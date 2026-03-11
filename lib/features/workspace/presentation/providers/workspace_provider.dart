@@ -12,19 +12,22 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     return [];
   }
 
-  void addProjector() {
+  void addProjectors(List<Map<String, dynamic>> configs) {
     final rand = Random();
-    // Snap to 20 grid
     double snap(double val) => (val / 20).round() * 20.0;
-    final newNode = ProjectorNode(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      name: 'Projector ${state.length + 1}',
-      ipAddress: '192.168.0.${state.length + 100}',
-      x: snap(100.0 + rand.nextInt(200)),
-      y: snap(100.0 + rand.nextInt(200)),
-      connectionStatus: ConnectionStatus.offline,
-    );
-    state = [...state, newNode];
+    
+    final newNodes = configs.map((config) {
+      return ProjectorNode(
+        id: DateTime.now().microsecondsSinceEpoch.toString() + rand.nextInt(1000).toString(),
+        name: config['name'] ?? 'Projector ${state.length + 1}',
+        ipAddress: config['ip'] as String,
+        x: snap(100.0 + rand.nextInt(200)),
+        y: snap(100.0 + rand.nextInt(200)),
+        connectionStatus: ConnectionStatus.offline,
+      );
+    }).toList();
+
+    state = [...state, ...newNodes];
   }
 
   void updateNodePosition(String id, double dx, double dy) {

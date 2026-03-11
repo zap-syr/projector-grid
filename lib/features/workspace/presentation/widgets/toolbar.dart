@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/workspace_provider.dart';
+import 'add_projector_dialog.dart';
 
 class MainToolbar extends ConsumerWidget {
   const MainToolbar({super.key});
@@ -14,7 +15,7 @@ class MainToolbar extends ConsumerWidget {
         color: Theme.of(context).colorScheme.surface,
         border: Border(
           bottom: BorderSide(
-            color: Theme.of(context).dividerColor.withOpacity(0.2),
+            color: Theme.of(context).dividerColor.withValues(alpha: 0.2),
           ),
         ),
       ),
@@ -22,7 +23,14 @@ class MainToolbar extends ConsumerWidget {
         children: [
           FilledButton.icon(
             onPressed: () {
-              ref.read(workspaceProvider.notifier).addProjector();
+              showDialog(
+                context: context,
+                builder: (context) => AddProjectorDialog(
+                  onAddProjectors: (projectors) {
+                    ref.read(workspaceProvider.notifier).addProjectors(projectors);
+                  },
+                ),
+              );
             },
             icon: const Icon(Icons.add),
             label: const Text('Add Projectors'),
