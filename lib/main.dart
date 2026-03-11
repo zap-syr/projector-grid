@@ -1,38 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
+import 'app/app.dart';
+import 'dart:io' show Platform;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await windowManager.ensureInitialized();
-
-  WindowOptions windowOptions = const WindowOptions(
-    size: Size(1200, 800),
-    center: true,
-    title: 'Panasonic Projectors Manager',
-  );
-
-  windowManager.waitUntilReadyToShow(windowOptions, () async {
-    await windowManager.show();
-    await windowManager.focus();
-  });
-
-  runApp(const MyApp());
-}
-
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
+  
+  if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+    await windowManager.ensureInitialized();
+    WindowOptions windowOptions = const WindowOptions(
+      minimumSize: Size(800, 600),
+      center: true,
       title: 'Panasonic Projectors Manager',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-        useMaterial3: true,
-      ),
-      home: const Scaffold(
-        body: Center(child: Text('Panasonic Projectors Manager')),
-      ),
     );
+    windowManager.waitUntilReadyToShow(windowOptions, () async {
+      await windowManager.show();
+      await windowManager.focus();
+    });
   }
+
+  runApp(const ProviderScope(child: MyApp()));
 }
