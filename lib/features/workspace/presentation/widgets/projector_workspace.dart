@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/workspace_provider.dart';
 import 'projector_card.dart';
@@ -25,24 +26,93 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
   final double _workspaceWidth = 3000.0;
   final double _workspaceHeight = 3000.0;
   double _currentZoom = 1.0;
+  bool _isMultiSelect = false;
+
+  @override
+  void initState() {
+    super.initState();
+    HardwareKeyboard.instance.addHandler(_handleKeyEvent);
+    _isMultiSelect = _checkIsMultiSelect();
+  }
 
   @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
     _verticalController.dispose();
     _horizontalController.dispose();
     super.dispose();
   }
 
-  void _setZoom(double zoom) {
-    setState(() {
-      _currentZoom = zoom.clamp(0.5, 2.0);
-    });
+  bool _checkIsMultiSelect() {
+    final keys = HardwareKeyboard.instance.logicalKeysPressed;
+    return keys.contains(LogicalKeyboardKey.controlLeft) || 
+           keys.contains(LogicalKeyboardKey.controlRight) || 
+           keys.contains(LogicalKeyboardKey.metaLeft) || 
+           keys.contains(LogicalKeyboardKey.metaRight);
   }
 
-  bool get _isMultiSelect {
-    return HardwareKeyboard.instance.logicalKeysPressed.any(
-      (k) => k == LogicalKeyboardKey.controlLeft || k == LogicalKeyboardKey.controlRight || k == LogicalKeyboardKey.metaLeft || k == LogicalKeyboardKey.metaRight
-    );
+  bool _handleKeyEvent(KeyEvent event) {
+    final isMulti = _checkIsMultiSelect();
+    if (_isMultiSelect != isMulti) {
+      setState(() {
+        _isMultiSelect = isMulti;
+      });
+    }
+    return false;
+  }
+
+  void _setZoom(double zoom, {Offset? contentOffset}) {
+    final newZoom = zoom.clamp(0.5, 2.0);
+    if (newZoom == _currentZoom) return;
+
+    if (_horizontalController.hasClients && _verticalController.hasClients) {
+      final oldZoom = _currentZoom;
+      final scaleRatio = newZoom / oldZoom;
+
+      double absoluteX;
+      double absoluteY;
+
+      if (contentOffset != null) {
+        // Provided by mouse pointer signal (relative to the content itself)
+        absoluteX = contentOffset.dx;
+        absoluteY = contentOffset.dy;
+      } else {
+        // Fallback for UI buttons/slider: zoom relative to the center of the visible viewport
+        absoluteX = _horizontalController.offset + (_horizontalController.position.viewportDimension / 2);
+        absoluteY = _verticalController.offset + (_verticalController.position.viewportDimension / 2);
+      }
+
+      final viewportX = absoluteX - _horizontalController.offset;
+      final viewportY = absoluteY - _verticalController.offset;
+
+      final newAbsoluteX = absoluteX * scaleRatio;
+      final newAbsoluteY = absoluteY * scaleRatio;
+
+      final newScrollX = newAbsoluteX - viewportX;
+      final newScrollY = newAbsoluteY - viewportY;
+
+      // Adjust pixel offset synchronously to avoid 1-frame jitter during layout rebuild
+      _horizontalController.position.correctPixels(newScrollX);
+      _verticalController.position.correctPixels(newScrollY);
+
+      setState(() {
+        _currentZoom = newZoom;
+      });
+
+      // Post-frame jump ensures the scrollbars natively refresh their thumbs
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_horizontalController.hasClients) {
+          _horizontalController.jumpTo(_horizontalController.offset);
+        }
+        if (_verticalController.hasClients) {
+          _verticalController.jumpTo(_verticalController.offset);
+        }
+      });
+    } else {
+      setState(() {
+        _currentZoom = newZoom;
+      });
+    }
   }
 
   @override
@@ -67,92 +137,129 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
             },
             child: Focus(
               autofocus: true,
-              child: Scrollbar(
-                controller: _verticalController,
-                thumbVisibility: true,
+              canRequestFocus: true,
+              // Outer listener: Captures middle-mouse panning independently of scroll contents
+              child: Listener(
+                onPointerMove: (event) {
+                  if (event.buttons == kMiddleMouseButton) {
+                    if (_horizontalController.hasClients) {
+                      _horizontalController.jumpTo(
+                        (_horizontalController.offset - event.delta.dx).clamp(0.0, _horizontalController.position.maxScrollExtent)
+                      );
+                    }
+                    if (_verticalController.hasClients) {
+                      _verticalController.jumpTo(
+                        (_verticalController.offset - event.delta.dy).clamp(0.0, _verticalController.position.maxScrollExtent)
+                      );
+                    }
+                  }
+                },
                 child: Scrollbar(
-                  controller: _horizontalController,
+                  controller: _verticalController,
                   thumbVisibility: true,
-                  notificationPredicate: (notif) => notif.depth == 1,
-                  child: SingleChildScrollView(
-                    controller: _verticalController,
-                    scrollDirection: Axis.vertical,
+                  child: Scrollbar(
+                    controller: _horizontalController,
+                    thumbVisibility: true,
+                    notificationPredicate: (notif) => notif.depth == 1,
                     child: SingleChildScrollView(
-                      controller: _horizontalController,
-                      scrollDirection: Axis.horizontal,
-                      child: GestureDetector(
-                        onTap: () {
-                          notifier.deselectAll();
-                        },
-                        onPanStart: (details) {
-                          setState(() {
-                            _selectionStart = details.localPosition / _currentZoom;
-                            _selectionCurrent = details.localPosition / _currentZoom;
-                          });
-                          notifier.startMarqueeSelection(append: _isMultiSelect);
-                        },
-                        onPanUpdate: (details) {
-                          setState(() {
-                            _selectionCurrent = details.localPosition / _currentZoom;
-                          });
-                          if (_selectionStart != null && _selectionCurrent != null) {
-                            final rect = Rect.fromPoints(_selectionStart!, _selectionCurrent!);
-                            notifier.selectNodesInRect(rect, append: _isMultiSelect);
-                          }
-                        },
-                        onPanEnd: (details) {
-                          setState(() {
-                            _selectionStart = null;
-                            _selectionCurrent = null;
-                          });
-                          notifier.endMarqueeSelection();
-                        },
-                        child: Container(
-                          width: _workspaceWidth * _currentZoom,
-                          height: _workspaceHeight * _currentZoom,
-                          color: Colors.transparent, // Capture gestures
-                          child: CustomPaint(
-                            painter: GridPainter(Theme.of(context).dividerColor.withValues(alpha: 0.1), _gridStep * _currentZoom),
-                            child: Stack(
-                              clipBehavior: Clip.none,
-                              children: [
-                                // Render projector nodes
-                                ...nodes.map((node) => ProjectorCard(
-                                      key: ValueKey(node.id),
-                                      node: node,
-                                      zoom: _currentZoom,
-                                      onTap: () {
-                                        notifier.selectNodeOnTap(node.id, multiSelect: _isMultiSelect);
-                                      },
-                                      onPanDown: (details) {
-                                        notifier.selectNodeOnDown(node.id, multiSelect: _isMultiSelect);
-                                      },
-                                      onPanUpdate: (details) {
-                                        notifier.updateNodePosition(node.id, details.delta.dx, details.delta.dy);
-                                      },
-                                      onPanEnd: (details) {
-                                        notifier.snapNodeToGrid(node.id);
-                                      },
-                                    )),
+                      controller: _verticalController,
+                      scrollDirection: Axis.vertical,
+                      physics: _isMultiSelect ? const NeverScrollableScrollPhysics() : null,
+                      child: SingleChildScrollView(
+                        controller: _horizontalController,
+                        scrollDirection: Axis.horizontal,
+                        physics: _isMultiSelect ? const NeverScrollableScrollPhysics() : null,
+                        // Inner listener: Captures scroll wheel zoom and intercepts it before SingleChildScrollView acts
+                        child: Listener(
+                          onPointerSignal: (pointerSignal) {
+                            if (pointerSignal is PointerScrollEvent) {
+                              if (_isMultiSelect) {
+                                final double scrollDelta = pointerSignal.scrollDelta.dy;
+                                if (scrollDelta > 0) {
+                                  final newZoom = double.parse((_currentZoom - 0.1).toStringAsFixed(1));
+                                  _setZoom(newZoom.clamp(0.5, 2.0), contentOffset: pointerSignal.localPosition);
+                                } else if (scrollDelta < 0) {
+                                  final newZoom = double.parse((_currentZoom + 0.1).toStringAsFixed(1));
+                                  _setZoom(newZoom.clamp(0.5, 2.0), contentOffset: pointerSignal.localPosition);
+                                }
+                              }
+                            }
+                          },
+                          child: GestureDetector(
+                            onTap: () {
+                              notifier.deselectAll();
+                            },
+                            onPanStart: (details) {
+                              setState(() {
+                                _selectionStart = details.localPosition / _currentZoom;
+                                _selectionCurrent = details.localPosition / _currentZoom;
+                              });
+                              notifier.startMarqueeSelection(append: _isMultiSelect);
+                            },
+                            onPanUpdate: (details) {
+                              setState(() {
+                                _selectionCurrent = details.localPosition / _currentZoom;
+                              });
+                              if (_selectionStart != null && _selectionCurrent != null) {
+                                final rect = Rect.fromPoints(_selectionStart!, _selectionCurrent!);
+                                notifier.selectNodesInRect(rect, append: _isMultiSelect);
+                              }
+                            },
+                            onPanEnd: (details) {
+                              setState(() {
+                                _selectionStart = null;
+                                _selectionCurrent = null;
+                              });
+                              notifier.endMarqueeSelection();
+                            },
+                            child: Container(
+                              width: _workspaceWidth * _currentZoom,
+                              height: _workspaceHeight * _currentZoom,
+                              color: Colors.transparent, // Capture gestures
+                              child: CustomPaint(
+                                painter: GridPainter(Theme.of(context).dividerColor.withValues(alpha: 0.1), _gridStep * _currentZoom),
+                                child: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    // Render projector nodes
+                                    ...nodes.map((node) => ProjectorCard(
+                                          key: ValueKey(node.id),
+                                          node: node,
+                                          zoom: _currentZoom,
+                                          onTap: () {
+                                            notifier.selectNodeOnTap(node.id, multiSelect: _isMultiSelect);
+                                          },
+                                          onPanDown: (details) {
+                                            notifier.selectNodeOnDown(node.id, multiSelect: _isMultiSelect);
+                                          },
+                                          onPanUpdate: (details) {
+                                            notifier.updateNodePosition(node.id, details.delta.dx, details.delta.dy);
+                                          },
+                                          onPanEnd: (details) {
+                                            notifier.snapNodeToGrid(node.id);
+                                          },
+                                        )),
 
-                                // Render selection marquee
-                                if (_selectionStart != null && _selectionCurrent != null)
-                                  Positioned.fromRect(
-                                    rect: Rect.fromPoints(
-                                      _selectionStart! * _currentZoom,
-                                      _selectionCurrent! * _currentZoom,
-                                    ),
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
-                                        border: Border.all(
-                                          color: Theme.of(context).colorScheme.primary,
-                                          width: 1,
+                                    // Render selection marquee
+                                    if (_selectionStart != null && _selectionCurrent != null)
+                                      Positioned.fromRect(
+                                        rect: Rect.fromPoints(
+                                          _selectionStart! * _currentZoom,
+                                          _selectionCurrent! * _currentZoom,
+                                        ),
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+                                            border: Border.all(
+                                              color: Theme.of(context).colorScheme.primary,
+                                              width: 1,
+                                            ),
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                  ),
-                              ],
+                                  ],
+                                ),
+                              ),
                             ),
                           ),
                         ),
@@ -171,7 +278,7 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
           left: 16,
           child: _ZoomControl(
             currentZoom: _currentZoom,
-            onZoomChanged: _setZoom,
+            onZoomChanged: (zoom) => _setZoom(zoom),
           ),
         ),
       ],

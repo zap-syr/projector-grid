@@ -123,8 +123,15 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
       // Fixed size for cards for intersection logic (120x100 based on 6x5 grid cells)
       final nodeRect = Rect.fromLTWH(node.x, node.y, 120, 100);
       final isOverlapping = selectionRect.overlaps(nodeRect);
-      final wasSelected = append && _preDragSelection.contains(node.id);
-      return node.copyWith(isSelected: isOverlapping || wasSelected);
+      
+      if (append) {
+        final wasSelected = _preDragSelection.contains(node.id);
+        // If appending (Ctrl/Cmd pressed): toggle the state of overlapping items
+        return node.copyWith(isSelected: isOverlapping ? !wasSelected : wasSelected);
+      } else {
+        // Normal selection: only overlapping items are selected
+        return node.copyWith(isSelected: isOverlapping);
+      }
     }).toList();
   }
 }
