@@ -16,49 +16,117 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
   List<ProjectorNode> build() {
     // Start polling when provider initializes
     _startPolling();
-    
+
     // Make sure to clean up the timer when the provider is destroyed
     ref.onDispose(() {
       _pollingTimer?.cancel();
     });
-    
+
     return [];
   }
 
   void _startPolling() {
     _pollingTimer?.cancel();
-    _pollingTimer = Timer.periodic(const Duration(seconds: 60), (_) {
-      _pollAllProjectors();
+    _pollingTimer = Timer.periodic(const Duration(seconds: 60), (_) async {
+      // Prevent overlapping polls if a previous one is still running
+      await _pollAllProjectors();
     });
   }
 
   Future<void> _pollAllProjectors() async {
-    for (var node in state) {
-      if (node.connectionStatus == ConnectionStatus.connected) {
-        await _pollSingleProjector(node);
-      }
+    // Take a snapshot of the current nodes to poll to avoid concurrent modification issues
+    final nodesToPoll = List<ProjectorNode>.from(state.where((n) => n.connectionStatus == ConnectionStatus.connected));
+    for (var node in nodesToPoll) {
+      await _pollSingleProjector(node);
     }
   }
 
   Future<void> _pollSingleProjector(ProjectorNode node) async {
-    final telemetry = await _protocolService.pollProjectorTelemetry(node.ipAddress, node.port, node.login, node.password);
-    
+    final telemetry = await _protocolService.pollProjectorTelemetry(
+      node.ipAddress,
+      node.port,
+      node.login,
+      node.password,
+    );
+
     if (telemetry != null) {
       state = state.map((n) {
         if (n.id == node.id) {
+          // Parse Input
+          String input = telemetry['input'] ?? n.input;
+          if (input == 'HD1') {
+            input = 'HDMI 1';
+          } else if (input == 'HD2') {
+            input = 'HDMI 2';
+          } else if (input == 'SD1') {
+            input = 'SDI 1';
+          } else if (input == 'SD2') {
+            input = 'SDI 2';
+          } else if (input == 'DL1') {
+            input = 'DIGITAL LINK';
+          } else if (input == 'DVI') {
+            input = 'DVI-D';
+          } else if (input == 'DP1') {
+            input = 'DISPLAY PORT';
+          }
+
+          // Parse Signal
+          String signal = (telemetry['signal'] as String).replaceAll('NSGS1=', '').trim();
+          if (signal == 'ER401' || signal == 'NO SIGNAL' || signal.isEmpty) {
+            signal = 'NO SIGNAL';
+          }
+
+          // Parse Runtime
+          String runtimeRaw = (telemetry['runtime'] as String).replaceAll('RTMS1=', '').trim();
+          String runtime = runtimeRaw.isEmpty || runtimeRaw == 'ER401'
+              ? '-'
+              : '${runtimeRaw}H';
+
+          // Parse Temps
+          String intake = telemetry['intakeTemp'] ?? n.intakeTemp;
+          if (intake.contains('/')) {
+            intake = '${intake.split('/')[0].substring(2)}°C';
+          } else if (intake == 'ER401') {
+            intake = '-';
+          }
+
+          String exhaust = telemetry['exhaustTemp'] ?? n.exhaustTemp;
+          if (exhaust.contains('/')) {
+            exhaust = '${exhaust.split('/')[0].substring(2)}°C';
+          } else if (exhaust == 'ER401') {
+            exhaust = '-';
+          }
+
+          // Parse Voltage
+          String voltageRaw = (telemetry['acVoltage'] as String).replaceAll('VMOI2=', '').trim();
+          String voltage = '-';
+          if (voltageRaw != 'ER401' && voltageRaw.length > 3) {
+            voltage = '${voltageRaw.substring(3)}V';
+          } else if (voltageRaw.length == 3) {
+            voltage = '${voltageRaw}V';
+          }
+
+          // Parse Errors
+          String errorsRaw = (telemetry['errors'] as String).replaceAll('ERRS2=', '').trim();
+          String errors = errorsRaw.isEmpty ? 'NO ERRORS' : errorsRaw;
+
           return n.copyWith(
             name: telemetry['modelName'] ?? n.name,
             serialNumber: telemetry['serialNumber'] ?? n.serialNumber,
-            powerStatus: telemetry['power'] == '001' ? PowerStatus.on : PowerStatus.standby,
-            shutterStatus: telemetry['shutter'] == '1' ? ShutterStatus.closed : ShutterStatus.open,
-            input: telemetry['input'] ?? n.input,
-            signal: (telemetry['signal'] as String).replaceAll('NSGS1=', ''),
-            runtime: (telemetry['runtime'] as String).replaceAll('RTMS1=', ''),
-            intakeTemp: telemetry['intakeTemp'] ?? n.intakeTemp,
-            exhaustTemp: telemetry['exhaustTemp'] ?? n.exhaustTemp,
-            acVoltage: (telemetry['acVoltage'] as String).replaceAll('VMOI2=', ''),
-            errors: (telemetry['errors'] as String).replaceAll('ERRS2=', ''),
-            connectionStatus: ConnectionStatus.connected, // ensure it's marked connected
+            powerStatus: telemetry['power'] == '001'
+                ? PowerStatus.on
+                : PowerStatus.standby,
+            shutterStatus: telemetry['shutter'] == '1'
+                ? ShutterStatus.closed
+                : ShutterStatus.open,
+            input: input,
+            signal: signal,
+            runtime: runtime,
+            intakeTemp: intake,
+            exhaustTemp: exhaust,
+            acVoltage: voltage,
+            errors: errors,
+            connectionStatus: ConnectionStatus.connected,
           );
         }
         return n;
@@ -77,16 +145,18 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
   void addProjectors(List<Map<String, dynamic>> configs) {
     final rand = Random();
     double snap(double val) => (val / 20).round() * 20.0;
-    
+
+    int idx = 0;
     final newNodes = configs.map((config) {
       ConnectionStatus connStatus = ConnectionStatus.offline;
       if (config['status'] == 'online' || config['status'] == 'protected') {
         connStatus = ConnectionStatus.connected;
       }
 
+      idx++;
       return ProjectorNode(
-        id: DateTime.now().microsecondsSinceEpoch.toString() + rand.nextInt(1000).toString(),
-        name: config['name'] ?? 'Projector ${state.length + 1}',
+        id: '${DateTime.now().microsecondsSinceEpoch}_${rand.nextInt(100000)}_$idx',
+        name: config['name'] ?? 'Projector ${state.length + idx}',
         ipAddress: config['ip'] as String,
         port: config['port'] ?? 1024,
         login: config['login'] ?? 'admin1',
@@ -120,10 +190,38 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
         }
         return node;
       }).toList();
-      
+
       // Grab the node with its credentials and fetch telemetry right away
       final targetNode = state.firstWhere((n) => n.id == id);
       await _pollSingleProjector(targetNode);
+    }
+  }
+
+  Future<void> sendCommandToSelected(String cmd) async {
+    final selectedNodes = state.where((n) => n.isSelected).toList();
+    for (var node in selectedNodes) {
+      if (node.connectionStatus == ConnectionStatus.connected) {
+        final success = await _protocolService.sendCommand(
+          node.ipAddress,
+          node.port,
+          node.login,
+          node.password,
+          cmd,
+        );
+        
+        // Optimistic UI updates for specific known commands
+        if (success) {
+          if (cmd == 'PON') {
+            state = state.map((n) => n.id == node.id ? n.copyWith(powerStatus: PowerStatus.on) : n).toList();
+          } else if (cmd == 'POF') {
+            state = state.map((n) => n.id == node.id ? n.copyWith(powerStatus: PowerStatus.standby) : n).toList();
+          } else if (cmd == 'OSH:0') {
+            state = state.map((n) => n.id == node.id ? n.copyWith(shutterStatus: ShutterStatus.open) : n).toList();
+          } else if (cmd == 'OSH:1') {
+            state = state.map((n) => n.id == node.id ? n.copyWith(shutterStatus: ShutterStatus.closed) : n).toList();
+          }
+        }
+      }
     }
   }
 
@@ -207,7 +305,10 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
 
   void startMarqueeSelection({bool append = false}) {
     if (append) {
-      _preDragSelection = state.where((n) => n.isSelected).map((n) => n.id).toSet();
+      _preDragSelection = state
+          .where((n) => n.isSelected)
+          .map((n) => n.id)
+          .toSet();
     } else {
       _preDragSelection = {};
       state = state.map((node) => node.copyWith(isSelected: false)).toList();
@@ -223,11 +324,13 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
       // Fixed size for cards for intersection logic (120x100 based on 6x5 grid cells)
       final nodeRect = Rect.fromLTWH(node.x, node.y, 120, 100);
       final isOverlapping = selectionRect.overlaps(nodeRect);
-      
+
       if (append) {
         final wasSelected = _preDragSelection.contains(node.id);
         // If appending (Ctrl/Cmd pressed): toggle the state of overlapping items
-        return node.copyWith(isSelected: isOverlapping ? !wasSelected : wasSelected);
+        return node.copyWith(
+          isSelected: isOverlapping ? !wasSelected : wasSelected,
+        );
       } else {
         // Normal selection: only overlapping items are selected
         return node.copyWith(isSelected: isOverlapping);

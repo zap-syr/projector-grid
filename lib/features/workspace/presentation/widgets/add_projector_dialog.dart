@@ -95,7 +95,7 @@ class _ManualAddTabState extends State<_ManualAddTab> {
   final _endIpController = TextEditingController();
   final _portController = TextEditingController(text: '1024');
   final _loginController = TextEditingController(text: 'admin1');
-  final _passwordController = TextEditingController();
+  final _passwordController = TextEditingController(text: 'panasonic');
 
   final _ipRegex = RegExp(r"^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$");
 
@@ -285,7 +285,7 @@ class _AutoDiscoveryTab extends StatefulWidget {
 class _AutoDiscoveryTabState extends State<_AutoDiscoveryTab> {
   final _portController = TextEditingController(text: '1024');
   final _loginController = TextEditingController(text: 'admin1');
-  final _passwordController = TextEditingController();
+  final _passwordController = TextEditingController(text: 'panasonic');
 
   List<NetworkInterface> _interfaces = [];
   NetworkInterface? _selectedInterface;

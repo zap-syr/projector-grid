@@ -125,6 +125,17 @@ class PanasonicProtocolService {
     }
   }
 
+  /// Sends an action command to the projector without expecting complex telemetry back.
+  Future<bool> sendCommand(String ip, int port, String login, String password, String cmd) async {
+    final response = await _sendSingleCommand(ip, port, login, password, cmd);
+    // Usually responses are echoing the command back or a generic acknowledgment.
+    // As long as it's not a timeout or ERRA (auth error), we consider the dispatch successful.
+    if (response == 'Timeout' || response.contains('ERRA')) {
+      return false;
+    }
+    return true;
+  }
+
   /// Polls all essential telemetry points for the Monitoring Table
   Future<Map<String, dynamic>?> pollProjectorTelemetry(String ip, int port, String login, String password) async {
     final modelResponse = await _sendSingleCommand(ip, port, login, password, 'QID');
