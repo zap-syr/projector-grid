@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:io';
+import '../../../../core/services/panasonic_protocol_service.dart';
 
 class AddProjectorDialog extends StatefulWidget {
   final Function(List<Map<String, dynamic>>) onAddProjectors;
@@ -93,7 +94,7 @@ class _ManualAddTabState extends State<_ManualAddTab> {
   final _startIpController = TextEditingController();
   final _endIpController = TextEditingController();
   final _portController = TextEditingController(text: '1024');
-  final _loginController = TextEditingController();
+  final _loginController = TextEditingController(text: 'admin1');
   final _passwordController = TextEditingController();
 
   final _ipRegex = RegExp(r"^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$");
@@ -147,6 +148,7 @@ class _ManualAddTabState extends State<_ManualAddTab> {
             'port': port,
             'login': login,
             'password': password,
+            'status': 'offline', // default before ping
           });
         }
         widget.onAddMultiple(results);
@@ -157,6 +159,7 @@ class _ManualAddTabState extends State<_ManualAddTab> {
           'port': port,
           'login': login,
           'password': password,
+          'status': 'offline', // default before ping
         });
       }
     }
@@ -233,13 +236,21 @@ class _ManualAddTabState extends State<_ManualAddTab> {
           const SizedBox(height: 16),
           TextFormField(
             controller: _loginController,
-            decoration: const InputDecoration(labelText: 'Login (Optional)', border: OutlineInputBorder()),
+            decoration: const InputDecoration(labelText: 'Login', border: OutlineInputBorder()),
+            validator: (val) {
+              if (val == null || val.isEmpty) return 'Login required';
+              return null;
+            },
           ),
           const SizedBox(height: 16),
           TextFormField(
             controller: _passwordController,
-            decoration: const InputDecoration(labelText: 'Password (Optional)', border: OutlineInputBorder()),
-            obscureText: true,
+            decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder()),
+            obscureText: false, // Made visible per user request
+            validator: (val) {
+              if (val == null || val.isEmpty) return 'Password required';
+              return null;
+            },
           ),
           const SizedBox(height: 32),
           Row(
@@ -273,7 +284,7 @@ class _AutoDiscoveryTab extends StatefulWidget {
 
 class _AutoDiscoveryTabState extends State<_AutoDiscoveryTab> {
   final _portController = TextEditingController(text: '1024');
-  final _loginController = TextEditingController();
+  final _loginController = TextEditingController(text: 'admin1');
   final _passwordController = TextEditingController();
 
   List<NetworkInterface> _interfaces = [];
@@ -282,6 +293,8 @@ class _AutoDiscoveryTabState extends State<_AutoDiscoveryTab> {
   bool _isScanning = false;
   List<Map<String, dynamic>> _foundProjectors = [];
   final Set<String> _selectedIps = {};
+
+  final _protocolService = PanasonicProtocolService();
 
   @override
   void initState() {
@@ -299,20 +312,25 @@ class _AutoDiscoveryTabState extends State<_AutoDiscoveryTab> {
 
   Future<void> _loadInterfaces() async {
     try {
-      final interfaces = await NetworkInterface.list();
-      setState(() {
-        _interfaces = interfaces;
-        if (interfaces.isNotEmpty) {
-          _selectedInterface = interfaces.first;
-        }
-      });
+      final interfaces = await NetworkInterface.list(
+        includeLinkLocal: false,
+        type: InternetAddressType.IPv4,
+      );
+      if (mounted) {
+        setState(() {
+          _interfaces = interfaces;
+          if (interfaces.isNotEmpty) {
+            _selectedInterface = interfaces.first;
+          }
+        });
+      }
     } catch (e) {
       // Ignore
     }
   }
 
   Future<void> _startScan() async {
-    if (_selectedInterface == null) return;
+    if (_selectedInterface == null || _selectedInterface!.addresses.isEmpty) return;
     
     setState(() {
       _isScanning = true;
@@ -320,32 +338,36 @@ class _AutoDiscoveryTabState extends State<_AutoDiscoveryTab> {
       _selectedIps.clear();
     });
 
-    // Fake scanning simulation
-    await Future.delayed(const Duration(seconds: 2));
-    
-    // Generate some fake projector responses based on the selected interface's first IP (if available)
-    String baseIp = '192.168.1';
-    if (_selectedInterface!.addresses.isNotEmpty) {
-      final parts = _selectedInterface!.addresses.first.address.split('.');
-      if (parts.length == 4) {
-        baseIp = parts.sublist(0, 3).join('.');
-      }
-    }
-
-    if (mounted) {
+    final address = _selectedInterface!.addresses.first.address;
+    final parts = address.split('.');
+    if (parts.length != 4) {
       setState(() {
         _isScanning = false;
-        _foundProjectors = [
-          {'ip': '$baseIp.15', 'name': 'PT-RZ21K'},
-          {'ip': '$baseIp.22', 'name': 'PT-RQ35K'},
-          {'ip': '$baseIp.105', 'name': 'PT-MZ16K'},
-        ];
-        // Auto select all by default
-        for (var p in _foundProjectors) {
-          _selectedIps.add(p['ip']);
-        }
       });
+      return;
     }
+
+    final subnet = parts.sublist(0, 3).join('.');
+    final port = int.tryParse(_portController.text) ?? 1024;
+    final login = _loginController.text;
+    final password = _passwordController.text;
+
+    final stream = _protocolService.scanNetwork(subnet, port, login: login, password: password);
+    
+    stream.listen((result) {
+      if (mounted) {
+        setState(() {
+          _foundProjectors.add(result);
+          _selectedIps.add(result['ip'] as String);
+        });
+      }
+    }, onDone: () {
+      if (mounted) {
+        setState(() {
+          _isScanning = false;
+        });
+      }
+    });
   }
 
   @override
@@ -382,6 +404,8 @@ class _AutoDiscoveryTabState extends State<_AutoDiscoveryTab> {
                 child: TextFormField(
                   controller: _portController,
                   decoration: const InputDecoration(labelText: 'Port', border: OutlineInputBorder()),
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 ),
               ),
             ],
@@ -392,15 +416,15 @@ class _AutoDiscoveryTabState extends State<_AutoDiscoveryTab> {
               Expanded(
                 child: TextFormField(
                   controller: _loginController,
-                  decoration: const InputDecoration(labelText: 'Login (Optional)', border: OutlineInputBorder()),
+                  decoration: const InputDecoration(labelText: 'Login', border: OutlineInputBorder()),
                 ),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: TextFormField(
                   controller: _passwordController,
-                  decoration: const InputDecoration(labelText: 'Password (Optional)', border: OutlineInputBorder()),
-                  obscureText: true,
+                  decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder()),
+                  obscureText: false, // Made visible per user request
                 ),
               ),
             ],
@@ -413,7 +437,7 @@ class _AutoDiscoveryTabState extends State<_AutoDiscoveryTab> {
               icon: _isScanning 
                 ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                 : const Icon(Icons.search),
-              label: const Text('Scan Network'),
+              label: Text(_isScanning ? 'Scanning Subnet...' : 'Scan Network'),
             ),
           ),
           const Divider(height: 32),
@@ -434,7 +458,7 @@ class _AutoDiscoveryTabState extends State<_AutoDiscoveryTab> {
                         final isSelected = _selectedIps.contains(p['ip']);
                         return CheckboxListTile(
                           title: Text(p['name']),
-                          subtitle: Text(p['ip']),
+                          subtitle: Text('${p['ip']} • Status: ${p['status']}'),
                           value: isSelected,
                           onChanged: (val) {
                             setState(() {
@@ -460,7 +484,7 @@ class _AutoDiscoveryTabState extends State<_AutoDiscoveryTab> {
               ),
               const SizedBox(width: 16),
               FilledButton(
-                onPressed: _selectedIps.isEmpty ? null : () {
+                onPressed: _selectedIps.isEmpty || _isScanning ? null : () {
                   final port = int.tryParse(_portController.text) ?? 1024;
                   final login = _loginController.text;
                   final password = _passwordController.text;
@@ -469,10 +493,11 @@ class _AutoDiscoveryTabState extends State<_AutoDiscoveryTab> {
                     .where((p) => _selectedIps.contains(p['ip']))
                     .map((p) => {
                       'ip': p['ip'],
-                      'name': p['name'], // Keep simulated name for auto discovery
+                      'name': p['name'],
                       'port': port,
                       'login': login,
                       'password': password,
+                      'status': p['status'] == 'online' ? 'online' : 'protected',
                     }).toList();
 
                   widget.onAddSelected(results);

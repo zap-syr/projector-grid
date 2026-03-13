@@ -2,11 +2,14 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../domain/projector_node.dart';
+import '../../../../core/services/panasonic_protocol_service.dart';
 
 part 'workspace_provider.g.dart';
 
 @riverpod
 class WorkspaceNotifier extends _$WorkspaceNotifier {
+  final _protocolService = PanasonicProtocolService();
+
   @override
   List<ProjectorNode> build() {
     return [];
@@ -17,17 +20,41 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     double snap(double val) => (val / 20).round() * 20.0;
     
     final newNodes = configs.map((config) {
+      ConnectionStatus connStatus = ConnectionStatus.offline;
+      if (config['status'] == 'online' || config['status'] == 'protected') {
+        connStatus = ConnectionStatus.connected;
+      }
+
       return ProjectorNode(
         id: DateTime.now().microsecondsSinceEpoch.toString() + rand.nextInt(1000).toString(),
         name: config['name'] ?? 'Projector ${state.length + 1}',
         ipAddress: config['ip'] as String,
         x: snap(100.0 + rand.nextInt(200)),
         y: snap(100.0 + rand.nextInt(200)),
-        connectionStatus: ConnectionStatus.offline,
+        connectionStatus: connStatus,
       );
     }).toList();
 
     state = [...state, ...newNodes];
+
+    // Trigger an asynchronous ping for any newly added offline nodes
+    for (var node in newNodes) {
+      if (node.connectionStatus == ConnectionStatus.offline) {
+        _checkAndSetNodeStatus(node.id, node.ipAddress, 1024); // Defaulting to 1024 for quick ping
+      }
+    }
+  }
+
+  Future<void> _checkAndSetNodeStatus(String id, String ip, int port) async {
+    final isOnline = await _protocolService.checkConnection(ip, port);
+    if (isOnline) {
+      state = state.map((node) {
+        if (node.id == id) {
+          return node.copyWith(connectionStatus: ConnectionStatus.connected);
+        }
+        return node;
+      }).toList();
+    }
   }
 
   void updateNodePosition(String id, double dx, double dy) {

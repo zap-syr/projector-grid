@@ -10,9 +10,19 @@ class StatusBar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final nodes = ref.watch(workspaceProvider);
     final total = nodes.length;
-    final online = nodes.where((n) => n.connectionStatus == ConnectionStatus.connected).length;
-    final offline = nodes.where((n) => n.connectionStatus == ConnectionStatus.offline).length;
-    final warnings = nodes.where((n) => n.powerStatus == PowerStatus.on && n.shutterStatus == ShutterStatus.closed).length; // Just an example of warning logic
+    final online = nodes
+        .where((n) => n.connectionStatus == ConnectionStatus.connected)
+        .length;
+    final offline = nodes
+        .where((n) => n.connectionStatus == ConnectionStatus.offline)
+        .length;
+    final warnings = nodes
+        .where(
+          (n) =>
+              n.powerStatus == PowerStatus.on &&
+              n.shutterStatus == ShutterStatus.closed,
+        )
+        .length; // Just an example of warning logic
 
     return Container(
       height: 32,
@@ -58,16 +68,10 @@ class _StatusItem extends StatelessWidget {
         Container(
           width: 8,
           height: 8,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-          ),
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 6),
-        Text(
-          '$label: $count',
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
+        Text('$label: $count', style: Theme.of(context).textTheme.bodySmall),
       ],
     );
   }
