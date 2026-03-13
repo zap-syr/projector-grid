@@ -11,7 +11,7 @@ class ControlBar extends StatelessWidget {
         color: Theme.of(context).colorScheme.surface,
         border: Border(
           left: BorderSide(
-            color: Theme.of(context).dividerColor.withOpacity(0.2),
+            color: Theme.of(context).dividerColor.withValues(alpha: 0.2),
           ),
         ),
       ),

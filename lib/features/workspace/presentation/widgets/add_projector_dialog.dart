@@ -383,6 +383,7 @@ class _AutoDiscoveryTabState extends State<_AutoDiscoveryTab> {
                 flex: 2,
                 child: DropdownButtonFormField<NetworkInterface>(
                   decoration: const InputDecoration(labelText: 'Network Interface', border: OutlineInputBorder()),
+                  // ignore: deprecated_member_use
                   value: _selectedInterface,
                   items: _interfaces.map((i) {
                     final ip = i.addresses.isNotEmpty ? i.addresses.first.address : 'No IP';

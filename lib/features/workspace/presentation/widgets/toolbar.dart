@@ -4,7 +4,14 @@ import '../providers/workspace_provider.dart';
 import 'add_projector_dialog.dart';
 
 class MainToolbar extends ConsumerWidget {
-  const MainToolbar({super.key});
+  final bool isMonitoringView;
+  final ValueChanged<bool> onViewChanged;
+
+  const MainToolbar({
+    super.key,
+    required this.isMonitoringView,
+    required this.onViewChanged,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -35,7 +42,25 @@ class MainToolbar extends ConsumerWidget {
             icon: const Icon(Icons.add),
             label: const Text('Add Projectors'),
           ),
-          // Additional tools can go here
+          const Spacer(),
+          SegmentedButton<bool>(
+            segments: const [
+              ButtonSegment(
+                value: false,
+                icon: Icon(Icons.grid_view),
+                label: Text('Controls'),
+              ),
+              ButtonSegment(
+                value: true,
+                icon: Icon(Icons.table_chart),
+                label: Text('Monitoring'),
+              ),
+            ],
+            selected: {isMonitoringView},
+            onSelectionChanged: (set) {
+              onViewChanged(set.first);
+            },
+          ),
         ],
       ),
     );

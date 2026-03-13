@@ -26,120 +26,16 @@ class PanasonicProtocolService {
   /// Attempts to connect to a specific IP and port, verify it's a Panasonic projector,
   /// and retrieve its model name (QID).
   Future<Map<String, dynamic>?> _pingProjector(String ip, int port, String login, String password) async {
-    Socket? socket;
-    try {
-      // Connect with a slightly longer timeout for real-world networks
-      socket = await Socket.connect(ip, port, timeout: const Duration(milliseconds: 1500));
-      
-      final initCompleter = Completer<String>();
-      StringBuffer buffer = StringBuffer();
-      
-      late StreamSubscription subscription;
-      subscription = socket.listen(
-        (data) {
-          buffer.write(ascii.decode(data));
-          if (buffer.toString().contains('\r') && !initCompleter.isCompleted) {
-            initCompleter.complete(buffer.toString());
-          }
-        },
-        onError: (e) {
-          if (!initCompleter.isCompleted) initCompleter.completeError(e);
-        },
-        onDone: () {
-          if (!initCompleter.isCompleted) initCompleter.completeError('Connection closed');
-        },
-      );
-
-      final initResponse = await initCompleter.future.timeout(const Duration(seconds: 2));
-      
-      if (!initResponse.startsWith('NTCONTROL')) {
-        await subscription.cancel();
-        return null; // Not a Panasonic projector
-      }
-
-      final isProtected = initResponse.contains(' 1 ');
-      
-      String commandPrefix = '00'; // Default non-protected header '0' '0'
-      
-      if (isProtected) {
-        if (login.isEmpty || password.isEmpty) {
-          await subscription.cancel();
-          return {
-            'ip': ip,
-            'name': 'Protected Projector (Requires Login)',
-            'status': 'protected',
-          };
-        }
-
-        // Extract the random 8-byte token at the end before CR
-        // Format: NTCONTROL 1 zzzzzzzz\r
-        final tokenMatch = RegExp(r'NTCONTROL\s1\s([0-9a-fA-F]{8})\r?').firstMatch(initResponse);
-        if (tokenMatch == null) {
-          await subscription.cancel();
-          return null;
-        }
-        
-        final token = tokenMatch.group(1)!;
-        
-        // Generate MD5 hash: "login:password:token"
-        final hashStr = '$login:$password:$token';
-        final bytes = utf8.encode(hashStr);
-        final digest = md5.convert(bytes);
-        commandPrefix = '${digest.toString()}00';
-      }
-
-      // Prepare for next command response
-      buffer.clear();
-      final cmdCompleter = Completer<String>();
-      
-      // Override the data handler for the next command
-      subscription.onData((data) {
-        buffer.write(ascii.decode(data));
-        if (buffer.toString().contains('\r') && !cmdCompleter.isCompleted) {
-          cmdCompleter.complete(buffer.toString());
-        }
-      });
-      subscription.onError((e) {
-        if (!cmdCompleter.isCompleted) cmdCompleter.completeError(e);
-      });
-
-      // We send the Model Name query command: QID
-      final qidCommand = '${commandPrefix}QID\r';
-      socket.add(ascii.encode(qidCommand));
-      await socket.flush();
-
-      final cmdResponse = await cmdCompleter.future.timeout(const Duration(seconds: 2));
-      await subscription.cancel();
-
-      // Expected response format: "00<ModelName>\r" (Non-Protected) or "00<ModelName>\r" with a 32-byte hash header
-      String modelName = 'Unknown Model';
-      if (cmdResponse.contains('ERR')) {
-        modelName = 'Auth Failed or Error: ${cmdResponse.trim()}';
-      } else {
-        // Find the index of the command response header. 
-        // If protected, it might be returning a hash. 
-        // According to protocol, response header is '0' '0'.
-        final headerIndex = cmdResponse.indexOf('00');
-        if (headerIndex != -1 && cmdResponse.length > headerIndex + 2) {
-          modelName = cmdResponse.substring(headerIndex + 2).replaceAll('\r', '').trim();
-          if (modelName.isEmpty) modelName = 'Panasonic Projector';
-        } else {
-           modelName = 'Panasonic Projector';
-        }
-      }
-
-      return {
-        'ip': ip,
-        'name': modelName,
-        'status': 'online',
-      };
-
-    } catch (e) {
-      // Timeout, connection refused, etc.
+    final modelResponse = await _sendSingleCommand(ip, port, login, password, 'QID');
+    if (modelResponse == 'Timeout' || modelResponse.contains('Error') || modelResponse.contains('ERRA') || modelResponse.isEmpty) {
       return null;
-    } finally {
-      socket?.destroy();
     }
+    
+    return {
+      'ip': ip,
+      'name': modelResponse,
+      'status': 'online',
+    };
   }
 
   /// A quick ping to just check if an already added projector is online and reachable on the port.
@@ -153,5 +49,103 @@ class PanasonicProtocolService {
     } finally {
       socket?.destroy();
     }
+  }
+
+  /// Helper method to send a single command. The Panasonic projector closes the connection after each command.
+  Future<String> _sendSingleCommand(String ip, int port, String login, String password, String cmd) async {
+    Socket? socket;
+    StreamSubscription? subscription;
+    try {
+      socket = await Socket.connect(ip, port, timeout: const Duration(milliseconds: 2000));
+      
+      Completer<String>? currentCompleter = Completer<String>();
+      StringBuffer buffer = StringBuffer();
+      
+      void processBuffer() {
+        final content = buffer.toString();
+        final newlineIndex = content.indexOf('\r');
+        
+        if (newlineIndex != -1) {
+          final message = content.substring(0, newlineIndex);
+          buffer = StringBuffer(content.substring(newlineIndex + 1));
+          if (currentCompleter != null && !currentCompleter.isCompleted) {
+            currentCompleter.complete(message);
+          }
+        }
+      }
+
+      subscription = socket.listen(
+        (data) {
+          buffer.write(ascii.decode(data));
+          processBuffer();
+        },
+        onError: (e) {
+          if (currentCompleter != null && !currentCompleter.isCompleted) {
+            currentCompleter.completeError(e);
+          }
+        },
+      );
+
+      final initResponse = await currentCompleter.future.timeout(const Duration(seconds: 3));
+      
+      if (!initResponse.startsWith('NTCONTROL')) {
+        await subscription.cancel();
+        return 'Error: Invalid Handshake';
+      }
+
+      String commandPrefix = '00';
+      if (initResponse.contains(' 1 ')) {
+        final tokenMatch = RegExp(r'NTCONTROL\s1\s([0-9a-fA-F]{8})').firstMatch(initResponse);
+        if (tokenMatch != null) {
+          final token = tokenMatch.group(1)!;
+          final hashStr = '$login:$password:$token';
+          commandPrefix = '${md5.convert(utf8.encode(hashStr))}00';
+        }
+      }
+
+      currentCompleter = Completer<String>();
+      processBuffer(); 
+      
+      final fullCmd = '$commandPrefix$cmd\r';
+      socket.add(ascii.encode(fullCmd));
+      await socket.flush();
+      
+      final response = await currentCompleter.future.timeout(const Duration(seconds: 3));
+      
+      final headerIndex = response.indexOf('00');
+      if (headerIndex != -1 && response.length > headerIndex + 2) {
+        return response.substring(headerIndex + 2).trim();
+      }
+      return response.trim();
+    } catch (e) {
+      return 'Timeout';
+    } finally {
+      await subscription?.cancel();
+      socket?.destroy();
+    }
+  }
+
+  /// Polls all essential telemetry points for the Monitoring Table
+  Future<Map<String, dynamic>?> pollProjectorTelemetry(String ip, int port, String login, String password) async {
+    final modelResponse = await _sendSingleCommand(ip, port, login, password, 'QID');
+    if (modelResponse == 'Timeout' || modelResponse.contains('Error') || modelResponse.contains('ERRA')) {
+      return null;
+    }
+
+    final Map<String, dynamic> telemetry = {};
+    telemetry['modelName'] = modelResponse;
+
+    telemetry['serialNumber'] = await _sendSingleCommand(ip, port, login, password, 'QSN');
+    telemetry['power'] = await _sendSingleCommand(ip, port, login, password, 'QPW'); // 000=standby, 001=on
+    telemetry['shutter'] = await _sendSingleCommand(ip, port, login, password, 'QSH'); // 0=off(open), 1=on(closed)
+    telemetry['input'] = await _sendSingleCommand(ip, port, login, password, 'QIN');
+    telemetry['signal'] = await _sendSingleCommand(ip, port, login, password, 'QVX:NSGS1'); // Format: NSGS1=*****
+    telemetry['runtime'] = await _sendSingleCommand(ip, port, login, password, 'QVX:RTMS1'); // Format: RTMS1=1234
+    telemetry['intakeTemp'] = await _sendSingleCommand(ip, port, login, password, 'QTM:0');
+    telemetry['exhaustTemp'] = await _sendSingleCommand(ip, port, login, password, 'QTM:1');
+    telemetry['acVoltage'] = await _sendSingleCommand(ip, port, login, password, 'QVX:VMOI2'); // Format: VMOI2=+00000
+    telemetry['errors'] = await _sendSingleCommand(ip, port, login, password, 'QVX:ERRS2');
+
+    return telemetry;
   }
 }
