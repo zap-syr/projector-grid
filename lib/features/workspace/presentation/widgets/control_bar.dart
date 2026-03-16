@@ -446,6 +446,17 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                               enableFilter: false,
                               expandedInsets: EdgeInsets.zero,
                               menuHeight: 250,
+                              inputDecorationTheme: InputDecorationTheme(
+                                border: UnderlineInputBorder(
+                                  borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
+                                ),
+                                enabledBorder: UnderlineInputBorder(
+                                  borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
+                                ),
+                                focusedBorder: UnderlineInputBorder(
+                                  borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 2),
+                                ),
+                              ),
                               initialSelection: _selectedLens,
                               dropdownMenuEntries: _lensOptions.entries
                                   .map(
@@ -456,8 +467,9 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                                   )
                                   .toList(),
                               onSelected: (val) {
-                                if (val != null)
+                                if (val != null) {
                                   setState(() => _selectedLens = val);
+                                }
                               },
                             ),
                           ),
@@ -550,6 +562,17 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                               enableFilter: false,
                               expandedInsets: EdgeInsets.zero,
                               menuHeight: 300,
+                              inputDecorationTheme: InputDecorationTheme(
+                                border: UnderlineInputBorder(
+                                  borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
+                                ),
+                                enabledBorder: UnderlineInputBorder(
+                                  borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
+                                ),
+                                focusedBorder: UnderlineInputBorder(
+                                  borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 2),
+                                ),
+                              ),
                               initialSelection: _selectedTestPattern,
                               dropdownMenuEntries: _testPatternOptions.entries
                                   .map(
@@ -560,8 +583,9 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                                   )
                                   .toList(),
                               onSelected: (val) {
-                                if (val != null)
+                                if (val != null) {
                                   setState(() => _selectedTestPattern = val);
+                                }
                               },
                             ),
                           ),
