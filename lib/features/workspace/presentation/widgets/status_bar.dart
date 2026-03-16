@@ -17,12 +17,8 @@ class StatusBar extends ConsumerWidget {
         .where((n) => n.connectionStatus == ConnectionStatus.offline)
         .length;
     final warnings = nodes
-        .where(
-          (n) =>
-              n.powerStatus == PowerStatus.on &&
-              n.shutterStatus == ShutterStatus.closed,
-        )
-        .length; // Just an example of warning logic
+        .where((n) => n.errors != 'NO ERRORS' && n.errors != '-')
+        .length;
 
     return Container(
       height: 32,
@@ -37,7 +33,11 @@ class StatusBar extends ConsumerWidget {
       ),
       child: Row(
         children: [
-          _StatusItem(label: 'Overall', count: total, color: Colors.blueGrey),
+          _StatusItem(
+            label: 'Projectors',
+            count: total,
+            color: Colors.blueGrey,
+          ),
           const SizedBox(width: 16),
           _StatusItem(label: 'Online', count: online, color: Colors.green),
           const SizedBox(width: 16),

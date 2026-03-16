@@ -34,10 +34,24 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
   }
 
   Future<void> _pollAllProjectors() async {
-    // Take a snapshot of the current nodes to poll to avoid concurrent modification issues
-    final nodesToPoll = List<ProjectorNode>.from(state.where((n) => n.connectionStatus == ConnectionStatus.connected));
-    for (var node in nodesToPoll) {
-      await _pollSingleProjector(node);
+    // We must poll ALL nodes, not just connected ones, so offline nodes can reconnect.
+    // Also, we must not take a static copy of state into a loop, because state might change
+    // while we are awaiting. We should iterate over the current IDs.
+    final currentIds = state.map((n) => n.id).toList();
+    
+    for (var id in currentIds) {
+      // Find the latest version of the node just before polling
+      final nodeIndex = state.indexWhere((n) => n.id == id);
+      if (nodeIndex == -1) continue; // Node was deleted
+      
+      final node = state[nodeIndex];
+      
+      // If it's connected, fetch full telemetry. If offline, just ping it first to see if it's back.
+      if (node.connectionStatus == ConnectionStatus.connected) {
+        await _pollSingleProjector(node);
+      } else {
+        await _checkAndSetNodeStatus(node.id, node.ipAddress, node.port);
+      }
     }
   }
 

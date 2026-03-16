@@ -101,6 +101,9 @@ class ProjectorCard extends StatelessWidget {
                       Icon(Icons.power_settings_new, size: 14, color: powerColor),
                       const SizedBox(width: 4),
                       Icon(Icons.visibility, size: 14, color: shutterColor),
+                      const SizedBox(width: 4),
+                      if (node.errors != 'NO ERRORS' && node.errors != '-')
+                        const Icon(Icons.warning_amber_rounded, size: 14, color: Colors.orange),
                       const Spacer(),
                       // Top right: Connection
                       Container(
