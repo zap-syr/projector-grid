@@ -11,15 +11,200 @@ class ControlBar extends ConsumerStatefulWidget {
 }
 
 class _ControlBarState extends ConsumerState<ControlBar> {
+  // ── Constants ────────────────────────────────────────────────────────────
+  static const double _barWidth = 320;
+  static const double _spacingXs = 4;
+  static const double _spacingSm = 8;
+  static const double _spacingMd = 16;
+  static const double _spacingLg = 24;
+  static const double _lensShiftCenterGap = 30;
+
+  // ── State ─────────────────────────────────────────────────────────────────
   String _selectedLens = 'VXX:LNEI1=+00001';
   String _selectedTestPattern = 'OTS:87';
+  bool _isSending = false;
+
+  // ── Data ──────────────────────────────────────────────────────────────────
+  static const Map<String, String> _lensOptions = {
+    'VXX:LNEI1=+00001': 'ET-D75LE6',
+    'VXX:LNEI1=+00002': 'ET-D75LE10',
+    'VXX:LNEI1=+00003': 'ET-D75LE20',
+    'VXX:LNEI1=+00004': 'ET-D75LE30',
+    'VXX:LNEI1=+00005': 'ET-D75LE40',
+    'VXX:LNEI1=+00006': 'ET-D75LE8',
+    'VXX:LNEI1=+00007': 'ET-D75LE95',
+    'VXX:LNEI1=+00008': 'ET-D75LE90',
+    'VXX:LNEI1=+00009': 'ET-D75LE50',
+  };
+
+  static const Map<String, String> _testPatternOptions = {
+    'OTS:01': 'White',
+    'OTS:02': 'Black',
+    'OTS:05': 'Window',
+    'OTS:06': 'Reversed Window',
+    'OTS:07': 'Cross Hatch',
+    'OTS:08': 'Color Bar V',
+    'OTS:32': 'Focus (Level 0%)',
+    'OTS:33': 'Focus (Level 50%)',
+    'OTS:34': 'Focus (Level 100%)',
+    'OTS:51': 'Color Bar Side',
+    'OTS:59': '16:9/4:3',
+    'OTS:70': 'Focus Red',
+    'OTS:71': 'Focus Green',
+    'OTS:72': 'Focus Blue',
+    'OTS:73': 'Focus Cyan',
+    'OTS:74': 'Focus Magenta',
+    'OTS:75': 'Focus Yellow',
+    'OTS:78': 'Focus',
+    'OTS:87': 'Circle',
+  };
+
+  static const List<(String, String)> _inputOptions = [
+    ('DVI', 'IIS:DVI'),
+    ('HDMI', 'IIS:HD1'),
+    ('SDI', 'IIS:SD1'),
+    ('DLINK', 'IIS:DL1'),
+  ];
+
+  // ── Motor command throttle ────────────────────────────────────────────────
+  Future<void> _throttledSend(String cmd) async {
+    if (_isSending) return;
+    setState(() => _isSending = true);
+    try {
+      await ref.read(workspaceProvider.notifier).sendCommandToSelected(cmd);
+    } finally {
+      if (mounted) setState(() => _isSending = false);
+    }
+  }
+
+  // ── Widget helpers ────────────────────────────────────────────────────────
+
+  /// Builds a labelled section title.
+  Widget _buildSectionHeader(BuildContext context, String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: _spacingSm),
+      child: Text(
+        title,
+        style: Theme.of(
+          context,
+        ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+
+  /// Two equally-wide `OutlinedButton`s side by side that send discrete commands.
+  Widget _buildCommandPair(
+    String label1,
+    String cmd1,
+    String label2,
+    String cmd2, {
+    required bool enabled,
+  }) {
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton(
+            onPressed: enabled
+                ? () => ref
+                      .read(workspaceProvider.notifier)
+                      .sendCommandToSelected(cmd1)
+                : null,
+            child: Text(label1),
+          ),
+        ),
+        const SizedBox(width: _spacingSm),
+        Expanded(
+          child: OutlinedButton(
+            onPressed: enabled
+                ? () => ref
+                      .read(workspaceProvider.notifier)
+                      .sendCommandToSelected(cmd2)
+                : null,
+            child: Text(label2),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Six motor-control buttons (fast/normal/slow in each direction) for a
+  /// single linear axis such as Focus or Zoom.
+  ///
+  /// [cmdBase] is the NTCONTROL command prefix, e.g. `VXX:LNSI4`.
+  /// Suffix pattern: `=+SSSSSD` where SSS = speed (200/100/000) and D = direction
+  /// (1 = left/near/out, 0 = right/far/in).
+  Widget _buildLinearControl(
+    String title,
+    String cmdBase, {
+    required bool enabled,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader(context, title),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          spacing: _spacingXs,
+          children: [
+            _SvgBtn(
+              assetPath: 'assets/icons/left_fast.svg',
+              tooltip: '$title — Left Fast',
+              onPressed: enabled
+                  ? () => _throttledSend('$cmdBase=+00201')
+                  : null,
+            ),
+            _SvgBtn(
+              assetPath: 'assets/icons/left_normal.svg',
+              tooltip: '$title — Left',
+              onPressed: enabled
+                  ? () => _throttledSend('$cmdBase=+00101')
+                  : null,
+            ),
+            _SvgBtn(
+              assetPath: 'assets/icons/left_slow.svg',
+              tooltip: '$title — Left Slow',
+              onPressed: enabled
+                  ? () => _throttledSend('$cmdBase=+00001')
+                  : null,
+            ),
+            const Spacer(),
+            _SvgBtn(
+              assetPath: 'assets/icons/right_slow.svg',
+              tooltip: '$title — Right Slow',
+              onPressed: enabled
+                  ? () => _throttledSend('$cmdBase=+00000')
+                  : null,
+            ),
+            _SvgBtn(
+              assetPath: 'assets/icons/right_normal.svg',
+              tooltip: '$title — Right',
+              onPressed: enabled
+                  ? () => _throttledSend('$cmdBase=+00100')
+                  : null,
+            ),
+            _SvgBtn(
+              assetPath: 'assets/icons/right_fast.svg',
+              tooltip: '$title — Right Fast',
+              onPressed: enabled
+                  ? () => _throttledSend('$cmdBase=+00200')
+                  : null,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
-    final notifier = ref.read(workspaceProvider.notifier);
+    final hasSelection = ref.watch(
+      workspaceProvider.select((nodes) => nodes.any((n) => n.isSelected)),
+    );
 
     return Container(
-      width: 320,
+      width: _barWidth,
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         border: Border(
@@ -44,249 +229,205 @@ class _ControlBarState extends ConsumerState<ControlBar> {
             Expanded(
               child: TabBarView(
                 children: [
-                  // General Tab
+                  // ── General Tab ──────────────────────────────────────────
                   ListView(
-                    padding: const EdgeInsets.all(16.0),
+                    padding: const EdgeInsets.all(_spacingMd),
                     children: [
+                      // Power
                       _buildSectionHeader(context, 'Power'),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: () =>
-                                  notifier.sendCommandToSelected('PON'),
-                              child: const Text('On'),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: () =>
-                                  notifier.sendCommandToSelected('POF'),
-                              child: const Text('Standby'),
-                            ),
-                          ),
-                        ],
+                      _buildCommandPair(
+                        'On',
+                        'PON',
+                        'Standby',
+                        'POF',
+                        enabled: hasSelection,
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: _spacingMd),
 
+                      // Shutter
                       _buildSectionHeader(context, 'Shutter'),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: () =>
-                                  notifier.sendCommandToSelected('OSH:0'),
-                              child: const Text('Open'),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: () =>
-                                  notifier.sendCommandToSelected('OSH:1'),
-                              child: const Text('Close'),
-                            ),
-                          ),
-                        ],
+                      _buildCommandPair(
+                        'Open',
+                        'OSH:0',
+                        'Close',
+                        'OSH:1',
+                        enabled: hasSelection,
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: _spacingMd),
 
+                      // OSD
                       _buildSectionHeader(context, 'OSD'),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: () =>
-                                  notifier.sendCommandToSelected('OOS:1'),
-                              child: const Text('On'),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: () =>
-                                  notifier.sendCommandToSelected('OOS:0'),
-                              child: const Text('Off'),
-                            ),
-                          ),
-                        ],
+                      _buildCommandPair(
+                        'On',
+                        'OOS:1',
+                        'Off',
+                        'OOS:0',
+                        enabled: hasSelection,
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: _spacingMd),
 
+                      // Inputs
                       _buildSectionHeader(context, 'Inputs'),
                       Row(
                         children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 2,
+                          for (final (label, cmd) in _inputOptions) ...[
+                            Expanded(
+                              child: OutlinedButton(
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: _spacingXs,
+                                  ),
                                 ),
+                                onPressed: hasSelection
+                                    ? () => ref
+                                          .read(workspaceProvider.notifier)
+                                          .sendCommandToSelected(cmd)
+                                    : null,
+                                child: FittedBox(child: Text(label)),
                               ),
-                              onPressed: () =>
-                                  notifier.sendCommandToSelected('IIS:DVI'),
-                              child: const FittedBox(child: Text('DVI')),
                             ),
-                          ),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: OutlinedButton(
-                              style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 2,
-                                ),
-                              ),
-                              onPressed: () =>
-                                  notifier.sendCommandToSelected('IIS:HD1'),
-                              child: const FittedBox(child: Text('HDMI')),
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: OutlinedButton(
-                              style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 2,
-                                ),
-                              ),
-                              onPressed: () =>
-                                  notifier.sendCommandToSelected('IIS:SD1'),
-                              child: const FittedBox(child: Text('SDI')),
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: OutlinedButton(
-                              style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 2,
-                                ),
-                              ),
-                              onPressed: () =>
-                                  notifier.sendCommandToSelected('IIS:DL1'),
-                              child: const FittedBox(child: Text('DLINK')),
-                            ),
-                          ),
+                            if (label != _inputOptions.last.$1)
+                              const SizedBox(width: _spacingXs),
+                          ],
                         ],
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: _spacingMd),
                       const Divider(),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: _spacingMd),
 
+                      // Lens Shift D-Pad
                       _buildSectionHeader(context, 'Lens Shift'),
-                      // D-Pad for Lens Shift
                       Center(
                         child: Column(
                           children: [
                             _SvgBtn(
-                              'assets/icons/up_fast.svg',
-                              () => notifier.sendCommandToSelected(
-                                'VXX:LNSI3=+00200',
-                              ),
+                              assetPath: 'assets/icons/up_fast.svg',
+                              tooltip: 'Shift Up Fast',
+                              onPressed: hasSelection
+                                  ? () => _throttledSend('VXX:LNSI3=+00200')
+                                  : null,
                             ),
-                            const SizedBox(height: 4),
+                            const SizedBox(height: _spacingXs),
                             _SvgBtn(
-                              'assets/icons/up_normal.svg',
-                              () => notifier.sendCommandToSelected(
-                                'VXX:LNSI3=+00100',
-                              ),
+                              assetPath: 'assets/icons/up_normal.svg',
+                              tooltip: 'Shift Up',
+                              onPressed: hasSelection
+                                  ? () => _throttledSend('VXX:LNSI3=+00100')
+                                  : null,
                             ),
-                            const SizedBox(height: 4),
+                            const SizedBox(height: _spacingXs),
                             _SvgBtn(
-                              'assets/icons/up_slow.svg',
-                              () => notifier.sendCommandToSelected(
-                                'VXX:LNSI3=+00000',
-                              ),
+                              assetPath: 'assets/icons/up_slow.svg',
+                              tooltip: 'Shift Up Slow',
+                              onPressed: hasSelection
+                                  ? () => _throttledSend('VXX:LNSI3=+00000')
+                                  : null,
                             ),
-                            // const SizedBox(height: 2),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 _SvgBtn(
-                                  'assets/icons/left_fast.svg',
-                                  () => notifier.sendCommandToSelected(
-                                    'VXX:LNSI2=+00201',
-                                  ),
+                                  assetPath: 'assets/icons/left_fast.svg',
+                                  tooltip: 'Shift Left Fast',
+                                  onPressed: hasSelection
+                                      ? () => _throttledSend('VXX:LNSI2=+00201')
+                                      : null,
                                 ),
-                                const SizedBox(width: 4),
+                                const SizedBox(width: _spacingXs),
                                 _SvgBtn(
-                                  'assets/icons/left_normal.svg',
-                                  () => notifier.sendCommandToSelected(
-                                    'VXX:LNSI2=+00101',
-                                  ),
+                                  assetPath: 'assets/icons/left_normal.svg',
+                                  tooltip: 'Shift Left',
+                                  onPressed: hasSelection
+                                      ? () => _throttledSend('VXX:LNSI2=+00101')
+                                      : null,
                                 ),
-                                const SizedBox(width: 4),
+                                const SizedBox(width: _spacingXs),
                                 _SvgBtn(
-                                  'assets/icons/left_slow.svg',
-                                  () => notifier.sendCommandToSelected(
-                                    'VXX:LNSI2=+00001',
-                                  ),
+                                  assetPath: 'assets/icons/left_slow.svg',
+                                  tooltip: 'Shift Left Slow',
+                                  onPressed: hasSelection
+                                      ? () => _throttledSend('VXX:LNSI2=+00001')
+                                      : null,
                                 ),
-                                const SizedBox(width: 30),
+                                const SizedBox(width: _lensShiftCenterGap),
                                 _SvgBtn(
-                                  'assets/icons/right_slow.svg',
-                                  () => notifier.sendCommandToSelected(
-                                    'VXX:LNSI2=+00000',
-                                  ),
+                                  assetPath: 'assets/icons/right_slow.svg',
+                                  tooltip: 'Shift Right Slow',
+                                  onPressed: hasSelection
+                                      ? () => _throttledSend('VXX:LNSI2=+00000')
+                                      : null,
                                 ),
-                                const SizedBox(width: 4),
+                                const SizedBox(width: _spacingXs),
                                 _SvgBtn(
-                                  'assets/icons/right_normal.svg',
-                                  () => notifier.sendCommandToSelected(
-                                    'VXX:LNSI2=+00100',
-                                  ),
+                                  assetPath: 'assets/icons/right_normal.svg',
+                                  tooltip: 'Shift Right',
+                                  onPressed: hasSelection
+                                      ? () => _throttledSend('VXX:LNSI2=+00100')
+                                      : null,
                                 ),
-                                const SizedBox(width: 4),
+                                const SizedBox(width: _spacingXs),
                                 _SvgBtn(
-                                  'assets/icons/right_fast.svg',
-                                  () => notifier.sendCommandToSelected(
-                                    'VXX:LNSI2=+00200',
-                                  ),
+                                  assetPath: 'assets/icons/right_fast.svg',
+                                  tooltip: 'Shift Right Fast',
+                                  onPressed: hasSelection
+                                      ? () => _throttledSend('VXX:LNSI2=+00200')
+                                      : null,
                                 ),
                               ],
                             ),
-                            // const SizedBox(height: 4),
                             _SvgBtn(
-                              'assets/icons/down_slow.svg',
-                              () => notifier.sendCommandToSelected(
-                                'VXX:LNSI3=+00001',
-                              ),
+                              assetPath: 'assets/icons/down_slow.svg',
+                              tooltip: 'Shift Down Slow',
+                              onPressed: hasSelection
+                                  ? () => _throttledSend('VXX:LNSI3=+00001')
+                                  : null,
                             ),
-                            const SizedBox(height: 4),
+                            const SizedBox(height: _spacingXs),
                             _SvgBtn(
-                              'assets/icons/down_normal.svg',
-                              () => notifier.sendCommandToSelected(
-                                'VXX:LNSI3=+00101',
-                              ),
+                              assetPath: 'assets/icons/down_normal.svg',
+                              tooltip: 'Shift Down',
+                              onPressed: hasSelection
+                                  ? () => _throttledSend('VXX:LNSI3=+00101')
+                                  : null,
                             ),
-                            const SizedBox(height: 4),
+                            const SizedBox(height: _spacingXs),
                             _SvgBtn(
-                              'assets/icons/down_fast.svg',
-                              () => notifier.sendCommandToSelected(
-                                'VXX:LNSI3=+00201',
-                              ),
+                              assetPath: 'assets/icons/down_fast.svg',
+                              tooltip: 'Shift Down Fast',
+                              onPressed: hasSelection
+                                  ? () => _throttledSend('VXX:LNSI3=+00201')
+                                  : null,
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: _spacingLg),
+
+                      // Lens Home / Calibration
                       Row(
                         children: [
                           Expanded(
                             child: OutlinedButton(
-                              onPressed: () => notifier.sendCommandToSelected(
-                                'VXX:LNSI1=+00001',
-                              ),
+                              onPressed: hasSelection
+                                  ? () => ref
+                                        .read(workspaceProvider.notifier)
+                                        .sendCommandToSelected(
+                                          'VXX:LNSI1=+00001',
+                                        )
+                                  : null,
                               child: const FittedBox(child: Text('Home Pos.')),
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: _spacingSm),
                           Expanded(
                             child: OutlinedButton(
-                              onPressed: () => notifier.sendCommandToSelected(
-                                'VXX:LNSI0=+00001',
-                              ),
+                              onPressed: hasSelection
+                                  ? () => ref
+                                        .read(workspaceProvider.notifier)
+                                        .sendCommandToSelected(
+                                          'VXX:LNSI0=+00001',
+                                        )
+                                  : null,
                               child: const FittedBox(
                                 child: Text('Calibration'),
                               ),
@@ -294,223 +435,103 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: _spacingSm),
+
+                      // Lens type selector
                       Row(
                         children: [
                           Expanded(
-                            child: DropdownButtonFormField<String>(
-                              isExpanded: true,
-                              menuMaxHeight: 250,
-                              // ignore: deprecated_member_use
-                              value: _selectedLens,
-                              items: const [
-                                DropdownMenuItem(
-                                  value: 'VXX:LNEI1=+00001',
-                                  child: Text(
-                                    'ET-D75LE6',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'VXX:LNEI1=+00002',
-                                  child: Text(
-                                    'ET-D75LE10',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'VXX:LNEI1=+00003',
-                                  child: Text(
-                                    'ET-D75LE20',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'VXX:LNEI1=+00004',
-                                  child: Text(
-                                    'ET-D75LE30',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'VXX:LNEI1=+00005',
-                                  child: Text(
-                                    'ET-D75LE40',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'VXX:LNEI1=+00006',
-                                  child: Text(
-                                    'ET-D75LE8',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'VXX:LNEI1=+00007',
-                                  child: Text(
-                                    'ET-D75LE95',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'VXX:LNEI1=+00008',
-                                  child: Text(
-                                    'ET-D75LE90',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'VXX:LNEI1=+00009',
-                                  child: Text(
-                                    'ET-D75LE50',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                              onChanged: (val) {
-                                if (val != null) {
-                                  setState(() {
-                                    _selectedLens = val;
-                                  });
-                                }
+                            child: DropdownMenu<String>(
+                              requestFocusOnTap: false,
+                              enableFilter: false,
+                              expandedInsets: EdgeInsets.zero,
+                              menuHeight: 250,
+                              initialSelection: _selectedLens,
+                              dropdownMenuEntries: _lensOptions.entries
+                                  .map(
+                                    (e) => DropdownMenuEntry<String>(
+                                      value: e.key,
+                                      label: e.value,
+                                    ),
+                                  )
+                                  .toList(),
+                              onSelected: (val) {
+                                if (val != null)
+                                  setState(() => _selectedLens = val);
                               },
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: _spacingSm),
                           OutlinedButton(
-                            onPressed: () =>
-                                notifier.sendCommandToSelected(_selectedLens),
+                            onPressed: hasSelection
+                                ? () => ref
+                                      .read(workspaceProvider.notifier)
+                                      .sendCommandToSelected(_selectedLens)
+                                : null,
                             child: const Text('Set'),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: _spacingMd),
                       const Divider(),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: _spacingMd),
 
-                      _buildSectionHeader(context, 'Focus'),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        spacing: 4.0,
-                        children: [
-                          _SvgBtn(
-                            'assets/icons/left_fast.svg',
-                            () => notifier.sendCommandToSelected(
-                              'VXX:LNSI4=+00201',
-                            ),
-                          ),
-                          _SvgBtn(
-                            'assets/icons/left_normal.svg',
-                            () => notifier.sendCommandToSelected(
-                              'VXX:LNSI4=+00101',
-                            ),
-                          ),
-                          _SvgBtn(
-                            'assets/icons/left_slow.svg',
-                            () => notifier.sendCommandToSelected(
-                              'VXX:LNSI4=+00001',
-                            ),
-                          ),
-                          const Spacer(),
-                          _SvgBtn(
-                            'assets/icons/right_slow.svg',
-                            () => notifier.sendCommandToSelected(
-                              'VXX:LNSI4=+00000',
-                            ),
-                          ),
-                          _SvgBtn(
-                            'assets/icons/right_normal.svg',
-                            () => notifier.sendCommandToSelected(
-                              'VXX:LNSI4=+00100',
-                            ),
-                          ),
-                          _SvgBtn(
-                            'assets/icons/right_fast.svg',
-                            () => notifier.sendCommandToSelected(
-                              'VXX:LNSI4=+00200',
-                            ),
-                          ),
-                        ],
+                      // Focus
+                      _buildLinearControl(
+                        'Focus',
+                        'VXX:LNSI4',
+                        enabled: hasSelection,
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: _spacingMd),
 
-                      _buildSectionHeader(context, 'Zoom'),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        spacing: 4.0,
-                        children: [
-                          _SvgBtn(
-                            'assets/icons/left_fast.svg',
-                            () => notifier.sendCommandToSelected(
-                              'VXX:LNSI5=+00201',
-                            ),
-                          ),
-                          _SvgBtn(
-                            'assets/icons/left_normal.svg',
-                            () => notifier.sendCommandToSelected(
-                              'VXX:LNSI5=+00101',
-                            ),
-                          ),
-                          _SvgBtn(
-                            'assets/icons/left_slow.svg',
-                            () => notifier.sendCommandToSelected(
-                              'VXX:LNSI5=+00001',
-                            ),
-                          ),
-                          const Spacer(),
-                          _SvgBtn(
-                            'assets/icons/right_slow.svg',
-                            () => notifier.sendCommandToSelected(
-                              'VXX:LNSI5=+00000',
-                            ),
-                          ),
-                          _SvgBtn(
-                            'assets/icons/right_normal.svg',
-                            () => notifier.sendCommandToSelected(
-                              'VXX:LNSI5=+00100',
-                            ),
-                          ),
-                          _SvgBtn(
-                            'assets/icons/right_fast.svg',
-                            () => notifier.sendCommandToSelected(
-                              'VXX:LNSI5=+00200',
-                            ),
-                          ),
-                        ],
+                      // Zoom
+                      _buildLinearControl(
+                        'Zoom',
+                        'VXX:LNSI5',
+                        enabled: hasSelection,
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: _spacingMd),
                       const Divider(),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: _spacingMd),
 
+                      // Test Patterns
                       _buildSectionHeader(context, 'Test Patterns'),
                       Row(
                         children: [
                           Expanded(
                             child: OutlinedButton(
-                              onPressed: () =>
-                                  notifier.sendCommandToSelected('OTS:00'),
+                              onPressed: hasSelection
+                                  ? () => ref
+                                        .read(workspaceProvider.notifier)
+                                        .sendCommandToSelected('OTS:00')
+                                  : null,
                               child: const Text('OFF'),
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: _spacingSm),
                           Expanded(
                             child: OutlinedButton(
-                              onPressed: () =>
-                                  notifier.sendCommandToSelected('OTS:01'),
+                              onPressed: hasSelection
+                                  ? () => ref
+                                        .read(workspaceProvider.notifier)
+                                        .sendCommandToSelected('OTS:01')
+                                  : null,
                               child: const Text('White'),
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: _spacingSm),
                           Expanded(
                             child: OutlinedButton(
                               style: OutlinedButton.styleFrom(
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 2,
+                                  horizontal: _spacingXs,
                                 ),
                               ),
-                              onPressed: () =>
-                                  notifier.sendCommandToSelected('OTS:07'),
+                              onPressed: hasSelection
+                                  ? () => ref
+                                        .read(workspaceProvider.notifier)
+                                        .sendCommandToSelected('OTS:07')
+                                  : null,
                               child: const FittedBox(
                                 child: Text('Cross Hatch'),
                               ),
@@ -518,209 +539,50 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: _spacingSm),
+
+                      // Test pattern selector
                       Row(
                         children: [
                           Expanded(
-                            child: DropdownButtonFormField<String>(
-                              isExpanded: true,
-                              menuMaxHeight: 300,
-                              // ignore: deprecated_member_use
-                              value: _selectedTestPattern,
-                              items: const [
-                                DropdownMenuItem(
-                                  value: 'OTS:00',
-                                  child: Text(
-                                    'Off',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'OTS:01',
-                                  child: Text(
-                                    'White',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'OTS:02',
-                                  child: Text(
-                                    'Black',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'OTS:05',
-                                  child: Text(
-                                    'Window',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'OTS:06',
-                                  child: Text(
-                                    'Reversed Window',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'OTS:07',
-                                  child: Text(
-                                    'Cross Hatch',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'OTS:08',
-                                  child: Text(
-                                    'Color Bar V',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'OTS:32',
-                                  child: Text(
-                                    'Focus (Level 0%)',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'OTS:33',
-                                  child: Text(
-                                    'Focus (Level 50%)',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'OTS:34',
-                                  child: Text(
-                                    'Focus (Level 100%)',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'OTS:51',
-                                  child: Text(
-                                    'Color Bar Side',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'OTS:59',
-                                  child: Text(
-                                    '16:9/4:3',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'OTS:70',
-                                  child: Text(
-                                    'Focus Red',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'OTS:71',
-                                  child: Text(
-                                    'Focus Green',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'OTS:72',
-                                  child: Text(
-                                    'Focus Blue',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'OTS:73',
-                                  child: Text(
-                                    'Focus Cyan',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'OTS:74',
-                                  child: Text(
-                                    'Focus Magenta',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'OTS:75',
-                                  child: Text(
-                                    'Focus Yellow',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'OTS:78',
-                                  child: Text(
-                                    'Focus',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'OTS:80',
-                                  child: Text(
-                                    '3D-1',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'OTS:81',
-                                  child: Text(
-                                    '3D-2',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'OTS:82',
-                                  child: Text(
-                                    '3D-3',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'OTS:83',
-                                  child: Text(
-                                    '3D-4',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'OTS:87',
-                                  child: Text(
-                                    'Circle',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                              onChanged: (val) {
-                                if (val != null) {
-                                  setState(() {
-                                    _selectedTestPattern = val;
-                                  });
-                                }
+                            child: DropdownMenu<String>(
+                              requestFocusOnTap: false,
+                              enableFilter: false,
+                              expandedInsets: EdgeInsets.zero,
+                              menuHeight: 300,
+                              initialSelection: _selectedTestPattern,
+                              dropdownMenuEntries: _testPatternOptions.entries
+                                  .map(
+                                    (e) => DropdownMenuEntry<String>(
+                                      value: e.key,
+                                      label: e.value,
+                                    ),
+                                  )
+                                  .toList(),
+                              onSelected: (val) {
+                                if (val != null)
+                                  setState(() => _selectedTestPattern = val);
                               },
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: _spacingSm),
                           OutlinedButton(
-                            onPressed: () {
-                              notifier.sendCommandToSelected(
-                                _selectedTestPattern,
-                              );
-                            },
+                            onPressed: hasSelection
+                                ? () => ref
+                                      .read(workspaceProvider.notifier)
+                                      .sendCommandToSelected(
+                                        _selectedTestPattern,
+                                      )
+                                : null,
                             child: const Text('Set'),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: _spacingLg),
                     ],
                   ),
-                  // System Tab
+
+                  // ── System Tab ───────────────────────────────────────────
                   const Center(
                     child: Text('System configuration not yet implemented.'),
                   ),
@@ -732,33 +594,29 @@ class _ControlBarState extends ConsumerState<ControlBar> {
       ),
     );
   }
-
-  Widget _buildSectionHeader(BuildContext context, String title) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
-      child: Text(
-        title,
-        style: Theme.of(
-          context,
-        ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
-      ),
-    );
-  }
 }
 
 class _SvgBtn extends StatelessWidget {
   final String assetPath;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
+  final String tooltip;
 
-  const _SvgBtn(this.assetPath, this.onPressed);
+  static const double _size = 40;
+
+  const _SvgBtn({
+    required this.assetPath,
+    required this.onPressed,
+    required this.tooltip,
+  });
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 40,
-      height: 40,
+      width: _size,
+      height: _size,
       child: IconButton.outlined(
         padding: EdgeInsets.zero,
+        tooltip: tooltip,
         icon: SvgPicture.asset(
           assetPath,
           width: 20,
