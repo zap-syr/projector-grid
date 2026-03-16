@@ -227,8 +227,16 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
         if (success) {
           if (cmd == 'PON') {
             state = state.map((n) => n.id == node.id ? n.copyWith(powerStatus: PowerStatus.on) : n).toList();
+            // Projector warming up: check shutter status in 8 seconds
+            Future.delayed(const Duration(seconds: 8), () async {
+              _pollSpecificTelemetry(node, 'QSH');
+            });
           } else if (cmd == 'POF') {
             state = state.map((n) => n.id == node.id ? n.copyWith(powerStatus: PowerStatus.standby) : n).toList();
+            // Projector cooling down: check shutter status in 5 seconds
+            Future.delayed(const Duration(seconds: 5), () async {
+              _pollSpecificTelemetry(node, 'QSH');
+            });
           } else if (cmd == 'OSH:0') {
             state = state.map((n) => n.id == node.id ? n.copyWith(shutterStatus: ShutterStatus.open) : n).toList();
           } else if (cmd == 'OSH:1') {
@@ -236,6 +244,34 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
           }
         }
       }
+    }
+  }
+
+  // Helper to fetch a single specific telemetry string without hitting the entire sequence
+  Future<void> _pollSpecificTelemetry(ProjectorNode initialNode, String command) async {
+    // Re-find the node to ensure we have the most current credentials/IP
+    final idx = state.indexWhere((n) => n.id == initialNode.id);
+    if (idx == -1) return;
+    final node = state[idx];
+
+    final response = await _protocolService.sendRawCommand(
+      node.ipAddress, 
+      node.port, 
+      node.login, 
+      node.password, 
+      command
+    );
+
+    if (response != null && response != 'Timeout' && !response.contains('Error') && !response.contains('ERRA')) {
+      state = state.map((n) {
+        if (n.id == node.id) {
+          if (command == 'QSH') {
+             return n.copyWith(shutterStatus: response == '1' ? ShutterStatus.closed : ShutterStatus.open);
+          }
+          // Add other specific telemetry command parses here if needed later
+        }
+        return n;
+      }).toList();
     }
   }
 

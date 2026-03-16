@@ -56,7 +56,7 @@ class PanasonicProtocolService {
     Socket? socket;
     StreamSubscription? subscription;
     try {
-      socket = await Socket.connect(ip, port, timeout: const Duration(milliseconds: 2000));
+      socket = await Socket.connect(ip, port, timeout: const Duration(seconds: 4));
       
       Completer<String>? currentCompleter = Completer<String>();
       StringBuffer buffer = StringBuffer();
@@ -86,7 +86,7 @@ class PanasonicProtocolService {
         },
       );
 
-      final initResponse = await currentCompleter.future.timeout(const Duration(seconds: 3));
+      final initResponse = await currentCompleter.future.timeout(const Duration(seconds: 5));
       
       if (!initResponse.startsWith('NTCONTROL')) {
         await subscription.cancel();
@@ -110,7 +110,7 @@ class PanasonicProtocolService {
       socket.add(ascii.encode(fullCmd));
       await socket.flush();
       
-      final response = await currentCompleter.future.timeout(const Duration(seconds: 3));
+      final response = await currentCompleter.future.timeout(const Duration(seconds: 5));
       
       final headerIndex = response.indexOf('00');
       if (headerIndex != -1 && response.length > headerIndex + 2) {
@@ -134,6 +134,15 @@ class PanasonicProtocolService {
       return false;
     }
     return true;
+  }
+
+  /// Sends a specific command and returns its raw string response.
+  Future<String?> sendRawCommand(String ip, int port, String login, String password, String cmd) async {
+    final response = await _sendSingleCommand(ip, port, login, password, cmd);
+    if (response == 'Timeout' || response.contains('ERRA')) {
+      return null;
+    }
+    return response;
   }
 
   /// Polls all essential telemetry points for the Monitoring Table

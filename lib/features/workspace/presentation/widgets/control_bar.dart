@@ -185,21 +185,21 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                                 'VXX:LNSI3=+00200',
                               ),
                             ),
-                            const SizedBox(height: 2),
+                            const SizedBox(height: 4),
                             _SvgBtn(
                               'assets/icons/up_normal.svg',
                               () => notifier.sendCommandToSelected(
                                 'VXX:LNSI3=+00100',
                               ),
                             ),
-                            const SizedBox(height: 2),
+                            const SizedBox(height: 4),
                             _SvgBtn(
                               'assets/icons/up_slow.svg',
                               () => notifier.sendCommandToSelected(
                                 'VXX:LNSI3=+00000',
                               ),
                             ),
-                            const SizedBox(height: 4),
+                            // const SizedBox(height: 2),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
@@ -209,35 +209,35 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                                     'VXX:LNSI2=+00201',
                                   ),
                                 ),
-                                const SizedBox(width: 2),
+                                const SizedBox(width: 4),
                                 _SvgBtn(
                                   'assets/icons/left_normal.svg',
                                   () => notifier.sendCommandToSelected(
                                     'VXX:LNSI2=+00101',
                                   ),
                                 ),
-                                const SizedBox(width: 2),
+                                const SizedBox(width: 4),
                                 _SvgBtn(
                                   'assets/icons/left_slow.svg',
                                   () => notifier.sendCommandToSelected(
                                     'VXX:LNSI2=+00001',
                                   ),
                                 ),
-                                const SizedBox(width: 16),
+                                const SizedBox(width: 30),
                                 _SvgBtn(
                                   'assets/icons/right_slow.svg',
                                   () => notifier.sendCommandToSelected(
                                     'VXX:LNSI2=+00000',
                                   ),
                                 ),
-                                const SizedBox(width: 2),
+                                const SizedBox(width: 4),
                                 _SvgBtn(
                                   'assets/icons/right_normal.svg',
                                   () => notifier.sendCommandToSelected(
                                     'VXX:LNSI2=+00100',
                                   ),
                                 ),
-                                const SizedBox(width: 2),
+                                const SizedBox(width: 4),
                                 _SvgBtn(
                                   'assets/icons/right_fast.svg',
                                   () => notifier.sendCommandToSelected(
@@ -246,21 +246,21 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 4),
+                            // const SizedBox(height: 4),
                             _SvgBtn(
                               'assets/icons/down_slow.svg',
                               () => notifier.sendCommandToSelected(
                                 'VXX:LNSI3=+00001',
                               ),
                             ),
-                            const SizedBox(height: 2),
+                            const SizedBox(height: 4),
                             _SvgBtn(
                               'assets/icons/down_normal.svg',
                               () => notifier.sendCommandToSelected(
                                 'VXX:LNSI3=+00101',
                               ),
                             ),
-                            const SizedBox(height: 2),
+                            const SizedBox(height: 4),
                             _SvgBtn(
                               'assets/icons/down_fast.svg',
                               () => notifier.sendCommandToSelected(
@@ -270,12 +270,33 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 16),
-                      // Lens Assignment
+                      const SizedBox(height: 24),
                       Row(
                         children: [
-                          const Text('Lens:'),
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () => notifier.sendCommandToSelected(
+                                'VXX:LNSI1=+00001',
+                              ),
+                              child: const FittedBox(child: Text('Home Pos.')),
+                            ),
+                          ),
                           const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () => notifier.sendCommandToSelected(
+                                'VXX:LNSI0=+00001',
+                              ),
+                              child: const FittedBox(
+                                child: Text('Calibration'),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
                           Expanded(
                             child: DropdownButtonFormField<String>(
                               isExpanded: true,
@@ -356,40 +377,13 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                               },
                             ),
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: () => notifier.sendCommandToSelected(
-                                'VXX:LNSI1=+00001',
-                              ),
-                              child: const FittedBox(child: Text('Home Pos.')),
-                            ),
-                          ),
                           const SizedBox(width: 8),
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: () => notifier.sendCommandToSelected(
-                                'VXX:LNSI0=+00001',
-                              ),
-                              child: const FittedBox(
-                                child: Text('Calibration'),
-                              ),
-                            ),
+                          OutlinedButton(
+                            onPressed: () =>
+                                notifier.sendCommandToSelected(_selectedLens),
+                            child: const Text('Set'),
                           ),
                         ],
-                      ),
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton(
-                          onPressed: () =>
-                              notifier.sendCommandToSelected(_selectedLens),
-                          child: const Text('Set Lens'),
-                        ),
                       ),
                       const SizedBox(height: 16),
                       const Divider(),
@@ -398,6 +392,7 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                       _buildSectionHeader(context, 'Focus'),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        spacing: 4.0,
                         children: [
                           _SvgBtn(
                             'assets/icons/left_fast.svg',
@@ -443,6 +438,7 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                       _buildSectionHeader(context, 'Zoom'),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        spacing: 4.0,
                         children: [
                           _SvgBtn(
                             'assets/icons/left_fast.svg',
