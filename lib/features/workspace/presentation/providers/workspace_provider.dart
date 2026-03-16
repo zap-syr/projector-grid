@@ -156,9 +156,25 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     }
   }
 
+  static const double _cardWidth = 120;
+  static const double _cardHeight = 100;
+  static const double _gridOriginX = 40;
+  static const double _gridOriginY = 40;
+  static const double _gridHGap = 20;
+  static const double _gridVGap = 40;
+  static const int _gridMaxCols = 10;
+
+  (double, double) _gridPosition(int index) {
+    final col = index % _gridMaxCols;
+    final row = index ~/ _gridMaxCols;
+    return (
+      _gridOriginX + col * (_cardWidth + _gridHGap),
+      _gridOriginY + row * (_cardHeight + _gridVGap),
+    );
+  }
+
   void addProjectors(List<Map<String, dynamic>> configs) {
     final rand = Random();
-    double snap(double val) => (val / 20).round() * 20.0;
 
     int idx = 0;
     final newNodes = configs.map((config) {
@@ -167,6 +183,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
         connStatus = ConnectionStatus.connected;
       }
 
+      final (x, y) = _gridPosition(idx);
       idx++;
       return ProjectorNode(
         id: '${DateTime.now().microsecondsSinceEpoch}_${rand.nextInt(100000)}_$idx',
@@ -175,8 +192,8 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
         port: config['port'] ?? 1024,
         login: config['login'] ?? 'admin1',
         password: config['password'] ?? 'panasonic',
-        x: snap(100.0 + rand.nextInt(200)),
-        y: snap(100.0 + rand.nextInt(200)),
+        x: x,
+        y: y,
         connectionStatus: connStatus,
       );
     }).toList();
