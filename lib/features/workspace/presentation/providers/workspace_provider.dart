@@ -244,6 +244,29 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     }
   }
 
+  void updateNode(String id, String ip, String login, String password) {
+    state = state.map((node) {
+      if (node.id == id) {
+        return node.copyWith(
+          ipAddress: ip,
+          login: login,
+          password: password,
+          connectionStatus: ConnectionStatus.offline, // Will be pinged on next poll or we can ping now
+        );
+      }
+      return node;
+    }).toList();
+    _checkAndSetNodeStatus(id, ip, 1024);
+  }
+
+  void deleteSelected() {
+    state = state.where((node) => !node.isSelected).toList();
+  }
+
+  void deleteNode(String id) {
+    state = state.where((node) => node.id != id).toList();
+  }
+
   void snapNodeToGrid(String id) {
     double snap(double val) => (val / 20).round() * 20.0;
     final targetNode = state.firstWhere((n) => n.id == id);

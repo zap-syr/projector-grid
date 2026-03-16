@@ -4,9 +4,11 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/workspace_provider.dart';
 import 'projector_card.dart';
+import 'edit_projector_dialog.dart';
 
 class SelectAllIntent extends Intent { const SelectAllIntent(); }
 class DeselectAllIntent extends Intent { const DeselectAllIntent(); }
+class DeleteIntent extends Intent { const DeleteIntent(); }
 
 class ProjectorWorkspace extends ConsumerStatefulWidget {
   const ProjectorWorkspace({super.key});
@@ -129,11 +131,31 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
             LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyA): const SelectAllIntent(),
             LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.keyD): const DeselectAllIntent(),
             LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyD): const DeselectAllIntent(),
+            LogicalKeySet(LogicalKeyboardKey.delete): const DeleteIntent(),
           },
           child: Actions(
             actions: {
               SelectAllIntent: CallbackAction<SelectAllIntent>(onInvoke: (intent) => notifier.selectAll()),
               DeselectAllIntent: CallbackAction<DeselectAllIntent>(onInvoke: (intent) => notifier.deselectAll()),
+              DeleteIntent: CallbackAction<DeleteIntent>(onInvoke: (intent) async {
+                final selectedCount = nodes.where((n) => n.isSelected).length;
+                if (selectedCount == 0) return;
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('Delete Projectors'),
+                    content: Text('Are you sure you want to delete $selectedCount selected projector(s)?'),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+                      FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Delete')),
+                    ],
+                  ),
+                );
+                if (confirm == true) {
+                  notifier.deleteSelected();
+                }
+                return null;
+              }),
             },
             child: Focus(
               autofocus: true,
@@ -237,6 +259,36 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
                                           },
                                           onPanEnd: (details) {
                                             notifier.snapNodeToGrid(node.id);
+                                          },
+                                          onEdit: () {
+                                            showDialog(
+                                              context: context,
+                                              builder: (context) => EditProjectorDialog(
+                                                node: node,
+                                                onSave: (ip, login, password) {
+                                                  notifier.updateNode(node.id, ip, login, password);
+                                                },
+                                              ),
+                                            );
+                                          },
+                                          onDelete: () async {
+                                            final confirm = await showDialog<bool>(
+                                              context: context,
+                                              builder: (context) => AlertDialog(
+                                                title: const Text('Delete Projector'),
+                                                content: Text('Are you sure you want to delete ${node.name}?'),
+                                                actions: [
+                                                  TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+                                                  FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Delete')),
+                                                ],
+                                              ),
+                                            );
+                                            if (confirm == true) {
+                                              notifier.deleteNode(node.id);
+                                            }
+                                          },
+                                          onColorCorrection: () {
+                                            // Empty for now
                                           },
                                         )),
 

@@ -5,8 +5,9 @@ import '../../../../core/services/panasonic_protocol_service.dart';
 
 class AddProjectorDialog extends StatefulWidget {
   final Function(List<Map<String, dynamic>>) onAddProjectors;
+  final List<String> existingIps;
 
-  const AddProjectorDialog({super.key, required this.onAddProjectors});
+  const AddProjectorDialog({super.key, required this.onAddProjectors, required this.existingIps});
 
   @override
   State<AddProjectorDialog> createState() => _AddProjectorDialogState();
@@ -55,17 +56,24 @@ class _AddProjectorDialogState extends State<AddProjectorDialog> with SingleTick
               child: TabBarView(
                 controller: _tabController,
                 children: [
-                  _ManualAddTab(onAdd: (projector) {
-                    widget.onAddProjectors([projector]);
-                    Navigator.of(context).pop();
-                  }, onAddMultiple: (projectors) {
-                    widget.onAddProjectors(projectors);
-                    Navigator.of(context).pop();
-                  }),
-                  _AutoDiscoveryTab(onAddSelected: (projectors) {
-                    widget.onAddProjectors(projectors);
-                    Navigator.of(context).pop();
-                  }),
+                  _ManualAddTab(
+                    existingIps: widget.existingIps,
+                    onAdd: (projector) {
+                      widget.onAddProjectors([projector]);
+                      Navigator.of(context).pop();
+                    }, 
+                    onAddMultiple: (projectors) {
+                      widget.onAddProjectors(projectors);
+                      Navigator.of(context).pop();
+                    }
+                  ),
+                  _AutoDiscoveryTab(
+                    existingIps: widget.existingIps,
+                    onAddSelected: (projectors) {
+                      widget.onAddProjectors(projectors);
+                      Navigator.of(context).pop();
+                    }
+                  ),
                 ],
               ),
             ),
@@ -79,8 +87,9 @@ class _AddProjectorDialogState extends State<AddProjectorDialog> with SingleTick
 class _ManualAddTab extends StatefulWidget {
   final Function(Map<String, dynamic>) onAdd;
   final Function(List<Map<String, dynamic>>) onAddMultiple;
+  final List<String> existingIps;
 
-  const _ManualAddTab({required this.onAdd, required this.onAddMultiple});
+  const _ManualAddTab({required this.onAdd, required this.onAddMultiple, required this.existingIps});
 
   @override
   State<_ManualAddTab> createState() => _ManualAddTabState();
@@ -142,20 +151,42 @@ class _ManualAddTabState extends State<_ManualAddTab> {
         }
 
         List<Map<String, dynamic>> results = [];
+        List<String> duplicates = [];
         for (int i = startLast; i <= endLast; i++) {
+          final ip = '$startPrefix.$i';
+          if (widget.existingIps.contains(ip)) {
+            duplicates.add(ip);
+            continue;
+          }
           results.add({
-            'ip': '$startPrefix.$i',
+            'ip': ip,
             'port': port,
             'login': login,
             'password': password,
             'status': 'offline', // default before ping
           });
         }
-        widget.onAddMultiple(results);
+        
+        if (duplicates.isNotEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Skipped ${duplicates.length} duplicate IP(s)')),
+          );
+        }
+        if (results.isNotEmpty) {
+          widget.onAddMultiple(results);
+        }
       } else {
         // Single IP logic
+        final ip = _ipController.text;
+        if (widget.existingIps.contains(ip)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('IP Address already exists in project')),
+          );
+          return;
+        }
+        
         widget.onAdd({
-          'ip': _ipController.text,
+          'ip': ip,
           'port': port,
           'login': login,
           'password': password,
@@ -275,8 +306,9 @@ class _ManualAddTabState extends State<_ManualAddTab> {
 
 class _AutoDiscoveryTab extends StatefulWidget {
   final Function(List<Map<String, dynamic>>) onAddSelected;
+  final List<String> existingIps;
 
-  const _AutoDiscoveryTab({required this.onAddSelected});
+  const _AutoDiscoveryTab({required this.onAddSelected, required this.existingIps});
 
   @override
   State<_AutoDiscoveryTab> createState() => _AutoDiscoveryTabState();
@@ -357,8 +389,12 @@ class _AutoDiscoveryTabState extends State<_AutoDiscoveryTab> {
     stream.listen((result) {
       if (mounted) {
         setState(() {
-          _foundProjectors.add(result);
-          _selectedIps.add(result['ip'] as String);
+          final ip = result['ip'] as String;
+          // Only add to found list if it's not already in the project
+          if (!widget.existingIps.contains(ip)) {
+            _foundProjectors.add(result);
+            _selectedIps.add(ip);
+          }
         });
       }
     }, onDone: () {
@@ -492,6 +528,7 @@ class _AutoDiscoveryTabState extends State<_AutoDiscoveryTab> {
 
                   final results = _foundProjectors
                     .where((p) => _selectedIps.contains(p['ip']))
+                    .where((p) => !widget.existingIps.contains(p['ip'])) // Filter out existing IPs
                     .map((p) => {
                       'ip': p['ip'],
                       'name': p['name'],
@@ -501,7 +538,19 @@ class _AutoDiscoveryTabState extends State<_AutoDiscoveryTab> {
                       'status': p['status'] == 'online' ? 'online' : 'protected',
                     }).toList();
 
-                  widget.onAddSelected(results);
+                  final originalCount = _selectedIps.length;
+                  if (results.length < originalCount) {
+                    final duplicates = originalCount - results.length;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Skipped $duplicates duplicate IP(s) already in project')),
+                    );
+                  }
+
+                  if (results.isNotEmpty) {
+                    widget.onAddSelected(results);
+                  } else {
+                    Navigator.of(context).pop();
+                  }
                 },
                 child: Text('Add Selected (${_selectedIps.length})'),
               ),

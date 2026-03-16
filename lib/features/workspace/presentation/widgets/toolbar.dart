@@ -30,9 +30,11 @@ class MainToolbar extends ConsumerWidget {
         children: [
           FilledButton.icon(
             onPressed: () {
+              final existingIps = ref.read(workspaceProvider).map((n) => n.ipAddress).toList();
               showDialog(
                 context: context,
                 builder: (context) => AddProjectorDialog(
+                  existingIps: existingIps,
                   onAddProjectors: (projectors) {
                     ref.read(workspaceProvider.notifier).addProjectors(projectors);
                   },

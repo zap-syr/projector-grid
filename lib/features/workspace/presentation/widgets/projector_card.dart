@@ -8,6 +8,9 @@ class ProjectorCard extends StatelessWidget {
   final GestureDragDownCallback onPanDown;
   final GestureDragUpdateCallback onPanUpdate;
   final GestureDragEndCallback onPanEnd;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+  final VoidCallback onColorCorrection;
 
   const ProjectorCard({
     super.key,
@@ -17,6 +20,9 @@ class ProjectorCard extends StatelessWidget {
     required this.onPanDown,
     required this.onPanUpdate,
     required this.onPanEnd,
+    required this.onEdit,
+    required this.onDelete,
+    required this.onColorCorrection,
   });
 
   @override
@@ -40,6 +46,26 @@ class ProjectorCard extends StatelessWidget {
           onPanDown: onPanDown,
           onPanUpdate: onPanUpdate,
           onPanEnd: onPanEnd,
+          onSecondaryTapDown: (details) {
+            showMenu(
+              context: context,
+              position: RelativeRect.fromLTRB(
+                details.globalPosition.dx,
+                details.globalPosition.dy,
+                details.globalPosition.dx,
+                details.globalPosition.dy,
+              ),
+              items: const [
+                PopupMenuItem(value: 'edit', child: Text('Edit')),
+                PopupMenuItem(value: 'color', child: Text('Color Correction')),
+                PopupMenuItem(value: 'delete', child: Text('Delete')),
+              ],
+            ).then((value) {
+              if (value == 'edit') onEdit();
+              if (value == 'delete') onDelete();
+              if (value == 'color') onColorCorrection();
+            });
+          },
           child: Container(
             width: 120,
             height: 100,
