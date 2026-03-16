@@ -23,6 +23,12 @@ class _ControlBarState extends ConsumerState<ControlBar> {
   String _selectedLens = 'VXX:LNEI1=+00001';
   String _selectedTestPattern = 'OTS:87';
   bool _isSending = false;
+  String _selectedPictureMode = 'VPM:STD';
+  String _selectedBackColor = 'OBC:0';
+  String _selectedStartupLogo = 'MLO:2';
+  String _selectedProjectionMethod = 'OIL:0';
+  String _selectedShutterFadeIn = 'VXX:SEFS1=0.0';
+  String _selectedShutterFadeOut = 'VXX:SEFS2=0.0';
 
   // ── Data ──────────────────────────────────────────────────────────────────
   static const Map<String, String> _lensOptions = {
@@ -65,6 +71,53 @@ class _ControlBarState extends ConsumerState<ControlBar> {
     ('SDI', 'IIS:SD1'),
     ('DLINK', 'IIS:DL1'),
   ];
+
+  static const Map<String, String> _pictureModeOptions = {
+    'VPM:DYN': 'Dynamic',
+    'VPM:NAT': 'Natural',
+    'VPM:STD': 'Standard',
+    'VPM:CIN': 'Cinema',
+    'VPM:GRA': 'Graphic',
+    'VPM:DIC': 'DICOM Sim.',
+    'VPM:USR': 'User',
+  };
+
+  static const Map<String, String> _backColorOptions = {
+    'OBC:0': 'Blue',
+    'OBC:1': 'Black',
+    'OBC:2': 'User Logo',
+    'OBC:3': 'Default Logo',
+  };
+
+  static const Map<String, String> _startupLogoOptions = {
+    'MLO:0': 'Off',
+    'MLO:1': 'User Logo',
+    'MLO:2': 'Default Logo',
+  };
+
+  static const Map<String, String> _projectionMethodOptions = {
+    'OIL:0': 'Front / Desk',
+    'OIL:1': 'Rear / Desk',
+    'OIL:2': 'Front / Ceiling',
+    'OIL:3': 'Rear / Ceiling',
+    'OIL:4': 'Front / Auto',
+    'OIL:5': 'Rear / Auto',
+  };
+
+  static const Map<String, String> _shutterFadeOptions = {
+    '0.0': '0.0s (OFF)',
+    '0.5': '0.5s',
+    '1.0': '1.0s',
+    '1.5': '1.5s',
+    '2.0': '2.0s',
+    '2.5': '2.5s',
+    '3.0': '3.0s',
+    '3.5': '3.5s',
+    '4.0': '4.0s',
+    '5.0': '5.0s',
+    '7.0': '7.0s',
+    '10.0': '10.0s',
+  };
 
   // ── Motor command throttle ────────────────────────────────────────────────
   Future<void> _throttledSend(String cmd) async {
@@ -182,6 +235,62 @@ class _ControlBarState extends ConsumerState<ControlBar> {
               onPressed: enabled
                   ? () => _throttledSend('$cmdBase=+00200')
                   : null,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  /// A labelled dropdown + Set button row for sending a single selected command.
+  Widget _buildDropdownRow(
+    String title,
+    Map<String, String> options,
+    String selectedValue,
+    void Function(String) onChanged, {
+    required bool enabled,
+    double menuHeight = 250,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader(context, title),
+        Row(
+          children: [
+            Expanded(
+              child: DropdownMenu<String>(
+                requestFocusOnTap: false,
+                enableFilter: false,
+                expandedInsets: EdgeInsets.zero,
+                menuHeight: menuHeight,
+                inputDecorationTheme: InputDecorationTheme(
+                  border: UnderlineInputBorder(
+                    borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
+                  ),
+                  enabledBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
+                  ),
+                  focusedBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 2),
+                  ),
+                ),
+                initialSelection: selectedValue,
+                dropdownMenuEntries: options.entries
+                    .map((e) => DropdownMenuEntry<String>(value: e.key, label: e.value))
+                    .toList(),
+                onSelected: (val) {
+                  if (val != null) onChanged(val);
+                },
+              ),
+            ),
+            const SizedBox(width: _spacingSm),
+            OutlinedButton(
+              onPressed: enabled
+                  ? () => ref
+                        .read(workspaceProvider.notifier)
+                        .sendCommandToSelected(selectedValue)
+                  : null,
+              child: const Text('Set'),
             ),
           ],
         ),
@@ -616,8 +725,87 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                   ),
 
                   // ── System Tab ───────────────────────────────────────────
-                  const Center(
-                    child: Text('System configuration not yet implemented.'),
+                  ListView(
+                    padding: const EdgeInsets.all(_spacingMd),
+                    children: [
+                      // System
+                      _buildSectionHeader(context, 'System'),
+                      _buildDropdownRow(
+                        'Picture Mode',
+                        _pictureModeOptions,
+                        _selectedPictureMode,
+                        (val) => setState(() => _selectedPictureMode = val),
+                        enabled: hasSelection,
+                      ),
+                      const SizedBox(height: _spacingMd),
+                      _buildDropdownRow(
+                        'Back Color',
+                        _backColorOptions,
+                        _selectedBackColor,
+                        (val) => setState(() => _selectedBackColor = val),
+                        enabled: hasSelection,
+                      ),
+                      const SizedBox(height: _spacingMd),
+                      _buildDropdownRow(
+                        'Startup Logo',
+                        _startupLogoOptions,
+                        _selectedStartupLogo,
+                        (val) => setState(() => _selectedStartupLogo = val),
+                        enabled: hasSelection,
+                      ),
+                      const SizedBox(height: _spacingMd),
+                      _buildDropdownRow(
+                        'Projection Method',
+                        _projectionMethodOptions,
+                        _selectedProjectionMethod,
+                        (val) => setState(() => _selectedProjectionMethod = val),
+                        enabled: hasSelection,
+                        menuHeight: 300,
+                      ),
+                      const SizedBox(height: _spacingMd),
+                      const Divider(),
+                      const SizedBox(height: _spacingMd),
+
+                      // Shutter Settings
+                      _buildSectionHeader(context, 'Shutter Settings'),
+                      _buildDropdownRow(
+                        'Fade In',
+                        Map.fromEntries(
+                          _shutterFadeOptions.entries.map(
+                            (e) => MapEntry('VXX:SEFS1=${e.key}', e.value),
+                          ),
+                        ),
+                        _selectedShutterFadeIn,
+                        (val) => setState(() => _selectedShutterFadeIn = val),
+                        enabled: hasSelection,
+                      ),
+                      const SizedBox(height: _spacingMd),
+                      _buildDropdownRow(
+                        'Fade Out',
+                        Map.fromEntries(
+                          _shutterFadeOptions.entries.map(
+                            (e) => MapEntry('VXX:SEFS2=${e.key}', e.value),
+                          ),
+                        ),
+                        _selectedShutterFadeOut,
+                        (val) => setState(() => _selectedShutterFadeOut = val),
+                        enabled: hasSelection,
+                      ),
+                      const SizedBox(height: _spacingMd),
+                      const Divider(),
+                      const SizedBox(height: _spacingMd),
+
+                      // Quad Pixel Drive
+                      _buildSectionHeader(context, 'Quad Pixel Drive'),
+                      _buildCommandPair(
+                        'On',
+                        'VXX:QPDI1=+00001',
+                        'Off',
+                        'VXX:QPDI1=+00000',
+                        enabled: hasSelection,
+                      ),
+                      const SizedBox(height: _spacingLg),
+                    ],
                   ),
                 ],
               ),
