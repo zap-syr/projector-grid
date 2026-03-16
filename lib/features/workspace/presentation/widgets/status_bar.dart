@@ -21,7 +21,7 @@ class StatusBar extends ConsumerWidget {
         .length;
 
     return Container(
-      height: 32,
+      height: 36,
       padding: const EdgeInsets.symmetric(horizontal: 16.0),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHighest,

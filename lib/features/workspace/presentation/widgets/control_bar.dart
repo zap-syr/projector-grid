@@ -212,6 +212,7 @@ class _ControlBarState extends ConsumerState<ControlBar> {
         child: Column(
           children: [
             Container(
+              height: 36,
               color: Theme.of(context).colorScheme.surfaceContainerHighest,
               child: const TabBar(
                 tabs: [
@@ -430,13 +431,26 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                               menuHeight: 250,
                               inputDecorationTheme: InputDecorationTheme(
                                 border: UnderlineInputBorder(
-                                  borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
+                                  borderSide: BorderSide(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
+                                  ),
                                 ),
                                 enabledBorder: UnderlineInputBorder(
-                                  borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
+                                  borderSide: BorderSide(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
+                                  ),
                                 ),
                                 focusedBorder: UnderlineInputBorder(
-                                  borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 2),
+                                  borderSide: BorderSide(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
+                                    width: 2,
+                                  ),
                                 ),
                               ),
                               initialSelection: _selectedLens,
@@ -546,13 +560,26 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                               menuHeight: 300,
                               inputDecorationTheme: InputDecorationTheme(
                                 border: UnderlineInputBorder(
-                                  borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
+                                  borderSide: BorderSide(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
+                                  ),
                                 ),
                                 enabledBorder: UnderlineInputBorder(
-                                  borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
+                                  borderSide: BorderSide(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
+                                  ),
                                 ),
                                 focusedBorder: UnderlineInputBorder(
-                                  borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 2),
+                                  borderSide: BorderSide(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
+                                    width: 2,
+                                  ),
                                 ),
                               ),
                               initialSelection: _selectedTestPattern,
@@ -608,10 +635,7 @@ class _SvgBtn extends StatelessWidget {
 
   static const double _size = 40;
 
-  const _SvgBtn({
-    required this.assetPath,
-    required this.onPressed,
-  });
+  const _SvgBtn({required this.assetPath, required this.onPressed});
 
   @override
   Widget build(BuildContext context) {
