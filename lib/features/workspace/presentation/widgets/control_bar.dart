@@ -148,21 +148,18 @@ class _ControlBarState extends ConsumerState<ControlBar> {
           children: [
             _SvgBtn(
               assetPath: 'assets/icons/left_fast.svg',
-              tooltip: '$title — Left Fast',
               onPressed: enabled
                   ? () => _throttledSend('$cmdBase=+00201')
                   : null,
             ),
             _SvgBtn(
               assetPath: 'assets/icons/left_normal.svg',
-              tooltip: '$title — Left',
               onPressed: enabled
                   ? () => _throttledSend('$cmdBase=+00101')
                   : null,
             ),
             _SvgBtn(
               assetPath: 'assets/icons/left_slow.svg',
-              tooltip: '$title — Left Slow',
               onPressed: enabled
                   ? () => _throttledSend('$cmdBase=+00001')
                   : null,
@@ -170,21 +167,18 @@ class _ControlBarState extends ConsumerState<ControlBar> {
             const Spacer(),
             _SvgBtn(
               assetPath: 'assets/icons/right_slow.svg',
-              tooltip: '$title — Right Slow',
               onPressed: enabled
                   ? () => _throttledSend('$cmdBase=+00000')
                   : null,
             ),
             _SvgBtn(
               assetPath: 'assets/icons/right_normal.svg',
-              tooltip: '$title — Right',
               onPressed: enabled
                   ? () => _throttledSend('$cmdBase=+00100')
                   : null,
             ),
             _SvgBtn(
               assetPath: 'assets/icons/right_fast.svg',
-              tooltip: '$title — Right Fast',
               onPressed: enabled
                   ? () => _throttledSend('$cmdBase=+00200')
                   : null,
@@ -302,7 +296,6 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                           children: [
                             _SvgBtn(
                               assetPath: 'assets/icons/up_fast.svg',
-                              tooltip: 'Shift Up Fast',
                               onPressed: hasSelection
                                   ? () => _throttledSend('VXX:LNSI3=+00200')
                                   : null,
@@ -310,7 +303,6 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                             const SizedBox(height: _spacingXs),
                             _SvgBtn(
                               assetPath: 'assets/icons/up_normal.svg',
-                              tooltip: 'Shift Up',
                               onPressed: hasSelection
                                   ? () => _throttledSend('VXX:LNSI3=+00100')
                                   : null,
@@ -318,7 +310,6 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                             const SizedBox(height: _spacingXs),
                             _SvgBtn(
                               assetPath: 'assets/icons/up_slow.svg',
-                              tooltip: 'Shift Up Slow',
                               onPressed: hasSelection
                                   ? () => _throttledSend('VXX:LNSI3=+00000')
                                   : null,
@@ -328,7 +319,6 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                               children: [
                                 _SvgBtn(
                                   assetPath: 'assets/icons/left_fast.svg',
-                                  tooltip: 'Shift Left Fast',
                                   onPressed: hasSelection
                                       ? () => _throttledSend('VXX:LNSI2=+00201')
                                       : null,
@@ -336,7 +326,6 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                                 const SizedBox(width: _spacingXs),
                                 _SvgBtn(
                                   assetPath: 'assets/icons/left_normal.svg',
-                                  tooltip: 'Shift Left',
                                   onPressed: hasSelection
                                       ? () => _throttledSend('VXX:LNSI2=+00101')
                                       : null,
@@ -344,7 +333,6 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                                 const SizedBox(width: _spacingXs),
                                 _SvgBtn(
                                   assetPath: 'assets/icons/left_slow.svg',
-                                  tooltip: 'Shift Left Slow',
                                   onPressed: hasSelection
                                       ? () => _throttledSend('VXX:LNSI2=+00001')
                                       : null,
@@ -352,7 +340,6 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                                 const SizedBox(width: _lensShiftCenterGap),
                                 _SvgBtn(
                                   assetPath: 'assets/icons/right_slow.svg',
-                                  tooltip: 'Shift Right Slow',
                                   onPressed: hasSelection
                                       ? () => _throttledSend('VXX:LNSI2=+00000')
                                       : null,
@@ -360,7 +347,6 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                                 const SizedBox(width: _spacingXs),
                                 _SvgBtn(
                                   assetPath: 'assets/icons/right_normal.svg',
-                                  tooltip: 'Shift Right',
                                   onPressed: hasSelection
                                       ? () => _throttledSend('VXX:LNSI2=+00100')
                                       : null,
@@ -368,7 +354,6 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                                 const SizedBox(width: _spacingXs),
                                 _SvgBtn(
                                   assetPath: 'assets/icons/right_fast.svg',
-                                  tooltip: 'Shift Right Fast',
                                   onPressed: hasSelection
                                       ? () => _throttledSend('VXX:LNSI2=+00200')
                                       : null,
@@ -377,7 +362,6 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                             ),
                             _SvgBtn(
                               assetPath: 'assets/icons/down_slow.svg',
-                              tooltip: 'Shift Down Slow',
                               onPressed: hasSelection
                                   ? () => _throttledSend('VXX:LNSI3=+00001')
                                   : null,
@@ -385,7 +369,6 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                             const SizedBox(height: _spacingXs),
                             _SvgBtn(
                               assetPath: 'assets/icons/down_normal.svg',
-                              tooltip: 'Shift Down',
                               onPressed: hasSelection
                                   ? () => _throttledSend('VXX:LNSI3=+00101')
                                   : null,
@@ -393,7 +376,6 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                             const SizedBox(height: _spacingXs),
                             _SvgBtn(
                               assetPath: 'assets/icons/down_fast.svg',
-                              tooltip: 'Shift Down Fast',
                               onPressed: hasSelection
                                   ? () => _throttledSend('VXX:LNSI3=+00201')
                                   : null,
@@ -623,14 +605,12 @@ class _ControlBarState extends ConsumerState<ControlBar> {
 class _SvgBtn extends StatelessWidget {
   final String assetPath;
   final VoidCallback? onPressed;
-  final String tooltip;
 
   static const double _size = 40;
 
   const _SvgBtn({
     required this.assetPath,
     required this.onPressed,
-    required this.tooltip,
   });
 
   @override
@@ -640,7 +620,6 @@ class _SvgBtn extends StatelessWidget {
       height: _size,
       child: IconButton.outlined(
         padding: EdgeInsets.zero,
-        tooltip: tooltip,
         icon: SvgPicture.asset(
           assetPath,
           width: 20,
