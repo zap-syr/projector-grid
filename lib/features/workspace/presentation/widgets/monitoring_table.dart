@@ -14,11 +14,21 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
   int _sortColumnIndex = 3; // Default to IP Address (index 3)
   bool _sortAscending = true;
 
-  void _sort<T>(Comparable<T> Function(ProjectorNode node) getField, int columnIndex, bool ascending) {
+  void _sort(int columnIndex, bool ascending) {
     setState(() {
       _sortColumnIndex = columnIndex;
       _sortAscending = ascending;
     });
+  }
+
+  int _compareIp(String a, String b) {
+    final aParts = a.split('.').map((s) => int.tryParse(s) ?? 0).toList();
+    final bParts = b.split('.').map((s) => int.tryParse(s) ?? 0).toList();
+    for (var i = 0; i < 4; i++) {
+      final cmp = (aParts.elementAtOrNull(i) ?? 0).compareTo(bParts.elementAtOrNull(i) ?? 0);
+      if (cmp != 0) return cmp;
+    }
+    return 0;
   }
 
   @override
@@ -29,34 +39,55 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
     // Apply sorting
     final sortedNodes = List<ProjectorNode>.from(nodes);
     sortedNodes.sort((a, b) {
-      Comparable aValue;
-      Comparable bValue;
-
+      int cmp;
       switch (_sortColumnIndex) {
+        case 0: // Connection
+          cmp = (a.connectionStatus == ConnectionStatus.connected ? 0 : 1)
+              .compareTo(b.connectionStatus == ConnectionStatus.connected ? 0 : 1);
+          break;
         case 1: // Model
-          aValue = a.name;
-          bValue = b.name;
+          cmp = a.name.compareTo(b.name);
           break;
         case 2: // Serial Number
-          aValue = a.serialNumber;
-          bValue = b.serialNumber;
+          cmp = a.serialNumber.compareTo(b.serialNumber);
           break;
         case 3: // IP Address
-          // Basic string sort for IP (for robust sorting, we'd pad octets, but this is okay for now)
-          aValue = a.ipAddress;
-          bValue = b.ipAddress;
+          cmp = _compareIp(a.ipAddress, b.ipAddress);
+          break;
+        case 4: // Power
+          cmp = (a.powerStatus == PowerStatus.on ? 0 : 1)
+              .compareTo(b.powerStatus == PowerStatus.on ? 0 : 1);
+          break;
+        case 5: // Shutter
+          cmp = (a.shutterStatus == ShutterStatus.open ? 0 : 1)
+              .compareTo(b.shutterStatus == ShutterStatus.open ? 0 : 1);
+          break;
+        case 6: // Input
+          cmp = a.input.compareTo(b.input);
+          break;
+        case 7: // Signal
+          cmp = a.signal.compareTo(b.signal);
           break;
         case 8: // Runtime
-          aValue = a.runtime;
-          bValue = b.runtime;
+          cmp = a.runtime.compareTo(b.runtime);
+          break;
+        case 9: // Intake Temp
+          cmp = a.intakeTemp.compareTo(b.intakeTemp);
+          break;
+        case 10: // Exhaust Temp
+          cmp = a.exhaustTemp.compareTo(b.exhaustTemp);
+          break;
+        case 11: // AC Voltage
+          cmp = a.acVoltage.compareTo(b.acVoltage);
+          break;
+        case 12: // Errors
+          cmp = a.errors.compareTo(b.errors);
           break;
         default:
-          aValue = a.ipAddress;
-          bValue = b.ipAddress;
+          cmp = _compareIp(a.ipAddress, b.ipAddress);
           break;
       }
-
-      return _sortAscending ? Comparable.compare(aValue, bValue) : Comparable.compare(bValue, aValue);
+      return _sortAscending ? cmp : -cmp;
     });
 
     return Container(
@@ -70,31 +101,58 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
             sortAscending: _sortAscending,
             headingTextStyle: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
             columns: [
-              const DataColumn(label: Text('Connection')),
+              DataColumn(
+                label: const Text('Connection'),
+                onSort: (columnIndex, ascending) => _sort(columnIndex, ascending),
+              ),
               DataColumn(
                 label: const Text('Model'),
-                onSort: (columnIndex, ascending) => _sort<String>((n) => n.name, columnIndex, ascending),
+                onSort: (columnIndex, ascending) => _sort(columnIndex, ascending),
               ),
               DataColumn(
                 label: const Text('Serial Number'),
-                onSort: (columnIndex, ascending) => _sort<String>((n) => n.serialNumber, columnIndex, ascending),
+                onSort: (columnIndex, ascending) => _sort(columnIndex, ascending),
               ),
               DataColumn(
                 label: const Text('IP Address'),
-                onSort: (columnIndex, ascending) => _sort<String>((n) => n.ipAddress, columnIndex, ascending),
+                onSort: (columnIndex, ascending) => _sort(columnIndex, ascending),
               ),
-              const DataColumn(label: Text('Power')),
-              const DataColumn(label: Text('Shutter')),
-              const DataColumn(label: Text('Input')),
-              const DataColumn(label: Text('Signal')),
+              DataColumn(
+                label: const Text('Power'),
+                onSort: (columnIndex, ascending) => _sort(columnIndex, ascending),
+              ),
+              DataColumn(
+                label: const Text('Shutter'),
+                onSort: (columnIndex, ascending) => _sort(columnIndex, ascending),
+              ),
+              DataColumn(
+                label: const Text('Input'),
+                onSort: (columnIndex, ascending) => _sort(columnIndex, ascending),
+              ),
+              DataColumn(
+                label: const Text('Signal'),
+                onSort: (columnIndex, ascending) => _sort(columnIndex, ascending),
+              ),
               DataColumn(
                 label: const Text('Runtime'),
-                onSort: (columnIndex, ascending) => _sort<String>((n) => n.runtime, columnIndex, ascending),
+                onSort: (columnIndex, ascending) => _sort(columnIndex, ascending),
               ),
-              const DataColumn(label: Text('Intake Temp')),
-              const DataColumn(label: Text('Exhaust Temp')),
-              const DataColumn(label: Text('AC Voltage')),
-              const DataColumn(label: Text('Errors')),
+              DataColumn(
+                label: const Text('Intake Temp'),
+                onSort: (columnIndex, ascending) => _sort(columnIndex, ascending),
+              ),
+              DataColumn(
+                label: const Text('Exhaust Temp'),
+                onSort: (columnIndex, ascending) => _sort(columnIndex, ascending),
+              ),
+              DataColumn(
+                label: const Text('AC Voltage'),
+                onSort: (columnIndex, ascending) => _sort(columnIndex, ascending),
+              ),
+              DataColumn(
+                label: const Text('Errors'),
+                onSort: (columnIndex, ascending) => _sort(columnIndex, ascending),
+              ),
             ],
             rows: sortedNodes.map((node) {
               final isOnline = node.connectionStatus == ConnectionStatus.connected;
@@ -103,10 +161,13 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
 
               return DataRow(
                 cells: [
-                  DataCell(Icon(
-                    Icons.circle,
-                    size: 12,
-                    color: isOnline ? Colors.green : Colors.red,
+                  DataCell(Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.circle, size: 12, color: isOnline ? Colors.green : Colors.red),
+                      const SizedBox(width: 6),
+                      Text(isOnline ? 'Online' : 'Offline'),
+                    ],
                   )),
                   DataCell(Text(node.name)),
                   DataCell(Text(node.serialNumber)),
