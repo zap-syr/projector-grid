@@ -6,9 +6,17 @@ import '../providers/workspace_provider.dart';
 import 'projector_card.dart';
 import 'edit_projector_dialog.dart';
 
-class SelectAllIntent extends Intent { const SelectAllIntent(); }
-class DeselectAllIntent extends Intent { const DeselectAllIntent(); }
-class DeleteIntent extends Intent { const DeleteIntent(); }
+class SelectAllIntent extends Intent {
+  const SelectAllIntent();
+}
+
+class DeselectAllIntent extends Intent {
+  const DeselectAllIntent();
+}
+
+class DeleteIntent extends Intent {
+  const DeleteIntent();
+}
 
 class ProjectorWorkspace extends ConsumerStatefulWidget {
   const ProjectorWorkspace({super.key});
@@ -20,10 +28,10 @@ class ProjectorWorkspace extends ConsumerStatefulWidget {
 class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
   Offset? _selectionStart;
   Offset? _selectionCurrent;
-  
+
   final ScrollController _verticalController = ScrollController();
   final ScrollController _horizontalController = ScrollController();
-  
+
   final double _gridStep = 20.0;
   final double _workspaceWidth = 3000.0;
   final double _workspaceHeight = 3000.0;
@@ -47,10 +55,10 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
 
   bool _checkIsMultiSelect() {
     final keys = HardwareKeyboard.instance.logicalKeysPressed;
-    return keys.contains(LogicalKeyboardKey.controlLeft) || 
-           keys.contains(LogicalKeyboardKey.controlRight) || 
-           keys.contains(LogicalKeyboardKey.metaLeft) || 
-           keys.contains(LogicalKeyboardKey.metaRight);
+    return keys.contains(LogicalKeyboardKey.controlLeft) ||
+        keys.contains(LogicalKeyboardKey.controlRight) ||
+        keys.contains(LogicalKeyboardKey.metaLeft) ||
+        keys.contains(LogicalKeyboardKey.metaRight);
   }
 
   bool _handleKeyEvent(KeyEvent event) {
@@ -80,8 +88,12 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
         absoluteY = contentOffset.dy;
       } else {
         // Fallback for UI buttons/slider: zoom relative to the center of the visible viewport
-        absoluteX = _horizontalController.offset + (_horizontalController.position.viewportDimension / 2);
-        absoluteY = _verticalController.offset + (_verticalController.position.viewportDimension / 2);
+        absoluteX =
+            _horizontalController.offset +
+            (_horizontalController.position.viewportDimension / 2);
+        absoluteY =
+            _verticalController.offset +
+            (_verticalController.position.viewportDimension / 2);
       }
 
       final viewportX = absoluteX - _horizontalController.offset;
@@ -127,35 +139,53 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
         // The Scrollable Workspace
         Shortcuts(
           shortcuts: {
-            LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.keyA): const SelectAllIntent(),
-            LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyA): const SelectAllIntent(),
-            LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.keyD): const DeselectAllIntent(),
-            LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyD): const DeselectAllIntent(),
+            LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.keyA):
+                const SelectAllIntent(),
+            LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyA):
+                const SelectAllIntent(),
+            LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.keyD):
+                const DeselectAllIntent(),
+            LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyD):
+                const DeselectAllIntent(),
             LogicalKeySet(LogicalKeyboardKey.delete): const DeleteIntent(),
           },
           child: Actions(
             actions: {
-              SelectAllIntent: CallbackAction<SelectAllIntent>(onInvoke: (intent) => notifier.selectAll()),
-              DeselectAllIntent: CallbackAction<DeselectAllIntent>(onInvoke: (intent) => notifier.deselectAll()),
-              DeleteIntent: CallbackAction<DeleteIntent>(onInvoke: (intent) async {
-                final selectedCount = nodes.where((n) => n.isSelected).length;
-                if (selectedCount == 0) return;
-                final confirm = await showDialog<bool>(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('Delete Projectors'),
-                    content: Text('Are you sure you want to delete $selectedCount selected projector(s)?'),
-                    actions: [
-                      TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
-                      FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Delete')),
-                    ],
-                  ),
-                );
-                if (confirm == true) {
-                  notifier.deleteSelected();
-                }
-                return null;
-              }),
+              SelectAllIntent: CallbackAction<SelectAllIntent>(
+                onInvoke: (intent) => notifier.selectAll(),
+              ),
+              DeselectAllIntent: CallbackAction<DeselectAllIntent>(
+                onInvoke: (intent) => notifier.deselectAll(),
+              ),
+              DeleteIntent: CallbackAction<DeleteIntent>(
+                onInvoke: (intent) async {
+                  final selectedCount = nodes.where((n) => n.isSelected).length;
+                  if (selectedCount == 0) return;
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Delete Projectors'),
+                      content: Text(
+                        'Are you sure you want to delete $selectedCount selected projector(s)?',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(false),
+                          child: const Text('Cancel'),
+                        ),
+                        FilledButton(
+                          onPressed: () => Navigator.of(context).pop(true),
+                          child: const Text('Delete'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirm == true) {
+                    notifier.deleteSelected();
+                  }
+                  return null;
+                },
+              ),
             },
             child: Focus(
               autofocus: true,
@@ -166,12 +196,18 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
                   if (event.buttons == kMiddleMouseButton) {
                     if (_horizontalController.hasClients) {
                       _horizontalController.jumpTo(
-                        (_horizontalController.offset - event.delta.dx).clamp(0.0, _horizontalController.position.maxScrollExtent)
+                        (_horizontalController.offset - event.delta.dx).clamp(
+                          0.0,
+                          _horizontalController.position.maxScrollExtent,
+                        ),
                       );
                     }
                     if (_verticalController.hasClients) {
                       _verticalController.jumpTo(
-                        (_verticalController.offset - event.delta.dy).clamp(0.0, _verticalController.position.maxScrollExtent)
+                        (_verticalController.offset - event.delta.dy).clamp(
+                          0.0,
+                          _verticalController.position.maxScrollExtent,
+                        ),
                       );
                     }
                   }
@@ -186,23 +222,38 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
                     child: SingleChildScrollView(
                       controller: _verticalController,
                       scrollDirection: Axis.vertical,
-                      physics: _isMultiSelect ? const NeverScrollableScrollPhysics() : null,
+                      physics: _isMultiSelect
+                          ? const NeverScrollableScrollPhysics()
+                          : null,
                       child: SingleChildScrollView(
                         controller: _horizontalController,
                         scrollDirection: Axis.horizontal,
-                        physics: _isMultiSelect ? const NeverScrollableScrollPhysics() : null,
+                        physics: _isMultiSelect
+                            ? const NeverScrollableScrollPhysics()
+                            : null,
                         // Inner listener: Captures scroll wheel zoom and intercepts it before SingleChildScrollView acts
                         child: Listener(
                           onPointerSignal: (pointerSignal) {
                             if (pointerSignal is PointerScrollEvent) {
                               if (_isMultiSelect) {
-                                final double scrollDelta = pointerSignal.scrollDelta.dy;
+                                final double scrollDelta =
+                                    pointerSignal.scrollDelta.dy;
                                 if (scrollDelta > 0) {
-                                  final newZoom = double.parse((_currentZoom - 0.1).toStringAsFixed(1));
-                                  _setZoom(newZoom.clamp(0.5, 2.0), contentOffset: pointerSignal.localPosition);
+                                  final newZoom = double.parse(
+                                    (_currentZoom - 0.1).toStringAsFixed(1),
+                                  );
+                                  _setZoom(
+                                    newZoom.clamp(0.5, 2.0),
+                                    contentOffset: pointerSignal.localPosition,
+                                  );
                                 } else if (scrollDelta < 0) {
-                                  final newZoom = double.parse((_currentZoom + 0.1).toStringAsFixed(1));
-                                  _setZoom(newZoom.clamp(0.5, 2.0), contentOffset: pointerSignal.localPosition);
+                                  final newZoom = double.parse(
+                                    (_currentZoom + 0.1).toStringAsFixed(1),
+                                  );
+                                  _setZoom(
+                                    newZoom.clamp(0.5, 2.0),
+                                    contentOffset: pointerSignal.localPosition,
+                                  );
                                 }
                               }
                             }
@@ -213,18 +264,30 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
                             },
                             onPanStart: (details) {
                               setState(() {
-                                _selectionStart = details.localPosition / _currentZoom;
-                                _selectionCurrent = details.localPosition / _currentZoom;
+                                _selectionStart =
+                                    details.localPosition / _currentZoom;
+                                _selectionCurrent =
+                                    details.localPosition / _currentZoom;
                               });
-                              notifier.startMarqueeSelection(append: _isMultiSelect);
+                              notifier.startMarqueeSelection(
+                                append: _isMultiSelect,
+                              );
                             },
                             onPanUpdate: (details) {
                               setState(() {
-                                _selectionCurrent = details.localPosition / _currentZoom;
+                                _selectionCurrent =
+                                    details.localPosition / _currentZoom;
                               });
-                              if (_selectionStart != null && _selectionCurrent != null) {
-                                final rect = Rect.fromPoints(_selectionStart!, _selectionCurrent!);
-                                notifier.selectNodesInRect(rect, append: _isMultiSelect);
+                              if (_selectionStart != null &&
+                                  _selectionCurrent != null) {
+                                final rect = Rect.fromPoints(
+                                  _selectionStart!,
+                                  _selectionCurrent!,
+                                );
+                                notifier.selectNodesInRect(
+                                  rect,
+                                  append: _isMultiSelect,
+                                );
                               }
                             },
                             onPanEnd: (details) {
@@ -239,61 +302,100 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
                               height: _workspaceHeight * _currentZoom,
                               color: Colors.transparent, // Capture gestures
                               child: CustomPaint(
-                                painter: GridPainter(Theme.of(context).dividerColor.withValues(alpha: 0.1), _gridStep * _currentZoom),
+                                painter: GridPainter(
+                                  Theme.of(
+                                    context,
+                                  ).dividerColor.withValues(alpha: 0.1),
+                                  _gridStep * _currentZoom,
+                                ),
                                 child: Stack(
                                   clipBehavior: Clip.none,
                                   children: [
                                     // Render projector nodes
-                                    ...nodes.map((node) => ProjectorCard(
-                                          key: ValueKey(node.id),
-                                          node: node,
-                                          zoom: _currentZoom,
-                                          onTap: () {
-                                            notifier.selectNodeOnTap(node.id, multiSelect: _isMultiSelect);
-                                          },
-                                          onPanDown: (details) {
-                                            notifier.selectNodeOnDown(node.id, multiSelect: _isMultiSelect);
-                                          },
-                                          onPanUpdate: (details) {
-                                            notifier.updateNodePosition(node.id, details.delta.dx, details.delta.dy);
-                                          },
-                                          onPanEnd: (details) {
-                                            notifier.snapNodeToGrid(node.id);
-                                          },
-                                          onEdit: () {
-                                            showDialog(
-                                              context: context,
-                                              builder: (context) => EditProjectorDialog(
-                                                node: node,
-                                                onSave: (ip, login, password) {
-                                                  notifier.updateNode(node.id, ip, login, password);
-                                                },
+                                    ...nodes.map(
+                                      (node) => ProjectorCard(
+                                        key: ValueKey(node.id),
+                                        node: node,
+                                        zoom: _currentZoom,
+                                        onTap: () {
+                                          notifier.selectNodeOnTap(
+                                            node.id,
+                                            multiSelect: _isMultiSelect,
+                                          );
+                                        },
+                                        onPanDown: (details) {
+                                          notifier.selectNodeOnDown(
+                                            node.id,
+                                            multiSelect: _isMultiSelect,
+                                          );
+                                        },
+                                        onPanUpdate: (details) {
+                                          notifier.updateNodePosition(
+                                            node.id,
+                                            details.delta.dx,
+                                            details.delta.dy,
+                                          );
+                                        },
+                                        onPanEnd: (details) {
+                                          notifier.snapNodeToGrid(node.id);
+                                        },
+                                        onEdit: () {
+                                          showDialog(
+                                            context: context,
+                                            builder: (context) =>
+                                                EditProjectorDialog(
+                                                  node: node,
+                                                  onSave:
+                                                      (ip, login, password) {
+                                                        notifier.updateNode(
+                                                          node.id,
+                                                          ip,
+                                                          login,
+                                                          password,
+                                                        );
+                                                      },
+                                                ),
+                                          );
+                                        },
+                                        onDelete: () async {
+                                          final confirm = await showDialog<bool>(
+                                            context: context,
+                                            builder: (context) => AlertDialog(
+                                              title: const Text(
+                                                'Delete Projector',
                                               ),
-                                            );
-                                          },
-                                          onDelete: () async {
-                                            final confirm = await showDialog<bool>(
-                                              context: context,
-                                              builder: (context) => AlertDialog(
-                                                title: const Text('Delete Projector'),
-                                                content: Text('Are you sure you want to delete ${node.name}?'),
-                                                actions: [
-                                                  TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
-                                                  FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Delete')),
-                                                ],
+                                              content: Text(
+                                                'Are you sure you want to delete ${node.name}?',
                                               ),
-                                            );
-                                            if (confirm == true) {
-                                              notifier.deleteNode(node.id);
-                                            }
-                                          },
-                                          onColorCorrection: () {
-                                            // Empty for now
-                                          },
-                                        )),
+                                              actions: [
+                                                TextButton(
+                                                  onPressed: () => Navigator.of(
+                                                    context,
+                                                  ).pop(false),
+                                                  child: const Text('Cancel'),
+                                                ),
+                                                FilledButton(
+                                                  onPressed: () => Navigator.of(
+                                                    context,
+                                                  ).pop(true),
+                                                  child: const Text('Delete'),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                          if (confirm == true) {
+                                            notifier.deleteNode(node.id);
+                                          }
+                                        },
+                                        onColorCorrection: () {
+                                          // Empty for now
+                                        },
+                                      ),
+                                    ),
 
                                     // Render selection marquee
-                                    if (_selectionStart != null && _selectionCurrent != null)
+                                    if (_selectionStart != null &&
+                                        _selectionCurrent != null)
                                       Positioned.fromRect(
                                         rect: Rect.fromPoints(
                                           _selectionStart! * _currentZoom,
@@ -301,9 +403,14 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
                                         ),
                                         child: Container(
                                           decoration: BoxDecoration(
-                                            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .primary
+                                                .withValues(alpha: 0.2),
                                             border: Border.all(
-                                              color: Theme.of(context).colorScheme.primary,
+                                              color: Theme.of(
+                                                context,
+                                              ).colorScheme.primary,
                                               width: 1,
                                             ),
                                           ),
@@ -323,7 +430,7 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
             ),
           ),
         ),
-        
+
         // Zoom Controls overlay at bottom left
         Positioned(
           bottom: 16,
@@ -369,10 +476,7 @@ class _ZoomControl extends StatefulWidget {
   final double currentZoom;
   final ValueChanged<double> onZoomChanged;
 
-  const _ZoomControl({
-    required this.currentZoom,
-    required this.onZoomChanged,
-  });
+  const _ZoomControl({required this.currentZoom, required this.onZoomChanged});
 
   @override
   State<_ZoomControl> createState() => _ZoomControlState();
@@ -409,35 +513,22 @@ class _ZoomControlState extends State<_ZoomControl> {
             IconButton(
               icon: const Icon(Icons.zoom_out, size: 20),
               onPressed: () {
-                final newZoom = double.parse((widget.currentZoom - 0.1).toStringAsFixed(1));
+                final newZoom = double.parse(
+                  (widget.currentZoom - 0.1).toStringAsFixed(1),
+                );
                 widget.onZoomChanged(newZoom.clamp(0.5, 2.0));
               },
             ),
-            if (_isHovered)
-              SizedBox(
-                width: 150,
-                child: Slider(
-                  value: widget.currentZoom.clamp(0.5, 2.0),
-                  min: 0.5,
-                  max: 2.0,
-                  divisions: 15,
-                  label: '${(widget.currentZoom * 100).round()}%',
-                  onChanged: (val) {
-                    // Update slider visually using 10% steps
-                    final newZoom = double.parse(val.toStringAsFixed(1));
-                    widget.onZoomChanged(newZoom);
-                  },
-                ),
-              )
-            else
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                child: Text('${(widget.currentZoom * 100).round()}%'),
-              ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8.0),
+              child: Text('${(widget.currentZoom * 100).round()}%'),
+            ),
             IconButton(
               icon: const Icon(Icons.zoom_in, size: 20),
               onPressed: () {
-                final newZoom = double.parse((widget.currentZoom + 0.1).toStringAsFixed(1));
+                final newZoom = double.parse(
+                  (widget.currentZoom + 0.1).toStringAsFixed(1),
+                );
                 widget.onZoomChanged(newZoom.clamp(0.5, 2.0));
               },
             ),
