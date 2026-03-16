@@ -1,25 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/workspace_provider.dart';
+import 'preferences_dialog.dart';
 
-class TopMenuBar extends StatelessWidget {
+class TopMenuBar extends ConsumerWidget {
   const TopMenuBar({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      color: Theme.of(context).colorScheme.surface,
-      child: Row(
-        children: [
-          MenuBar(
-            style: MenuStyle(
-              elevation: WidgetStateProperty.all(0),
-              shape: WidgetStateProperty.all(
-                RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(0),
-                ),
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Row(
+      children: [
+        MenuBar(
+          style: MenuStyle(
+            elevation: WidgetStateProperty.all(0),
+            backgroundColor: WidgetStateProperty.all(Colors.transparent),
+            shape: WidgetStateProperty.all(
+              RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(0),
               ),
             ),
+          ),
             children: [
               SubmenuButton(
                 menuChildren: [
@@ -54,6 +55,19 @@ class TopMenuBar extends StatelessWidget {
                     onPressed: () {},
                     child: const Text('Redo'),
                   ),
+                  const Divider(),
+                  MenuItemButton(
+                    shortcut: const SingleActivator(LogicalKeyboardKey.keyR, control: true),
+                    onPressed: () => ref.read(workspaceProvider.notifier).refreshAll(),
+                    child: const Text('Refresh'),
+                  ),
+                  MenuItemButton(
+                    onPressed: () => showDialog(
+                      context: context,
+                      builder: (_) => const PreferencesDialog(),
+                    ),
+                    child: const Text('Preferences'),
+                  ),
                 ],
                 child: const Text('Edit'),
               ),
@@ -73,7 +87,6 @@ class TopMenuBar extends StatelessWidget {
             ],
           ),
         ],
-      ),
-    );
+      );
   }
 }

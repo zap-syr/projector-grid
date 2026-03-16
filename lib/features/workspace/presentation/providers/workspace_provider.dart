@@ -25,12 +25,17 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     return [];
   }
 
-  void _startPolling() {
+  void _startPolling({int seconds = 60}) {
     _pollingTimer?.cancel();
-    _pollingTimer = Timer.periodic(const Duration(seconds: 60), (_) async {
-      // Prevent overlapping polls if a previous one is still running
+    _pollingTimer = Timer.periodic(Duration(seconds: seconds), (_) async {
       await _pollAllProjectors();
     });
+  }
+
+  Future<void> refreshAll() => _pollAllProjectors();
+
+  void setPollingInterval(int seconds) {
+    _startPolling(seconds: seconds);
   }
 
   Future<void> _pollAllProjectors() async {
