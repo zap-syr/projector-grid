@@ -132,15 +132,41 @@ class _ControlBarState extends ConsumerState<ControlBar> {
 
   // ── Widget helpers ────────────────────────────────────────────────────────
 
-  /// Builds a labelled section title.
-  Widget _buildSectionHeader(BuildContext context, String title) {
+  /// Builds a group-level header — primary color, uppercase, with a line.
+  Widget _buildGroupHeader(BuildContext context, String title) {
+    final primary = Theme.of(context).colorScheme.primary;
     return Padding(
-      padding: const EdgeInsets.only(bottom: _spacingSm),
+      padding: const EdgeInsets.only(bottom: _spacingMd),
+      child: Row(
+        children: [
+          Text(
+            title.toUpperCase(),
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: primary,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(width: _spacingSm),
+          Expanded(
+            child: Divider(color: primary.withValues(alpha: 0.4), thickness: 1),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Builds a setting-level label (muted, smaller).
+  Widget _buildSettingLabel(BuildContext context, String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: _spacingXs),
       child: Text(
         title,
-        style: Theme.of(
-          context,
-        ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: Theme.of(
+            context,
+          ).colorScheme.onSurface.withValues(alpha: 0.55),
+        ),
       ),
     );
   }
@@ -194,7 +220,7 @@ class _ControlBarState extends ConsumerState<ControlBar> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionHeader(context, title),
+        _buildGroupHeader(context, title),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           spacing: _spacingXs,
@@ -254,7 +280,7 @@ class _ControlBarState extends ConsumerState<ControlBar> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionHeader(context, title),
+        _buildSettingLabel(context, title),
         Row(
           children: [
             Expanded(
@@ -265,18 +291,30 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                 menuHeight: menuHeight,
                 inputDecorationTheme: InputDecorationTheme(
                   border: UnderlineInputBorder(
-                    borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
+                    borderSide: BorderSide(
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
                   ),
                   enabledBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
+                    borderSide: BorderSide(
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
                   ),
                   focusedBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 2),
+                    borderSide: BorderSide(
+                      color: Theme.of(context).colorScheme.primary,
+                      width: 2,
+                    ),
                   ),
                 ),
                 initialSelection: selectedValue,
                 dropdownMenuEntries: options.entries
-                    .map((e) => DropdownMenuEntry<String>(value: e.key, label: e.value))
+                    .map(
+                      (e) => DropdownMenuEntry<String>(
+                        value: e.key,
+                        label: e.value,
+                      ),
+                    )
                     .toList(),
                 onSelected: (val) {
                   if (val != null) onChanged(val);
@@ -338,7 +376,7 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                     padding: const EdgeInsets.all(_spacingMd),
                     children: [
                       // Power
-                      _buildSectionHeader(context, 'Power'),
+                      _buildGroupHeader(context, 'Power'),
                       _buildCommandPair(
                         'On',
                         'PON',
@@ -349,7 +387,7 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                       const SizedBox(height: _spacingMd),
 
                       // Shutter
-                      _buildSectionHeader(context, 'Shutter'),
+                      _buildGroupHeader(context, 'Shutter'),
                       _buildCommandPair(
                         'Open',
                         'OSH:0',
@@ -360,7 +398,7 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                       const SizedBox(height: _spacingMd),
 
                       // OSD
-                      _buildSectionHeader(context, 'OSD'),
+                      _buildGroupHeader(context, 'OSD'),
                       _buildCommandPair(
                         'On',
                         'OOS:1',
@@ -371,7 +409,7 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                       const SizedBox(height: _spacingMd),
 
                       // Inputs
-                      _buildSectionHeader(context, 'Inputs'),
+                      _buildGroupHeader(context, 'Inputs'),
                       Row(
                         children: [
                           for (final (label, cmd) in _inputOptions) ...[
@@ -396,11 +434,11 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                         ],
                       ),
                       const SizedBox(height: _spacingMd),
-                      const Divider(),
+                      // const Divider(),
                       const SizedBox(height: _spacingMd),
 
                       // Lens Shift D-Pad
-                      _buildSectionHeader(context, 'Lens Shift'),
+                      _buildGroupHeader(context, 'Lens Shift'),
                       Center(
                         child: Column(
                           children: [
@@ -590,7 +628,7 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                         ],
                       ),
                       const SizedBox(height: _spacingMd),
-                      const Divider(),
+                      // const Divider(),
                       const SizedBox(height: _spacingMd),
 
                       // Focus
@@ -608,11 +646,11 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                         enabled: hasSelection,
                       ),
                       const SizedBox(height: _spacingMd),
-                      const Divider(),
+                      // const Divider(),
                       const SizedBox(height: _spacingMd),
 
                       // Test Patterns
-                      _buildSectionHeader(context, 'Test Patterns'),
+                      _buildGroupHeader(context, 'Test Patterns'),
                       Row(
                         children: [
                           Expanded(
@@ -729,7 +767,7 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                     padding: const EdgeInsets.all(_spacingMd),
                     children: [
                       // System
-                      _buildSectionHeader(context, 'System'),
+                      _buildGroupHeader(context, 'System'),
                       _buildDropdownRow(
                         'Picture Mode',
                         _pictureModeOptions,
@@ -758,16 +796,15 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                         'Projection Method',
                         _projectionMethodOptions,
                         _selectedProjectionMethod,
-                        (val) => setState(() => _selectedProjectionMethod = val),
+                        (val) =>
+                            setState(() => _selectedProjectionMethod = val),
                         enabled: hasSelection,
                         menuHeight: 300,
                       ),
                       const SizedBox(height: _spacingMd),
-                      const Divider(),
-                      const SizedBox(height: _spacingMd),
-
+                      const SizedBox(height: _spacingSm),
                       // Shutter Settings
-                      _buildSectionHeader(context, 'Shutter Settings'),
+                      _buildGroupHeader(context, 'Shutter Settings'),
                       _buildDropdownRow(
                         'Fade In',
                         Map.fromEntries(
@@ -792,11 +829,9 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                         enabled: hasSelection,
                       ),
                       const SizedBox(height: _spacingMd),
-                      const Divider(),
-                      const SizedBox(height: _spacingMd),
-
+                      const SizedBox(height: _spacingSm),
                       // Quad Pixel Drive
-                      _buildSectionHeader(context, 'Quad Pixel Drive'),
+                      _buildGroupHeader(context, 'Quad Pixel Drive'),
                       _buildCommandPair(
                         'On',
                         'VXX:QPDI1=+00001',
