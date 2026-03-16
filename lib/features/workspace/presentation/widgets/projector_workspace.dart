@@ -134,6 +134,13 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
     final nodes = ref.watch(workspaceProvider);
     final notifier = ref.read(workspaceProvider.notifier);
 
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final canvasWidth = (_workspaceWidth * _currentZoom)
+            .clamp(constraints.maxWidth, double.infinity);
+        final canvasHeight = (_workspaceHeight * _currentZoom)
+            .clamp(constraints.maxHeight, double.infinity);
+
     return Stack(
       children: [
         // The Scrollable Workspace
@@ -298,8 +305,8 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
                               notifier.endMarqueeSelection();
                             },
                             child: Container(
-                              width: _workspaceWidth * _currentZoom,
-                              height: _workspaceHeight * _currentZoom,
+                              width: canvasWidth,
+                              height: canvasHeight,
                               color: Colors.transparent, // Capture gestures
                               child: CustomPaint(
                                 painter: GridPainter(
@@ -441,6 +448,8 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
           ),
         ),
       ],
+    );
+      },
     );
   }
 }
