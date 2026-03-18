@@ -19,20 +19,20 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
 
   // 3-color target values: [r, g, b], range 0–2048
   final _values3 = <String, List<int>>{
-    'Red':   [2048,    0,    0],
-    'Green': [   0, 2048,    0],
-    'Blue':  [   0,    0, 2048],
+    'Red': [2048, 0, 0],
+    'Green': [0, 2048, 0],
+    'Blue': [0, 0, 2048],
   };
 
   // 7-color target values: [r, g, b], range 0–2048
   final _values7 = <String, List<int>>{
-    'Red':     [2048,    0,    0],
-    'Green':   [   0, 2048,    0],
-    'Blue':    [   0,    0, 2048],
-    'Cyan':    [   0, 2048, 2048],
-    'Magenta': [2048,    0, 2048],
-    'Yellow':  [2048, 2048,    0],
-    'White':   [2048, 2048, 2048],
+    'Red': [2048, 0, 0],
+    'Green': [0, 2048, 0],
+    'Blue': [0, 0, 2048],
+    'Cyan': [0, 2048, 2048],
+    'Magenta': [2048, 0, 2048],
+    'Yellow': [2048, 2048, 0],
+    'White': [2048, 2048, 2048],
   };
 
   String get _ip => widget.node.ipAddress;
@@ -80,7 +80,15 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
     }
 
     // Parse 7-color values: response "C7CSx=RRRR,GGGG,BBBB"
-    final keys7 = ['Red', 'Green', 'Blue', 'Cyan', 'Magenta', 'Yellow', 'White'];
+    final keys7 = [
+      'Red',
+      'Green',
+      'Blue',
+      'Cyan',
+      'Magenta',
+      'Yellow',
+      'White',
+    ];
     for (int i = 0; i < 7; i++) {
       final raw = results[4 + i];
       if (raw != null) {
@@ -106,7 +114,10 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
   Future<void> _setMethod(int method) async {
     setState(() => _method = method);
     await _service.sendRawCommand(
-      _ip, _port, _login, _password,
+      _ip,
+      _port,
+      _login,
+      _password,
       'VXX:CMAI0=+${method.toString().padLeft(5, '0')}',
     );
   }
@@ -118,17 +129,31 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
       _ => 'VMB',
     };
     await _service.sendRawCommand(
-      _ip, _port, _login, _password,
+      _ip,
+      _port,
+      _login,
+      _password,
       '$prefix:${_fmt(rgb[0])},${_fmt(rgb[1])},${_fmt(rgb[2])}',
     );
   }
 
   Future<void> _set7Color(String color, List<int> rgb) async {
-    final keys7 = ['Red', 'Green', 'Blue', 'Cyan', 'Magenta', 'Yellow', 'White'];
+    final keys7 = [
+      'Red',
+      'Green',
+      'Blue',
+      'Cyan',
+      'Magenta',
+      'Yellow',
+      'White',
+    ];
     final idx = keys7.indexOf(color);
     if (idx == -1) return;
     await _service.sendRawCommand(
-      _ip, _port, _login, _password,
+      _ip,
+      _port,
+      _login,
+      _password,
       'VXX:C7CS$idx=${_fmt(rgb[0])},${_fmt(rgb[1])},${_fmt(rgb[2])}',
     );
   }
@@ -226,17 +251,26 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
       childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       children: [
         _buildSliderRow(
-          context, 'R', Colors.red, rgb[0],
+          context,
+          'R',
+          Colors.red,
+          rgb[0],
           (v) => setState(() => valuesMap[colorName]![0] = v.round()),
           (_) => onSend(colorName, List.from(valuesMap[colorName]!)),
         ),
         _buildSliderRow(
-          context, 'G', Colors.green, rgb[1],
+          context,
+          'G',
+          Colors.green,
+          rgb[1],
           (v) => setState(() => valuesMap[colorName]![1] = v.round()),
           (_) => onSend(colorName, List.from(valuesMap[colorName]!)),
         ),
         _buildSliderRow(
-          context, 'B', Colors.blue, rgb[2],
+          context,
+          'B',
+          Colors.blue,
+          rgb[2],
           (v) => setState(() => valuesMap[colorName]![2] = v.round()),
           (_) => onSend(colorName, List.from(valuesMap[colorName]!)),
         ),
@@ -262,7 +296,7 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
                 children: [
                   Expanded(
                     child: Text(
-                      'Color Correction — ${widget.node.ipAddress}',
+                      'Color Correction - Projector ${widget.node.ipAddress}',
                       style: theme.textTheme.titleMedium,
                     ),
                   ),
@@ -276,9 +310,7 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
             ),
 
             if (_loading)
-              const Expanded(
-                child: Center(child: CircularProgressIndicator()),
-              )
+              const Expanded(child: Center(child: CircularProgressIndicator()))
             else ...[
               // Method selector
               Padding(
@@ -304,32 +336,34 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
                         child: Text(
                           'Color matching is disabled',
                           style: TextStyle(
-                            color: theme.colorScheme.onSurface
-                                .withValues(alpha: 0.45),
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.45,
+                            ),
                           ),
                         ),
                       )
                     : ListView(
-                        children: (_method == 1
-                                ? ['Red', 'Green', 'Blue']
-                                : [
-                                    'Red',
-                                    'Green',
-                                    'Blue',
-                                    'Cyan',
-                                    'Magenta',
-                                    'Yellow',
-                                    'White',
-                                  ])
-                            .map(
-                              (c) => _buildColorTile(
-                                context,
-                                c,
-                                _method == 1 ? _values3 : _values7,
-                                _method == 1 ? _set3Color : _set7Color,
-                              ),
-                            )
-                            .toList(),
+                        children:
+                            (_method == 1
+                                    ? ['Red', 'Green', 'Blue']
+                                    : [
+                                        'Red',
+                                        'Green',
+                                        'Blue',
+                                        'Cyan',
+                                        'Magenta',
+                                        'Yellow',
+                                        'White',
+                                      ])
+                                .map(
+                                  (c) => _buildColorTile(
+                                    context,
+                                    c,
+                                    _method == 1 ? _values3 : _values7,
+                                    _method == 1 ? _set3Color : _set7Color,
+                                  ),
+                                )
+                                .toList(),
                       ),
               ),
             ],

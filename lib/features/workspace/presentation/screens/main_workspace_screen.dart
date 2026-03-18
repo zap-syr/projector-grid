@@ -71,7 +71,7 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
           ? projectFileName(projectState.currentFilePath!)
           : 'New Project';
       final dirtyMark = projectState.isDirty ? '● ' : '';
-      title = '$_appName — $fileName $dirtyMark';
+      title = '$_appName - $fileName $dirtyMark';
     }
     windowManager.setTitle(title);
   }
