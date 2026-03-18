@@ -18,6 +18,11 @@ class DeleteIntent extends Intent {
   const DeleteIntent();
 }
 
+class SendCommandIntent extends Intent {
+  final String command;
+  const SendCommandIntent(this.command);
+}
+
 class ProjectorWorkspace extends ConsumerStatefulWidget {
   const ProjectorWorkspace({super.key});
 
@@ -155,6 +160,42 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
             LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyD):
                 const DeselectAllIntent(),
             LogicalKeySet(LogicalKeyboardKey.delete): const DeleteIntent(),
+
+            // ── Lens Shift — normal speed (arrow only) ───────────────────
+            const SingleActivator(LogicalKeyboardKey.arrowUp):
+                const SendCommandIntent('VXX:LNSI3=+00100'),
+            const SingleActivator(LogicalKeyboardKey.arrowDown):
+                const SendCommandIntent('VXX:LNSI3=+00101'),
+            const SingleActivator(LogicalKeyboardKey.arrowLeft):
+                const SendCommandIntent('VXX:LNSI2=+00101'),
+            const SingleActivator(LogicalKeyboardKey.arrowRight):
+                const SendCommandIntent('VXX:LNSI2=+00100'),
+
+            // ── Lens Shift — fast speed (Shift + arrow) ──────────────────
+            const SingleActivator(LogicalKeyboardKey.arrowUp, shift: true):
+                const SendCommandIntent('VXX:LNSI3=+00200'),
+            const SingleActivator(LogicalKeyboardKey.arrowDown, shift: true):
+                const SendCommandIntent('VXX:LNSI3=+00201'),
+            const SingleActivator(LogicalKeyboardKey.arrowLeft, shift: true):
+                const SendCommandIntent('VXX:LNSI2=+00201'),
+            const SingleActivator(LogicalKeyboardKey.arrowRight, shift: true):
+                const SendCommandIntent('VXX:LNSI2=+00200'),
+
+            // ── Lens Shift — slow speed (Ctrl + arrow) ───────────────────
+            const SingleActivator(LogicalKeyboardKey.arrowUp, control: true):
+                const SendCommandIntent('VXX:LNSI3=+00000'),
+            const SingleActivator(LogicalKeyboardKey.arrowDown, control: true):
+                const SendCommandIntent('VXX:LNSI3=+00001'),
+            const SingleActivator(LogicalKeyboardKey.arrowLeft, control: true):
+                const SendCommandIntent('VXX:LNSI2=+00001'),
+            const SingleActivator(LogicalKeyboardKey.arrowRight, control: true):
+                const SendCommandIntent('VXX:LNSI2=+00000'),
+
+            // ── Shutter ───────────────────────────────────────────────────
+            const SingleActivator(LogicalKeyboardKey.keyI):
+                const SendCommandIntent('OSH:1'),
+            const SingleActivator(LogicalKeyboardKey.keyO):
+                const SendCommandIntent('OSH:0'),
           },
           child: Actions(
             actions: {
@@ -163,6 +204,10 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
               ),
               DeselectAllIntent: CallbackAction<DeselectAllIntent>(
                 onInvoke: (intent) => notifier.deselectAll(),
+              ),
+              SendCommandIntent: CallbackAction<SendCommandIntent>(
+                onInvoke: (intent) =>
+                    notifier.sendCommandToSelected(intent.command),
               ),
               DeleteIntent: CallbackAction<DeleteIntent>(
                 onInvoke: (intent) async {
