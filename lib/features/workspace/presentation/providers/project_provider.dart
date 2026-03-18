@@ -300,6 +300,11 @@ if (\$r -eq 'OK') { Write-Output \$dialog.FileName }
     return current.where((p) => p != path).toList();
   }
 
+  void clearRecentProjects() {
+    state = state.copyWith(recentProjects: []);
+    _saveRecentProjects([]);
+  }
+
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   static String _fileName(String path) =>

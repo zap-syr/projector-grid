@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 import '../providers/workspace_provider.dart';
@@ -8,6 +7,38 @@ import 'preferences_dialog.dart';
 
 class TopMenuBar extends ConsumerWidget {
   const TopMenuBar({super.key});
+
+  static Widget _menuItem(
+    BuildContext context, {
+    required String label,
+    String? shortcutLabel,
+    required VoidCallback? onPressed,
+  }) {
+    return MenuItemButton(
+      onPressed: onPressed,
+      child: shortcutLabel == null
+          ? Text(label)
+          : SizedBox(
+              width: 220,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(label),
+                  Text(
+                    shortcutLabel,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: 0.45),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+    );
+  }
 
   // ── Unsaved changes guard ──────────────────────────────────────────────────
   static Future<bool> confirmUnsavedChanges(
@@ -58,45 +89,40 @@ class TopMenuBar extends ConsumerWidget {
     return Row(
       children: [
         MenuBar(
-      style: MenuStyle(
-        elevation: WidgetStateProperty.all(0),
-        backgroundColor: WidgetStateProperty.all(Colors.transparent),
-        shape: WidgetStateProperty.all(
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(0)),
-        ),
-      ),
-      children: [
-            // ── File ────────────────────────────────────────────────────────
+          style: const MenuStyle(
+            elevation: WidgetStatePropertyAll(0),
+            backgroundColor: WidgetStatePropertyAll(Colors.transparent),
+            shape: WidgetStatePropertyAll(
+              RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+            ),
+          ),
+          children: [
+            // ── File ──────────────────────────────────────────────────────
             SubmenuButton(
+
               menuChildren: [
-                // New Project
-                MenuItemButton(
-                  shortcut: const SingleActivator(
-                    LogicalKeyboardKey.keyN,
-                    control: true,
-                  ),
+                _menuItem(
+                  context,
+                  label: 'New Project',
+                  shortcutLabel: 'Ctrl+N',
                   onPressed: () async {
                     if (!await confirmUnsavedChanges(context, ref)) return;
                     notifier.newProject();
                   },
-                  child: const Text('New Project'),
                 ),
-
-                // Open Project
-                MenuItemButton(
-                  shortcut: const SingleActivator(
-                    LogicalKeyboardKey.keyO,
-                    control: true,
-                  ),
+                _menuItem(
+                  context,
+                  label: 'Open Project',
+                  shortcutLabel: 'Ctrl+O',
                   onPressed: () async {
                     if (!await confirmUnsavedChanges(context, ref)) return;
                     await notifier.pickAndOpenProject();
                   },
-                  child: const Text('Open Project'),
                 ),
 
                 // Open Recent
                 SubmenuButton(
+    
                   menuChildren: recentProjects.isEmpty
                       ? [
                           const MenuItemButton(
@@ -104,8 +130,8 @@ class TopMenuBar extends ConsumerWidget {
                             child: Text('(No recent projects)'),
                           ),
                         ]
-                      : recentProjects
-                          .map(
+                      : [
+                          ...recentProjects.map(
                             (path) => MenuItemButton(
                               onPressed: () async {
                                 if (!await confirmUnsavedChanges(
@@ -116,111 +142,93 @@ class TopMenuBar extends ConsumerWidget {
                                 }
                                 await notifier.openProject(path);
                               },
-                              child: Tooltip(
-                                message: path,
-                                child: Text(
-                                  projectFileName(path),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                              child: Text(
+                                projectFileName(path),
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                          )
-                          .toList(),
+                          ),
+                          const Divider(),
+                          MenuItemButton(
+                            onPressed: () => notifier.clearRecentProjects(),
+                            child: const Text('Clear Recent Projects'),
+                          ),
+                        ],
                   child: const Text('Open Recent'),
                 ),
 
                 const Divider(),
 
-                // Save
-                MenuItemButton(
-                  shortcut: const SingleActivator(
-                    LogicalKeyboardKey.keyS,
-                    control: true,
-                  ),
+                _menuItem(
+                  context,
+                  label: 'Save',
+                  shortcutLabel: 'Ctrl+S',
                   onPressed: () => notifier.saveProject(),
-                  child: const Text('Save'),
                 ),
-
-                // Save As…
-                MenuItemButton(
-                  shortcut: const SingleActivator(
-                    LogicalKeyboardKey.keyS,
-                    control: true,
-                    shift: true,
-                  ),
+                _menuItem(
+                  context,
+                  label: 'Save As…',
+                  shortcutLabel: 'Ctrl+Shift+S',
                   onPressed: () => notifier.saveProjectAs(),
-                  child: const Text('Save As…'),
                 ),
 
                 const Divider(),
 
-                // Exit
-                MenuItemButton(
-                  shortcut: const SingleActivator(
-                    LogicalKeyboardKey.keyQ,
-                    control: true,
-                  ),
+                _menuItem(
+                  context,
+                  label: 'Exit',
+                  shortcutLabel: 'Ctrl+Q',
                   onPressed: () async {
                     if (!await confirmUnsavedChanges(context, ref)) return;
                     windowManager.destroy();
                   },
-                  child: const Text('Exit'),
                 ),
               ],
               child: const Text('File'),
             ),
 
-            // ── Edit ────────────────────────────────────────────────────────
+            // ── Edit ──────────────────────────────────────────────────────
             SubmenuButton(
+
               menuChildren: [
-                MenuItemButton(
-                  shortcut: const SingleActivator(
-                    LogicalKeyboardKey.keyZ,
-                    control: true,
-                  ),
+                _menuItem(
+                  context,
+                  label: 'Undo',
+                  shortcutLabel: 'Ctrl+Z',
                   onPressed: () {},
-                  child: const Text('Undo'),
                 ),
-                MenuItemButton(
-                  shortcut: const SingleActivator(
-                    LogicalKeyboardKey.keyY,
-                    control: true,
-                  ),
+                _menuItem(
+                  context,
+                  label: 'Redo',
+                  shortcutLabel: 'Ctrl+Y',
                   onPressed: () {},
-                  child: const Text('Redo'),
                 ),
                 const Divider(),
-                MenuItemButton(
-                  shortcut: const SingleActivator(
-                    LogicalKeyboardKey.keyR,
-                    control: true,
-                  ),
+                _menuItem(
+                  context,
+                  label: 'Refresh',
+                  shortcutLabel: 'F5',
                   onPressed: () =>
                       ref.read(workspaceProvider.notifier).refreshAll(),
-                  child: const Text('Refresh'),
                 ),
-                MenuItemButton(
+                _menuItem(
+                  context,
+                  label: 'Preferences',
                   onPressed: () => showDialog(
                     context: context,
                     builder: (_) => const PreferencesDialog(),
                   ),
-                  child: const Text('Preferences'),
                 ),
               ],
               child: const Text('Edit'),
             ),
 
-            // ── Help ────────────────────────────────────────────────────────
+            // ── Help ──────────────────────────────────────────────────────
             SubmenuButton(
+
               menuChildren: [
-                MenuItemButton(
-                  onPressed: () {},
-                  child: const Text('Documentation'),
-                ),
-                MenuItemButton(
-                  onPressed: () {},
-                  child: const Text('About'),
-                ),
+                _menuItem(context, label: 'Documentation', onPressed: () {}),
+                _menuItem(context, label: 'About', onPressed: () {}),
               ],
               child: const Text('Help'),
             ),
