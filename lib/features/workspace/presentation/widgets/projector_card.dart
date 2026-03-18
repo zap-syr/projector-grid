@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../domain/projector_node.dart';
 
@@ -59,15 +60,27 @@ class ProjectorCard extends StatelessWidget {
                 details.globalPosition.dx,
                 details.globalPosition.dy,
               ),
-              items: const [
+              items: const <PopupMenuEntry<String>>[
                 PopupMenuItem(value: 'edit', child: Text('Edit')),
                 PopupMenuItem(value: 'color', child: Text('Color Correction')),
+                PopupMenuItem(value: 'browser', child: Text('Open in Browser')),
+                PopupMenuDivider(),
                 PopupMenuItem(value: 'delete', child: Text('Delete')),
               ],
             ).then((value) {
               if (value == 'edit') onEdit();
               if (value == 'delete') onDelete();
               if (value == 'color') onColorCorrection();
+              if (value == 'browser') {
+                final url = 'http://${node.ipAddress}';
+                if (Platform.isWindows) {
+                  Process.run('cmd', ['/c', 'start', url]);
+                } else if (Platform.isMacOS) {
+                  Process.run('open', [url]);
+                } else if (Platform.isLinux) {
+                  Process.run('xdg-open', [url]);
+                }
+              }
             });
           },
           child: Container(
