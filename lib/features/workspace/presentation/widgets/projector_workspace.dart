@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/workspace_provider.dart';
 import 'projector_card.dart';
 import 'edit_projector_dialog.dart';
+import 'color_correction_dialog.dart';
 
 class SelectAllIntent extends Intent {
   const SelectAllIntent();
@@ -440,7 +441,13 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
                                           }
                                         },
                                         onColorCorrection: () {
-                                          // Empty for now
+                                          showDialog(
+                                            context: context,
+                                            builder: (_) =>
+                                                ColorCorrectionDialog(
+                                                  node: node,
+                                                ),
+                                          );
                                         },
                                       ),
                                     ),
