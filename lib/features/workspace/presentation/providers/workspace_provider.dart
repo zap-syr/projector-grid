@@ -61,6 +61,24 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
   }
 
   Future<void> _pollSingleProjector(ProjectorNode node) async {
+    final probe = await _protocolService.probeProjector(
+      node.ipAddress, node.port, node.login, node.password,
+    );
+
+    if (probe == ProbeResult.unauthorized) {
+      state = state.map((n) => n.id == node.id
+          ? n.copyWith(connectionStatus: ConnectionStatus.unauthorized)
+          : n).toList();
+      return;
+    }
+
+    if (probe == ProbeResult.offline) {
+      state = state.map((n) => n.id == node.id
+          ? n.copyWith(connectionStatus: ConnectionStatus.offline)
+          : n).toList();
+      return;
+    }
+
     final telemetry = await _protocolService.pollProjectorTelemetry(
       node.ipAddress,
       node.port,
@@ -186,6 +204,8 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
       ConnectionStatus connStatus = ConnectionStatus.offline;
       if (config['status'] == 'online' || config['status'] == 'protected') {
         connStatus = ConnectionStatus.connected;
+      } else if (config['status'] == 'auth_error') {
+        connStatus = ConnectionStatus.unauthorized;
       }
 
       final (x, y) = _gridPosition(idx);

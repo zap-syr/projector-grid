@@ -493,9 +493,28 @@ class _AutoDiscoveryTabState extends State<_AutoDiscoveryTab> {
                       itemBuilder: (context, index) {
                         final p = _foundProjectors[index];
                         final isSelected = _selectedIps.contains(p['ip']);
+                        final isAuthError = p['status'] == 'auth_error';
                         return CheckboxListTile(
-                          title: Text(p['name']),
-                          subtitle: Text('${p['ip']} • Status: ${p['status']}'),
+                          title: Row(
+                            children: [
+                              Expanded(child: Text(p['name'])),
+                              if (isAuthError) ...[
+                                const SizedBox(width: 6),
+                                const Tooltip(
+                                  message: 'Projector found but credentials are incorrect',
+                                  child: Icon(Icons.lock_outline, size: 14, color: Colors.amber),
+                                ),
+                              ],
+                            ],
+                          ),
+                          subtitle: Text(
+                            isAuthError
+                                ? '${p['ip']} • Auth Error — check login/password'
+                                : '${p['ip']} • Online',
+                            style: isAuthError
+                                ? TextStyle(color: Colors.amber.shade700)
+                                : null,
+                          ),
                           value: isSelected,
                           onChanged: (val) {
                             setState(() {

@@ -4,7 +4,7 @@ part 'projector_node.freezed.dart';
 
 enum PowerStatus { on, standby }
 enum ShutterStatus { open, closed }
-enum ConnectionStatus { connected, offline }
+enum ConnectionStatus { connected, offline, unauthorized }
 
 @freezed
 abstract class ProjectorNode with _$ProjectorNode {

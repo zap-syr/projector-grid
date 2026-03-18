@@ -33,7 +33,11 @@ class ProjectorCard extends StatelessWidget {
     // Status colors
     final powerColor = node.powerStatus == PowerStatus.on ? Colors.green : Colors.red;
     final shutterColor = node.shutterStatus == ShutterStatus.open ? Colors.green : Colors.red;
-    final connectionColor = node.connectionStatus == ConnectionStatus.connected ? Colors.green : Colors.red;
+    final connectionColor = switch (node.connectionStatus) {
+      ConnectionStatus.connected => Colors.green,
+      ConnectionStatus.unauthorized => Colors.amber,
+      ConnectionStatus.offline => Colors.red,
+    };
 
     return Positioned(
       left: node.x * zoom,
@@ -106,6 +110,9 @@ class ProjectorCard extends StatelessWidget {
                         const Icon(Icons.warning_amber_rounded, size: 14, color: Colors.orange),
                       const Spacer(),
                       // Top right: Connection
+                      if (node.connectionStatus == ConnectionStatus.unauthorized)
+                        const Icon(Icons.lock_outline, size: 12, color: Colors.amber),
+                      const SizedBox(width: 4),
                       Container(
                         width: 8,
                         height: 8,

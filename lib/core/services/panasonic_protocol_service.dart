@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:async';
 import 'package:crypto/crypto.dart';
 
+enum ProbeResult { online, unauthorized, offline }
+
 class PanasonicProtocolService {
   /// Scans a given subnet (e.g. "192.168.1") for Panasonic projectors on the specified port.
   /// Yields results as they are found.
@@ -27,15 +29,34 @@ class PanasonicProtocolService {
   /// and retrieve its model name (QID).
   Future<Map<String, dynamic>?> _pingProjector(String ip, int port, String login, String password) async {
     final modelResponse = await _sendSingleCommand(ip, port, login, password, 'QID');
-    if (modelResponse == 'Timeout' || modelResponse.contains('Error') || modelResponse.contains('ERRA') || modelResponse.isEmpty) {
+    if (modelResponse == 'Timeout' || modelResponse.contains('Error') || modelResponse.isEmpty) {
       return null;
     }
-    
-    return {
-      'ip': ip,
-      'name': modelResponse,
-      'status': 'online',
-    };
+    if (modelResponse == 'ERRA') {
+      return {'ip': ip, 'name': ip, 'status': 'auth_error'};
+    }
+    if (modelResponse.startsWith('ER')) {
+      return null;
+    }
+    return {'ip': ip, 'name': modelResponse, 'status': 'online'};
+  }
+
+  /// Probes a projector to determine its reachability and auth status without
+  /// fetching full telemetry. Returns [ProbeResult.online] if reachable and
+  /// credentials are valid, [ProbeResult.unauthorized] if reachable but auth
+  /// fails, and [ProbeResult.offline] if not reachable at all.
+  Future<ProbeResult> probeProjector(String ip, int port, String login, String password) async {
+    final response = await _sendSingleCommand(ip, port, login, password, 'QID');
+    if (response == 'Timeout' || response.contains('Error') || response.isEmpty) {
+      return ProbeResult.offline;
+    }
+    if (response == 'ERRA') {
+      return ProbeResult.unauthorized;
+    }
+    if (response.startsWith('ER')) {
+      return ProbeResult.offline;
+    }
+    return ProbeResult.online;
   }
 
   /// A quick ping to just check if an already added projector is online and reachable on the port.
@@ -130,7 +151,7 @@ class PanasonicProtocolService {
     final response = await _sendSingleCommand(ip, port, login, password, cmd);
     // Usually responses are echoing the command back or a generic acknowledgment.
     // As long as it's not a timeout or ERRA (auth error), we consider the dispatch successful.
-    if (response == 'Timeout' || response.contains('ERRA')) {
+    if (response == 'Timeout' || response.startsWith('ER')) {
       return false;
     }
     return true;
@@ -139,7 +160,7 @@ class PanasonicProtocolService {
   /// Sends a specific command and returns its raw string response.
   Future<String?> sendRawCommand(String ip, int port, String login, String password, String cmd) async {
     final response = await _sendSingleCommand(ip, port, login, password, cmd);
-    if (response == 'Timeout' || response.contains('ERRA')) {
+    if (response == 'Timeout' || response.startsWith('ER')) {
       return null;
     }
     return response;

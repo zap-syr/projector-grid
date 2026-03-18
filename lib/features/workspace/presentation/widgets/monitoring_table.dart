@@ -41,9 +41,13 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
     sortedNodes.sort((a, b) {
       int cmp;
       switch (_sortColumnIndex) {
-        case 0: // Connection
-          cmp = (a.connectionStatus == ConnectionStatus.connected ? 0 : 1)
-              .compareTo(b.connectionStatus == ConnectionStatus.connected ? 0 : 1);
+        case 0: // Connection: connected=0, unauthorized=1, offline=2
+          int connOrder(ConnectionStatus s) => switch (s) {
+            ConnectionStatus.connected => 0,
+            ConnectionStatus.unauthorized => 1,
+            ConnectionStatus.offline => 2,
+          };
+          cmp = connOrder(a.connectionStatus).compareTo(connOrder(b.connectionStatus));
           break;
         case 1: // Model
           cmp = a.name.compareTo(b.name);
@@ -156,17 +160,33 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
             ],
             rows: sortedNodes.map((node) {
               final isOnline = node.connectionStatus == ConnectionStatus.connected;
+              final isUnauthorized = node.connectionStatus == ConnectionStatus.unauthorized;
               final isPowerOn = node.powerStatus == PowerStatus.on;
               final isShutterOpen = node.shutterStatus == ShutterStatus.open;
+
+              final connectionDotColor = isOnline
+                  ? Colors.green
+                  : isUnauthorized
+                      ? Colors.amber
+                      : Colors.red;
+              final connectionLabel = isOnline
+                  ? 'Online'
+                  : isUnauthorized
+                      ? 'Auth Error'
+                      : 'Offline';
 
               return DataRow(
                 cells: [
                   DataCell(Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.circle, size: 12, color: isOnline ? Colors.green : Colors.red),
+                      Icon(Icons.circle, size: 12, color: connectionDotColor),
                       const SizedBox(width: 6),
-                      Text(isOnline ? 'Online' : 'Offline'),
+                      Text(connectionLabel),
+                      if (isUnauthorized) ...[
+                        const SizedBox(width: 4),
+                        const Icon(Icons.lock_outline, size: 12, color: Colors.amber),
+                      ],
                     ],
                   )),
                   DataCell(Text(node.name)),
