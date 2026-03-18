@@ -34,6 +34,10 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
 
   Future<void> refreshAll() => _pollAllProjectors();
 
+  void setNodes(List<ProjectorNode> nodes) {
+    state = List<ProjectorNode>.from(nodes);
+  }
+
   void setPollingInterval(int seconds) {
     _startPolling(seconds: seconds);
   }

@@ -537,16 +537,12 @@ class _ZoomControl extends StatefulWidget {
 }
 
 class _ZoomControlState extends State<_ZoomControl> {
-  bool _isHovered = false;
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
     return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         height: 40,
