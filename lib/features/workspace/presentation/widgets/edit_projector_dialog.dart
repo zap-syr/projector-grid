@@ -44,19 +44,34 @@ class _EditProjectorDialogState extends State<EditProjectorDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Dialog(
+      clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Container(
+      child: SizedBox(
         width: 400,
-        padding: const EdgeInsets.all(24.0),
         child: Form(
           key: _formKey,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Edit Projector', style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 24),
+              // ── Title bar ───────────────────────────────────────────────
+              Container(
+                width: double.infinity,
+                color: theme.colorScheme.surfaceContainerHigh,
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+                child: Text('Edit Projector',
+                    style: theme.textTheme.titleMedium),
+              ),
+              const Divider(height: 1),
+              // ── Content ─────────────────────────────────────────────────
+              Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               TextFormField(
                 controller: _ipController,
                 decoration: const InputDecoration(labelText: 'IP Address', border: OutlineInputBorder()),
@@ -98,6 +113,9 @@ class _EditProjectorDialogState extends State<EditProjectorDialog> {
                     child: const Text('Save'),
                   ),
                 ],
+              ),
+            ],
+          ),
               ),
             ],
           ),

@@ -6,6 +6,7 @@ import '../providers/workspace_provider.dart';
 import 'projector_card.dart';
 import 'edit_projector_dialog.dart';
 import 'color_correction_dialog.dart';
+import 'brightness_control_dialog.dart';
 
 class SelectAllIntent extends Intent {
   const SelectAllIntent();
@@ -445,6 +446,15 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
                                             context: context,
                                             builder: (_) =>
                                                 ColorCorrectionDialog(
+                                                  node: node,
+                                                ),
+                                          );
+                                        },
+                                        onBrightnessControl: () {
+                                          showDialog(
+                                            context: context,
+                                            builder: (_) =>
+                                                BrightnessControlDialog(
                                                   node: node,
                                                 ),
                                           );

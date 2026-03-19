@@ -283,15 +283,17 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
     final theme = Theme.of(context);
 
     return Dialog(
+      clipBehavior: Clip.antiAlias,
       child: SizedBox(
         width: 520,
         height: 580,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Title bar
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 16, 8, 0),
+            // ── Title bar ─────────────────────────────────────────────
+            Container(
+              color: theme.colorScheme.surfaceContainerHigh,
+              padding: const EdgeInsets.fromLTRB(24, 12, 8, 12),
               child: Row(
                 children: [
                   Expanded(
@@ -308,6 +310,7 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
                 ],
               ),
             ),
+            const Divider(height: 1),
 
             if (_loading)
               const Expanded(child: Center(child: CircularProgressIndicator()))

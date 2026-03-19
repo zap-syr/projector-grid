@@ -12,6 +12,7 @@ class ProjectorCard extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final VoidCallback onColorCorrection;
+  final VoidCallback onBrightnessControl;
 
   const ProjectorCard({
     super.key,
@@ -24,6 +25,7 @@ class ProjectorCard extends StatelessWidget {
     required this.onEdit,
     required this.onDelete,
     required this.onColorCorrection,
+    required this.onBrightnessControl,
   });
 
   @override
@@ -62,6 +64,7 @@ class ProjectorCard extends StatelessWidget {
               ),
               items: const <PopupMenuEntry<String>>[
                 PopupMenuItem(value: 'edit', child: Text('Edit')),
+                PopupMenuItem(value: 'brightness', child: Text('Brightness Control')),
                 PopupMenuItem(value: 'color', child: Text('Color Correction')),
                 PopupMenuItem(value: 'browser', child: Text('Open in Browser')),
                 PopupMenuDivider(),
@@ -71,6 +74,7 @@ class ProjectorCard extends StatelessWidget {
               if (value == 'edit') onEdit();
               if (value == 'delete') onDelete();
               if (value == 'color') onColorCorrection();
+              if (value == 'brightness') onBrightnessControl();
               if (value == 'browser') {
                 final url = 'http://${node.ipAddress}';
                 if (Platform.isWindows) {
