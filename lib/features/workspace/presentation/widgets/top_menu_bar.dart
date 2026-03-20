@@ -85,6 +85,9 @@ class TopMenuBar extends ConsumerWidget {
       projectStateProvider.select((s) => s.recentProjects),
     );
     final notifier = ref.read(projectStateProvider.notifier);
+    // Watch workspace to rebuild when undo/redo availability changes.
+    ref.watch(workspaceProvider);
+    final wsNotifier = ref.read(workspaceProvider.notifier);
 
     return Row(
       children: [
@@ -195,13 +198,13 @@ class TopMenuBar extends ConsumerWidget {
                   context,
                   label: 'Undo',
                   shortcutLabel: 'Ctrl+Z',
-                  onPressed: () {},
+                  onPressed: wsNotifier.canUndo ? () => wsNotifier.undo() : null,
                 ),
                 _menuItem(
                   context,
                   label: 'Redo',
                   shortcutLabel: 'Ctrl+Y',
-                  onPressed: () {},
+                  onPressed: wsNotifier.canRedo ? () => wsNotifier.redo() : null,
                 ),
                 const Divider(),
                 _menuItem(

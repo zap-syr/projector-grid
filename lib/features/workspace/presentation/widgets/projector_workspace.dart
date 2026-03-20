@@ -25,6 +25,14 @@ class SendCommandIntent extends Intent {
   const SendCommandIntent(this.command);
 }
 
+class UndoIntent extends Intent {
+  const UndoIntent();
+}
+
+class RedoIntent extends Intent {
+  const RedoIntent();
+}
+
 class ProjectorWorkspace extends ConsumerStatefulWidget {
   const ProjectorWorkspace({super.key});
 
@@ -162,6 +170,14 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
             LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyD):
                 const DeselectAllIntent(),
             LogicalKeySet(LogicalKeyboardKey.delete): const DeleteIntent(),
+            LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.keyZ):
+                const UndoIntent(),
+            LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyZ):
+                const UndoIntent(),
+            LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.keyY):
+                const RedoIntent(),
+            LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyY):
+                const RedoIntent(),
 
             // ── Lens Shift — normal speed (arrow only) ───────────────────
             const SingleActivator(LogicalKeyboardKey.arrowUp):
@@ -210,6 +226,12 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
               SendCommandIntent: CallbackAction<SendCommandIntent>(
                 onInvoke: (intent) =>
                     notifier.sendCommandToSelected(intent.command),
+              ),
+              UndoIntent: CallbackAction<UndoIntent>(
+                onInvoke: (intent) => notifier.undo(),
+              ),
+              RedoIntent: CallbackAction<RedoIntent>(
+                onInvoke: (intent) => notifier.redo(),
               ),
               DeleteIntent: CallbackAction<DeleteIntent>(
                 onInvoke: (intent) async {
@@ -384,6 +406,7 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
                                           );
                                         },
                                         onPanUpdate: (details) {
+                                          notifier.saveBeforeMove();
                                           notifier.updateNodePosition(
                                             node.id,
                                             details.delta.dx,
@@ -392,6 +415,7 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
                                         },
                                         onPanEnd: (details) {
                                           notifier.snapNodeToGrid(node.id);
+                                          notifier.endMove();
                                         },
                                         onEdit: () {
                                           showDialog(

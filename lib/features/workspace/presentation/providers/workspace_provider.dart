@@ -12,6 +12,11 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
   final _protocolService = PanasonicProtocolService();
   Timer? _pollingTimer;
 
+  static const int _maxHistorySize = 50;
+  final List<List<ProjectorNode>> _undoStack = [];
+  final List<List<ProjectorNode>> _redoStack = [];
+  bool _isDragging = false;
+
   @override
   List<ProjectorNode> build() {
     // Start polling when provider initializes
@@ -23,6 +28,89 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     });
 
     return [];
+  }
+
+  // ── Undo / Redo ──────────────────────────────────────────────────────────
+
+  bool get canUndo => _undoStack.isNotEmpty;
+  bool get canRedo => _redoStack.isNotEmpty;
+
+  /// Strips transient fields so snapshots only capture user-editable state.
+  List<ProjectorNode> _stripTransient(List<ProjectorNode> nodes) {
+    return nodes.map((n) => n.copyWith(
+      isSelected: false,
+      connectionStatus: ConnectionStatus.offline,
+      powerStatus: PowerStatus.standby,
+      shutterStatus: ShutterStatus.closed,
+      serialNumber: '-',
+      runtime: '-',
+      intakeTemp: '-',
+      exhaustTemp: '-',
+      acVoltage: '-',
+      errors: '-',
+      input: '-',
+      signal: '-',
+    )).toList();
+  }
+
+  void _saveSnapshot() {
+    _undoStack.add(_stripTransient(state));
+    if (_undoStack.length > _maxHistorySize) {
+      _undoStack.removeAt(0);
+    }
+    _redoStack.clear();
+  }
+
+  /// Restores a snapshot while preserving live telemetry from current state.
+  List<ProjectorNode> _mergeWithTelemetry(List<ProjectorNode> snapshot) {
+    final currentMap = {for (var n in state) n.id: n};
+    return snapshot.map((saved) {
+      final live = currentMap[saved.id];
+      if (live != null) {
+        return saved.copyWith(
+          name: live.name,
+          connectionStatus: live.connectionStatus,
+          powerStatus: live.powerStatus,
+          shutterStatus: live.shutterStatus,
+          serialNumber: live.serialNumber,
+          runtime: live.runtime,
+          intakeTemp: live.intakeTemp,
+          exhaustTemp: live.exhaustTemp,
+          acVoltage: live.acVoltage,
+          errors: live.errors,
+          input: live.input,
+          signal: live.signal,
+        );
+      }
+      return saved;
+    }).toList();
+  }
+
+  void undo() {
+    if (!canUndo) return;
+    _redoStack.add(_stripTransient(state));
+    final snapshot = _undoStack.removeLast();
+    state = _mergeWithTelemetry(snapshot);
+  }
+
+  void redo() {
+    if (!canRedo) return;
+    _undoStack.add(_stripTransient(state));
+    final snapshot = _redoStack.removeLast();
+    state = _mergeWithTelemetry(snapshot);
+  }
+
+  /// Call before starting a node drag to capture pre-move state.
+  void saveBeforeMove() {
+    if (!_isDragging) {
+      _isDragging = true;
+      _saveSnapshot();
+    }
+  }
+
+  /// Call when drag ends to allow the next drag to save a new snapshot.
+  void endMove() {
+    _isDragging = false;
   }
 
   void _startPolling({int seconds = 60}) {
@@ -227,6 +315,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
       );
     }).toList();
 
+    _saveSnapshot();
     state = [...state, ...newNodes];
 
     // Trigger an asynchronous ping for any newly added offline nodes
@@ -341,6 +430,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
   }
 
   void updateNode(String id, String ip, String login, String password) {
+    _saveSnapshot();
     state = state.map((node) {
       if (node.id == id) {
         return node.copyWith(
@@ -356,10 +446,12 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
   }
 
   void deleteSelected() {
+    _saveSnapshot();
     state = state.where((node) => !node.isSelected).toList();
   }
 
   void deleteNode(String id) {
+    _saveSnapshot();
     state = state.where((node) => node.id != id).toList();
   }
 
