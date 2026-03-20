@@ -3,10 +3,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/workspace_provider.dart';
+import '../../domain/projector_node.dart';
+import '../../domain/projector_group.dart';
 import 'projector_card.dart';
 import 'edit_projector_dialog.dart';
 import 'color_correction_dialog.dart';
 import 'brightness_control_dialog.dart';
+import 'manage_groups_dialog.dart';
 
 class SelectAllIntent extends Intent {
   const SelectAllIntent();
@@ -144,10 +147,57 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
     }
   }
 
+  List<Widget> _buildGroupMenuItems(
+    ProjectorNode node,
+    WorkspaceNotifier notifier,
+    List<ProjectorGroup> groups,
+  ) {
+    // Collect affected node IDs: if the node is selected, apply to all selected.
+    final nodes = ref.read(workspaceProvider);
+    final targetIds = node.isSelected
+        ? nodes.where((n) => n.isSelected).map((n) => n.id).toList()
+        : [node.id];
+
+    return [
+      ...groups.map((g) => MenuItemButton(
+            onPressed: () => notifier.assignNodesToGroup(targetIds, g.id),
+            leadingIcon: Container(
+              width: 12,
+              height: 12,
+              decoration: BoxDecoration(
+                color: Color(g.color),
+                shape: BoxShape.circle,
+              ),
+            ),
+            trailingIcon: node.groupId == g.id
+                ? Icon(Icons.check, size: 16, color: Theme.of(context).colorScheme.primary)
+                : null,
+            child: Text(g.name),
+          )),
+      if (groups.isNotEmpty) const Divider(height: 1),
+      MenuItemButton(
+        onPressed: () async {
+          final newGroup = await showGroupEditorDialog(context, ref);
+          if (newGroup != null) {
+            notifier.assignNodesToGroup(targetIds, newGroup.id);
+          }
+        },
+        child: const Text('New Group...'),
+      ),
+      if (node.groupId != null)
+        MenuItemButton(
+          onPressed: () => notifier.assignNodesToGroup(targetIds, null),
+          child: const Text('Remove from Group'),
+        ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final nodes = ref.watch(workspaceProvider);
     final notifier = ref.read(workspaceProvider.notifier);
+    final groups = notifier.groups;
+    final groupMap = {for (var g in groups) g.id: g};
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -392,6 +442,7 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
                                       (node) => ProjectorCard(
                                         key: ValueKey(node.id),
                                         node: node,
+                                        group: node.groupId != null ? groupMap[node.groupId] : null,
                                         zoom: _currentZoom,
                                         onTap: () {
                                           notifier.selectNodeOnTap(
@@ -483,6 +534,7 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
                                                 ),
                                           );
                                         },
+                                        buildGroupMenuItems: () => _buildGroupMenuItems(node, notifier, groups),
                                       ),
                                     ),
 

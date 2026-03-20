@@ -29,5 +29,6 @@ abstract class ProjectorNode with _$ProjectorNode {
     @Default('-') String errors,
     @Default('-') String input,
     @Default('-') String signal,
+    String? groupId,
   }) = _ProjectorNode;
 }

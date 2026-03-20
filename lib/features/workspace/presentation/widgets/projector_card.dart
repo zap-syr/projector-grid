@@ -1,9 +1,11 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../domain/projector_node.dart';
+import '../../domain/projector_group.dart';
 
-class ProjectorCard extends StatelessWidget {
+class ProjectorCard extends StatefulWidget {
   final ProjectorNode node;
+  final ProjectorGroup? group;
   final double zoom;
   final VoidCallback onTap;
   final GestureDragDownCallback onPanDown;
@@ -13,10 +15,12 @@ class ProjectorCard extends StatelessWidget {
   final VoidCallback onDelete;
   final VoidCallback onColorCorrection;
   final VoidCallback onBrightnessControl;
+  final List<Widget> Function() buildGroupMenuItems;
 
   const ProjectorCard({
     super.key,
     required this.node,
+    this.group,
     required this.zoom,
     required this.onTap,
     required this.onPanDown,
@@ -26,13 +30,28 @@ class ProjectorCard extends StatelessWidget {
     required this.onDelete,
     required this.onColorCorrection,
     required this.onBrightnessControl,
+    required this.buildGroupMenuItems,
   });
 
   @override
+  State<ProjectorCard> createState() => _ProjectorCardState();
+}
+
+class _ProjectorCardState extends State<ProjectorCard> {
+  final _menuController = MenuController();
+
+  void _closeAndRun(VoidCallback action) {
+    _menuController.close();
+    action();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final node = widget.node;
+    final group = widget.group;
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    
+
     // Status colors
     final powerColor = node.powerStatus == PowerStatus.on ? Colors.green : Colors.red;
     final shutterColor = node.shutterStatus == ShutterStatus.open ? Colors.green : Colors.red;
@@ -43,39 +62,29 @@ class ProjectorCard extends StatelessWidget {
     };
 
     return Positioned(
-      left: node.x * zoom,
-      top: node.y * zoom,
+      left: node.x * widget.zoom,
+      top: node.y * widget.zoom,
       child: Transform.scale(
-        scale: zoom,
+        scale: widget.zoom,
         alignment: Alignment.topLeft,
-        child: GestureDetector(
-          onTap: onTap,
-          onPanDown: onPanDown,
-          onPanUpdate: onPanUpdate,
-          onPanEnd: onPanEnd,
-          onSecondaryTapDown: (details) {
-            showMenu(
-              context: context,
-              position: RelativeRect.fromLTRB(
-                details.globalPosition.dx,
-                details.globalPosition.dy,
-                details.globalPosition.dx,
-                details.globalPosition.dy,
-              ),
-              items: const <PopupMenuEntry<String>>[
-                PopupMenuItem(value: 'edit', child: Text('Edit')),
-                PopupMenuItem(value: 'brightness', child: Text('Brightness Control')),
-                PopupMenuItem(value: 'color', child: Text('Color Correction')),
-                PopupMenuItem(value: 'browser', child: Text('Open in Browser')),
-                PopupMenuDivider(),
-                PopupMenuItem(value: 'delete', child: Text('Delete')),
-              ],
-            ).then((value) {
-              if (value == 'edit') onEdit();
-              if (value == 'delete') onDelete();
-              if (value == 'color') onColorCorrection();
-              if (value == 'brightness') onBrightnessControl();
-              if (value == 'browser') {
+        child: MenuAnchor(
+          controller: _menuController,
+          consumeOutsideTap: true,
+          menuChildren: [
+            MenuItemButton(
+              onPressed: () => _closeAndRun(widget.onEdit),
+              child: const Text('Edit'),
+            ),
+            MenuItemButton(
+              onPressed: () => _closeAndRun(widget.onBrightnessControl),
+              child: const Text('Brightness Control'),
+            ),
+            MenuItemButton(
+              onPressed: () => _closeAndRun(widget.onColorCorrection),
+              child: const Text('Color Correction'),
+            ),
+            MenuItemButton(
+              onPressed: () => _closeAndRun(() {
                 final url = 'http://${node.ipAddress}';
                 if (Platform.isWindows) {
                   Process.run('cmd', ['/c', 'start', url]);
@@ -84,85 +93,144 @@ class ProjectorCard extends StatelessWidget {
                 } else if (Platform.isLinux) {
                   Process.run('xdg-open', [url]);
                 }
-              }
-            });
-          },
-          child: Container(
-            width: 120,
-            height: 100,
-            padding: EdgeInsets.all(node.isSelected ? 0 : 1),
-            decoration: BoxDecoration(
-              color: colorScheme.surface,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: node.isSelected ? colorScheme.primary : theme.dividerColor,
-                width: node.isSelected ? 2 : 1,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.1),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                ),
-              ],
+              }),
+              child: const Text('Open in Browser'),
             ),
+            const Divider(height: 1),
+            SubmenuButton(
+              menuChildren: widget.buildGroupMenuItems(),
+              child: const Text('Assign to Group'),
+            ),
+            const Divider(height: 1),
+            MenuItemButton(
+              onPressed: () => _closeAndRun(widget.onDelete),
+              child: const Text('Delete'),
+            ),
+          ],
+          child: GestureDetector(
+            onTap: widget.onTap,
+            onPanDown: widget.onPanDown,
+            onPanUpdate: widget.onPanUpdate,
+            onPanEnd: widget.onPanEnd,
+            onSecondaryTapUp: (details) {
+              _menuController.open(position: details.localPosition);
+            },
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                // Top Bar
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  width: 120,
+                  height: 100,
+                  padding: EdgeInsets.all(node.isSelected ? 0 : 1),
                   decoration: BoxDecoration(
-                    color: colorScheme.surfaceContainerHighest,
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(7)),
+                    color: colorScheme.surface,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: node.isSelected ? colorScheme.primary : theme.dividerColor,
+                      width: node.isSelected ? 2 : 1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.1),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Top left: Power and Shutter
-                      Icon(Icons.power_settings_new, size: 14, color: powerColor),
-                      const SizedBox(width: 4),
-                      Icon(Icons.visibility, size: 14, color: shutterColor),
-                      const SizedBox(width: 4),
-                      if (node.errors != 'NO ERRORS' && node.errors != '-')
-                        const Icon(Icons.warning_amber_rounded, size: 14, color: Colors.orange),
+                      // Top Bar with optional group color stripe overlaid
+                      Stack(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: colorScheme.surfaceContainerHighest,
+                              borderRadius: const BorderRadius.vertical(top: Radius.circular(7)),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.power_settings_new, size: 14, color: powerColor),
+                                const SizedBox(width: 4),
+                                Icon(Icons.visibility, size: 14, color: shutterColor),
+                                const SizedBox(width: 4),
+                                if (node.errors != 'NO ERRORS' && node.errors != '-')
+                                  const Icon(Icons.warning_amber_rounded, size: 14, color: Colors.orange),
+                                const Spacer(),
+                                if (node.connectionStatus == ConnectionStatus.unauthorized)
+                                  const Icon(Icons.lock_outline, size: 12, color: Colors.amber),
+                                const SizedBox(width: 4),
+                                Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: BoxDecoration(
+                                    color: connectionColor,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          // Group color stripe overlay
+                          if (group != null)
+                            Positioned(
+                              top: 0,
+                              left: 0,
+                              right: 0,
+                              child: Container(
+                                height: 4,
+                                decoration: BoxDecoration(
+                                  color: Color(group.color),
+                                  borderRadius: const BorderRadius.vertical(top: Radius.circular(7)),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
                       const Spacer(),
-                      // Top right: Connection
-                      if (node.connectionStatus == ConnectionStatus.unauthorized)
-                        const Icon(Icons.lock_outline, size: 12, color: Colors.amber),
-                      const SizedBox(width: 4),
-                      Container(
-                        width: 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: connectionColor,
-                          shape: BoxShape.circle,
+                      // Content area
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                        child: Text(
+                          node.name,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8.0, right: 8.0, bottom: 8.0),
+                        child: Text(
+                          node.ipAddress,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.7),
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
-                const Spacer(),
-                // Content area
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-                  child: Text(
-                    node.name,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(left: 8.0, right: 8.0, bottom: 8.0),
-                  child: Text(
-                    node.ipAddress,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.7),
+                // Group label
+                if (group != null)
+                  SizedBox(
+                    width: 120,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        group.name,
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: Color(group.color),
+                          fontSize: 9,
+                        ),
+                      ),
                     ),
                   ),
-                ),
               ],
             ),
           ),

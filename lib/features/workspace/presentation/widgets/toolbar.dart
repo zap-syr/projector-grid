@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/workspace_provider.dart';
 import 'add_projector_dialog.dart';
+import 'manage_groups_dialog.dart';
 
 class MainToolbar extends ConsumerWidget {
   final bool isMonitoringView;
@@ -43,6 +44,17 @@ class MainToolbar extends ConsumerWidget {
             },
             icon: const Icon(Icons.add),
             label: const Text('Add Projectors'),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton.icon(
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (_) => const ManageGroupsDialog(),
+              );
+            },
+            icon: const Icon(Icons.workspaces_outlined, size: 18),
+            label: const Text('Manage Groups'),
           ),
           const Spacer(),
           SegmentedButton<bool>(

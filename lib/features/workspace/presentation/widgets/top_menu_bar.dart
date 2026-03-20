@@ -4,6 +4,7 @@ import 'package:window_manager/window_manager.dart';
 import '../providers/workspace_provider.dart';
 import '../providers/project_provider.dart';
 import 'preferences_dialog.dart';
+import 'manage_groups_dialog.dart';
 
 class TopMenuBar extends ConsumerWidget {
   const TopMenuBar({super.key});
@@ -213,6 +214,14 @@ class TopMenuBar extends ConsumerWidget {
                   shortcutLabel: 'F5',
                   onPressed: () =>
                       ref.read(workspaceProvider.notifier).refreshAll(),
+                ),
+                _menuItem(
+                  context,
+                  label: 'Manage Groups',
+                  onPressed: () => showDialog(
+                    context: context,
+                    builder: (_) => const ManageGroupsDialog(),
+                  ),
                 ),
                 _menuItem(
                   context,

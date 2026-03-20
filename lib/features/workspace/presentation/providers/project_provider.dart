@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../domain/projector_node.dart';
+import '../../domain/projector_group.dart';
 import 'workspace_provider.dart';
 
 part 'project_provider.g.dart';
@@ -79,7 +80,8 @@ class ProjectStateNotifier extends _$ProjectStateNotifier {
           p.login != node.login ||
           p.password != node.password ||
           p.x != node.x ||
-          p.y != node.y) {
+          p.y != node.y ||
+          p.groupId != node.groupId) {
         return true;
       }
     }
@@ -90,7 +92,9 @@ class ProjectStateNotifier extends _$ProjectStateNotifier {
 
   void newProject() {
     _suppressDirty = true;
-    ref.read(workspaceProvider.notifier).setNodes([]);
+    final wsNotifier = ref.read(workspaceProvider.notifier);
+    wsNotifier.setNodes([]);
+    wsNotifier.setGroups([]);
     _suppressDirty = false;
     state = state.copyWith(clearCurrentFilePath: true, isDirty: false);
   }
@@ -108,10 +112,13 @@ class ProjectStateNotifier extends _$ProjectStateNotifier {
 
       final json = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
       final nodes = _deserializeNodes(json);
+      final groups = _deserializeGroups(json);
 
       _suppressDirty = true;
-      ref.read(workspaceProvider.notifier).setNodes(nodes);
-      ref.read(workspaceProvider.notifier).refreshAll();
+      final wsNotifier = ref.read(workspaceProvider.notifier);
+      wsNotifier.setNodes(nodes);
+      wsNotifier.setGroups(groups);
+      wsNotifier.refreshAll();
       _suppressDirty = false;
 
       final updated = _addToRecent(path, state.recentProjects);
@@ -220,9 +227,12 @@ if (\$r -eq 'OK') { Write-Output \$dialog.FileName }
 
   Future<bool> _writeToFile(String path) async {
     try {
+      final wsNotifier = ref.read(workspaceProvider.notifier);
       final nodes = ref.read(workspaceProvider);
+      final groups = wsNotifier.groups;
       final json = jsonEncode({
-        'version': 1,
+        'version': 2,
+        'groups': groups.map(_serializeGroup).toList(),
         'nodes': nodes.map(_serializeNode).toList(),
       });
 
@@ -254,6 +264,14 @@ if (\$r -eq 'OK') { Write-Output \$dialog.FileName }
     'password': node.password,
     'x': node.x,
     'y': node.y,
+    if (node.groupId != null) 'groupId': node.groupId,
+  };
+
+  static Map<String, dynamic> _serializeGroup(ProjectorGroup group) => {
+    'id': group.id,
+    'name': group.name,
+    'color': group.color,
+    'oscAddress': group.oscAddress,
   };
 
   List<ProjectorNode> _deserializeNodes(Map<String, dynamic> json) {
@@ -267,6 +285,18 @@ if (\$r -eq 'OK') { Write-Output \$dialog.FileName }
       password: n['password'] as String,
       x: (n['x'] as num).toDouble(),
       y: (n['y'] as num).toDouble(),
+      groupId: n['groupId'] as String?,
+    )).toList();
+  }
+
+  static List<ProjectorGroup> _deserializeGroups(Map<String, dynamic> json) {
+    final groups = json['groups'] as List<dynamic>?;
+    if (groups == null) return [];
+    return groups.map((g) => ProjectorGroup(
+      id: g['id'] as String,
+      name: g['name'] as String,
+      color: g['color'] as int,
+      oscAddress: (g['oscAddress'] as String?) ?? '',
     )).toList();
   }
 

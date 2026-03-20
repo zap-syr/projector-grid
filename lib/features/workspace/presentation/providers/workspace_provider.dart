@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../domain/projector_node.dart';
+import '../../domain/projector_group.dart';
 import '../../../../core/services/panasonic_protocol_service.dart';
 
 part 'workspace_provider.g.dart';
@@ -13,9 +14,12 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
   Timer? _pollingTimer;
 
   static const int _maxHistorySize = 50;
-  final List<List<ProjectorNode>> _undoStack = [];
-  final List<List<ProjectorNode>> _redoStack = [];
+  final List<_WorkspaceSnapshot> _undoStack = [];
+  final List<_WorkspaceSnapshot> _redoStack = [];
   bool _isDragging = false;
+
+  List<ProjectorGroup> _groups = [];
+  List<ProjectorGroup> get groups => List.unmodifiable(_groups);
 
   @override
   List<ProjectorNode> build() {
@@ -53,8 +57,15 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     )).toList();
   }
 
+  _WorkspaceSnapshot _createSnapshot() {
+    return _WorkspaceSnapshot(
+      nodes: _stripTransient(state),
+      groups: List.of(_groups),
+    );
+  }
+
   void _saveSnapshot() {
-    _undoStack.add(_stripTransient(state));
+    _undoStack.add(_createSnapshot());
     if (_undoStack.length > _maxHistorySize) {
       _undoStack.removeAt(0);
     }
@@ -86,18 +97,21 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     }).toList();
   }
 
+  void _restoreSnapshot(_WorkspaceSnapshot snapshot) {
+    state = _mergeWithTelemetry(snapshot.nodes);
+    _groups = List.of(snapshot.groups);
+  }
+
   void undo() {
     if (!canUndo) return;
-    _redoStack.add(_stripTransient(state));
-    final snapshot = _undoStack.removeLast();
-    state = _mergeWithTelemetry(snapshot);
+    _redoStack.add(_createSnapshot());
+    _restoreSnapshot(_undoStack.removeLast());
   }
 
   void redo() {
     if (!canRedo) return;
-    _undoStack.add(_stripTransient(state));
-    final snapshot = _redoStack.removeLast();
-    state = _mergeWithTelemetry(snapshot);
+    _undoStack.add(_createSnapshot());
+    _restoreSnapshot(_redoStack.removeLast());
   }
 
   /// Call before starting a node drag to capture pre-move state.
@@ -111,6 +125,38 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
   /// Call when drag ends to allow the next drag to save a new snapshot.
   void endMove() {
     _isDragging = false;
+  }
+
+  // ── Groups ─────────────────────────────────────────────────────────────
+
+  void setGroups(List<ProjectorGroup> groups) {
+    _groups = List.of(groups);
+  }
+
+  void addGroup(ProjectorGroup group) {
+    _saveSnapshot();
+    _groups = [..._groups, group];
+    // Trigger state rebuild so listeners (UI) update.
+    state = [...state];
+  }
+
+  void updateGroup(ProjectorGroup updated) {
+    _saveSnapshot();
+    _groups = _groups.map((g) => g.id == updated.id ? updated : g).toList();
+    state = [...state];
+  }
+
+  void deleteGroup(String groupId) {
+    _saveSnapshot();
+    _groups = _groups.where((g) => g.id != groupId).toList();
+    // Unassign nodes that belonged to the deleted group.
+    state = state.map((n) => n.groupId == groupId ? n.copyWith(groupId: null) : n).toList();
+  }
+
+  void assignNodesToGroup(List<String> nodeIds, String? groupId) {
+    _saveSnapshot();
+    final idSet = nodeIds.toSet();
+    state = state.map((n) => idSet.contains(n.id) ? n.copyWith(groupId: groupId) : n).toList();
   }
 
   void _startPolling({int seconds = 60}) {
@@ -548,4 +594,11 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
       }
     }).toList();
   }
+}
+
+class _WorkspaceSnapshot {
+  final List<ProjectorNode> nodes;
+  final List<ProjectorGroup> groups;
+
+  const _WorkspaceSnapshot({required this.nodes, required this.groups});
 }
