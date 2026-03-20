@@ -100,6 +100,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
   void _restoreSnapshot(_WorkspaceSnapshot snapshot) {
     state = _mergeWithTelemetry(snapshot.nodes);
     _groups = List.of(snapshot.groups);
+    _notifyStateChanged();
   }
 
   void undo() {
@@ -373,6 +374,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
 
     _saveSnapshot();
     state = [...state, ...newNodes];
+    _notifyStateChanged();
 
     // Trigger an asynchronous ping for any newly added offline nodes
     for (var node in newNodes) {
@@ -517,22 +519,25 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
           ipAddress: ip,
           login: login,
           password: password,
-          connectionStatus: ConnectionStatus.offline, // Will be pinged on next poll or we can ping now
+          connectionStatus: ConnectionStatus.offline,
         );
       }
       return node;
     }).toList();
+    _notifyStateChanged();
     _checkAndSetNodeStatus(id, ip, 1024);
   }
 
   void deleteSelected() {
     _saveSnapshot();
     state = state.where((node) => !node.isSelected).toList();
+    _notifyStateChanged();
   }
 
   void deleteNode(String id) {
     _saveSnapshot();
     state = state.where((node) => node.id != id).toList();
+    _notifyStateChanged();
   }
 
   void snapNodeToGrid(String id) {
