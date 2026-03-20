@@ -487,33 +487,35 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
                                           );
                                         },
                                         onDelete: () async {
+                                          final selectedCount = nodes.where((n) => n.isSelected).length;
+                                          final isMultiDelete = node.isSelected && selectedCount > 1;
                                           final confirm = await showDialog<bool>(
                                             context: context,
                                             builder: (context) => AlertDialog(
-                                              title: const Text(
-                                                'Delete Projector',
-                                              ),
+                                              title: const Text('Delete Projector'),
                                               content: Text(
-                                                'Are you sure you want to delete ${node.name}?',
+                                                isMultiDelete
+                                                    ? 'Are you sure you want to delete $selectedCount selected projectors?'
+                                                    : 'Are you sure you want to delete ${node.name}?',
                                               ),
                                               actions: [
                                                 TextButton(
-                                                  onPressed: () => Navigator.of(
-                                                    context,
-                                                  ).pop(false),
+                                                  onPressed: () => Navigator.of(context).pop(false),
                                                   child: const Text('Cancel'),
                                                 ),
                                                 FilledButton(
-                                                  onPressed: () => Navigator.of(
-                                                    context,
-                                                  ).pop(true),
+                                                  onPressed: () => Navigator.of(context).pop(true),
                                                   child: const Text('Delete'),
                                                 ),
                                               ],
                                             ),
                                           );
                                           if (confirm == true) {
-                                            notifier.deleteNode(node.id);
+                                            if (isMultiDelete) {
+                                              notifier.deleteSelected();
+                                            } else {
+                                              notifier.deleteNode(node.id);
+                                            }
                                           }
                                         },
                                         onColorCorrection: () {
