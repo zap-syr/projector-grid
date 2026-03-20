@@ -159,10 +159,16 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     state = state.map((n) => idSet.contains(n.id) ? n.copyWith(groupId: groupId) : n).toList();
   }
 
+  /// Invoked whenever projector connection/status state changes (used by OSC to push status).
+  void Function()? onStateChanged;
+
+  void _notifyStateChanged() => onStateChanged?.call();
+
   void _startPolling({int seconds = 60}) {
     _pollingTimer?.cancel();
     _pollingTimer = Timer.periodic(Duration(seconds: seconds), (_) async {
       await _pollAllProjectors();
+      _notifyStateChanged();
     });
   }
 
@@ -207,6 +213,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
       state = state.map((n) => n.id == node.id
           ? n.copyWith(connectionStatus: ConnectionStatus.unauthorized)
           : n).toList();
+      _notifyStateChanged();
       return;
     }
 
@@ -214,6 +221,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
       state = state.map((n) => n.id == node.id
           ? n.copyWith(connectionStatus: ConnectionStatus.offline)
           : n).toList();
+      _notifyStateChanged();
       return;
     }
 
@@ -306,6 +314,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
         }
         return n;
       }).toList();
+      _notifyStateChanged();
     } else {
       // If telemetry fails, mark as offline
       state = state.map((n) {
@@ -314,6 +323,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
         }
         return n;
       }).toList();
+      _notifyStateChanged();
     }
   }
 
@@ -378,15 +388,14 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
   Future<void> _checkAndSetNodeStatus(String id, String ip, int port) async {
     final isOnline = await _protocolService.checkConnection(ip, port);
     if (isOnline) {
-      // Temporarily mark connected so the UI shows green
       state = state.map((node) {
         if (node.id == id) {
           return node.copyWith(connectionStatus: ConnectionStatus.connected);
         }
         return node;
       }).toList();
+      _notifyStateChanged();
 
-      // Grab the node with its credentials and fetch telemetry right away
       final targetNode = state.firstWhere((n) => n.id == id);
       await _pollSingleProjector(targetNode);
     }
@@ -397,32 +406,10 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     for (var node in selectedNodes) {
       if (node.connectionStatus == ConnectionStatus.connected) {
         final success = await _protocolService.sendCommand(
-          node.ipAddress,
-          node.port,
-          node.login,
-          node.password,
-          cmd,
+          node.ipAddress, node.port, node.login, node.password, cmd,
         );
-        
-        // Optimistic UI updates for specific known commands
         if (success) {
-          if (cmd == 'PON') {
-            state = state.map((n) => n.id == node.id ? n.copyWith(powerStatus: PowerStatus.on) : n).toList();
-            // Projector warming up: check shutter status in 8 seconds
-            Future.delayed(const Duration(seconds: 8), () async {
-              _pollSpecificTelemetry(node, 'QSH');
-            });
-          } else if (cmd == 'POF') {
-            state = state.map((n) => n.id == node.id ? n.copyWith(powerStatus: PowerStatus.standby) : n).toList();
-            // Projector cooling down: check shutter status in 5 seconds
-            Future.delayed(const Duration(seconds: 5), () async {
-              _pollSpecificTelemetry(node, 'QSH');
-            });
-          } else if (cmd == 'OSH:0') {
-            state = state.map((n) => n.id == node.id ? n.copyWith(shutterStatus: ShutterStatus.open) : n).toList();
-          } else if (cmd == 'OSH:1') {
-            state = state.map((n) => n.id == node.id ? n.copyWith(shutterStatus: ShutterStatus.closed) : n).toList();
-          }
+          _applyOptimisticUpdate(node.id, cmd);
         }
       }
     }
@@ -453,6 +440,53 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
         }
         return n;
       }).toList();
+    }
+  }
+
+  Future<void> sendCommandToGroup(String groupId, String cmd) async {
+    final groupNodes = state.where((n) => n.groupId == groupId).toList();
+    for (var node in groupNodes) {
+      if (node.connectionStatus == ConnectionStatus.connected) {
+        final success = await _protocolService.sendCommand(
+          node.ipAddress, node.port, node.login, node.password, cmd,
+        );
+        if (success) {
+          _applyOptimisticUpdate(node.id, cmd);
+        }
+      }
+    }
+  }
+
+  Future<void> sendCommandToAll(String cmd) async {
+    for (var node in state) {
+      if (node.connectionStatus == ConnectionStatus.connected) {
+        final success = await _protocolService.sendCommand(
+          node.ipAddress, node.port, node.login, node.password, cmd,
+        );
+        if (success) {
+          _applyOptimisticUpdate(node.id, cmd);
+        }
+      }
+    }
+  }
+
+  void _applyOptimisticUpdate(String nodeId, String cmd) {
+    if (cmd == 'PON') {
+      state = state.map((n) => n.id == nodeId ? n.copyWith(powerStatus: PowerStatus.on) : n).toList();
+      _notifyStateChanged();
+      final node = state.firstWhere((n) => n.id == nodeId);
+      Future.delayed(const Duration(seconds: 8), () => _pollSpecificTelemetry(node, 'QSH'));
+    } else if (cmd == 'POF') {
+      state = state.map((n) => n.id == nodeId ? n.copyWith(powerStatus: PowerStatus.standby) : n).toList();
+      _notifyStateChanged();
+      final node = state.firstWhere((n) => n.id == nodeId);
+      Future.delayed(const Duration(seconds: 5), () => _pollSpecificTelemetry(node, 'QSH'));
+    } else if (cmd == 'OSH:0') {
+      state = state.map((n) => n.id == nodeId ? n.copyWith(shutterStatus: ShutterStatus.open) : n).toList();
+      _notifyStateChanged();
+    } else if (cmd == 'OSH:1') {
+      state = state.map((n) => n.id == nodeId ? n.copyWith(shutterStatus: ShutterStatus.closed) : n).toList();
+      _notifyStateChanged();
     }
   }
 
