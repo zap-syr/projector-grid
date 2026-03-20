@@ -1,3 +1,5 @@
+// Panasonic protocol service polling test — dart run tool/projector_polling_test.dart
+// Tests the PanasonicProtocolService with 4 consecutive polling cycles.
 import 'dart:async';
 import 'package:panasonic_projectors_manager/core/services/panasonic_protocol_service.dart';
 

@@ -1,3 +1,5 @@
+// Panasonic NTCONTROL raw TCP test — dart run tool/projector_protocol_test.dart
+// Tests direct TCP communication with a projector using the NTCONTROL protocol.
 import 'dart:io';
 import 'dart:convert';
 import 'dart:async';
@@ -14,14 +16,14 @@ void main() async {
     Socket? socket;
     try {
       socket = await Socket.connect(ip, port, timeout: const Duration(seconds: 5));
-      
+
       Completer<String>? currentCompleter = Completer<String>();
       StringBuffer buffer = StringBuffer();
-      
+
       void processBuffer() {
         final content = buffer.toString();
         final newlineIndex = content.indexOf('\r');
-        
+
         if (newlineIndex != -1) {
           final message = content.substring(0, newlineIndex);
           buffer = StringBuffer(content.substring(newlineIndex + 1));
@@ -44,7 +46,7 @@ void main() async {
       );
 
       final initResponse = await currentCompleter!.future.timeout(const Duration(seconds: 3));
-      
+
       String commandPrefix = '00';
       if (initResponse.contains(' 1 ')) {
         final tokenMatch = RegExp(r'NTCONTROL\s1\s([0-9a-fA-F]{8})').firstMatch(initResponse);
@@ -57,12 +59,12 @@ void main() async {
       }
 
       currentCompleter = Completer<String>();
-      processBuffer(); 
-      
+      processBuffer();
+
       final fullCmd = '$commandPrefix$cmd\r';
       socket.add(ascii.encode(fullCmd));
       await socket.flush();
-      
+
       final response = await currentCompleter!.future.timeout(const Duration(seconds: 3));
       await subscription.cancel();
       socket.destroy();
