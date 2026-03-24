@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Background gradient: deep navy → teal -->
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0E2454"/>
+      <stop offset="100%" stop-color="#0A7FA8"/>
+    </linearGradient>
+
+    <!-- Outer bezel gradient -->
+    <radialGradient id="bezelGrad" cx="50%" cy="40%" r="55%">
+      <stop offset="0%" stop-color="#4A6FA0"/>
+      <stop offset="100%" stop-color="#1A3060"/>
+    </radialGradient>
+
+    <!-- Lens body gradient -->
+    <radialGradient id="lensGrad" cx="50%" cy="45%" r="52%">
+      <stop offset="0%" stop-color="#1E3E72"/>
+      <stop offset="100%" stop-color="#0C1E42"/>
+    </radialGradient>
+
+    <!-- Glow centre: white → cyan → transparent -->
+    <radialGradient id="glowGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%"   stop-color="#FFFFFF" stop-opacity="1"/>
+      <stop offset="18%"  stop-color="#D8F0FF" stop-opacity="0.98"/>
+      <stop offset="38%"  stop-color="#6AC8FF" stop-opacity="0.85"/>
+      <stop offset="60%"  stop-color="#2290D8" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#0A5090" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Blade shadow filter -->
+    <filter id="bladeShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="1" stdDeviation="3" flood-color="#000033" flood-opacity="0.5"/>
+    </filter>
+
+    <!-- Subtle inner glow on blades -->
+    <filter id="bladeGlow">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="2" result="blur"/>
+      <feFlood flood-color="#88CCFF" flood-opacity="0.3" result="color"/>
+      <feComposite in="color" in2="blur" operator="in" result="glow"/>
+      <feMerge><feMergeNode in="glow"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- 1. Rounded-rect background -->
+  <rect width="512" height="512" rx="100" ry="100" fill="url(#bgGrad)"/>
+
+  <!-- 2. Outer metallic bezel ring -->
+  <circle cx="256" cy="256" r="228" fill="none" stroke="url(#bezelGrad)" stroke-width="6" opacity="0.9"/>
+  <circle cx="256" cy="256" r="222" fill="url(#lensGrad)"/>
+
+  <!-- 3. Subtle iris recess ring -->
+  <circle cx="256" cy="256" r="200" fill="none" stroke="#0A1830" stroke-width="4" opacity="0.6"/>
+
+  <!-- 4. Six aperture blades
+       Outer arc r=200 centred at (256,256), span ±30° per blade.
+       Inner edge r=86, shifted +25° (rotational iris offset).
+       Blade colours: semi-transparent white with a slight blue tint. -->
+
+  <!-- Blade 0  (outer 330°→30°, inner 55°→-5°) -->
+  <path d="M 429.2 156.0 A 200 200 0 0 1 429.2 356.0 L 305.3 326.4 L 341.7 248.5 Z"
+        fill="rgba(220,235,255,0.82)" filter="url(#bladeShadow)"/>
+
+  <!-- Blade 1  (outer 30°→90°, inner 115°→55°) -->
+  <path d="M 429.2 356.0 A 200 200 0 0 1 256.0 456.0 L 219.7 333.9 L 305.3 326.4 Z"
+        fill="rgba(220,235,255,0.82)" filter="url(#bladeShadow)"/>
+
+  <!-- Blade 2  (outer 90°→150°, inner 175°→115°) -->
+  <path d="M 256.0 456.0 A 200 200 0 0 1 82.8 356.0 L 170.3 263.5 L 219.7 333.9 Z"
+        fill="rgba(220,235,255,0.82)" filter="url(#bladeShadow)"/>
+
+  <!-- Blade 3  (outer 150°→210°, inner 235°→175°) -->
+  <path d="M 82.8 356.0 A 200 200 0 0 1 82.8 156.0 L 206.7 185.6 L 170.3 263.5 Z"
+        fill="rgba(220,235,255,0.82)" filter="url(#bladeShadow)"/>
+
+  <!-- Blade 4  (outer 210°→270°, inner 295°→235°) -->
+  <path d="M 82.8 156.0 A 200 200 0 0 1 256.0 56.0 L 292.3 178.1 L 206.7 185.6 Z"
+        fill="rgba(220,235,255,0.82)" filter="url(#bladeShadow)"/>
+
+  <!-- Blade 5  (outer 270°→330°, inner 355°→295°) -->
+  <path d="M 256.0 56.0 A 200 200 0 0 1 429.2 156.0 L 341.7 248.5 L 292.3 178.1 Z"
+        fill="rgba(220,235,255,0.82)" filter="url(#bladeShadow)"/>
+
+  <!-- 5. Thin inner rim ring — sits over blade inner edges -->
+  <circle cx="256" cy="256" r="92"  fill="none" stroke="#1A3878" stroke-width="5" opacity="0.9"/>
+  <circle cx="256" cy="256" r="87"  fill="#0C1A3A"/>
+
+  <!-- 6. Central glow — the aperture opening -->
+  <circle cx="256" cy="256" r="87"  fill="url(#glowGrad)"/>
+
+  <!-- 7. Outer lens highlight arc (top-left reflection) -->
+  <path d="M 100 130 A 200 200 0 0 1 320 60"
+        fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="8" stroke-linecap="round"/>
+
+  <!-- 8. Outer bezel highlight stroke (top) -->
+  <circle cx="256" cy="256" r="228" fill="none"
+          stroke="rgba(255,255,255,0.08)" stroke-width="2"/>
+</svg>
