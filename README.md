@@ -1,17 +1,18 @@
-# panasonic_projectors_manager
+# Projectors Manager
 
-A new Flutter project.
+A Windows desktop app for controlling and monitoring multiple projectors over a local network using the Panasonic NTCONTROL/TCP protocol.
 
-## Getting Started
+## Features
 
-This project is a starting point for a Flutter application.
+- **Multi-projector workspace** — infinite canvas with draggable projector cards, zoom, marquee selection, and grid snapping
+- **Real-time monitoring** — table view with live telemetry: power status, shutter, input, signal name, runtime, temperatures, voltage, and error codes
+- **Group control** — organize projectors into named groups and send commands to a group or all projectors simultaneously
+- **Controls panel** — power on/off, shutter open/close, OSD, input selection, lens shift, focus, zoom, and test patterns
+- **Brightness control** — light output adjustment (8–100%) with real-time feedback
+- **Color correction** — color matching (3-color, 7-color, measured) and color temperature control (preset or custom Kelvin with white balance fine-tuning)
+- **OSC integration** — receive commands from external systems over UDP and broadcast live status (online/offline/warning counts)
+- **Persistent projects** — save, load, and reopen workspace layouts with projector positions
 
-A few resources to get you started if this is your first Flutter project:
+## Protocol
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Communicates over raw TCP using the Panasonic NTCONTROL protocol with MD5 authentication. Each command opens a dedicated socket connection. Default port: 1024.
