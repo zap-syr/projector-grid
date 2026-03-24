@@ -2,8 +2,8 @@ const { Resvg } = require('@resvg/resvg-js');
 const fs = require('fs');
 const path = require('path');
 
-const svgPath  = path.resolve(__dirname, '../../assets/icon/preview.svg');
-const pngPath  = path.resolve(__dirname, '../../assets/icon/app_icon.png');
+const svgPath  = path.resolve(__dirname, '../../assets/launcher_icon/preview.svg');
+const pngPath  = path.resolve(__dirname, '../../assets/launcher_icon/app_icon.png');
 const size     = 1024;
 
 const svg = fs.readFileSync(svgPath);

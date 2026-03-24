@@ -1,4 +1,4 @@
-// Generates assets/icon/app_icon.png — the app icon for Projectors Manager.
+// Generates assets/launcher_icon/app_icon.png — the app icon for Projectors Manager.
 // Run with: dart run tool/generate_icon.dart
 //
 // Design: lens aperture — navy→teal diagonal gradient, 6-blade iris,
@@ -60,8 +60,8 @@ void main() async {
   _applyRoundedCorners(icon, _cornerR);
 
   // 9. Save
-  Directory('assets/icon').createSync(recursive: true);
-  final out = File('assets/icon/app_icon.png');
+  Directory('assets/launcher_icon').createSync(recursive: true);
+  final out = File('assets/launcher_icon/app_icon.png');
   out.writeAsBytesSync(img.encodePng(icon));
   print('Generated: ${out.path} (${_size}x$_size)');
 }

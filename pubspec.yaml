@@ -1,7 +1,7 @@
 flutter_launcher_icons:
   windows:
     generate: true
-    image_path: "assets/icon/app_icon.png"
+    image_path: "assets/launcher_icon/app_icon.png"
     icon_size: 256
 
 name: projectors_manager
@@ -77,7 +77,7 @@ flutter:
 
   # To add assets to your application, add an assets section, like this:
   assets:
-    - assets/icons/
+    - assets/icons/lens_shift/
     - assets/icons/test_patterns/
 
   # An image asset can refer to one or more resolution-specific "variants", see

@@ -257,38 +257,38 @@ class _ControlBarState extends ConsumerState<ControlBar> {
           spacing: _spacingXs,
           children: [
             _SvgBtn(
-              assetPath: 'assets/icons/left_fast.svg',
+              assetPath: 'assets/icons/lens_shift/left_fast.svg',
               onPressed: enabled
                   ? () => _throttledSend('$cmdBase=+00201')
                   : null,
             ),
             _SvgBtn(
-              assetPath: 'assets/icons/left_normal.svg',
+              assetPath: 'assets/icons/lens_shift/left_normal.svg',
               onPressed: enabled
                   ? () => _throttledSend('$cmdBase=+00101')
                   : null,
             ),
             _SvgBtn(
-              assetPath: 'assets/icons/left_slow.svg',
+              assetPath: 'assets/icons/lens_shift/left_slow.svg',
               onPressed: enabled
                   ? () => _throttledSend('$cmdBase=+00001')
                   : null,
             ),
             const Spacer(),
             _SvgBtn(
-              assetPath: 'assets/icons/right_slow.svg',
+              assetPath: 'assets/icons/lens_shift/right_slow.svg',
               onPressed: enabled
                   ? () => _throttledSend('$cmdBase=+00000')
                   : null,
             ),
             _SvgBtn(
-              assetPath: 'assets/icons/right_normal.svg',
+              assetPath: 'assets/icons/lens_shift/right_normal.svg',
               onPressed: enabled
                   ? () => _throttledSend('$cmdBase=+00100')
                   : null,
             ),
             _SvgBtn(
-              assetPath: 'assets/icons/right_fast.svg',
+              assetPath: 'assets/icons/lens_shift/right_fast.svg',
               onPressed: enabled
                   ? () => _throttledSend('$cmdBase=+00200')
                   : null,
@@ -474,21 +474,21 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                         child: Column(
                           children: [
                             _SvgBtn(
-                              assetPath: 'assets/icons/up_fast.svg',
+                              assetPath: 'assets/icons/lens_shift/up_fast.svg',
                               onPressed: hasSelection
                                   ? () => _throttledSend('VXX:LNSI3=+00200')
                                   : null,
                             ),
                             const SizedBox(height: _spacingXs),
                             _SvgBtn(
-                              assetPath: 'assets/icons/up_normal.svg',
+                              assetPath: 'assets/icons/lens_shift/up_normal.svg',
                               onPressed: hasSelection
                                   ? () => _throttledSend('VXX:LNSI3=+00100')
                                   : null,
                             ),
                             const SizedBox(height: _spacingXs),
                             _SvgBtn(
-                              assetPath: 'assets/icons/up_slow.svg',
+                              assetPath: 'assets/icons/lens_shift/up_slow.svg',
                               onPressed: hasSelection
                                   ? () => _throttledSend('VXX:LNSI3=+00000')
                                   : null,
@@ -497,42 +497,42 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 _SvgBtn(
-                                  assetPath: 'assets/icons/left_fast.svg',
+                                  assetPath: 'assets/icons/lens_shift/left_fast.svg',
                                   onPressed: hasSelection
                                       ? () => _throttledSend('VXX:LNSI2=+00201')
                                       : null,
                                 ),
                                 const SizedBox(width: _spacingXs),
                                 _SvgBtn(
-                                  assetPath: 'assets/icons/left_normal.svg',
+                                  assetPath: 'assets/icons/lens_shift/left_normal.svg',
                                   onPressed: hasSelection
                                       ? () => _throttledSend('VXX:LNSI2=+00101')
                                       : null,
                                 ),
                                 const SizedBox(width: _spacingXs),
                                 _SvgBtn(
-                                  assetPath: 'assets/icons/left_slow.svg',
+                                  assetPath: 'assets/icons/lens_shift/left_slow.svg',
                                   onPressed: hasSelection
                                       ? () => _throttledSend('VXX:LNSI2=+00001')
                                       : null,
                                 ),
                                 const SizedBox(width: _lensShiftCenterGap),
                                 _SvgBtn(
-                                  assetPath: 'assets/icons/right_slow.svg',
+                                  assetPath: 'assets/icons/lens_shift/right_slow.svg',
                                   onPressed: hasSelection
                                       ? () => _throttledSend('VXX:LNSI2=+00000')
                                       : null,
                                 ),
                                 const SizedBox(width: _spacingXs),
                                 _SvgBtn(
-                                  assetPath: 'assets/icons/right_normal.svg',
+                                  assetPath: 'assets/icons/lens_shift/right_normal.svg',
                                   onPressed: hasSelection
                                       ? () => _throttledSend('VXX:LNSI2=+00100')
                                       : null,
                                 ),
                                 const SizedBox(width: _spacingXs),
                                 _SvgBtn(
-                                  assetPath: 'assets/icons/right_fast.svg',
+                                  assetPath: 'assets/icons/lens_shift/right_fast.svg',
                                   onPressed: hasSelection
                                       ? () => _throttledSend('VXX:LNSI2=+00200')
                                       : null,
@@ -540,21 +540,21 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                               ],
                             ),
                             _SvgBtn(
-                              assetPath: 'assets/icons/down_slow.svg',
+                              assetPath: 'assets/icons/lens_shift/down_slow.svg',
                               onPressed: hasSelection
                                   ? () => _throttledSend('VXX:LNSI3=+00001')
                                   : null,
                             ),
                             const SizedBox(height: _spacingXs),
                             _SvgBtn(
-                              assetPath: 'assets/icons/down_normal.svg',
+                              assetPath: 'assets/icons/lens_shift/down_normal.svg',
                               onPressed: hasSelection
                                   ? () => _throttledSend('VXX:LNSI3=+00101')
                                   : null,
                             ),
                             const SizedBox(height: _spacingXs),
                             _SvgBtn(
-                              assetPath: 'assets/icons/down_fast.svg',
+                              assetPath: 'assets/icons/lens_shift/down_fast.svg',
                               onPressed: hasSelection
                                   ? () => _throttledSend('VXX:LNSI3=+00201')
                                   : null,
