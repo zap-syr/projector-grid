@@ -321,7 +321,8 @@ class _AutoDiscoveryTabState extends State<_AutoDiscoveryTab> {
 
   List<NetworkInterface> _interfaces = [];
   NetworkInterface? _selectedInterface;
-  
+  String? _selectedIp;
+
   bool _isScanning = false;
   List<Map<String, dynamic>> _foundProjectors = [];
   final Set<String> _selectedIps = {};
@@ -345,6 +346,7 @@ class _AutoDiscoveryTabState extends State<_AutoDiscoveryTab> {
   Future<void> _loadInterfaces() async {
     try {
       final interfaces = await NetworkInterface.list(
+        includeLoopback: false,
         includeLinkLocal: false,
         type: InternetAddressType.IPv4,
       );
@@ -353,6 +355,7 @@ class _AutoDiscoveryTabState extends State<_AutoDiscoveryTab> {
           _interfaces = interfaces;
           if (interfaces.isNotEmpty) {
             _selectedInterface = interfaces.first;
+            _selectedIp = interfaces.first.addresses.first.address;
           }
         });
       }
@@ -413,40 +416,65 @@ class _AutoDiscoveryTabState extends State<_AutoDiscoveryTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Expanded(
-                flex: 2,
-                child: DropdownButtonFormField<NetworkInterface>(
-                  decoration: const InputDecoration(labelText: 'Network Interface', border: OutlineInputBorder()),
-                  // ignore: deprecated_member_use
-                  value: _selectedInterface,
-                  items: _interfaces.map((i) {
-                    final ip = i.addresses.isNotEmpty ? i.addresses.first.address : 'No IP';
-                    return DropdownMenuItem(
-                      value: i,
-                      child: Text('${i.name} ($ip)'),
-                    );
-                  }).toList(),
-                  onChanged: (val) {
-                    setState(() {
-                      _selectedInterface = val;
-                    });
-                  },
+          if (_interfaces.isEmpty)
+            Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: Theme.of(context).colorScheme.error, size: 18),
+                const SizedBox(width: 8),
+                Text(
+                  'No active network interfaces found',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.error,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                flex: 1,
-                child: TextFormField(
-                  controller: _portController,
-                  decoration: const InputDecoration(labelText: 'Port', border: OutlineInputBorder()),
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              ],
+            )
+          else
+            Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: DropdownMenu<String>(
+                    initialSelection: _selectedIp,
+                    expandedInsets: EdgeInsets.zero,
+                    requestFocusOnTap: false,
+                    enableFilter: false,
+                    label: const Text('Network Interface'),
+                    inputDecorationTheme: const InputDecorationTheme(
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                    dropdownMenuEntries: _interfaces.map((i) {
+                      final ip = i.addresses.first.address;
+                      return DropdownMenuEntry(
+                        value: ip,
+                        label: '${i.name}  $ip',
+                      );
+                    }).toList(),
+                    onSelected: (ip) {
+                      if (ip == null) return;
+                      setState(() {
+                        _selectedIp = ip;
+                        _selectedInterface = _interfaces.firstWhere(
+                          (i) => i.addresses.any((a) => a.address == ip),
+                        );
+                      });
+                    },
+                  ),
                 ),
-              ),
-            ],
-          ),
+                const SizedBox(width: 16),
+                Expanded(
+                  flex: 1,
+                  child: TextFormField(
+                    controller: _portController,
+                    decoration: const InputDecoration(labelText: 'Port', border: OutlineInputBorder()),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  ),
+                ),
+              ],
+            ),
           const SizedBox(height: 16),
           Row(
             children: [
