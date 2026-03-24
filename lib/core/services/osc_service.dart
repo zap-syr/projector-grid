@@ -157,6 +157,9 @@ class OscService {
   /// Group OSC address → group ID resolver.
   String? Function(String oscAddress)? resolveGroupId;
 
+  /// Custom command OSC slug → NTCONTROL command resolver.
+  String? Function(String oscSlug)? resolveCustomCommand;
+
   bool get isActive => _isActive;
 
   Future<void> start({
@@ -212,18 +215,30 @@ class OscService {
     final address = msg.address;
 
     // /pprjm/all/{command...}
+    // Also handles /pprjm/all/custom/{slug} for user-defined commands.
     if (address.startsWith('/pprjm/all/')) {
       final commandPath = address.substring('/pprjm/all/'.length);
-      final ntCmd = _oscCommandMap[commandPath];
-      if (ntCmd != null && onCommand != null) {
-        onCommand!(ntcontrolCmd: ntCmd, all: true);
+      if (commandPath.startsWith('custom/')) {
+        final slug = commandPath.substring('custom/'.length);
+        final ntCmd = resolveCustomCommand?.call(slug);
+        if (ntCmd != null && onCommand != null) {
+          onCommand!(ntcontrolCmd: ntCmd, all: true);
+        } else {
+          debugPrint('OSC: Unknown custom command slug: $slug');
+        }
       } else {
-        debugPrint('OSC: Unknown command path: $commandPath');
+        final ntCmd = _oscCommandMap[commandPath];
+        if (ntCmd != null && onCommand != null) {
+          onCommand!(ntcontrolCmd: ntCmd, all: true);
+        } else {
+          debugPrint('OSC: Unknown command path: $commandPath');
+        }
       }
       return;
     }
 
     // /pprjm/group/{group-name}/{command...}
+    // Also handles /pprjm/group/{group-name}/custom/{slug} for user-defined commands.
     if (address.startsWith('/pprjm/group/')) {
       final remainder = address.substring('/pprjm/group/'.length);
       final firstSlash = remainder.indexOf('/');
@@ -233,18 +248,28 @@ class OscService {
       }
       final groupName = remainder.substring(0, firstSlash);
       final commandPath = remainder.substring(firstSlash + 1);
-      final ntCmd = _oscCommandMap[commandPath];
-      if (ntCmd == null) {
-        debugPrint('OSC: Unknown command path: $commandPath');
-        return;
-      }
       final groupOscAddress = '/group/$groupName';
       final groupId = resolveGroupId?.call(groupOscAddress);
       if (groupId == null) {
         debugPrint('OSC: No group found for address: $groupOscAddress');
         return;
       }
-      onCommand?.call(ntcontrolCmd: ntCmd, groupId: groupId, all: false);
+      if (commandPath.startsWith('custom/')) {
+        final slug = commandPath.substring('custom/'.length);
+        final ntCmd = resolveCustomCommand?.call(slug);
+        if (ntCmd != null && onCommand != null) {
+          onCommand!(ntcontrolCmd: ntCmd, groupId: groupId, all: false);
+        } else {
+          debugPrint('OSC: Unknown custom command slug: $slug');
+        }
+      } else {
+        final ntCmd = _oscCommandMap[commandPath];
+        if (ntCmd == null) {
+          debugPrint('OSC: Unknown command path: $commandPath');
+          return;
+        }
+        onCommand?.call(ntcontrolCmd: ntCmd, groupId: groupId, all: false);
+      }
       return;
     }
 

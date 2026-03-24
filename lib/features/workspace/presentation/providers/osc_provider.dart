@@ -2,6 +2,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../../../core/services/osc_service.dart';
 import '../../domain/projector_node.dart';
 import 'app_settings_provider.dart';
+import 'custom_commands_provider.dart';
 import 'workspace_provider.dart';
 
 part 'osc_provider.g.dart';
@@ -50,6 +51,9 @@ class OscNotifier extends _$OscNotifier {
       }
       return null;
     };
+
+    _service.resolveCustomCommand = (String slug) =>
+        ref.read(customCommandsProvider.notifier).resolveBySlug(slug);
   }
 
   Future<void> start() async {

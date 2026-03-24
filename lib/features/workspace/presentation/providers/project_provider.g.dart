@@ -42,7 +42,7 @@ final class ProjectStateNotifierProvider
 }
 
 String _$projectStateNotifierHash() =>
-    r'f88effc45a9200d463ad6db8ba47e8c59fc3754f';
+    r'cd2f8da80120beef93cfdaab865ca7985ff7aab8';
 
 abstract class _$ProjectStateNotifier extends $Notifier<ProjectState> {
   ProjectState build();

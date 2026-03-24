@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import '../../domain/custom_command.dart';
+import '../providers/custom_commands_provider.dart';
 import '../providers/workspace_provider.dart';
+import 'custom_command_dialog.dart';
 
 class ControlBar extends ConsumerStatefulWidget {
   const ControlBar({super.key});
@@ -386,7 +389,7 @@ class _ControlBarState extends ConsumerState<ControlBar> {
         ),
       ),
       child: DefaultTabController(
-        length: 2,
+        length: 3,
         child: Column(
           children: [
             Container(
@@ -396,6 +399,7 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                 tabs: [
                   Tab(text: 'General'),
                   Tab(text: 'System'),
+                  Tab(text: 'Custom'),
                 ],
               ),
             ),
@@ -906,6 +910,9 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                       const SizedBox(height: _spacingLg),
                     ],
                   ),
+
+                  // ── Custom Tab ───────────────────────────────────────────
+                  _CustomCommandsTab(hasSelection: hasSelection),
                 ],
               ),
             ),
@@ -915,6 +922,189 @@ class _ControlBarState extends ConsumerState<ControlBar> {
     );
   }
 }
+
+// ── Custom Commands Tab ───────────────────────────────────────────────────────
+
+class _CustomCommandsTab extends ConsumerWidget {
+  final bool hasSelection;
+
+  const _CustomCommandsTab({required this.hasSelection});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final commands = ref.watch(customCommandsProvider);
+    final notifier = ref.read(customCommandsProvider.notifier);
+
+    return Column(
+      children: [
+        if (commands.isEmpty)
+          Expanded(
+            child: Center(
+              child: Text(
+                'No custom commands yet',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          )
+        else
+          Expanded(
+            child: ReorderableListView.builder(
+              padding: const EdgeInsets.only(bottom: 8),
+              buildDefaultDragHandles: false,
+              itemCount: commands.length,
+              onReorder: notifier.reorder,
+              itemBuilder: (context, index) {
+                final cmd = commands[index];
+                return _CustomCommandTile(
+                  key: ValueKey(cmd.id),
+                  index: index,
+                  command: cmd,
+                  hasSelection: hasSelection,
+                  onRun: () => ref
+                      .read(workspaceProvider.notifier)
+                      .sendCommandToSelected(cmd.command),
+                  onEdit: () => showDialog(
+                    context: context,
+                    builder: (_) => CustomCommandDialog(existing: cmd),
+                  ),
+                  onDelete: () => showDialog(
+                    context: context,
+                    builder: (_) => AlertDialog(
+                      title: const Text('Delete Command'),
+                      content: Text(
+                        'Are you sure you want to delete "${cmd.name}"?',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('Cancel'),
+                        ),
+                        FilledButton(
+                          onPressed: () {
+                            notifier.remove(cmd.id);
+                            Navigator.of(context).pop();
+                          },
+                          child: const Text('Delete'),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          child: SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              icon: const Icon(Icons.add, size: 16),
+              label: const Text('Add Command'),
+              onPressed: () => showDialog(
+                context: context,
+                builder: (_) => const CustomCommandDialog(),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CustomCommandTile extends StatelessWidget {
+  final int index;
+  final CustomCommand command;
+  final bool hasSelection;
+  final VoidCallback onRun;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  const _CustomCommandTile({
+    super.key,
+    required this.index,
+    required this.command,
+    required this.hasSelection,
+    required this.onRun,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Row(
+        children: [
+          // Drag handle — functional via ReorderableDragStartListener
+          ReorderableDragStartListener(
+            index: index,
+            child: Icon(
+              Icons.drag_handle,
+              size: 18,
+              color: Theme.of(context)
+                  .colorScheme
+                  .onSurfaceVariant
+                  .withValues(alpha: 0.5),
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Name + command
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  command.name,
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  command.command,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontFamily: 'monospace',
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 4),
+          // Actions
+          SizedBox(
+            height: 28,
+            child: FilledButton.tonal(
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                textStyle: const TextStyle(fontSize: 12),
+              ),
+              onPressed: hasSelection ? onRun : null,
+              child: const Text('Run'),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.edit_outlined),
+            iconSize: 16,
+            onPressed: onEdit,
+            visualDensity: VisualDensity.compact,
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline),
+            iconSize: 16,
+            onPressed: onDelete,
+            visualDensity: VisualDensity.compact,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _SvgBtn extends StatelessWidget {
   final String assetPath;
