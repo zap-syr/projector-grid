@@ -71,9 +71,9 @@ class _BrightnessControlDialogState extends State<BrightnessControlDialog> {
   }
 
   // Protocol ↔ percentage conversion.
-  // 50 = 8%, 1000 = 100% (linear).
-  static double _toPercent(int v) => 8.0 + (v - 50) / 950 * 92;
-  static int _toProtocol(double pct) => (50 + (pct - 8) / 92 * 950).round();
+  // 80 = 8%, 1000 = 100% (linear).
+  static double _toPercent(int v) => 8.0 + (v - 80) / 920 * 92;
+  static int _toProtocol(double pct) => (80 + (pct - 8) / 92 * 920).round();
   static String _fmt(int v) => '+${v.toString().padLeft(5, '0')}';
 
   Future<void> _loadValues() async {
