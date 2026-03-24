@@ -12,7 +12,7 @@ void main() async {
     WindowOptions windowOptions = const WindowOptions(
       minimumSize: Size(800, 600),
       center: true,
-      title: 'Panasonic Projectors Manager',
+      title: 'Projectors Manager',
     );
     windowManager.waitUntilReadyToShow(windowOptions, () async {
       await windowManager.show();

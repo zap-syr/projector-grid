@@ -11,7 +11,7 @@ class MyApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(appSettingsProvider.select((s) => s.themeMode));
     return MaterialApp(
-      title: 'Panasonic Projectors Manager',
+      title: 'Projectors Manager',
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: themeMode,

@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.panasonic" "\0"
-            VALUE "FileDescription", "panasonic_projectors_manager" "\0"
+            VALUE "CompanyName", "" "\0"
+            VALUE "FileDescription", "Projectors Manager" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "panasonic_projectors_manager" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.panasonic. All rights reserved." "\0"
-            VALUE "OriginalFilename", "panasonic_projectors_manager.exe" "\0"
-            VALUE "ProductName", "panasonic_projectors_manager" "\0"
+            VALUE "InternalName", "projectors_manager" "\0"
+            VALUE "LegalCopyright", "" "\0"
+            VALUE "OriginalFilename", "projectors_manager.exe" "\0"
+            VALUE "ProductName", "Projectors Manager" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

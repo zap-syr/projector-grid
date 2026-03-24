@@ -39,13 +39,13 @@ class ProjectStateNotifier extends _$ProjectStateNotifier {
   static String get _recentProjectsPath {
     if (Platform.isWindows) {
       final appData = Platform.environment['APPDATA'] ?? '';
-      return '$appData\\PanasonicProjectorsManager\\recent.json';
+      return '$appData\\ProjectorsManager\\recent.json';
     } else if (Platform.isMacOS) {
       final home = Platform.environment['HOME'] ?? '';
-      return '$home/Library/Application Support/PanasonicProjectorsManager/recent.json';
+      return '$home/Library/Application Support/ProjectorsManager/recent.json';
     } else {
       final home = Platform.environment['HOME'] ?? '';
-      return '$home/.config/PanasonicProjectorsManager/recent.json';
+      return '$home/.config/ProjectorsManager/recent.json';
     }
   }
 

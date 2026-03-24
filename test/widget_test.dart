@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:panasonic_projectors_manager/app/app.dart';
+import 'package:projectors_manager/app/app.dart';
 
 void main() {
   testWidgets('App loads smoke test', (WidgetTester tester) async {

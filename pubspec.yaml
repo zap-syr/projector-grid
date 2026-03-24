@@ -1,5 +1,11 @@
-name: panasonic_projectors_manager
-description: "A new Flutter project."
+flutter_launcher_icons:
+  windows:
+    generate: true
+    image_path: "assets/icon/app_icon.png"
+    icon_size: 256
+
+name: projectors_manager
+description: "Desktop app for controlling and monitoring projectors over NTCONTROL/TCP."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -55,6 +61,8 @@ dev_dependencies:
   build_runner: ^2.12.2
   riverpod_generator: ^4.0.3
   freezed: ^3.2.5
+  flutter_launcher_icons: ^0.14.4
+  image: ^4.8.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
