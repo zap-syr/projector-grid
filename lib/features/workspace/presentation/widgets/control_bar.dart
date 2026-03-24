@@ -481,7 +481,8 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                             ),
                             const SizedBox(height: _spacingXs),
                             _SvgBtn(
-                              assetPath: 'assets/icons/lens_shift/up_normal.svg',
+                              assetPath:
+                                  'assets/icons/lens_shift/up_normal.svg',
                               onPressed: hasSelection
                                   ? () => _throttledSend('VXX:LNSI3=+00100')
                                   : null,
@@ -497,42 +498,48 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 _SvgBtn(
-                                  assetPath: 'assets/icons/lens_shift/left_fast.svg',
+                                  assetPath:
+                                      'assets/icons/lens_shift/left_fast.svg',
                                   onPressed: hasSelection
                                       ? () => _throttledSend('VXX:LNSI2=+00201')
                                       : null,
                                 ),
                                 const SizedBox(width: _spacingXs),
                                 _SvgBtn(
-                                  assetPath: 'assets/icons/lens_shift/left_normal.svg',
+                                  assetPath:
+                                      'assets/icons/lens_shift/left_normal.svg',
                                   onPressed: hasSelection
                                       ? () => _throttledSend('VXX:LNSI2=+00101')
                                       : null,
                                 ),
                                 const SizedBox(width: _spacingXs),
                                 _SvgBtn(
-                                  assetPath: 'assets/icons/lens_shift/left_slow.svg',
+                                  assetPath:
+                                      'assets/icons/lens_shift/left_slow.svg',
                                   onPressed: hasSelection
                                       ? () => _throttledSend('VXX:LNSI2=+00001')
                                       : null,
                                 ),
                                 const SizedBox(width: _lensShiftCenterGap),
                                 _SvgBtn(
-                                  assetPath: 'assets/icons/lens_shift/right_slow.svg',
+                                  assetPath:
+                                      'assets/icons/lens_shift/right_slow.svg',
                                   onPressed: hasSelection
                                       ? () => _throttledSend('VXX:LNSI2=+00000')
                                       : null,
                                 ),
                                 const SizedBox(width: _spacingXs),
                                 _SvgBtn(
-                                  assetPath: 'assets/icons/lens_shift/right_normal.svg',
+                                  assetPath:
+                                      'assets/icons/lens_shift/right_normal.svg',
                                   onPressed: hasSelection
                                       ? () => _throttledSend('VXX:LNSI2=+00100')
                                       : null,
                                 ),
                                 const SizedBox(width: _spacingXs),
                                 _SvgBtn(
-                                  assetPath: 'assets/icons/lens_shift/right_fast.svg',
+                                  assetPath:
+                                      'assets/icons/lens_shift/right_fast.svg',
                                   onPressed: hasSelection
                                       ? () => _throttledSend('VXX:LNSI2=+00200')
                                       : null,
@@ -540,21 +547,24 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                               ],
                             ),
                             _SvgBtn(
-                              assetPath: 'assets/icons/lens_shift/down_slow.svg',
+                              assetPath:
+                                  'assets/icons/lens_shift/down_slow.svg',
                               onPressed: hasSelection
                                   ? () => _throttledSend('VXX:LNSI3=+00001')
                                   : null,
                             ),
                             const SizedBox(height: _spacingXs),
                             _SvgBtn(
-                              assetPath: 'assets/icons/lens_shift/down_normal.svg',
+                              assetPath:
+                                  'assets/icons/lens_shift/down_normal.svg',
                               onPressed: hasSelection
                                   ? () => _throttledSend('VXX:LNSI3=+00101')
                                   : null,
                             ),
                             const SizedBox(height: _spacingXs),
                             _SvgBtn(
-                              assetPath: 'assets/icons/lens_shift/down_fast.svg',
+                              assetPath:
+                                  'assets/icons/lens_shift/down_fast.svg',
                               onPressed: hasSelection
                                   ? () => _throttledSend('VXX:LNSI3=+00201')
                                   : null,
@@ -736,6 +746,21 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                               enableFilter: false,
                               expandedInsets: EdgeInsets.zero,
                               menuHeight: 300,
+                              leadingIcon:
+                                  _testPatternIcons.containsKey(
+                                    _selectedTestPattern,
+                                  )
+                                  ? UnconstrainedBox(
+                                      child: SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: SvgPicture.asset(
+                                          _testPatternIcons[_selectedTestPattern]!,
+                                          fit: BoxFit.contain,
+                                        ),
+                                      ),
+                                    )
+                                  : null,
                               inputDecorationTheme: InputDecorationTheme(
                                 border: UnderlineInputBorder(
                                   borderSide: BorderSide(
@@ -766,7 +791,8 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                                     (e) => DropdownMenuEntry<String>(
                                       value: e.key,
                                       label: e.value,
-                                      leadingIcon: _testPatternIcons.containsKey(e.key)
+                                      leadingIcon:
+                                          _testPatternIcons.containsKey(e.key)
                                           ? SvgPicture.asset(
                                               _testPatternIcons[e.key]!,
                                               width: 20,
