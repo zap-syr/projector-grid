@@ -6,6 +6,7 @@ import '../providers/project_provider.dart';
 import 'preferences_dialog.dart';
 import 'manage_groups_dialog.dart';
 import 'keyboard_shortcuts_dialog.dart';
+import 'about_dialog.dart';
 import '../../../../core/services/docs_service.dart';
 
 class TopMenuBar extends ConsumerWidget {
@@ -254,7 +255,14 @@ class TopMenuBar extends ConsumerWidget {
                   onPressed: () => DocsService.openOscReference(),
                 ),
                 const Divider(),
-                _menuItem(context, label: 'About', onPressed: () {}),
+                _menuItem(
+                  context,
+                  label: 'About',
+                  onPressed: () => showDialog(
+                    context: context,
+                    builder: (_) => const AppAboutDialog(),
+                  ),
+                ),
               ],
               child: const Text('Help'),
             ),
