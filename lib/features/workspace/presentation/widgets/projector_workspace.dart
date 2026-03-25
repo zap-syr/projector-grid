@@ -55,6 +55,7 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
   final double _workspaceHeight = 3000.0;
   double _currentZoom = 1.0;
   bool _isMultiSelect = false;
+  bool _isPanning = false;
 
   @override
   void initState() {
@@ -206,7 +207,9 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
         final canvasHeight = (_workspaceHeight * _currentZoom)
             .clamp(constraints.maxHeight, double.infinity);
 
-    return Stack(
+    return MouseRegion(
+      cursor: _isPanning ? SystemMouseCursors.move : MouseCursor.defer,
+      child: Stack(
       children: [
         // The Scrollable Workspace
         Shortcuts(
@@ -318,8 +321,18 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
               canRequestFocus: true,
               // Outer listener: Captures middle-mouse panning independently of scroll contents
               child: Listener(
-                onPointerMove: (event) {
+                onPointerDown: (event) {
                   if (event.buttons == kMiddleMouseButton) {
+                    setState(() => _isPanning = true);
+                  }
+                },
+                onPointerUp: (event) {
+                  if (_isPanning) setState(() => _isPanning = false);
+                },
+                onPointerMove: (event) {
+                  final panning = event.buttons == kMiddleMouseButton;
+                  if (panning != _isPanning) setState(() => _isPanning = panning);
+                  if (panning) {
                     if (_horizontalController.hasClients) {
                       _horizontalController.jumpTo(
                         (_horizontalController.offset - event.delta.dx).clamp(
@@ -588,6 +601,7 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
           ),
         ),
       ],
+    ),
     );
       },
     );
