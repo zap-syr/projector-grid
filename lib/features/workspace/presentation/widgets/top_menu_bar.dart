@@ -5,6 +5,8 @@ import '../providers/workspace_provider.dart';
 import '../providers/project_provider.dart';
 import 'preferences_dialog.dart';
 import 'manage_groups_dialog.dart';
+import 'keyboard_shortcuts_dialog.dart';
+import '../../../../core/services/docs_service.dart';
 
 class TopMenuBar extends ConsumerWidget {
   const TopMenuBar({super.key});
@@ -237,9 +239,21 @@ class TopMenuBar extends ConsumerWidget {
 
             // ── Help ──────────────────────────────────────────────────────
             SubmenuButton(
-
               menuChildren: [
-                _menuItem(context, label: 'Documentation', onPressed: () {}),
+                _menuItem(
+                  context,
+                  label: 'Keyboard Shortcuts',
+                  onPressed: () => showDialog(
+                    context: context,
+                    builder: (_) => const KeyboardShortcutsDialog(),
+                  ),
+                ),
+                _menuItem(
+                  context,
+                  label: 'OSC Reference',
+                  onPressed: () => DocsService.openOscReference(),
+                ),
+                const Divider(),
                 _menuItem(context, label: 'About', onPressed: () {}),
               ],
               child: const Text('Help'),
