@@ -143,20 +143,40 @@ class _ControlBarState extends ConsumerState<ControlBar> {
     'OIL:5': 'Rear / Auto',
   };
 
-  static const Map<String, String> _shutterFadeOptions = {
-    '0.0': '0.0s (OFF)',
-    '0.5': '0.5s',
-    '1.0': '1.0s',
-    '1.5': '1.5s',
-    '2.0': '2.0s',
-    '2.5': '2.5s',
-    '3.0': '3.0s',
-    '3.5': '3.5s',
-    '4.0': '4.0s',
-    '5.0': '5.0s',
-    '7.0': '7.0s',
-    '10.0': '10.0s',
+  static const Map<String, String> _shutterFadeInOptions = {
+    'VXX:SEFS1=0.0': '0.0s (OFF)',
+    'VXX:SEFS1=0.5': '0.5s',
+    'VXX:SEFS1=1.0': '1.0s',
+    'VXX:SEFS1=1.5': '1.5s',
+    'VXX:SEFS1=2.0': '2.0s',
+    'VXX:SEFS1=2.5': '2.5s',
+    'VXX:SEFS1=3.0': '3.0s',
+    'VXX:SEFS1=3.5': '3.5s',
+    'VXX:SEFS1=4.0': '4.0s',
+    'VXX:SEFS1=5.0': '5.0s',
+    'VXX:SEFS1=7.0': '7.0s',
+    'VXX:SEFS1=10.0': '10.0s',
   };
+
+  static const Map<String, String> _shutterFadeOutOptions = {
+    'VXX:SEFS2=0.0': '0.0s (OFF)',
+    'VXX:SEFS2=0.5': '0.5s',
+    'VXX:SEFS2=1.0': '1.0s',
+    'VXX:SEFS2=1.5': '1.5s',
+    'VXX:SEFS2=2.0': '2.0s',
+    'VXX:SEFS2=2.5': '2.5s',
+    'VXX:SEFS2=3.0': '3.0s',
+    'VXX:SEFS2=3.5': '3.5s',
+    'VXX:SEFS2=4.0': '4.0s',
+    'VXX:SEFS2=5.0': '5.0s',
+    'VXX:SEFS2=7.0': '7.0s',
+    'VXX:SEFS2=10.0': '10.0s',
+  };
+
+  static Widget? _testPatternIconBuilder(String key) {
+    final path = _testPatternIcons[key];
+    return path != null ? SvgPicture.asset(path, width: 18, height: 18) : null;
+  }
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -164,11 +184,6 @@ class _ControlBarState extends ConsumerState<ControlBar> {
   void initState() {
     super.initState();
     _loadFavorites();
-  }
-
-  @override
-  void dispose() {
-    super.dispose();
   }
 
   // ── Favorites persistence ─────────────────────────────────────────────────
@@ -353,8 +368,6 @@ class _ControlBarState extends ConsumerState<ControlBar> {
       ],
     );
   }
-
-  /// A labelled dropdown + Set button row for sending a single selected command.
 
   // ── Build ─────────────────────────────────────────────────────────────────
 
@@ -702,12 +715,7 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                                   .sendCommandToSelected(_selectedTestPattern)
                             : null,
                         menuHeight: 300,
-                        iconBuilder: (key) {
-                          final path = _testPatternIcons[key];
-                          return path != null
-                              ? SvgPicture.asset(path, width: 18, height: 18)
-                              : null;
-                        },
+                        iconBuilder: _testPatternIconBuilder,
                       ),
                       const SizedBox(height: _spacingLg),
                     ],
@@ -779,11 +787,7 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                       _buildGroupHeader(context, 'Shutter Settings'),
                       _DropdownRow(
                         title: 'Fade In',
-                        options: Map.fromEntries(
-                          _shutterFadeOptions.entries.map(
-                            (e) => MapEntry('VXX:SEFS1=${e.key}', e.value),
-                          ),
-                        ),
+                        options: _shutterFadeInOptions,
                         selectedValue: _selectedShutterFadeIn,
                         onChanged: (val) =>
                             setState(() => _selectedShutterFadeIn = val),
@@ -796,11 +800,7 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                       const SizedBox(height: _spacingMd),
                       _DropdownRow(
                         title: 'Fade Out',
-                        options: Map.fromEntries(
-                          _shutterFadeOptions.entries.map(
-                            (e) => MapEntry('VXX:SEFS2=${e.key}', e.value),
-                          ),
-                        ),
+                        options: _shutterFadeOutOptions,
                         selectedValue: _selectedShutterFadeOut,
                         onChanged: (val) =>
                             setState(() => _selectedShutterFadeOut = val),
@@ -1258,7 +1258,7 @@ class _CustomTooltipState extends State<_CustomTooltip> {
   OverlayEntry? _entry;
 
   void _show() {
-    if (_entry != null) return;
+    if (_entry != null || !mounted) return;
     final box = _key.currentContext?.findRenderObject() as RenderBox?;
     if (box == null || !box.hasSize) return;
     final position = box.localToGlobal(Offset.zero);
