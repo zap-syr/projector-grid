@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../domain/custom_command.dart';
@@ -36,8 +37,6 @@ class _ControlBarState extends ConsumerState<ControlBar> {
   String _selectedShutterFadeIn = 'VXX:SEFS1=0.0';
   String _selectedShutterFadeOut = 'VXX:SEFS2=0.0';
   List<String> _favorites = [];
-  final MenuController _menuController = MenuController();
-  final ScrollController _menuScrollController = ScrollController();
 
   // ── Data ──────────────────────────────────────────────────────────────────
   static const Map<String, String> _lensOptions = {
@@ -169,7 +168,6 @@ class _ControlBarState extends ConsumerState<ControlBar> {
 
   @override
   void dispose() {
-    _menuScrollController.dispose();
     super.dispose();
   }
 
@@ -209,14 +207,16 @@ class _ControlBarState extends ConsumerState<ControlBar> {
     } catch (_) {}
   }
 
-  void _toggleFavorite(String code) {
-    setState(() {
-      if (_favorites.contains(code)) {
-        _favorites.remove(code);
-      } else if (_favorites.length < 4) {
-        _favorites.add(code);
-      }
-    });
+  void _addFavorite() {
+    if (_favorites.length >= 4) return;
+    if (_favorites.contains(_selectedTestPattern)) return;
+    setState(() => _favorites.add(_selectedTestPattern));
+    _saveFavorites();
+  }
+
+  void _clearFavorite(int index) {
+    if (index >= _favorites.length) return;
+    setState(() => _favorites.removeAt(index));
     _saveFavorites();
   }
 
@@ -253,21 +253,6 @@ class _ControlBarState extends ConsumerState<ControlBar> {
             child: Divider(color: primary.withValues(alpha: 0.4), thickness: 1),
           ),
         ],
-      ),
-    );
-  }
-
-  /// Builds a setting-level label (muted, smaller).
-  Widget _buildSettingLabel(BuildContext context, String title) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: _spacingXs),
-      child: Text(
-        title,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: Theme.of(
-            context,
-          ).colorScheme.onSurface.withValues(alpha: 0.55),
-        ),
       ),
     );
   }
@@ -370,72 +355,6 @@ class _ControlBarState extends ConsumerState<ControlBar> {
   }
 
   /// A labelled dropdown + Set button row for sending a single selected command.
-  Widget _buildDropdownRow(
-    String title,
-    Map<String, String> options,
-    String selectedValue,
-    void Function(String) onChanged, {
-    required bool enabled,
-    double menuHeight = 250,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSettingLabel(context, title),
-        Row(
-          children: [
-            Expanded(
-              child: DropdownMenu<String>(
-                requestFocusOnTap: false,
-                enableFilter: false,
-                expandedInsets: EdgeInsets.zero,
-                menuHeight: menuHeight,
-                inputDecorationTheme: InputDecorationTheme(
-                  border: UnderlineInputBorder(
-                    borderSide: BorderSide(
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                  ),
-                  enabledBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                  ),
-                  focusedBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(
-                      color: Theme.of(context).colorScheme.primary,
-                      width: 2,
-                    ),
-                  ),
-                ),
-                initialSelection: selectedValue,
-                dropdownMenuEntries: options.entries
-                    .map(
-                      (e) => DropdownMenuEntry<String>(
-                        value: e.key,
-                        label: e.value,
-                      ),
-                    )
-                    .toList(),
-                onSelected: (val) {
-                  if (val != null) onChanged(val);
-                },
-              ),
-            ),
-            const SizedBox(width: _spacingSm),
-            OutlinedButton(
-              onPressed: enabled
-                  ? () => ref
-                        .read(workspaceProvider.notifier)
-                        .sendCommandToSelected(selectedValue)
-                  : null,
-              child: const Text('Set'),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
 
   // ── Build ─────────────────────────────────────────────────────────────────
 
@@ -680,64 +599,15 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                       const SizedBox(height: _spacingSm),
 
                       // Lens type selector
-                      Row(
-                        children: [
-                          Expanded(
-                            child: DropdownMenu<String>(
-                              requestFocusOnTap: false,
-                              enableFilter: false,
-                              expandedInsets: EdgeInsets.zero,
-                              menuHeight: 250,
-                              inputDecorationTheme: InputDecorationTheme(
-                                border: UnderlineInputBorder(
-                                  borderSide: BorderSide(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.primary,
-                                  ),
-                                ),
-                                enabledBorder: UnderlineInputBorder(
-                                  borderSide: BorderSide(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.primary,
-                                  ),
-                                ),
-                                focusedBorder: UnderlineInputBorder(
-                                  borderSide: BorderSide(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.primary,
-                                    width: 2,
-                                  ),
-                                ),
-                              ),
-                              initialSelection: _selectedLens,
-                              dropdownMenuEntries: _lensOptions.entries
-                                  .map(
-                                    (e) => DropdownMenuEntry<String>(
-                                      value: e.key,
-                                      label: e.value,
-                                    ),
-                                  )
-                                  .toList(),
-                              onSelected: (val) {
-                                if (val != null) {
-                                  setState(() => _selectedLens = val);
-                                }
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: _spacingSm),
-                          OutlinedButton(
-                            onPressed: hasSelection
-                                ? () => ref
-                                      .read(workspaceProvider.notifier)
-                                      .sendCommandToSelected(_selectedLens)
-                                : null,
-                            child: const Text('Set'),
-                          ),
-                        ],
+                      _DropdownRow(
+                        options: _lensOptions,
+                        selectedValue: _selectedLens,
+                        onChanged: (val) => setState(() => _selectedLens = val),
+                        onSet: hasSelection
+                            ? () => ref
+                                  .read(workspaceProvider.notifier)
+                                  .sendCommandToSelected(_selectedLens)
+                            : null,
                       ),
                       const SizedBox(height: _spacingMd),
                       // const Divider(),
@@ -781,8 +651,12 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                       // Favorites row — always 4 slots
                       Row(
                         children: List.generate(4, (i) {
-                          final code =
-                              i < _favorites.length ? _favorites[i] : null;
+                          final code = i < _favorites.length
+                              ? _favorites[i]
+                              : null;
+                          final canAdd =
+                              code == null &&
+                              !_favorites.contains(_selectedTestPattern);
                           return Expanded(
                             child: Padding(
                               padding: EdgeInsets.only(
@@ -796,10 +670,18 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                                 label: code != null
                                     ? _testPatternOptions[code]
                                     : null,
-                                onPressed: code != null && hasSelection
+                                selectedLabel: canAdd
+                                    ? (_testPatternOptions[_selectedTestPattern] ??
+                                          _selectedTestPattern)
+                                    : null,
+                                onSend: code != null && hasSelection
                                     ? () => ref
                                           .read(workspaceProvider.notifier)
                                           .sendCommandToSelected(code)
+                                    : null,
+                                onAdd: canAdd ? _addFavorite : null,
+                                onClear: code != null
+                                    ? () => _clearFavorite(i)
                                     : null,
                               ),
                             ),
@@ -809,109 +691,23 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                       const SizedBox(height: _spacingSm),
 
                       // Pattern dropdown + Send button
-                      Row(
-                        children: [
-                          Expanded(
-                            child: MenuAnchor(
-                              controller: _menuController,
-                              menuChildren: [
-                                SizedBox(
-                                  width: _barWidth - 2 * _spacingMd,
-                                  height: 300,
-                                  child: Scrollbar(
-                                    controller: _menuScrollController,
-                                    thumbVisibility: true,
-                                    child: ListView(
-                                      controller: _menuScrollController,
-                                      children: _testPatternOptions.entries
-                                          .map((e) {
-                                            final isFav =
-                                                _favorites.contains(e.key);
-                                            final canAdd =
-                                                isFav ||
-                                                _favorites.length < 4;
-                                            return _PatternMenuItem(
-                                              code: e.key,
-                                              label: e.value,
-                                              iconPath:
-                                                  _testPatternIcons[e.key],
-                                              isFavorite: isFav,
-                                              canAddFavorite: canAdd,
-                                              onSelect: () {
-                                                setState(
-                                                  () =>
-                                                      _selectedTestPattern =
-                                                          e.key,
-                                                );
-                                                _menuController.close();
-                                              },
-                                              onToggleFavorite: () =>
-                                                  _toggleFavorite(e.key),
-                                            );
-                                          })
-                                          .toList(),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                              builder: (context, controller, child) {
-                                final label =
-                                    _testPatternOptions[_selectedTestPattern] ??
-                                    _selectedTestPattern;
-                                final iconPath =
-                                    _testPatternIcons[_selectedTestPattern];
-                                return OutlinedButton(
-                                  style: OutlinedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: _spacingSm,
-                                    ),
-                                  ),
-                                  onPressed: () {
-                                    if (controller.isOpen) {
-                                      controller.close();
-                                    } else {
-                                      controller.open();
-                                    }
-                                  },
-                                  child: Row(
-                                    children: [
-                                      if (iconPath != null) ...[
-                                        SvgPicture.asset(
-                                          iconPath,
-                                          width: 16,
-                                          height: 16,
-                                        ),
-                                        const SizedBox(width: _spacingXs),
-                                      ],
-                                      Expanded(
-                                        child: Text(
-                                          label,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(fontSize: 13),
-                                        ),
-                                      ),
-                                      const Icon(
-                                        Icons.arrow_drop_down,
-                                        size: 18,
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: _spacingSm),
-                          OutlinedButton(
-                            onPressed: hasSelection
-                                ? () => ref
-                                      .read(workspaceProvider.notifier)
-                                      .sendCommandToSelected(
-                                        _selectedTestPattern,
-                                      )
-                                : null,
-                            child: const Text('Send'),
-                          ),
-                        ],
+                      _DropdownRow(
+                        options: _testPatternOptions,
+                        selectedValue: _selectedTestPattern,
+                        onChanged: (val) =>
+                            setState(() => _selectedTestPattern = val),
+                        onSet: hasSelection
+                            ? () => ref
+                                  .read(workspaceProvider.notifier)
+                                  .sendCommandToSelected(_selectedTestPattern)
+                            : null,
+                        menuHeight: 300,
+                        iconBuilder: (key) {
+                          final path = _testPatternIcons[key];
+                          return path != null
+                              ? SvgPicture.asset(path, width: 18, height: 18)
+                              : null;
+                        },
                       ),
                       const SizedBox(height: _spacingLg),
                     ],
@@ -923,65 +719,98 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                     children: [
                       // System
                       _buildGroupHeader(context, 'System'),
-                      _buildDropdownRow(
-                        'Picture Mode',
-                        _pictureModeOptions,
-                        _selectedPictureMode,
-                        (val) => setState(() => _selectedPictureMode = val),
-                        enabled: hasSelection,
+                      _DropdownRow(
+                        title: 'Picture Mode',
+                        options: _pictureModeOptions,
+                        selectedValue: _selectedPictureMode,
+                        onChanged: (val) =>
+                            setState(() => _selectedPictureMode = val),
+                        onSet: hasSelection
+                            ? () => ref
+                                  .read(workspaceProvider.notifier)
+                                  .sendCommandToSelected(_selectedPictureMode)
+                            : null,
                       ),
                       const SizedBox(height: _spacingMd),
-                      _buildDropdownRow(
-                        'Back Color',
-                        _backColorOptions,
-                        _selectedBackColor,
-                        (val) => setState(() => _selectedBackColor = val),
-                        enabled: hasSelection,
+                      _DropdownRow(
+                        title: 'Back Color',
+                        options: _backColorOptions,
+                        selectedValue: _selectedBackColor,
+                        onChanged: (val) =>
+                            setState(() => _selectedBackColor = val),
+                        onSet: hasSelection
+                            ? () => ref
+                                  .read(workspaceProvider.notifier)
+                                  .sendCommandToSelected(_selectedBackColor)
+                            : null,
                       ),
                       const SizedBox(height: _spacingMd),
-                      _buildDropdownRow(
-                        'Startup Logo',
-                        _startupLogoOptions,
-                        _selectedStartupLogo,
-                        (val) => setState(() => _selectedStartupLogo = val),
-                        enabled: hasSelection,
+                      _DropdownRow(
+                        title: 'Startup Logo',
+                        options: _startupLogoOptions,
+                        selectedValue: _selectedStartupLogo,
+                        onChanged: (val) =>
+                            setState(() => _selectedStartupLogo = val),
+                        onSet: hasSelection
+                            ? () => ref
+                                  .read(workspaceProvider.notifier)
+                                  .sendCommandToSelected(_selectedStartupLogo)
+                            : null,
                       ),
                       const SizedBox(height: _spacingMd),
-                      _buildDropdownRow(
-                        'Projection Method',
-                        _projectionMethodOptions,
-                        _selectedProjectionMethod,
-                        (val) =>
+                      _DropdownRow(
+                        title: 'Projection Method',
+                        options: _projectionMethodOptions,
+                        selectedValue: _selectedProjectionMethod,
+                        onChanged: (val) =>
                             setState(() => _selectedProjectionMethod = val),
-                        enabled: hasSelection,
+                        onSet: hasSelection
+                            ? () => ref
+                                  .read(workspaceProvider.notifier)
+                                  .sendCommandToSelected(
+                                    _selectedProjectionMethod,
+                                  )
+                            : null,
                         menuHeight: 300,
                       ),
                       const SizedBox(height: _spacingMd),
                       const SizedBox(height: _spacingSm),
                       // Shutter Settings
                       _buildGroupHeader(context, 'Shutter Settings'),
-                      _buildDropdownRow(
-                        'Fade In',
-                        Map.fromEntries(
+                      _DropdownRow(
+                        title: 'Fade In',
+                        options: Map.fromEntries(
                           _shutterFadeOptions.entries.map(
                             (e) => MapEntry('VXX:SEFS1=${e.key}', e.value),
                           ),
                         ),
-                        _selectedShutterFadeIn,
-                        (val) => setState(() => _selectedShutterFadeIn = val),
-                        enabled: hasSelection,
+                        selectedValue: _selectedShutterFadeIn,
+                        onChanged: (val) =>
+                            setState(() => _selectedShutterFadeIn = val),
+                        onSet: hasSelection
+                            ? () => ref
+                                  .read(workspaceProvider.notifier)
+                                  .sendCommandToSelected(_selectedShutterFadeIn)
+                            : null,
                       ),
                       const SizedBox(height: _spacingMd),
-                      _buildDropdownRow(
-                        'Fade Out',
-                        Map.fromEntries(
+                      _DropdownRow(
+                        title: 'Fade Out',
+                        options: Map.fromEntries(
                           _shutterFadeOptions.entries.map(
                             (e) => MapEntry('VXX:SEFS2=${e.key}', e.value),
                           ),
                         ),
-                        _selectedShutterFadeOut,
-                        (val) => setState(() => _selectedShutterFadeOut = val),
-                        enabled: hasSelection,
+                        selectedValue: _selectedShutterFadeOut,
+                        onChanged: (val) =>
+                            setState(() => _selectedShutterFadeOut = val),
+                        onSet: hasSelection
+                            ? () => ref
+                                  .read(workspaceProvider.notifier)
+                                  .sendCommandToSelected(
+                                    _selectedShutterFadeOut,
+                                  )
+                            : null,
                       ),
                       const SizedBox(height: _spacingMd),
                       const SizedBox(height: _spacingSm),
@@ -1131,10 +960,9 @@ class _CustomCommandTile extends StatelessWidget {
             child: Icon(
               Icons.drag_handle,
               size: 18,
-              color: Theme.of(context)
-                  .colorScheme
-                  .onSurfaceVariant
-                  .withValues(alpha: 0.5),
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
             ),
           ),
           const SizedBox(width: 8),
@@ -1146,7 +974,10 @@ class _CustomCommandTile extends StatelessWidget {
               children: [
                 Text(
                   command.name,
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
@@ -1193,14 +1024,162 @@ class _CustomCommandTile extends StatelessWidget {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Reusable dropdown row: optional label + DropdownMenu + Set button.
+class _DropdownRow extends StatelessWidget {
+  final String? title;
+  final Map<String, String> options;
+  final String selectedValue;
+  final void Function(String) onChanged;
+  final VoidCallback? onSet;
+  final double menuHeight;
+
+  /// Optional icon per key — shown in the text field (leading) and each entry.
+  final Widget? Function(String key)? iconBuilder;
+
+  const _DropdownRow({
+    this.title,
+    required this.options,
+    required this.selectedValue,
+    required this.onChanged,
+    this.onSet,
+    this.menuHeight = 250,
+    this.iconBuilder,
+  });
+
+  static const _borderRadius = BorderRadius.all(Radius.circular(100));
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (title != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text(
+              title!,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: colorScheme.onSurface.withValues(alpha: 0.55),
+              ),
+            ),
+          ),
+        Row(
+          children: [
+            Expanded(
+              child: Theme(
+                data: Theme.of(context).copyWith(
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  iconButtonTheme: IconButtonThemeData(
+                    style: IconButton.styleFrom(
+                      minimumSize: Size.zero,
+                      padding: EdgeInsets.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+                ),
+                child: DropdownMenu<String>(
+                  requestFocusOnTap: false,
+                  enableFilter: false,
+                  expandedInsets: EdgeInsets.zero,
+                  menuHeight: menuHeight,
+                  leadingIcon: iconBuilder != null
+                      ? UnconstrainedBox(
+                          child: Padding(
+                            padding: const EdgeInsets.only(left: 14, right: 4),
+                            child:
+                                iconBuilder!(selectedValue) ??
+                                const SizedBox.shrink(),
+                          ),
+                        )
+                      : null,
+                  trailingIcon: const UnconstrainedBox(
+                    child: Icon(Icons.arrow_drop_down, size: 20),
+                  ),
+                  inputDecorationTheme: InputDecorationTheme(
+                    constraints: const BoxConstraints.tightFor(height: 32),
+                    isDense: true,
+                    contentPadding: EdgeInsets.only(
+                      left: iconBuilder != null ? 0 : 10,
+                      right: 10,
+                    ),
+                    prefixIconConstraints: const BoxConstraints(
+                      minHeight: 32,
+                      minWidth: 32,
+                    ),
+                    suffixIconConstraints: const BoxConstraints(
+                      minHeight: 32,
+                      minWidth: 32,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: _borderRadius,
+                      borderSide: BorderSide(color: colorScheme.outline),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: _borderRadius,
+                      borderSide: BorderSide(color: colorScheme.outline),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: _borderRadius,
+                      borderSide: BorderSide(
+                        color: colorScheme.primary,
+                        width: 2,
+                      ),
+                    ),
+                  ),
+                  initialSelection: selectedValue,
+                  dropdownMenuEntries: options.entries
+                      .map(
+                        (e) => DropdownMenuEntry<String>(
+                          value: e.key,
+                          label: e.value,
+                          leadingIcon: iconBuilder?.call(e.key),
+                        ),
+                      )
+                      .toList(),
+                  onSelected: (val) {
+                    if (val != null) onChanged(val);
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(width: _ControlBarState._spacingSm),
+            OutlinedButton(onPressed: onSet, child: const Text('Set')),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 /// One cell in the always-visible 4-slot favorites row.
+///
+/// Empty slot: click saves the currently selected test pattern.
+/// Filled slot: normal click sends the command; Ctrl+click clears the slot.
 class _PatternSlot extends StatelessWidget {
   final String? code;
   final String? iconPath;
   final String? label;
-  final VoidCallback? onPressed;
 
-  const _PatternSlot({this.code, this.iconPath, this.label, this.onPressed});
+  /// Label of the currently selected pattern — used for the empty-slot tooltip.
+  final String? selectedLabel;
+  final VoidCallback? onSend;
+  final VoidCallback? onAdd;
+  final VoidCallback? onClear;
+
+  const _PatternSlot({
+    this.code,
+    this.iconPath,
+    this.label,
+    this.selectedLabel,
+    this.onSend,
+    this.onAdd,
+    this.onClear,
+  });
 
   static final _slotStyle = OutlinedButton.styleFrom(
     padding: EdgeInsets.zero,
@@ -1211,21 +1190,37 @@ class _PatternSlot extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (code == null) {
-      return OutlinedButton(
-        style: _slotStyle,
-        onPressed: null,
-        child: Icon(
-          Icons.add,
-          size: 14,
-          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.25),
+      // Empty slot — click to save the current dropdown selection.
+      final tip = selectedLabel != null ? 'Save "$selectedLabel"' : '';
+      return Tooltip(
+        message: tip,
+        child: OutlinedButton(
+          style: _slotStyle,
+          onPressed: onAdd,
+          child: Icon(
+            Icons.add,
+            size: 14,
+            color: onAdd != null
+                ? Theme.of(context).colorScheme.onSurfaceVariant
+                : Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.25),
+          ),
         ),
       );
     }
+    // Filled slot — normal click sends, Ctrl+click clears.
     return Tooltip(
-      message: label ?? code!,
+      message: '${label ?? code!}\nCtrl+click to remove',
       child: OutlinedButton(
         style: _slotStyle,
-        onPressed: onPressed,
+        onPressed: () {
+          if (HardwareKeyboard.instance.isControlPressed) {
+            onClear?.call();
+          } else {
+            onSend?.call();
+          }
+        },
         child: iconPath != null
             ? SvgPicture.asset(iconPath!, width: 18, height: 18)
             : FittedBox(
@@ -1237,76 +1232,6 @@ class _PatternSlot extends StatelessWidget {
                   ),
                 ),
               ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// One row inside the test pattern `MenuAnchor` dropdown.
-/// Left side (label + icon) selects and closes; star toggles favorite.
-class _PatternMenuItem extends StatelessWidget {
-  final String code;
-  final String label;
-  final String? iconPath;
-  final bool isFavorite;
-  final bool canAddFavorite;
-  final VoidCallback onSelect;
-  final VoidCallback onToggleFavorite;
-
-  const _PatternMenuItem({
-    required this.code,
-    required this.label,
-    this.iconPath,
-    required this.isFavorite,
-    required this.canAddFavorite,
-    required this.onSelect,
-    required this.onToggleFavorite,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onSelect,
-      child: Padding(
-        padding: const EdgeInsets.only(left: 8, right: 4, top: 4, bottom: 4),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 22,
-              height: 22,
-              child: iconPath != null
-                  ? SvgPicture.asset(
-                      iconPath!,
-                      width: 18,
-                      height: 18,
-                      fit: BoxFit.contain,
-                    )
-                  : null,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(label, style: const TextStyle(fontSize: 13)),
-            ),
-            IconButton(
-              iconSize: 16,
-              padding: const EdgeInsets.all(6),
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-              icon: Icon(
-                isFavorite ? Icons.star_rounded : Icons.star_border_rounded,
-                color: isFavorite
-                    ? Colors.amber
-                    : (canAddFavorite
-                          ? Theme.of(context).colorScheme.onSurfaceVariant
-                          : Theme.of(
-                              context,
-                            ).colorScheme.onSurface.withValues(alpha: 0.25)),
-              ),
-              onPressed: (isFavorite || canAddFavorite) ? onToggleFavorite : null,
-            ),
-          ],
-        ),
       ),
     );
   }
