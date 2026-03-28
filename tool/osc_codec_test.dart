@@ -94,10 +94,10 @@ Future<void> _testLoopback() async {
   });
 
   final messages = [
-    ('/pprjm/status', <Object>[]),
-    ('/pprjm/all/power/on', <Object>[]),
-    ('/pprjm/all/shutter/open', <Object>[]),
-    ('/pprjm/status', <Object>[3, 1, 0]), // status reply format
+    ('/prjmgr/status', <Object>[]),
+    ('/prjmgr/all/power/on', <Object>[]),
+    ('/prjmgr/all/shutter/open', <Object>[]),
+    ('/prjmgr/status', <Object>[3, 1, 0]), // status reply format
   ];
 
   for (final (addr, args) in messages) {
@@ -123,11 +123,11 @@ Future<void> main() async {
   print('═══════════════════════════════════════════════\n');
 
   print('── Encode/decode roundtrip ──');
-  _testRoundtrip('/pprjm/status', []);
-  _testRoundtrip('/pprjm/all/power/on', []);
-  _testRoundtrip('/pprjm/all/shutter/open', []);
-  _testRoundtrip('/pprjm/group/stage/shutter/close', []);
-  _testRoundtrip('/pprjm/status', [3, 1, 0]); // online=3, offline=1, warnings=0
+  _testRoundtrip('/prjmgr/status', []);
+  _testRoundtrip('/prjmgr/all/power/on', []);
+  _testRoundtrip('/prjmgr/all/shutter/open', []);
+  _testRoundtrip('/prjmgr/group/stage/shutter/close', []);
+  _testRoundtrip('/prjmgr/status', [3, 1, 0]); // online=3, offline=1, warnings=0
 
   print('\n── UDP loopback ──');
   await _testLoopback();

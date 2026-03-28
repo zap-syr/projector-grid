@@ -152,11 +152,11 @@ class ProjectStateNotifier extends _$ProjectStateNotifier {
   Future<bool> saveProjectAs() async {
     final defaultName = state.currentFilePath != null
         ? _fileName(state.currentFilePath!)
-        : 'project.pprjm';
+        : 'project.prjmgr';
 
     final path = await _showSaveDialog(defaultName);
     if (path == null) return false;
-    final filePath = path.endsWith('.pprjm') ? path : '$path.pprjm';
+    final filePath = path.endsWith('.prjmgr') ? path : '$path.prjmgr';
     return _writeToFile(filePath);
   }
 
@@ -171,7 +171,7 @@ Add-Type -AssemblyName System.Windows.Forms
 $owner = New-Object System.Windows.Forms.Form
 $owner.TopMost = $true
 $dialog = New-Object System.Windows.Forms.OpenFileDialog
-$dialog.Filter = 'Projector Project (*.pprjm)|*.pprjm'
+$dialog.Filter = 'Projector Project (*.prjmgr)|*.prjmgr'
 $dialog.Title = 'Open Project'
 $r = $dialog.ShowDialog($owner)
 $owner.Dispose()
@@ -183,7 +183,7 @@ if ($r -eq 'OK') { Write-Output $dialog.FileName }
     } else if (Platform.isMacOS) {
       final result = await Process.run('osascript', [
         '-e',
-        'POSIX path of (choose file with prompt "Open Project" of type {"pprjm"})',
+        'POSIX path of (choose file with prompt "Open Project" of type {"prjmgr"})',
       ]);
       final path = result.stdout.toString().trim();
       return path.isEmpty ? null : path;
@@ -193,7 +193,7 @@ if ($r -eq 'OK') { Write-Output $dialog.FileName }
 
   static Future<String?> _showSaveDialog(String defaultName) async {
     final safeName =
-        defaultName.endsWith('.pprjm') ? defaultName : '$defaultName.pprjm';
+        defaultName.endsWith('.prjmgr') ? defaultName : '$defaultName.prjmgr';
 
     if (Platform.isWindows) {
       final result = await Process.run('powershell', [
@@ -203,8 +203,8 @@ Add-Type -AssemblyName System.Windows.Forms
 \$owner = New-Object System.Windows.Forms.Form
 \$owner.TopMost = \$true
 \$dialog = New-Object System.Windows.Forms.SaveFileDialog
-\$dialog.Filter = 'Projector Project (*.pprjm)|*.pprjm'
-\$dialog.DefaultExt = 'pprjm'
+\$dialog.Filter = 'Projector Project (*.prjmgr)|*.prjmgr'
+\$dialog.DefaultExt = 'prjmgr'
 \$dialog.FileName = '$safeName'
 \$dialog.Title = 'Save Project'
 \$r = \$dialog.ShowDialog(\$owner)

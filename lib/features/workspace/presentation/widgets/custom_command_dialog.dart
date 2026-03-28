@@ -135,7 +135,7 @@ class _CustomCommandDialogState extends ConsumerState<CustomCommandDialog> {
                         Expanded(
                           child: Text(
                             slug.isNotEmpty
-                                ? '/pprjm/all/custom/$slug'
+                                ? '/prjmgr/all/custom/$slug'
                                 : 'OSC address will appear here',
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: slug.isNotEmpty
