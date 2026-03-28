@@ -50,12 +50,12 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
     130, // Power      — wider to fit icon + "STANDBY" with padding
     110, // Shutter
     90, // Input
-    100, // Signal
+    120, // Signal
     90, // Runtime
     130, // Intake Temp
     130, // Exhaust Temp
     110, // AC Voltage
-    180, // Errors
+    160, // Errors
   ];
 
   // Derived from _columnWidths so it stays in sync automatically.
@@ -327,17 +327,45 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
           children: [
             _cell(0, _connectionCell(node), widths),
             _cell(1, Text(node.name, overflow: TextOverflow.ellipsis), widths),
-            _cell(2, Text(node.serialNumber, overflow: TextOverflow.ellipsis), widths),
+            _cell(
+              2,
+              Text(node.serialNumber, overflow: TextOverflow.ellipsis),
+              widths,
+            ),
             _cell(3, Text(node.ipAddress), widths),
             _cell(4, _powerCell(node), widths),
             _cell(5, _shutterCell(node), widths),
             _cell(6, Text(node.input, overflow: TextOverflow.ellipsis), widths),
-            _cell(7, Text(node.signal, overflow: TextOverflow.ellipsis), widths),
-            _cell(8, Text(node.runtime, overflow: TextOverflow.ellipsis), widths),
-            _cell(9, Text(node.intakeTemp, overflow: TextOverflow.ellipsis), widths),
-            _cell(10, Text(node.exhaustTemp, overflow: TextOverflow.ellipsis), widths),
-            _cell(11, Text(node.acVoltage, overflow: TextOverflow.ellipsis), widths),
-            _cell(12, Text(node.errors, overflow: TextOverflow.ellipsis), widths),
+            _cell(
+              7,
+              Text(node.signal, overflow: TextOverflow.ellipsis),
+              widths,
+            ),
+            _cell(
+              8,
+              Text(node.runtime, overflow: TextOverflow.ellipsis),
+              widths,
+            ),
+            _cell(
+              9,
+              Text(node.intakeTemp, overflow: TextOverflow.ellipsis),
+              widths,
+            ),
+            _cell(
+              10,
+              Text(node.exhaustTemp, overflow: TextOverflow.ellipsis),
+              widths,
+            ),
+            _cell(
+              11,
+              Text(node.acVoltage, overflow: TextOverflow.ellipsis),
+              widths,
+            ),
+            _cell(
+              12,
+              Text(node.errors, overflow: TextOverflow.ellipsis),
+              widths,
+            ),
           ],
         ),
       ),
@@ -380,8 +408,9 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
 
           // When the viewport is wider than the fixed column total, scale all
           // columns proportionally so the table fills the full width.
-          final tableWidth =
-              viewportWidth > _totalWidth ? viewportWidth : _totalWidth;
+          final tableWidth = viewportWidth > _totalWidth
+              ? viewportWidth
+              : _totalWidth;
           final effectiveWidths = viewportWidth > _totalWidth
               ? List<double>.generate(
                   _columnWidths.length,

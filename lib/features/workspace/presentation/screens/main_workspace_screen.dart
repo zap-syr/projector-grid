@@ -171,7 +171,7 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
               ),
               Expanded(
                 child: _isMonitoringView
-                    ? const MonitoringTable()
+                    ? const Focus(autofocus: true, child: MonitoringTable())
                     : Row(
                         children: [
                           Expanded(
