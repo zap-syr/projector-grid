@@ -1,4 +1,4 @@
-# Projectors Manager
+# Projector Grid
 
 A Windows desktop app for controlling and monitoring multiple projectors over a local network using the Panasonic NTCONTROL/TCP protocol.
 

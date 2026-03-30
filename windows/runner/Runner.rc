@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "" "\0"
-            VALUE "FileDescription", "Projectors Manager" "\0"
+            VALUE "FileDescription", "Projector Grid" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "projectors_manager" "\0"
+            VALUE "InternalName", "projector_grid" "\0"
             VALUE "LegalCopyright", "" "\0"
-            VALUE "OriginalFilename", "projectors_manager.exe" "\0"
-            VALUE "ProductName", "Projectors Manager" "\0"
+            VALUE "OriginalFilename", "projector_grid.exe" "\0"
+            VALUE "ProductName", "Projector Grid" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

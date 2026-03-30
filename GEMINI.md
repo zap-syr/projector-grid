@@ -1,7 +1,7 @@
-# Panasonic Projectors Manager
+# Projector Grid
 
 ## Project Overview
-Panasonic Projectors Manager is a Flutter-based desktop application designed for Windows and macOS. Its primary purpose is to control and manage Panasonic Projectors using the Panasonic LAN protocol. The application features an interactive graphical workspace where users can add, arrange, select (via clicking or marquee dragging), and control projector nodes on a local network.
+Projector Grid is a Flutter-based desktop application designed for Windows and macOS. Its primary purpose is to control and manage Panasonic Projectors using the Panasonic LAN protocol. The application features an interactive graphical workspace where users can add, arrange, select (via clicking or marquee dragging), and control projector nodes on a local network.
 
 ### Key Technologies
 - **Framework:** Flutter (Desktop targeted: Windows, macOS)

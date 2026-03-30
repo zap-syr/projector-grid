@@ -60,7 +60,7 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
     super.dispose();
   }
 
-  static const _appName = 'Projectors Manager';
+  static const _appName = 'Projector Grid';
 
   void _updateWindowTitle(ProjectState projectState) {
     final String title;

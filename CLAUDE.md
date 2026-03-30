@@ -84,14 +84,14 @@ Action commands: `PON`/`POF` (power on/off), `OSH:0/1` (shutter open/close), `II
 `OscService` listens on a configurable UDP port and sends status over UDP.
 
 **Incoming** — address patterns handled:
-- `/pprjm/all/{command}` — send NTCONTROL command to all projectors
-- `/pprjm/group/{group-name}/{command}` — send to a named group (resolved via `oscAddress`)
-- `/pprjm/status` — force-send all 3 current status values immediately
+- `/pgrid/all/{command}` — send NTCONTROL command to all projectors
+- `/pgrid/group/{group-name}/{command}` — send to a named group (resolved via `oscAddress`)
+- `/pgrid/status` — force-send all 3 current status values immediately
 
 **Outgoing** — 3 messages sent whenever their value changes:
-- `/pprjm/status/online` — count of connected projectors
-- `/pprjm/status/offline` — count of offline projectors
-- `/pprjm/status/warning` — count with errors or unauthorized status
+- `/pgrid/status/online` — count of connected projectors
+- `/pgrid/status/offline` — count of offline projectors
+- `/pgrid/status/warning` — count with errors or unauthorized status
 
 Change detection: `_lastOnline/Offline/Warnings` cached; only changed values are transmitted. `sendStatusForced()` bypasses this for on-demand requests.
 

@@ -3,8 +3,11 @@ flutter_launcher_icons:
     generate: true
     image_path: "assets/launcher_icon/app_icon.png"
     icon_size: 256
+  macos:
+    generate: true
+    image_path: "assets/launcher_icon/app_icon.png"
 
-name: projectors_manager
+name: projector_grid
 description: "Desktop app for controlling and monitoring projectors over NTCONTROL/TCP."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.

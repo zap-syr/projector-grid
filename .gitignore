@@ -45,7 +45,7 @@ app.*.map.json
 /android/app/release
 
 # Docs
-docs/
+support_docs/
 
 # AI
 .agents/

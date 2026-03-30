@@ -6,13 +6,13 @@ class DocsService {
   static String get _oscReferencePath {
     if (Platform.isWindows) {
       final appData = Platform.environment['APPDATA'] ?? '';
-      return '$appData\\ProjectorsManager\\osc_reference.html';
+      return '$appData\\ProjectorGrid\\osc_reference.html';
     } else if (Platform.isMacOS) {
       final home = Platform.environment['HOME'] ?? '';
-      return '$home/Library/Application Support/ProjectorsManager/osc_reference.html';
+      return '$home/Library/Application Support/ProjectorGrid/osc_reference.html';
     } else {
       final home = Platform.environment['HOME'] ?? '';
-      return '$home/.config/ProjectorsManager/osc_reference.html';
+      return '$home/.config/ProjectorGrid/osc_reference.html';
     }
   }
 

@@ -214,10 +214,10 @@ class OscService {
   void _processMessage(OSCMessage msg) {
     final address = msg.address;
 
-    // /prjmgr/all/{command...}
-    // Also handles /prjmgr/all/custom/{slug} for user-defined commands.
-    if (address.startsWith('/prjmgr/all/')) {
-      final commandPath = address.substring('/prjmgr/all/'.length);
+    // /pgrid/all/{command...}
+    // Also handles /pgrid/all/custom/{slug} for user-defined commands.
+    if (address.startsWith('/pgrid/all/')) {
+      final commandPath = address.substring('/pgrid/all/'.length);
       if (commandPath.startsWith('custom/')) {
         final slug = commandPath.substring('custom/'.length);
         final ntCmd = resolveCustomCommand?.call(slug);
@@ -237,10 +237,10 @@ class OscService {
       return;
     }
 
-    // /prjmgr/group/{group-name}/{command...}
-    // Also handles /prjmgr/group/{group-name}/custom/{slug} for user-defined commands.
-    if (address.startsWith('/prjmgr/group/')) {
-      final remainder = address.substring('/prjmgr/group/'.length);
+    // /pgrid/group/{group-name}/{command...}
+    // Also handles /pgrid/group/{group-name}/custom/{slug} for user-defined commands.
+    if (address.startsWith('/pgrid/group/')) {
+      final remainder = address.substring('/pgrid/group/'.length);
       final firstSlash = remainder.indexOf('/');
       if (firstSlash == -1) {
         debugPrint('OSC: Missing command after group name: $address');
@@ -273,8 +273,8 @@ class OscService {
       return;
     }
 
-    // /prjmgr/status — request: send all 3 status messages immediately, bypass change detection.
-    if (address == '/prjmgr/status') {
+    // /pgrid/status — request: send all 3 status messages immediately, bypass change detection.
+    if (address == '/pgrid/status') {
       sendStatusForced();
       return;
     }
@@ -289,27 +289,27 @@ class OscService {
     final status = getStatus!();
 
     if (status.online != _lastOnline) {
-      _sendMessage('/prjmgr/status/online', status.online);
+      _sendMessage('/pgrid/status/online', status.online);
       _lastOnline = status.online;
     }
     if (status.offline != _lastOffline) {
-      _sendMessage('/prjmgr/status/offline', status.offline);
+      _sendMessage('/pgrid/status/offline', status.offline);
       _lastOffline = status.offline;
     }
     if (status.warnings != _lastWarnings) {
-      _sendMessage('/prjmgr/status/warning', status.warnings);
+      _sendMessage('/pgrid/status/warning', status.warnings);
       _lastWarnings = status.warnings;
     }
   }
 
-  /// Sends all 3 status messages unconditionally (used for on-demand /prjmgr/status requests).
+  /// Sends all 3 status messages unconditionally (used for on-demand /pgrid/status requests).
   void sendStatusForced() {
     if (!_isActive || _socket == null || getStatus == null) return;
 
     final status = getStatus!();
-    _sendMessage('/prjmgr/status/online', status.online);
-    _sendMessage('/prjmgr/status/offline', status.offline);
-    _sendMessage('/prjmgr/status/warning', status.warnings);
+    _sendMessage('/pgrid/status/online', status.online);
+    _sendMessage('/pgrid/status/offline', status.offline);
+    _sendMessage('/pgrid/status/warning', status.warnings);
     _lastOnline = status.online;
     _lastOffline = status.offline;
     _lastWarnings = status.warnings;

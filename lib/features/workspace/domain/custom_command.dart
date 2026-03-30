@@ -17,7 +17,7 @@ class CustomCommand {
       .replaceAll(RegExp(r'-+'), '-')
       .replaceAll(RegExp(r'^-|-$'), '');
 
-  String get oscAddress => '/prjmgr/custom/$oscSlug';
+  String get oscAddress => '/pgrid/custom/$oscSlug';
 
   Map<String, dynamic> toJson() => {
     'id': id,

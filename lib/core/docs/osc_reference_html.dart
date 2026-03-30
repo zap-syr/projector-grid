@@ -5,7 +5,7 @@ const String oscReferenceHtml = '''<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OSC Reference — Projectors Manager</title>
+  <title>OSC Reference — Projector Grid</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -175,7 +175,7 @@ const String oscReferenceHtml = '''<!DOCTYPE html>
 <div class="page">
 
   <h1>OSC Reference</h1>
-  <p class="subtitle">Projectors Manager — Open Sound Control integration guide</p>
+  <p class="subtitle">Projector Grid — Open Sound Control integration guide</p>
 
   <nav>
     <p>Contents</p>
@@ -205,14 +205,14 @@ const String oscReferenceHtml = '''<!DOCTYPE html>
   <p>All incoming commands follow one of two patterns — target all projectors, or target a named group. Append any command from the reference below to either prefix.</p>
 
   <h3>All projectors</h3>
-  <div class="pattern-box">/prjmgr/all/<span style="color:#a8d8ff">{command}</span></div>
-  <p class="example">Example: <code>/prjmgr/all/power/on</code> &nbsp;·&nbsp; <code>/prjmgr/all/shutter/open</code></p>
+  <div class="pattern-box">/pgrid/all/<span style="color:#a8d8ff">{command}</span></div>
+  <p class="example">Example: <code>/pgrid/all/power/on</code> &nbsp;·&nbsp; <code>/pgrid/all/shutter/open</code></p>
 
   <h3>Named group</h3>
-  <div class="pattern-box">/prjmgr/group/<span style="color:#a8d8ff">{group-name}</span>/<span style="color:#a8d8ff">{command}</span></div>
+  <div class="pattern-box">/pgrid/group/<span style="color:#a8d8ff">{group-name}</span>/<span style="color:#a8d8ff">{command}</span></div>
   <p class="example">
     <code>{group-name}</code> is the OSC address set on the group — e.g. a group with OSC address <code>/group/stage</code> uses <code>stage</code> as the name.<br>
-    Example: <code>/prjmgr/group/stage/shutter/open</code> &nbsp;·&nbsp; <code>/prjmgr/group/auditorium/power/off</code>
+    Example: <code>/pgrid/group/stage/shutter/open</code> &nbsp;·&nbsp; <code>/pgrid/group/auditorium/power/off</code>
   </p>
 
   <div class="note">
@@ -432,13 +432,13 @@ const String oscReferenceHtml = '''<!DOCTYPE html>
   <p>Commands created in the <strong>Custom</strong> tab of the control bar can be triggered via OSC using the same all/group patterns:</p>
 
   <div class="pattern-box">
-    /prjmgr/all/custom/<span style="color:#a8d8ff">{slug}</span><br>
-    /prjmgr/group/<span style="color:#a8d8ff">{group-name}</span>/custom/<span style="color:#a8d8ff">{slug}</span>
+    /pgrid/all/custom/<span style="color:#a8d8ff">{slug}</span><br>
+    /pgrid/group/<span style="color:#a8d8ff">{group-name}</span>/custom/<span style="color:#a8d8ff">{slug}</span>
   </div>
 
   <p>The <code>{slug}</code> is automatically derived from the command name: lowercase, with spaces and special characters replaced by hyphens. It is shown in the OSC address preview when creating or editing a custom command.</p>
 
-  <p class="example">Example: a command named <em>"Warm Up Sequence"</em> gets the slug <code>warm-up-sequence</code>, so its OSC address is <code>/prjmgr/all/custom/warm-up-sequence</code>.</p>
+  <p class="example">Example: a command named <em>"Warm Up Sequence"</em> gets the slug <code>warm-up-sequence</code>, so its OSC address is <code>/pgrid/all/custom/warm-up-sequence</code>.</p>
 
   <!-- ─── OUTGOING STATUS ─── -->
   <h2 id="outgoing">Outgoing Status Messages</h2>
@@ -451,24 +451,24 @@ const String oscReferenceHtml = '''<!DOCTYPE html>
     </thead>
     <tbody>
       <tr>
-        <td><code>/prjmgr/status/online</code></td>
+        <td><code>/pgrid/status/online</code></td>
         <td>int</td>
         <td>Number of connected projectors changes</td>
       </tr>
       <tr>
-        <td><code>/prjmgr/status/offline</code></td>
+        <td><code>/pgrid/status/offline</code></td>
         <td>int</td>
         <td>Number of offline projectors changes</td>
       </tr>
       <tr>
-        <td><code>/prjmgr/status/warning</code></td>
+        <td><code>/pgrid/status/warning</code></td>
         <td>int</td>
         <td>Number of projectors with errors or unauthorized status changes</td>
       </tr>
     </tbody>
   </table>
 
-  <p>Send <code>/prjmgr/status</code> (no arguments) to request all three values immediately, bypassing change detection.</p>
+  <p>Send <code>/pgrid/status</code> (no arguments) to request all three values immediately, bypassing change detection.</p>
 
 </div>
 </body>

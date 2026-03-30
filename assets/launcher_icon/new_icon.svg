@@ -1,0 +1,26 @@
+<svg width="160" height="160" viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg">
+
+  <!-- Background — vivid deep blue -->
+  <rect x="0" y="0" width="160" height="160" rx="36" fill="#0f3080"/>
+
+  <!-- Grid 3x3 — 8 outer cells (muted, greyed out relative to center) -->
+  <rect x="16" y="16" width="38" height="38" rx="8" fill="#1e3060" stroke="#3a5a8a" stroke-width="2"/>
+  <rect x="61" y="16" width="38" height="38" rx="8" fill="#1e3060" stroke="#3a5a8a" stroke-width="2"/>
+  <rect x="106" y="16" width="38" height="38" rx="8" fill="#1e3060" stroke="#3a5a8a" stroke-width="2"/>
+  <rect x="16" y="61" width="38" height="38" rx="8" fill="#1e3060" stroke="#3a5a8a" stroke-width="2"/>
+  <rect x="106" y="61" width="38" height="38" rx="8" fill="#1e3060" stroke="#3a5a8a" stroke-width="2"/>
+  <rect x="16" y="106" width="38" height="38" rx="8" fill="#1e3060" stroke="#3a5a8a" stroke-width="2"/>
+  <rect x="61" y="106" width="38" height="38" rx="8" fill="#1e3060" stroke="#3a5a8a" stroke-width="2"/>
+  <rect x="106" y="106" width="38" height="38" rx="8" fill="#1e3060" stroke="#3a5a8a" stroke-width="2"/>
+
+  <!-- Center cell — highlighted bright -->
+  <rect x="61" y="61" width="38" height="38" rx="8" fill="#1d60cc" stroke="#70c0ff" stroke-width="2.5"/>
+
+  <!-- Lens -->
+  <circle cx="80" cy="80" r="13" fill="#1050b0" stroke="#80d0ff" stroke-width="2.5"/>
+  <circle cx="80" cy="80" r="9" fill="#b0d8f0"/>
+  <circle cx="80" cy="80" r="5" fill="#eef8ff"/>
+  <circle cx="77" cy="77" r="2.5" fill="#ffffff" opacity="1"/>
+  <circle cx="83" cy="83" r="1" fill="#cce8ff" opacity="0.9"/>
+
+</svg>

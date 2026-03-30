@@ -10,13 +10,13 @@ class CustomCommandsNotifier extends _$CustomCommandsNotifier {
   static String get _filePath {
     if (Platform.isWindows) {
       final appData = Platform.environment['APPDATA'] ?? '';
-      return '$appData\\ProjectorsManager\\custom_commands.json';
+      return '$appData\\ProjectorGrid\\custom_commands.json';
     } else if (Platform.isMacOS) {
       final home = Platform.environment['HOME'] ?? '';
-      return '$home/Library/Application Support/ProjectorsManager/custom_commands.json';
+      return '$home/Library/Application Support/ProjectorGrid/custom_commands.json';
     } else {
       final home = Platform.environment['HOME'] ?? '';
-      return '$home/.config/ProjectorsManager/custom_commands.json';
+      return '$home/.config/ProjectorGrid/custom_commands.json';
     }
   }
 

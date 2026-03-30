@@ -130,33 +130,33 @@ Future<void> main() async {
   await Future.delayed(const Duration(milliseconds: 200));
 
   // ── Test 1: Request status reply ────────────────────────────────────────
-  print('─── Test 1: /prjmgr/status (request outgoing status) ───');
-  _send(sendSocket, '/prjmgr/status');
+  print('─── Test 1: /pgrid/status (request outgoing status) ───');
+  _send(sendSocket, '/pgrid/status');
   await Future.delayed(const Duration(milliseconds: 500));
 
   // ── Test 2: Power On all ─────────────────────────────────────────────────
-  print('─── Test 2: /prjmgr/all/power/on ───');
-  _send(sendSocket, '/prjmgr/all/power/on');
+  print('─── Test 2: /pgrid/all/power/on ───');
+  _send(sendSocket, '/pgrid/all/power/on');
   await Future.delayed(const Duration(milliseconds: 500));
 
   // ── Test 3: Shutter open all ─────────────────────────────────────────────
-  print('─── Test 3: /prjmgr/all/shutter/open ───');
-  _send(sendSocket, '/prjmgr/all/shutter/open');
+  print('─── Test 3: /pgrid/all/shutter/open ───');
+  _send(sendSocket, '/pgrid/all/shutter/open');
   await Future.delayed(const Duration(milliseconds: 500));
 
   // ── Test 4: Group command (group OSC address = /group/stage) ─────────────
-  print('─── Test 4: /prjmgr/group/stage/shutter/close ───');
-  _send(sendSocket, '/prjmgr/group/stage/shutter/close');
+  print('─── Test 4: /pgrid/group/stage/shutter/close ───');
+  _send(sendSocket, '/pgrid/group/stage/shutter/close');
   await Future.delayed(const Duration(milliseconds: 500));
 
   // ── Test 5: Unknown command (should log warning, not crash) ──────────────
-  print('─── Test 5: /prjmgr/all/unknown/command (expect no crash) ───');
-  _send(sendSocket, '/prjmgr/all/unknown/command');
+  print('─── Test 5: /pgrid/all/unknown/command (expect no crash) ───');
+  _send(sendSocket, '/pgrid/all/unknown/command');
   await Future.delayed(const Duration(milliseconds: 500));
 
   // ── Test 6: Invalid OSC address ──────────────────────────────────────────
-  print('─── Test 6: /prjmgr/group/nonexistent-group/power/off (expect group not found) ───');
-  _send(sendSocket, '/prjmgr/group/nonexistent-group/power/off');
+  print('─── Test 6: /pgrid/group/nonexistent-group/power/off (expect group not found) ───');
+  _send(sendSocket, '/pgrid/group/nonexistent-group/power/off');
   await Future.delayed(const Duration(milliseconds: 500));
 
   print('\n═══════════════════════════════════════════════');

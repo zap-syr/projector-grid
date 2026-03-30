@@ -39,13 +39,13 @@ class ProjectStateNotifier extends _$ProjectStateNotifier {
   static String get _recentProjectsPath {
     if (Platform.isWindows) {
       final appData = Platform.environment['APPDATA'] ?? '';
-      return '$appData\\ProjectorsManager\\recent.json';
+      return '$appData\\ProjectorGrid\\recent.json';
     } else if (Platform.isMacOS) {
       final home = Platform.environment['HOME'] ?? '';
-      return '$home/Library/Application Support/ProjectorsManager/recent.json';
+      return '$home/Library/Application Support/ProjectorGrid/recent.json';
     } else {
       final home = Platform.environment['HOME'] ?? '';
-      return '$home/.config/ProjectorsManager/recent.json';
+      return '$home/.config/ProjectorGrid/recent.json';
     }
   }
 
@@ -152,11 +152,11 @@ class ProjectStateNotifier extends _$ProjectStateNotifier {
   Future<bool> saveProjectAs() async {
     final defaultName = state.currentFilePath != null
         ? _fileName(state.currentFilePath!)
-        : 'project.prjmgr';
+        : 'project.pgrid';
 
     final path = await _showSaveDialog(defaultName);
     if (path == null) return false;
-    final filePath = path.endsWith('.prjmgr') ? path : '$path.prjmgr';
+    final filePath = path.endsWith('.pgrid') ? path : '$path.pgrid';
     return _writeToFile(filePath);
   }
 
@@ -171,7 +171,7 @@ Add-Type -AssemblyName System.Windows.Forms
 $owner = New-Object System.Windows.Forms.Form
 $owner.TopMost = $true
 $dialog = New-Object System.Windows.Forms.OpenFileDialog
-$dialog.Filter = 'Projector Project (*.prjmgr)|*.prjmgr'
+$dialog.Filter = 'Projector Grid Project (*.pgrid)|*.pgrid'
 $dialog.Title = 'Open Project'
 $r = $dialog.ShowDialog($owner)
 $owner.Dispose()
@@ -183,7 +183,7 @@ if ($r -eq 'OK') { Write-Output $dialog.FileName }
     } else if (Platform.isMacOS) {
       final result = await Process.run('osascript', [
         '-e',
-        'POSIX path of (choose file with prompt "Open Project" of type {"prjmgr"})',
+        'POSIX path of (choose file with prompt "Open Project" of type {"pgrid"})',
       ]);
       final path = result.stdout.toString().trim();
       return path.isEmpty ? null : path;
@@ -193,7 +193,7 @@ if ($r -eq 'OK') { Write-Output $dialog.FileName }
 
   static Future<String?> _showSaveDialog(String defaultName) async {
     final safeName =
-        defaultName.endsWith('.prjmgr') ? defaultName : '$defaultName.prjmgr';
+        defaultName.endsWith('.pgrid') ? defaultName : '$defaultName.pgrid';
 
     if (Platform.isWindows) {
       final result = await Process.run('powershell', [
@@ -203,8 +203,8 @@ Add-Type -AssemblyName System.Windows.Forms
 \$owner = New-Object System.Windows.Forms.Form
 \$owner.TopMost = \$true
 \$dialog = New-Object System.Windows.Forms.SaveFileDialog
-\$dialog.Filter = 'Projector Project (*.prjmgr)|*.prjmgr'
-\$dialog.DefaultExt = 'prjmgr'
+\$dialog.Filter = 'Projector Grid Project (*.pgrid)|*.pgrid'
+\$dialog.DefaultExt = 'pgrid'
 \$dialog.FileName = '$safeName'
 \$dialog.Title = 'Save Project'
 \$r = \$dialog.ShowDialog(\$owner)

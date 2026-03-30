@@ -50,7 +50,7 @@ class AppAboutDialog extends StatelessWidget {
                 children: [
                   // Name + version
                   Text(
-                    'Projectors Manager',
+                    'Projector Grid',
                     style: textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
@@ -115,7 +115,7 @@ class AppAboutDialog extends StatelessWidget {
                           Navigator.of(context).pop();
                           showLicensePage(
                             context: context,
-                            applicationName: 'Projectors Manager',
+                            applicationName: 'Projector Grid',
                             applicationVersion: _version,
                           );
                         },

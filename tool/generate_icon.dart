@@ -1,4 +1,4 @@
-// Generates assets/launcher_icon/app_icon.png — the app icon for Projectors Manager.
+// Generates assets/launcher_icon/app_icon.png — the app icon for Projector Grid.
 // Run with: dart run tool/generate_icon.dart
 //
 // Design: lens aperture — navy→teal diagonal gradient, 6-blade iris,

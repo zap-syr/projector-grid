@@ -28,7 +28,7 @@ class _ControlBarState extends ConsumerState<ControlBar> {
 
   // ── State ─────────────────────────────────────────────────────────────────
   String _selectedLens = 'VXX:LNEI1=+00001';
-  String _selectedTestPattern = 'OTS:87';
+  String _selectedTestPattern = 'OTS:01';
   bool _isSending = false;
   String _selectedPictureMode = 'VPM:STD';
   String _selectedBackColor = 'OBC:0';
@@ -191,13 +191,13 @@ class _ControlBarState extends ConsumerState<ControlBar> {
   static String get _favoritesFilePath {
     if (Platform.isWindows) {
       final appData = Platform.environment['APPDATA'] ?? '';
-      return '$appData\\ProjectorsManager\\test_pattern_favorites.json';
+      return '$appData\\ProjectorGrid\\test_pattern_favorites.json';
     } else if (Platform.isMacOS) {
       final home = Platform.environment['HOME'] ?? '';
-      return '$home/Library/Application Support/ProjectorsManager/test_pattern_favorites.json';
+      return '$home/Library/Application Support/ProjectorGrid/test_pattern_favorites.json';
     } else {
       final home = Platform.environment['HOME'] ?? '';
-      return '$home/.config/ProjectorsManager/test_pattern_favorites.json';
+      return '$home/.config/ProjectorGrid/test_pattern_favorites.json';
     }
   }
 
@@ -1203,9 +1203,7 @@ class _PatternSlot extends StatelessWidget {
               : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.25),
         ),
       );
-      return tip.isEmpty
-          ? button
-          : _CustomTooltip(message: tip, child: button);
+      return tip.isEmpty ? button : _CustomTooltip(message: tip, child: button);
     }
     // Filled slot — normal click sends, Ctrl+click clears.
     return _CustomTooltip(
@@ -1264,49 +1262,55 @@ class _CustomTooltipState extends State<_CustomTooltip> {
     final position = box.localToGlobal(Offset.zero);
     final size = box.size;
 
-    _entry = OverlayEntry(builder: (overlayContext) {
-      final colorScheme = Theme.of(overlayContext).colorScheme;
-      final lines = widget.message.split('\n');
-      return Positioned(
-        // Anchor at horizontal center of the button, 6px above its top edge.
-        left: position.dx + size.width / 2,
-        top: position.dy - 6,
-        child: FractionalTranslation(
-          // Shift left by 50% of own width (centers it) and up by 100% of own
-          // height (places it fully above the button).
-          translation: const Offset(-0.5, -1.0),
-          child: IgnorePointer(
-            child: Material(
-              color: Colors.transparent,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                decoration: BoxDecoration(
-                  color: colorScheme.inverseSurface,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    for (int i = 0; i < lines.length; i++)
-                      Text(
-                        lines[i],
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: colorScheme.onInverseSurface,
-                          fontSize: 12,
-                          fontStyle:
-                              i > 0 ? FontStyle.italic : FontStyle.normal,
+    _entry = OverlayEntry(
+      builder: (overlayContext) {
+        final colorScheme = Theme.of(overlayContext).colorScheme;
+        final lines = widget.message.split('\n');
+        return Positioned(
+          // Anchor at horizontal center of the button, 6px above its top edge.
+          left: position.dx + size.width / 2,
+          top: position.dy - 6,
+          child: FractionalTranslation(
+            // Shift left by 50% of own width (centers it) and up by 100% of own
+            // height (places it fully above the button).
+            translation: const Offset(-0.5, -1.0),
+            child: IgnorePointer(
+              child: Material(
+                color: Colors.transparent,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: colorScheme.inverseSurface,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      for (int i = 0; i < lines.length; i++)
+                        Text(
+                          lines[i],
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: colorScheme.onInverseSurface,
+                            fontSize: 12,
+                            fontStyle: i > 0
+                                ? FontStyle.italic
+                                : FontStyle.normal,
+                          ),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      );
-    });
+        );
+      },
+    );
     Overlay.of(context).insert(_entry!);
   }
 
