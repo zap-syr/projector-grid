@@ -73,14 +73,17 @@ class _ProjectorCardState extends State<ProjectorCard> {
           menuChildren: [
             MenuItemButton(
               onPressed: () => _closeAndRun(widget.onEdit),
+              leadingIcon: const Icon(Icons.edit_outlined),
               child: const Text('Edit'),
             ),
             MenuItemButton(
               onPressed: () => _closeAndRun(widget.onBrightnessControl),
+              leadingIcon: const Icon(Icons.brightness_6),
               child: const Text('Brightness Control'),
             ),
             MenuItemButton(
               onPressed: () => _closeAndRun(widget.onColorCorrection),
+              leadingIcon: const Icon(Icons.tune),
               child: const Text('Color Correction'),
             ),
             MenuItemButton(
@@ -94,17 +97,30 @@ class _ProjectorCardState extends State<ProjectorCard> {
                   Process.run('xdg-open', [url]);
                 }
               }),
+              leadingIcon: const Icon(Icons.open_in_browser),
               child: const Text('Open in Browser'),
             ),
             const Divider(height: 1),
             SubmenuButton(
               menuChildren: widget.buildGroupMenuItems(),
+              leadingIcon: const Icon(Icons.workspaces_outlined),
               child: const Text('Assign to Group'),
             ),
             const Divider(height: 1),
             MenuItemButton(
               onPressed: () => _closeAndRun(widget.onDelete),
-              child: const Text('Delete'),
+              leadingIcon: Builder(
+                builder: (context) => Icon(
+                  Icons.delete_outline,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+              ),
+              child: Builder(
+                builder: (context) => Text(
+                  'Delete',
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ),
             ),
           ],
           child: GestureDetector(
@@ -113,7 +129,7 @@ class _ProjectorCardState extends State<ProjectorCard> {
             onPanUpdate: widget.onPanUpdate,
             onPanEnd: widget.onPanEnd,
             onSecondaryTapUp: (details) {
-              _menuController.open(position: details.localPosition);
+              _menuController.open(position: details.localPosition * widget.zoom);
             },
             child: Column(
               mainAxisSize: MainAxisSize.min,
