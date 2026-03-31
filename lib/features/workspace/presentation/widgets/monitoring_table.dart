@@ -50,12 +50,12 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
     130, // Power      — wider to fit icon + "STANDBY" with padding
     110, // Shutter
     90, // Input
-    120, // Signal
+    140, // Signal
     90, // Runtime
     130, // Intake Temp
     130, // Exhaust Temp
     110, // AC Voltage
-    160, // Errors
+    140, // Errors
   ];
 
   // Derived from _columnWidths so it stays in sync automatically.
