@@ -1,18 +1,37 @@
 # Projector Grid
 
-A Windows desktop app for controlling and monitoring multiple projectors over a local network using the Panasonic NTCONTROL/TCP protocol.
+Projector Grid is a desktop application for controlling and monitoring multiple Panasonic projectors over a local network.
 
-## Features
+With Projector Grid, you can manage an entire projector rig from one place — monitor live status, send commands, adjust image settings, and automate your workflow through OSC integration.
 
-- **Multi-projector workspace** — infinite canvas with draggable projector cards, zoom, marquee selection, and grid snapping
-- **Real-time monitoring** — table view with live telemetry: power status, shutter, input, signal name, runtime, temperatures, voltage, and error codes
-- **Group control** — organize projectors into named groups and send commands to a group or all projectors simultaneously
-- **Controls panel** — power on/off, shutter open/close, OSD, input selection, lens shift, focus, zoom, and test patterns
-- **Brightness control** — light output adjustment (8–100%) with real-time feedback
-- **Color correction** — color matching (3-color, 7-color, measured) and color temperature control (preset or custom Kelvin with white balance fine-tuning)
-- **OSC integration** — receive commands from external systems over UDP and broadcast live status (online/offline/warning counts)
-- **Persistent projects** — save, load, and reopen workspace layouts with projector positions
+## Main features
 
-## Protocol
+- **Multi-projector workspace** — an infinite canvas where projectors are represented as draggable cards. Arrange them to match your physical setup, select multiple at once, and send commands to the whole rig in a click.
 
-Communicates over raw TCP using the Panasonic NTCONTROL protocol with MD5 authentication. Each command opens a dedicated socket connection. Default port: 1024.
+- **Real-time monitoring** — a live table view showing power state, shutter, input, temperatures, runtime, voltage, and errors for every projector at a glance.
+
+- **Group control** — organize projectors into named groups and target commands at a group or all projectors simultaneously.
+
+- **Full control panel** — power, shutter, OSD, input selection, lens shift, focus, zoom, test patterns, picture modes, and other system settings — all in one panel.
+
+- **Brightness and color** — adjust light output with operating mode profiles (Normal/Eco/Quiet/User), fine-tune color matching (3-color, 7-color), and dial in color temperature with white balance controls.
+
+- **OSC integration** — receive commands from show control systems over UDP and broadcast live projector status back. Works with any OSC-capable tool (Qlab, TouchDesigner, Resolume, etc.).
+
+- **Persistent projects** — save and reopen workspace layouts, with undo/redo, dirty tracking, and a recent projects list.
+
+- **Auto-discovery** — scan your local subnet to find projectors automatically without entering IPs manually.
+
+## Contributing
+
+All contributions are welcome — bug reports, feature requests, or code.
+
+If you'd like to contribute code, please open an issue to discuss before submitting a pull request.
+
+## Issues
+
+Found a bug or have a feature request? [Open an issue](https://github.com/zap-syr/projector-grid/issues/new).
+
+## License
+
+This project is licensed under the terms of the GNU GPL v3.
