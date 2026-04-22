@@ -69,21 +69,16 @@ jobs:
       - name: Build macOS
         run: flutter build macos --release --build-name=${{ steps.version.outputs.VERSION }}
 
-      - name: Install create-dmg
-        run: brew install create-dmg
-
       - name: Create DMG
         run: |
-          create-dmg \
-            --volname "Projector Grid" \
-            --window-pos 200 120 \
-            --window-size 600 400 \
-            --icon-size 100 \
-            --icon "Projector Grid.app" 175 190 \
-            --hide-extension "Projector Grid.app" \
-            --app-drop-link 425 190 \
-            "ProjectorGrid-macOS-Intel.dmg" \
-            "build/macos/Build/Products/Release/"
+          mkdir -p dmg_staging
+          cp -r "build/macos/Build/Products/Release/projector_grid.app" "dmg_staging/Projector Grid.app"
+          ln -s /Applications dmg_staging/Applications
+          hdiutil create \
+            -volname "Projector Grid" \
+            -srcfolder dmg_staging \
+            -ov -format UDZO \
+            "ProjectorGrid-macOS-Intel.dmg"
 
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
@@ -113,21 +108,16 @@ jobs:
       - name: Build macOS
         run: flutter build macos --release --build-name=${{ steps.version.outputs.VERSION }}
 
-      - name: Install create-dmg
-        run: brew install create-dmg
-
       - name: Create DMG
         run: |
-          create-dmg \
-            --volname "Projector Grid" \
-            --window-pos 200 120 \
-            --window-size 600 400 \
-            --icon-size 100 \
-            --icon "Projector Grid.app" 175 190 \
-            --hide-extension "Projector Grid.app" \
-            --app-drop-link 425 190 \
-            "ProjectorGrid-macOS-AppleSilicon.dmg" \
-            "build/macos/Build/Products/Release/"
+          mkdir -p dmg_staging
+          cp -r "build/macos/Build/Products/Release/projector_grid.app" "dmg_staging/Projector Grid.app"
+          ln -s /Applications dmg_staging/Applications
+          hdiutil create \
+            -volname "Projector Grid" \
+            -srcfolder dmg_staging \
+            -ov -format UDZO \
+            "ProjectorGrid-macOS-AppleSilicon.dmg"
 
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
