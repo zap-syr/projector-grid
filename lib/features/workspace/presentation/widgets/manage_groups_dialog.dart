@@ -221,8 +221,9 @@ class _ManageGroupsDialogState extends ConsumerState<ManageGroupsDialog> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: SizedBox(
         width: 460,
+        height: 480,
         child: Column(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisSize: MainAxisSize.max,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Title bar
@@ -246,68 +247,62 @@ class _ManageGroupsDialogState extends ConsumerState<ManageGroupsDialog> {
             ),
             const Divider(height: 1),
             // Content
-            if (groups.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 48),
-                child: Center(
-                  child: Text(
-                    'No groups created yet',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                    ),
-                  ),
-                ),
-              )
-            else
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 360),
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  itemCount: groups.length,
-                  separatorBuilder: (_, _) => const Divider(height: 1, indent: 16, endIndent: 16),
-                  itemBuilder: (context, index) {
-                    final group = groups[index];
-                    final memberCount = nodes.where((n) => n.groupId == group.id).length;
-                    return ListTile(
-                      leading: Container(
-                        width: 16,
-                        height: 16,
-                        decoration: BoxDecoration(
-                          color: Color(group.color),
-                          shape: BoxShape.circle,
+            Expanded(
+              child: groups.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No groups created yet',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                         ),
                       ),
-                      title: Text(group.name),
-                      subtitle: Text(
-                        [
-                          '$memberCount projector${memberCount != 1 ? 's' : ''}',
-                          if (group.oscAddress.isNotEmpty) group.oscAddress,
-                        ].join('  ·  '),
-                        style: theme.textTheme.bodySmall,
-                      ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.edit_outlined, size: 18),
-                            onPressed: () async {
-                              await showGroupEditorDialog(context, ref, existing: group);
-                              setState(() {});
-                            },
-                            tooltip: 'Edit',
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      itemCount: groups.length,
+                      separatorBuilder: (_, _) => const Divider(height: 1, indent: 16, endIndent: 16),
+                      itemBuilder: (context, index) {
+                        final group = groups[index];
+                        final memberCount = nodes.where((n) => n.groupId == group.id).length;
+                        return ListTile(
+                          leading: Container(
+                            width: 16,
+                            height: 16,
+                            decoration: BoxDecoration(
+                              color: Color(group.color),
+                              shape: BoxShape.circle,
+                            ),
                           ),
-                          IconButton(
-                            icon: const Icon(Icons.delete_outline, size: 18),
-                            onPressed: () => _confirmDeleteGroup(group),
-                            tooltip: 'Delete',
+                          title: Text(group.name),
+                          subtitle: Text(
+                            [
+                              '$memberCount projector${memberCount != 1 ? 's' : ''}',
+                              if (group.oscAddress.isNotEmpty) group.oscAddress,
+                            ].join('  ·  '),
+                            style: theme.textTheme.bodySmall,
                           ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.edit_outlined, size: 18),
+                                onPressed: () async {
+                                  await showGroupEditorDialog(context, ref, existing: group);
+                                  setState(() {});
+                                },
+                                tooltip: 'Edit',
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline, size: 18),
+                                onPressed: () => _confirmDeleteGroup(group),
+                                tooltip: 'Delete',
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+            ),
             // Close button
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
