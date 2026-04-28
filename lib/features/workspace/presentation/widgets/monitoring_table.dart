@@ -47,14 +47,14 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
     160, // Model
     160, // Serial Number
     130, // IP Address
-    130, // Power      — wider to fit icon + "STANDBY" with padding
+    130, // Power
     110, // Shutter
-    90, // Input
+    90,  // Input
     140, // Signal
-    90, // Runtime
+    110, // Runtime
     130, // Intake Temp
-    130, // Exhaust Temp
-    110, // AC Voltage
+    150, // Exhaust Temp
+    130, // AC Voltage
     140, // Errors
   ];
 
@@ -230,12 +230,11 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
       children: [
         isOnline ? _iconOnline : (isUnauth ? _iconWarning : _iconOffline),
         _gap6,
-        Text(
-          isOnline
-              ? 'Online'
-              : isUnauth
-              ? 'Auth Error'
-              : 'Offline',
+        Flexible(
+          child: Text(
+            isOnline ? 'Online' : isUnauth ? 'Auth Error' : 'Offline',
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
         if (isUnauth) ...[_gap4, _iconLock],
       ],
@@ -249,7 +248,12 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
       children: [
         on ? _iconPowerOn : _iconPowerOff,
         _gap4,
-        Text(on ? 'ON' : 'STANDBY'),
+        Flexible(
+          child: Text(
+            on ? 'ON' : 'STANDBY',
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
       ],
     );
   }
@@ -261,7 +265,12 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
       children: [
         open ? _iconShutterOpen : _iconShutterClosed,
         _gap4,
-        Text(open ? 'OPEN' : 'CLOSED'),
+        Flexible(
+          child: Text(
+            open ? 'OPEN' : 'CLOSED',
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
       ],
     );
   }
@@ -290,7 +299,13 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(_columnLabels[i], style: headingStyle),
+                    Flexible(
+                      child: Text(
+                        _columnLabels[i],
+                        style: headingStyle,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                     if (isSorted) ...[
                       const SizedBox(width: 4),
                       Icon(
