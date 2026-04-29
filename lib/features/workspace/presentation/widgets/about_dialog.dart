@@ -1,12 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
-class AppAboutDialog extends StatelessWidget {
+class AppAboutDialog extends StatefulWidget {
   const AppAboutDialog({super.key});
 
-  static const _version = '1.0.0';
+  @override
+  State<AppAboutDialog> createState() => _AppAboutDialogState();
+}
+
+class _AppAboutDialogState extends State<AppAboutDialog> {
   static const _author = 'Aleksei Vlasov';
   static const _description =
       'Desktop application for controlling and monitoring\nprojectors over NTCONTROL/TCP.';
+
+  String _version = '';
+
+  @override
+  void initState() {
+    super.initState();
+    PackageInfo.fromPlatform().then((info) {
+      if (mounted) setState(() => _version = info.version);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -116,7 +131,7 @@ class AppAboutDialog extends StatelessWidget {
                           showLicensePage(
                             context: context,
                             applicationName: 'Projector Grid',
-                            applicationVersion: _version,
+                            applicationVersion: _version.isEmpty ? '' : _version,
                           );
                         },
                         child: const Text('View Licenses'),
