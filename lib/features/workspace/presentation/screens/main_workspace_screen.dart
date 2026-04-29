@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,6 +7,7 @@ import 'package:window_manager/window_manager.dart';
 import '../providers/project_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../widgets/control_bar.dart';
+import '../widgets/mac_menu_bar.dart';
 import '../widgets/projector_workspace.dart';
 import '../widgets/monitoring_table.dart';
 import '../widgets/status_bar.dart';
@@ -95,18 +98,32 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
     final projectNotifier = ref.read(projectStateProvider.notifier);
     final workspaceNotifier = ref.read(workspaceProvider.notifier);
 
-    return Shortcuts(
-      shortcuts: const {
-        SingleActivator(LogicalKeyboardKey.keyN, control: true):
-            _NewProjectIntent(),
-        SingleActivator(LogicalKeyboardKey.keyO, control: true):
-            _OpenProjectIntent(),
-        SingleActivator(LogicalKeyboardKey.keyS, control: true):
-            _SaveProjectIntent(),
-        SingleActivator(LogicalKeyboardKey.keyS, control: true, shift: true):
-            _SaveAsProjectIntent(),
-        SingleActivator(LogicalKeyboardKey.keyQ, control: true): _ExitIntent(),
-        SingleActivator(LogicalKeyboardKey.f5): _RefreshIntent(),
+    return MacMenuBar(
+      child: Shortcuts(
+      shortcuts: {
+        const SingleActivator(LogicalKeyboardKey.keyN, control: true):
+            const _NewProjectIntent(),
+        const SingleActivator(LogicalKeyboardKey.keyO, control: true):
+            const _OpenProjectIntent(),
+        const SingleActivator(LogicalKeyboardKey.keyS, control: true):
+            const _SaveProjectIntent(),
+        const SingleActivator(LogicalKeyboardKey.keyS, control: true, shift: true):
+            const _SaveAsProjectIntent(),
+        const SingleActivator(LogicalKeyboardKey.keyQ, control: true):
+            const _ExitIntent(),
+        const SingleActivator(LogicalKeyboardKey.f5): const _RefreshIntent(),
+        if (Platform.isMacOS) ...<ShortcutActivator, Intent>{
+          const SingleActivator(LogicalKeyboardKey.keyN, meta: true):
+              const _NewProjectIntent(),
+          const SingleActivator(LogicalKeyboardKey.keyO, meta: true):
+              const _OpenProjectIntent(),
+          const SingleActivator(LogicalKeyboardKey.keyS, meta: true):
+              const _SaveProjectIntent(),
+          const SingleActivator(LogicalKeyboardKey.keyS, meta: true, shift: true):
+              const _SaveAsProjectIntent(),
+          const SingleActivator(LogicalKeyboardKey.keyQ, meta: true):
+              const _ExitIntent(),
+        },
       },
       child: Actions(
         actions: {
@@ -160,7 +177,7 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
           backgroundColor: Theme.of(context).colorScheme.surface,
           body: Column(
             children: [
-              const TopMenuBar(),
+              if (!Platform.isMacOS) const TopMenuBar(),
               MainToolbar(
                 isMonitoringView: _isMonitoringView,
                 onViewChanged: (val) {
@@ -190,6 +207,6 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
           ),
         ),
       ),
-    );
+    ));
   }
 }
