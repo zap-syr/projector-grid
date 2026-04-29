@@ -22,6 +22,10 @@ With Projector Grid, you can manage an entire projector rig from one place — m
 
 - **Auto-discovery** — scan your local subnet to find projectors automatically without entering IPs manually.
 
+![Control Window](https://github.com/zap-syr/projector-grid/tree/main/.github/aux-images/control.png)
+
+![Monitoring Window](https://github.com/zap-syr/projector-grid/tree/main/.github/aux-images/monitoring.png)
+
 ## Contributing
 
 All contributions are welcome — bug reports, feature requests, or code.
