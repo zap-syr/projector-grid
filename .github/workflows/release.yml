@@ -82,7 +82,7 @@ jobs:
       - name: Create DMG
         run: |
           mkdir -p dmg_staging
-          cp -r "build/macos/Build/Products/Release/projector_grid.app" "dmg_staging/Projector Grid.app"
+          cp -r "build/macos/Build/Products/Release/Projector Grid.app" "dmg_staging/Projector Grid.app"
           ln -s /Applications dmg_staging/Applications
           hdiutil create \
             -volname "Projector Grid" \
@@ -126,7 +126,7 @@ jobs:
       - name: Create DMG
         run: |
           mkdir -p dmg_staging
-          cp -r "build/macos/Build/Products/Release/projector_grid.app" "dmg_staging/Projector Grid.app"
+          cp -r "build/macos/Build/Products/Release/Projector Grid.app" "dmg_staging/Projector Grid.app"
           ln -s /Applications dmg_staging/Applications
           hdiutil create \
             -volname "Projector Grid" \
