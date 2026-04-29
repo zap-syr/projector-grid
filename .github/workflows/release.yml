@@ -20,6 +20,11 @@ jobs:
         shell: bash
         run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
 
+      - name: Extract release notes
+        shell: bash
+        run: |
+          awk '/^## \[${{ steps.version.outputs.VERSION }}\]/{found=1; next} found && /^## \[/{exit} found{print}' CHANGELOG.md > release_notes.md
+
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -44,6 +49,7 @@ jobs:
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
+          body_path: release_notes.md
           files: installer/output/ProjectorGrid_Setup.exe
 
   build-macos-intel:
@@ -55,6 +61,10 @@ jobs:
       - name: Extract version from tag
         id: version
         run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Extract release notes
+        run: |
+          awk '/^## \[${{ steps.version.outputs.VERSION }}\]/{found=1; next} found && /^## \[/{exit} found{print}' CHANGELOG.md > release_notes.md
 
       - uses: subosito/flutter-action@v2
         with:
@@ -83,6 +93,7 @@ jobs:
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
+          body_path: release_notes.md
           files: ProjectorGrid-macOS-Intel.dmg
 
   build-macos-arm:
@@ -94,6 +105,10 @@ jobs:
       - name: Extract version from tag
         id: version
         run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Extract release notes
+        run: |
+          awk '/^## \[${{ steps.version.outputs.VERSION }}\]/{found=1; next} found && /^## \[/{exit} found{print}' CHANGELOG.md > release_notes.md
 
       - uses: subosito/flutter-action@v2
         with:
@@ -122,4 +137,5 @@ jobs:
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
+          body_path: release_notes.md
           files: ProjectorGrid-macOS-AppleSilicon.dmg
