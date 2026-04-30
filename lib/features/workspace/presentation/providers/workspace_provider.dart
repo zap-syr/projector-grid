@@ -502,19 +502,38 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     }
   }
 
-  void updateNodePosition(String id, double dx, double dy) {
+  static const double _workspaceWidth = 3000.0;
+  static const double _workspaceHeight = 3000.0;
+
+  static double _clampX(double x) => x.clamp(0.0, _workspaceWidth - _cardWidth);
+  static double _clampY(double y) => y.clamp(0.0, _workspaceHeight - _cardHeight);
+
+  void setNodePositionsFromDrag(
+    String id,
+    Offset totalDelta,
+    Map<String, Offset> startPositions,
+  ) {
     final targetNode = state.firstWhere((n) => n.id == id);
     if (targetNode.isSelected) {
       state = state.map((node) {
-        if (node.isSelected) {
-          return node.copyWith(x: node.x + dx, y: node.y + dy);
+        final start = startPositions[node.id];
+        if (node.isSelected && start != null) {
+          return node.copyWith(
+            x: _clampX(start.dx + totalDelta.dx),
+            y: _clampY(start.dy + totalDelta.dy),
+          );
         }
         return node;
       }).toList();
     } else {
+      final start = startPositions[id];
+      if (start == null) return;
       state = state.map((node) {
         if (node.id == id) {
-          return node.copyWith(x: node.x + dx, y: node.y + dy);
+          return node.copyWith(
+            x: _clampX(start.dx + totalDelta.dx),
+            y: _clampY(start.dy + totalDelta.dy),
+          );
         }
         return node;
       }).toList();
@@ -556,14 +575,20 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     if (targetNode.isSelected) {
       state = state.map((node) {
         if (node.isSelected) {
-          return node.copyWith(x: snap(node.x), y: snap(node.y));
+          return node.copyWith(
+            x: _clampX(snap(node.x)),
+            y: _clampY(snap(node.y)),
+          );
         }
         return node;
       }).toList();
     } else {
       state = state.map((node) {
         if (node.id == id) {
-          return node.copyWith(x: snap(node.x), y: snap(node.y));
+          return node.copyWith(
+            x: _clampX(snap(node.x)),
+            y: _clampY(snap(node.y)),
+          );
         }
         return node;
       }).toList();

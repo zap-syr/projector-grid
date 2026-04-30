@@ -17,7 +17,7 @@ void main() async {
     try {
       socket = await Socket.connect(ip, port, timeout: const Duration(seconds: 5));
 
-      Completer<String>? currentCompleter = Completer<String>();
+      var currentCompleter = Completer<String>();
       StringBuffer buffer = StringBuffer();
 
       void processBuffer() {
@@ -27,8 +27,8 @@ void main() async {
         if (newlineIndex != -1) {
           final message = content.substring(0, newlineIndex);
           buffer = StringBuffer(content.substring(newlineIndex + 1));
-          if (currentCompleter != null && !currentCompleter!.isCompleted) {
-            currentCompleter!.complete(message);
+          if (!currentCompleter.isCompleted) {
+            currentCompleter.complete(message);
           }
         }
       }
@@ -39,13 +39,13 @@ void main() async {
           processBuffer();
         },
         onError: (e) {
-          if (currentCompleter != null && !currentCompleter!.isCompleted) {
-            currentCompleter!.completeError(e);
+          if (!currentCompleter.isCompleted) {
+            currentCompleter.completeError(e);
           }
         },
       );
 
-      final initResponse = await currentCompleter!.future.timeout(const Duration(seconds: 3));
+      final initResponse = await currentCompleter.future.timeout(const Duration(seconds: 3));
 
       String commandPrefix = '00';
       if (initResponse.contains(' 1 ')) {
@@ -65,7 +65,7 @@ void main() async {
       socket.add(ascii.encode(fullCmd));
       await socket.flush();
 
-      final response = await currentCompleter!.future.timeout(const Duration(seconds: 3));
+      final response = await currentCompleter.future.timeout(const Duration(seconds: 3));
       await subscription.cancel();
       socket.destroy();
       return response;

@@ -50,6 +50,9 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
   final ScrollController _verticalController = ScrollController();
   final ScrollController _horizontalController = ScrollController();
 
+  Offset _panTotalDelta = Offset.zero;
+  Map<String, Offset>? _panStartPositions;
+
   final double _gridStep = 20.0;
   final double _workspaceWidth = 3000.0;
   final double _workspaceHeight = 3000.0;
@@ -470,16 +473,29 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
                                           );
                                         },
                                         onPanUpdate: (details) {
-                                          notifier.saveBeforeMove();
-                                          notifier.updateNodePosition(
+                                          if (_panStartPositions == null) {
+                                            notifier.saveBeforeMove();
+                                            final affected = node.isSelected
+                                                ? nodes.where((n) => n.isSelected)
+                                                : [node];
+                                            _panStartPositions = {
+                                              for (final n in affected)
+                                                n.id: Offset(n.x, n.y),
+                                            };
+                                            _panTotalDelta = Offset.zero;
+                                          }
+                                          _panTotalDelta += details.delta;
+                                          notifier.setNodePositionsFromDrag(
                                             node.id,
-                                            details.delta.dx,
-                                            details.delta.dy,
+                                            _panTotalDelta,
+                                            _panStartPositions!,
                                           );
                                         },
                                         onPanEnd: (details) {
                                           notifier.snapNodeToGrid(node.id);
                                           notifier.endMove();
+                                          _panStartPositions = null;
+                                          _panTotalDelta = Offset.zero;
                                         },
                                         onEdit: () {
                                           showDialog(

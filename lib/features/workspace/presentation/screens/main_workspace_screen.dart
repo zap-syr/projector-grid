@@ -187,21 +187,25 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
                 },
               ),
               Expanded(
-                child: _isMonitoringView
-                    ? const Focus(autofocus: true, child: MonitoringTable())
-                    : Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              children: const [
-                                StatusBar(),
-                                Expanded(child: ProjectorWorkspace()),
-                              ],
-                            ),
+                child: IndexedStack(
+                  index: _isMonitoringView ? 1 : 0,
+                  children: const [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            children: [
+                              StatusBar(),
+                              Expanded(child: ProjectorWorkspace()),
+                            ],
                           ),
-                          const ControlBar(),
-                        ],
-                      ),
+                        ),
+                        ControlBar(),
+                      ],
+                    ),
+                    Focus(autofocus: true, child: MonitoringTable()),
+                  ],
+                ),
               ),
             ],
           ),
