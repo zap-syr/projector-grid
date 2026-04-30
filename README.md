@@ -34,7 +34,7 @@ Information about the project setup can be found in the [development documentati
 
 ## Issues
 
-Found a bug or have a feature request? [Open an issue](https://github.com/zap-syr/projector-grid/issues/new).
+Found a bug, have a feature request, or noticed that a command doesn't work on your projector model? [Open an issue](https://github.com/zap-syr/projector-grid/issues/new). Most commands are shared across Panasonic projector models, so model-specific compatibility reports are especially welcome.
 
 ## License
 
