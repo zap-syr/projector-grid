@@ -565,6 +565,9 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
                                                 ),
                                           );
                                         },
+                                        onSelectGroup: node.groupId != null
+                                            ? () => notifier.selectNodesInGroup(node.groupId!)
+                                            : null,
                                         buildGroupMenuItems: () => _buildGroupMenuItems(node, notifier, groups),
                                       ),
                                     ),

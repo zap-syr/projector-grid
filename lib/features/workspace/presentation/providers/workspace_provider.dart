@@ -632,6 +632,12 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     state = state.map((node) => node.copyWith(isSelected: true)).toList();
   }
 
+  void selectNodesInGroup(String groupId) {
+    state = state
+        .map((node) => node.copyWith(isSelected: node.groupId == groupId))
+        .toList();
+  }
+
   Set<String> _preDragSelection = {};
 
   void startMarqueeSelection({bool append = false}) {

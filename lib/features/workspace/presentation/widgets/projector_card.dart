@@ -15,6 +15,7 @@ class ProjectorCard extends StatefulWidget {
   final VoidCallback onDelete;
   final VoidCallback onColorCorrection;
   final VoidCallback onBrightnessControl;
+  final VoidCallback? onSelectGroup;
   final List<Widget> Function() buildGroupMenuItems;
 
   const ProjectorCard({
@@ -30,6 +31,7 @@ class ProjectorCard extends StatefulWidget {
     required this.onDelete,
     required this.onColorCorrection,
     required this.onBrightnessControl,
+    required this.onSelectGroup,
     required this.buildGroupMenuItems,
   });
 
@@ -102,6 +104,13 @@ class _ProjectorCardState extends State<ProjectorCard> {
               child: const Text('Open in Browser'),
             ),
             const Divider(height: 1),
+            MenuItemButton(
+              onPressed: widget.onSelectGroup != null
+                  ? () => _closeAndRun(widget.onSelectGroup!)
+                  : null,
+              leadingIcon: const Icon(Icons.select_all),
+              child: const Text('Select in Group'),
+            ),
             SubmenuButton(
               menuChildren: widget.buildGroupMenuItems(),
               leadingIcon: const Icon(Icons.workspaces_outlined),
