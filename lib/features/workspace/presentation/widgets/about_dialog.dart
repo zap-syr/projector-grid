@@ -11,7 +11,7 @@ class AppAboutDialog extends StatefulWidget {
 class _AppAboutDialogState extends State<AppAboutDialog> {
   static const _author = 'Aleksei Vlasov';
   static const _description =
-      'Desktop application for controlling and monitoring\nprojectors over NTCONTROL/TCP.';
+      'Desktop application for controlling and monitoring projectors.';
 
   String _version = '';
 
@@ -119,7 +119,7 @@ class _AppAboutDialogState extends State<AppAboutDialog> {
                     children: [
                       // Copyright
                       Text(
-                        '© 2025–2026',
+                        '© 2025-2026',
                         style: textTheme.bodySmall?.copyWith(
                           color: colorScheme.onSurface.withValues(alpha: 0.4),
                         ),
