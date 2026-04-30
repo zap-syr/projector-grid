@@ -196,11 +196,13 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
       
       final node = state[nodeIndex];
       
-      // If it's connected, fetch full telemetry. If offline, just ping it first to see if it's back.
-      if (node.connectionStatus == ConnectionStatus.connected) {
-        await _pollSingleProjector(node);
-      } else {
+      // Offline nodes get a cheap TCP check first (1.5s) before full probe.
+      // All other states (connected, unprotected, unauthorized) go straight to
+      // _pollSingleProjector so no intermediate state is written before auth is confirmed.
+      if (node.connectionStatus == ConnectionStatus.offline) {
         await _checkAndSetNodeStatus(node.id, node.ipAddress, node.port);
+      } else {
+        await _pollSingleProjector(node);
       }
     }
   }
@@ -225,6 +227,10 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
       _notifyStateChanged();
       return;
     }
+
+    final targetStatus = probe == ProbeResult.unprotected
+        ? ConnectionStatus.unprotected
+        : ConnectionStatus.connected;
 
     final telemetry = await _protocolService.pollProjectorTelemetry(
       node.ipAddress,
@@ -310,7 +316,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
             exhaustTemp: exhaust,
             acVoltage: voltage,
             errors: errors,
-            connectionStatus: ConnectionStatus.connected,
+            connectionStatus: targetStatus,
           );
         }
         return n;
@@ -351,8 +357,10 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     int idx = 0;
     final newNodes = configs.map((config) {
       ConnectionStatus connStatus = ConnectionStatus.offline;
-      if (config['status'] == 'online' || config['status'] == 'protected') {
+      if (config['status'] == 'online') {
         connStatus = ConnectionStatus.connected;
+      } else if (config['status'] == 'unprotected') {
+        connStatus = ConnectionStatus.unprotected;
       } else if (config['status'] == 'auth_error') {
         connStatus = ConnectionStatus.unauthorized;
       }
@@ -364,8 +372,8 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
         name: config['name'] ?? 'Projector ${state.length + idx}',
         ipAddress: config['ip'] as String,
         port: config['port'] ?? 1024,
-        login: config['login'] ?? 'admin1',
-        password: config['password'] ?? 'panasonic',
+        login: config['login'] ?? '',
+        password: config['password'] ?? '',
         x: x,
         y: y,
         connectionStatus: connStatus,
@@ -380,8 +388,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     for (var node in newNodes) {
       if (node.connectionStatus == ConnectionStatus.offline) {
         _checkAndSetNodeStatus(node.id, node.ipAddress, node.port);
-      } else {
-        // If it's added as online, trigger an immediate full telemetry poll!
+      } else if (node.connectionStatus != ConnectionStatus.unauthorized) {
         _pollSingleProjector(node);
       }
     }
@@ -406,7 +413,8 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
   Future<void> sendCommandToSelected(String cmd) async {
     final selectedNodes = state.where((n) => n.isSelected).toList();
     for (var node in selectedNodes) {
-      if (node.connectionStatus == ConnectionStatus.connected) {
+      if (node.connectionStatus == ConnectionStatus.connected ||
+          node.connectionStatus == ConnectionStatus.unprotected) {
         final success = await _protocolService.sendCommand(
           node.ipAddress, node.port, node.login, node.password, cmd,
         );
@@ -448,7 +456,8 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
   Future<void> sendCommandToGroup(String groupId, String cmd) async {
     final groupNodes = state.where((n) => n.groupId == groupId).toList();
     for (var node in groupNodes) {
-      if (node.connectionStatus == ConnectionStatus.connected) {
+      if (node.connectionStatus == ConnectionStatus.connected ||
+          node.connectionStatus == ConnectionStatus.unprotected) {
         final success = await _protocolService.sendCommand(
           node.ipAddress, node.port, node.login, node.password, cmd,
         );
@@ -461,7 +470,8 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
 
   Future<void> sendCommandToAll(String cmd) async {
     for (var node in state) {
-      if (node.connectionStatus == ConnectionStatus.connected) {
+      if (node.connectionStatus == ConnectionStatus.connected ||
+          node.connectionStatus == ConnectionStatus.unprotected) {
         final success = await _protocolService.sendCommand(
           node.ipAddress, node.port, node.login, node.password, cmd,
         );

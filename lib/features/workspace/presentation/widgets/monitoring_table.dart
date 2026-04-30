@@ -75,6 +75,11 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
     size: 12,
     color: Colors.amber,
   );
+  static const _iconLockOpen = Icon(
+    Icons.lock_open,
+    size: 12,
+    color: Colors.blue,
+  );
   static const _iconPowerOn = Icon(
     Icons.power_settings_new,
     size: 16,
@@ -165,8 +170,9 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
         case 0:
           int order(ConnectionStatus s) => switch (s) {
             ConnectionStatus.connected => 0,
-            ConnectionStatus.unauthorized => 1,
-            ConnectionStatus.offline => 2,
+            ConnectionStatus.unprotected => 1,
+            ConnectionStatus.unauthorized => 2,
+            ConnectionStatus.offline => 3,
           };
           cmp = order(a.connectionStatus).compareTo(order(b.connectionStatus));
         case 1:
@@ -224,19 +230,24 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
 
   static Widget _connectionCell(ProjectorNode node) {
     final isOnline = node.connectionStatus == ConnectionStatus.connected;
+    final isUnprotected = node.connectionStatus == ConnectionStatus.unprotected;
     final isUnauth = node.connectionStatus == ConnectionStatus.unauthorized;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        isOnline ? _iconOnline : (isUnauth ? _iconWarning : _iconOffline),
+        isOnline || isUnprotected ? _iconOnline : (isUnauth ? _iconWarning : _iconOffline),
         _gap6,
         Flexible(
           child: Text(
-            isOnline ? 'Online' : isUnauth ? 'Auth Error' : 'Offline',
+            isOnline ? 'Online'
+              : isUnprotected ? 'Online'
+              : isUnauth ? 'Auth Error'
+              : 'Offline',
             overflow: TextOverflow.ellipsis,
           ),
         ),
         if (isUnauth) ...[_gap4, _iconLock],
+        if (isUnprotected) ...[_gap4, _iconLockOpen],
       ],
     );
   }

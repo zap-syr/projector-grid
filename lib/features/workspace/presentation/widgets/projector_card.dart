@@ -57,6 +57,7 @@ class _ProjectorCardState extends State<ProjectorCard> {
     final shutterColor = node.shutterStatus == ShutterStatus.open ? Colors.green : Colors.red;
     final connectionColor = switch (node.connectionStatus) {
       ConnectionStatus.connected => Colors.green,
+      ConnectionStatus.unprotected => Colors.green,
       ConnectionStatus.unauthorized => Colors.amber,
       ConnectionStatus.offline => Colors.red,
     };
@@ -176,6 +177,8 @@ class _ProjectorCardState extends State<ProjectorCard> {
                                 const Spacer(),
                                 if (node.connectionStatus == ConnectionStatus.unauthorized)
                                   const Icon(Icons.lock_outline, size: 12, color: Colors.amber),
+                                if (node.connectionStatus == ConnectionStatus.unprotected)
+                                  const Icon(Icons.lock_open, size: 12, color: Colors.blue),
                                 const SizedBox(width: 4),
                                 Container(
                                   width: 8,

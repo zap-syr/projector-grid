@@ -35,7 +35,10 @@ class OscNotifier extends _$OscNotifier {
 
     _service.getStatus = () {
       final nodes = ref.read(workspaceProvider);
-      final online = nodes.where((n) => n.connectionStatus == ConnectionStatus.connected).length;
+      final online = nodes.where((n) =>
+        n.connectionStatus == ConnectionStatus.connected ||
+        n.connectionStatus == ConnectionStatus.unprotected
+      ).length;
       final offline = nodes.where((n) => n.connectionStatus == ConnectionStatus.offline).length;
       final warnings = nodes.where((n) =>
         n.errors != 'NO ERRORS' && n.errors != '-' ||

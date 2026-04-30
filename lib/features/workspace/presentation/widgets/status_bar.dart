@@ -11,7 +11,9 @@ class StatusBar extends ConsumerWidget {
     final nodes = ref.watch(workspaceProvider);
     final total = nodes.length;
     final online = nodes
-        .where((n) => n.connectionStatus == ConnectionStatus.connected)
+        .where((n) =>
+          n.connectionStatus == ConnectionStatus.connected ||
+          n.connectionStatus == ConnectionStatus.unprotected)
         .length;
     final offline = nodes
         .where((n) => n.connectionStatus == ConnectionStatus.offline)
