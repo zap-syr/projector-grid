@@ -60,31 +60,40 @@ class _WorkspaceBody extends ConsumerWidget {
     final showLogs =
         ref.watch(appSettingsProvider.select((s) => s.showLogs));
 
-    return Column(
-      children: [
-        Expanded(
-          child: IndexedStack(
-            index: isMonitoringView ? 1 : 0,
-            children: const [
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      children: [
-                        StatusBar(),
-                        Expanded(child: ProjectorWorkspace()),
-                      ],
-                    ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Reserve at least 150px for the workspace above the log panel.
+        const minWorkspaceHeight = 150.0;
+        final maxLogHeight = (constraints.maxHeight - minWorkspaceHeight)
+            .clamp(EventLogPanel.minHeight, EventLogPanel.defaultHeight);
+
+        return Column(
+          children: [
+            Expanded(
+              child: IndexedStack(
+                index: isMonitoringView ? 1 : 0,
+                children: const [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          children: [
+                            StatusBar(),
+                            Expanded(child: ProjectorWorkspace()),
+                          ],
+                        ),
+                      ),
+                      ControlBar(),
+                    ],
                   ),
-                  ControlBar(),
+                  Focus(autofocus: true, child: MonitoringTable()),
                 ],
               ),
-              Focus(autofocus: true, child: MonitoringTable()),
-            ],
-          ),
-        ),
-        if (showLogs) const EventLogPanel(),
-      ],
+            ),
+            if (showLogs) EventLogPanel(maxHeight: maxLogHeight),
+          ],
+        );
+      },
     );
   }
 }

@@ -8,7 +8,12 @@ import '../providers/event_log_provider.dart';
 enum _LogFilter { all, errors, commands, connectivity, osc }
 
 class EventLogPanel extends ConsumerStatefulWidget {
-  const EventLogPanel({super.key});
+  const EventLogPanel({super.key, required this.maxHeight});
+
+  final double maxHeight;
+
+  static const double minHeight = 100.0;
+  static const double defaultHeight = 240.0;
 
   @override
   ConsumerState<EventLogPanel> createState() => _EventLogPanelState();
@@ -18,10 +23,24 @@ class _EventLogPanelState extends ConsumerState<EventLogPanel> {
   _LogFilter _activeFilter = _LogFilter.all;
   final _searchController = TextEditingController();
   String _searchQuery = '';
-  double _height = 240;
+  late double _height;
 
-  static const _minHeight = 100.0;
-  static const _maxHeight = 600.0;
+  @override
+  void initState() {
+    super.initState();
+    _height = EventLogPanel.defaultHeight.clamp(
+      EventLogPanel.minHeight,
+      widget.maxHeight,
+    );
+  }
+
+  @override
+  void didUpdateWidget(EventLogPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_height > widget.maxHeight) {
+      setState(() => _height = widget.maxHeight);
+    }
+  }
 
   @override
   void dispose() {
@@ -97,8 +116,10 @@ class _EventLogPanelState extends ConsumerState<EventLogPanel> {
           GestureDetector(
             onVerticalDragUpdate: (d) {
               setState(() {
-                _height =
-                    (_height - d.delta.dy).clamp(_minHeight, _maxHeight);
+                _height = (_height - d.delta.dy).clamp(
+                  EventLogPanel.minHeight,
+                  widget.maxHeight,
+                );
               });
             },
             child: MouseRegion(
