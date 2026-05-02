@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
+import '../providers/app_settings_provider.dart';
 import '../providers/project_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../widgets/control_bar.dart';
+import '../widgets/event_log_panel.dart';
 import '../widgets/mac_menu_bar.dart';
 import '../widgets/projector_workspace.dart';
 import '../widgets/monitoring_table.dart';
@@ -46,10 +48,49 @@ class MainWorkspaceScreen extends ConsumerStatefulWidget {
       _MainWorkspaceScreenState();
 }
 
+// Watches both isMonitoringView and showLogs independently so neither
+// triggers a rebuild of the keyboard-shortcut / action tree above it.
+class _WorkspaceBody extends ConsumerWidget {
+  const _WorkspaceBody();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isMonitoringView =
+        ref.watch(appSettingsProvider.select((s) => s.isMonitoringView));
+    final showLogs =
+        ref.watch(appSettingsProvider.select((s) => s.showLogs));
+
+    return Column(
+      children: [
+        Expanded(
+          child: IndexedStack(
+            index: isMonitoringView ? 1 : 0,
+            children: const [
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      children: [
+                        StatusBar(),
+                        Expanded(child: ProjectorWorkspace()),
+                      ],
+                    ),
+                  ),
+                  ControlBar(),
+                ],
+              ),
+              Focus(autofocus: true, child: MonitoringTable()),
+            ],
+          ),
+        ),
+        if (showLogs) const EventLogPanel(),
+      ],
+    );
+  }
+}
+
 class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
     with WindowListener {
-  bool _isMonitoringView = false;
-
   @override
   void initState() {
     super.initState();
@@ -178,35 +219,8 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
           body: Column(
             children: [
               if (!Platform.isMacOS) const TopMenuBar(),
-              MainToolbar(
-                isMonitoringView: _isMonitoringView,
-                onViewChanged: (val) {
-                  setState(() {
-                    _isMonitoringView = val;
-                  });
-                },
-              ),
-              Expanded(
-                child: IndexedStack(
-                  index: _isMonitoringView ? 1 : 0,
-                  children: const [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            children: [
-                              StatusBar(),
-                              Expanded(child: ProjectorWorkspace()),
-                            ],
-                          ),
-                        ),
-                        ControlBar(),
-                      ],
-                    ),
-                    Focus(autofocus: true, child: MonitoringTable()),
-                  ],
-                ),
-              ),
+              const MainToolbar(),
+              const Expanded(child: _WorkspaceBody()),
             ],
           ),
         ),

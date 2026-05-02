@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 import '../providers/workspace_provider.dart';
 import '../providers/project_provider.dart';
+import '../providers/app_settings_provider.dart';
 import 'preferences_dialog.dart';
 import 'manage_groups_dialog.dart';
 import 'keyboard_shortcuts_dialog.dart';
@@ -41,6 +42,22 @@ class TopMenuBar extends ConsumerWidget {
                 ],
               ),
             ),
+    );
+  }
+
+  static Widget _viewRadioItem(
+    BuildContext context, {
+    required String label,
+    required bool checked,
+    required VoidCallback onPressed,
+  }) {
+    return MenuItemButton(
+      leadingIcon: SizedBox(
+        width: 16,
+        child: checked ? const Icon(Icons.check, size: 14) : null,
+      ),
+      onPressed: onPressed,
+      child: Text(label),
     );
   }
 
@@ -92,6 +109,10 @@ class TopMenuBar extends ConsumerWidget {
     // Watch workspace to rebuild when undo/redo availability changes.
     ref.watch(workspaceProvider);
     final wsNotifier = ref.read(workspaceProvider.notifier);
+    final showLogs = ref.watch(appSettingsProvider.select((s) => s.showLogs));
+    final isMonitoringView =
+        ref.watch(appSettingsProvider.select((s) => s.isMonitoringView));
+    final settingsNotifier = ref.read(appSettingsProvider.notifier);
 
     return Row(
       children: [
@@ -236,6 +257,36 @@ class TopMenuBar extends ConsumerWidget {
                 ),
               ],
               child: const Text('Edit'),
+            ),
+
+            // ── View ──────────────────────────────────────────────────────
+            SubmenuButton(
+              menuChildren: [
+                _viewRadioItem(
+                  context,
+                  label: 'Controls',
+                  checked: !isMonitoringView,
+                  onPressed: () => settingsNotifier.setMonitoringView(false),
+                ),
+                _viewRadioItem(
+                  context,
+                  label: 'Monitoring',
+                  checked: isMonitoringView,
+                  onPressed: () => settingsNotifier.setMonitoringView(true),
+                ),
+                const Divider(),
+                MenuItemButton(
+                  leadingIcon: SizedBox(
+                    width: 16,
+                    child: showLogs
+                        ? const Icon(Icons.check, size: 14)
+                        : null,
+                  ),
+                  onPressed: () => settingsNotifier.setShowLogs(!showLogs),
+                  child: const Text('Show Logs'),
+                ),
+              ],
+              child: const Text('View'),
             ),
 
             // ── Help ──────────────────────────────────────────────────────

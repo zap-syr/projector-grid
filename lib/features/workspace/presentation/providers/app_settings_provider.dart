@@ -11,6 +11,8 @@ class AppSettings {
   final int oscReceivePort;
   final String oscSendIp;
   final int oscSendPort;
+  final bool showLogs;
+  final bool isMonitoringView;
 
   const AppSettings({
     this.pollingIntervalSeconds = 60,
@@ -20,6 +22,8 @@ class AppSettings {
     this.oscReceivePort = 8000,
     this.oscSendIp = '127.0.0.1',
     this.oscSendPort = 9000,
+    this.showLogs = false,
+    this.isMonitoringView = false,
   });
 
   AppSettings copyWith({
@@ -30,6 +34,8 @@ class AppSettings {
     int? oscReceivePort,
     String? oscSendIp,
     int? oscSendPort,
+    bool? showLogs,
+    bool? isMonitoringView,
   }) {
     return AppSettings(
       pollingIntervalSeconds: pollingIntervalSeconds ?? this.pollingIntervalSeconds,
@@ -39,6 +45,8 @@ class AppSettings {
       oscReceivePort: oscReceivePort ?? this.oscReceivePort,
       oscSendIp: oscSendIp ?? this.oscSendIp,
       oscSendPort: oscSendPort ?? this.oscSendPort,
+      showLogs: showLogs ?? this.showLogs,
+      isMonitoringView: isMonitoringView ?? this.isMonitoringView,
     );
   }
 }
@@ -74,5 +82,13 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
 
   void setOscSendPort(int port) {
     state = state.copyWith(oscSendPort: port);
+  }
+
+  void setShowLogs(bool show) {
+    state = state.copyWith(showLogs: show);
+  }
+
+  void setMonitoringView(bool monitoring) {
+    state = state.copyWith(isMonitoringView: monitoring);
   }
 }

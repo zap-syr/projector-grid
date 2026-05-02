@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/services/docs_service.dart';
+import '../providers/app_settings_provider.dart';
 import '../providers/project_provider.dart';
 import '../providers/workspace_provider.dart';
 import 'about_dialog.dart';
@@ -30,6 +31,10 @@ class MacMenuBar extends ConsumerWidget {
     ref.watch(workspaceProvider); // rebuild when undo/redo availability changes
     final projectNotifier = ref.read(projectStateProvider.notifier);
     final wsNotifier = ref.read(workspaceProvider.notifier);
+    final showLogs = ref.watch(appSettingsProvider.select((s) => s.showLogs));
+    final isMonitoringView =
+        ref.watch(appSettingsProvider.select((s) => s.isMonitoringView));
+    final settingsNotifier = ref.read(appSettingsProvider.notifier);
 
     return PlatformMenuBar(
       menus: <PlatformMenuItem>[
@@ -238,6 +243,33 @@ class MacMenuBar extends ConsumerWidget {
                       builder: (_) => const ManageGroupsDialog(),
                     );
                   },
+                ),
+              ],
+            ),
+          ],
+        ),
+
+        // ── View ──────────────────────────────────────────────────────────
+        PlatformMenu(
+          label: 'View',
+          menus: <PlatformMenuItem>[
+            PlatformMenuItemGroup(
+              members: <PlatformMenuItem>[
+                PlatformMenuItem(
+                  label: isMonitoringView ? 'Controls' : '✓ Controls',
+                  onSelected: () => settingsNotifier.setMonitoringView(false),
+                ),
+                PlatformMenuItem(
+                  label: isMonitoringView ? '✓ Monitoring' : 'Monitoring',
+                  onSelected: () => settingsNotifier.setMonitoringView(true),
+                ),
+              ],
+            ),
+            PlatformMenuItemGroup(
+              members: <PlatformMenuItem>[
+                PlatformMenuItem(
+                  label: showLogs ? 'Hide Logs' : 'Show Logs',
+                  onSelected: () => settingsNotifier.setShowLogs(!showLogs),
                 ),
               ],
             ),

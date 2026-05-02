@@ -1,21 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/app_settings_provider.dart';
 import '../providers/workspace_provider.dart';
 import 'add_projector_dialog.dart';
 import 'manage_groups_dialog.dart';
 
 class MainToolbar extends ConsumerWidget {
-  final bool isMonitoringView;
-  final ValueChanged<bool> onViewChanged;
-
-  const MainToolbar({
-    super.key,
-    required this.isMonitoringView,
-    required this.onViewChanged,
-  });
+  const MainToolbar({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final isMonitoringView =
+        ref.watch(appSettingsProvider.select((s) => s.isMonitoringView));
+    final settingsNotifier = ref.read(appSettingsProvider.notifier);
     return Container(
       height: 48,
       padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -72,7 +69,7 @@ class MainToolbar extends ConsumerWidget {
             ],
             selected: {isMonitoringView},
             onSelectionChanged: (set) {
-              onViewChanged(set.first);
+              settingsNotifier.setMonitoringView(set.first);
             },
           ),
         ],
