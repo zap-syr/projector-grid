@@ -1,8 +1,10 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../../../core/services/osc_service.dart';
 import '../../domain/projector_node.dart';
+import '../../domain/log_event.dart';
 import 'app_settings_provider.dart';
 import 'custom_commands_provider.dart';
+import 'event_log_provider.dart';
 import 'workspace_provider.dart';
 
 part 'osc_provider.g.dart';
@@ -26,6 +28,22 @@ class OscNotifier extends _$OscNotifier {
       bool all = false,
     }) async {
       final wsNotifier = ref.read(workspaceProvider.notifier);
+
+      String target;
+      if (all) {
+        target = 'all projectors';
+      } else if (groupId != null) {
+        final group = wsNotifier.groups.where((g) => g.id == groupId).firstOrNull;
+        target = group != null ? 'group: ${group.oscAddress}' : 'group';
+      } else {
+        target = 'unknown';
+      }
+      ref.read(eventLogProvider.notifier).log(LogEvent(
+        severity: LogSeverity.info,
+        type: LogEventType.osc,
+        message: 'OSC → ${commandLabel(ntcontrolCmd)} ($target)',
+      ));
+
       if (all) {
         await wsNotifier.sendCommandToAll(ntcontrolCmd);
       } else if (groupId != null) {

@@ -40,7 +40,7 @@ final class OscNotifierProvider extends $NotifierProvider<OscNotifier, bool> {
   }
 }
 
-String _$oscNotifierHash() => r'93e672b3d8ea663c8f9ead653ef6825ec7e6943c';
+String _$oscNotifierHash() => r'78260e5e92c942a7ff20e9a06c0ca0d49627cc85';
 
 abstract class _$OscNotifier extends $Notifier<bool> {
   bool build();

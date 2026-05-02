@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../domain/projector_node.dart';
 import '../../domain/projector_group.dart';
+import '../../domain/log_event.dart';
 import '../../../../core/services/panasonic_protocol_service.dart';
+import 'event_log_provider.dart';
 
 part 'workspace_provider.g.dart';
 
@@ -165,6 +167,10 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
 
   void _notifyStateChanged() => onStateChanged?.call();
 
+  void _logEvent(LogEvent event) {
+    ref.read(eventLogProvider.notifier).log(event);
+  }
+
   void _startPolling({int seconds = 60}) {
     _pollingTimer?.cancel();
     _pollingTimer = Timer.periodic(Duration(seconds: seconds), (_) async {
@@ -208,11 +214,23 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
   }
 
   Future<void> _pollSingleProjector(ProjectorNode node) async {
+    final oldStatus = node.connectionStatus;
+    final oldErrors = node.errors;
+
     final probe = await _protocolService.probeProjector(
       node.ipAddress, node.port, node.login, node.password,
     );
 
     if (probe == ProbeResult.unauthorized) {
+      if (oldStatus != ConnectionStatus.unauthorized) {
+        _logEvent(LogEvent(
+          severity: LogSeverity.error,
+          type: LogEventType.connectivity,
+          message: 'Authentication failed',
+          projectorIp: node.ipAddress,
+          projectorName: node.name,
+        ));
+      }
       state = state.map((n) => n.id == node.id
           ? n.copyWith(connectionStatus: ConnectionStatus.unauthorized)
           : n).toList();
@@ -221,6 +239,15 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     }
 
     if (probe == ProbeResult.offline) {
+      if (oldStatus != ConnectionStatus.offline) {
+        _logEvent(LogEvent(
+          severity: LogSeverity.warning,
+          type: LogEventType.connectivity,
+          message: 'Went offline',
+          projectorIp: node.ipAddress,
+          projectorName: node.name,
+        ));
+      }
       state = state.map((n) => n.id == node.id
           ? n.copyWith(connectionStatus: ConnectionStatus.offline)
           : n).toList();
@@ -240,6 +267,17 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     );
 
     if (telemetry != null) {
+      if (oldStatus == ConnectionStatus.offline ||
+          oldStatus == ConnectionStatus.unauthorized) {
+        _logEvent(LogEvent(
+          severity: LogSeverity.success,
+          type: LogEventType.connectivity,
+          message: 'Came online',
+          projectorIp: node.ipAddress,
+          projectorName: node.name,
+        ));
+      }
+
       state = state.map((n) {
         if (n.id == node.id) {
           // Parse Input
@@ -322,8 +360,34 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
         return n;
       }).toList();
       _notifyStateChanged();
+
+      // Log new hardware errors detected during this poll
+      final updatedNode = state.firstWhere(
+        (n) => n.id == node.id,
+        orElse: () => node,
+      );
+      if (updatedNode.errors != 'NO ERRORS' &&
+          updatedNode.errors != '-' &&
+          updatedNode.errors != oldErrors) {
+        _logEvent(LogEvent(
+          severity: LogSeverity.error,
+          type: LogEventType.hardware,
+          message: 'Hardware error: ${updatedNode.errors}',
+          projectorIp: node.ipAddress,
+          projectorName: node.name,
+        ));
+      }
     } else {
       // If telemetry fails, mark as offline
+      if (oldStatus != ConnectionStatus.offline) {
+        _logEvent(LogEvent(
+          severity: LogSeverity.warning,
+          type: LogEventType.connectivity,
+          message: 'Went offline',
+          projectorIp: node.ipAddress,
+          projectorName: node.name,
+        ));
+      }
       state = state.map((n) {
         if (n.id == node.id) {
           return n.copyWith(connectionStatus: ConnectionStatus.offline);
@@ -418,6 +482,15 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
         final success = await _protocolService.sendCommand(
           node.ipAddress, node.port, node.login, node.password, cmd,
         );
+        _logEvent(LogEvent(
+          severity: success ? LogSeverity.info : LogSeverity.error,
+          type: LogEventType.command,
+          message: success
+              ? 'Sent: ${commandLabel(cmd)}'
+              : 'Failed: ${commandLabel(cmd)}',
+          projectorIp: node.ipAddress,
+          projectorName: node.name,
+        ));
         if (success) {
           _applyOptimisticUpdate(node.id, cmd);
         }
@@ -461,6 +534,15 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
         final success = await _protocolService.sendCommand(
           node.ipAddress, node.port, node.login, node.password, cmd,
         );
+        _logEvent(LogEvent(
+          severity: success ? LogSeverity.info : LogSeverity.error,
+          type: LogEventType.command,
+          message: success
+              ? 'Sent: ${commandLabel(cmd)}'
+              : 'Failed: ${commandLabel(cmd)}',
+          projectorIp: node.ipAddress,
+          projectorName: node.name,
+        ));
         if (success) {
           _applyOptimisticUpdate(node.id, cmd);
         }
@@ -475,6 +557,15 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
         final success = await _protocolService.sendCommand(
           node.ipAddress, node.port, node.login, node.password, cmd,
         );
+        _logEvent(LogEvent(
+          severity: success ? LogSeverity.info : LogSeverity.error,
+          type: LogEventType.command,
+          message: success
+              ? 'Sent: ${commandLabel(cmd)}'
+              : 'Failed: ${commandLabel(cmd)}',
+          projectorIp: node.ipAddress,
+          projectorName: node.name,
+        ));
         if (success) {
           _applyOptimisticUpdate(node.id, cmd);
         }
