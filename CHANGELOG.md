@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.0] - 2026-05-03
+
+### Added
+- Event Log panel - a resizable panel at the bottom of the workspace displaying
+  timestamped OSC, connectivity, and command events with colour-coded severity indicators
+- Filter tabs (All / Errors / Commands / Connectivity / OSC) and a live search field
+  in the Event Log toolbar, plus copy-to-clipboard and clear buttons
+- "Show Logs" toggle in the View menu (Windows top menu bar and macOS menu bar) to
+  show and hide the Event Log panel
+- Ctrl+1 / Ctrl+2 keyboard shortcuts (Cmd+1 / Cmd+2 on macOS) to switch between the
+  Controls and Monitoring views; shortcut hints shown in the View menu items
+- Ctrl+1 / Ctrl+2 entries added to the Keyboard Shortcuts reference dialog
+
+### Fixed
+- All keyboard shortcuts (Ctrl+A, Ctrl+D, Ctrl+Z, Ctrl+Y, etc.) now remain active
+  after switching between Controls and Monitoring views - Flutter's IndexedStack
+  Visibility/ExcludeFocus mechanism was silently clearing primaryFocus on every switch,
+  causing Shortcuts lookup to fail silently
+- Edit Projector dialog no longer requires login and password, making them optional
+  to support non-protected projectors
+- Edit Projector dialog now validates that the entered IP address is not already used
+  by another projector in the project
+
 ## [1.0.2] - 2026-04-30
 
 ### Added
