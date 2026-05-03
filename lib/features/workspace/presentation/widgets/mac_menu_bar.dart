@@ -257,10 +257,18 @@ class MacMenuBar extends ConsumerWidget {
               members: <PlatformMenuItem>[
                 PlatformMenuItem(
                   label: isMonitoringView ? 'Controls' : '✓ Controls',
+                  shortcut: const SingleActivator(
+                    LogicalKeyboardKey.digit1,
+                    meta: true,
+                  ),
                   onSelected: () => settingsNotifier.setMonitoringView(false),
                 ),
                 PlatformMenuItem(
                   label: isMonitoringView ? '✓ Monitoring' : 'Monitoring',
+                  shortcut: const SingleActivator(
+                    LogicalKeyboardKey.digit2,
+                    meta: true,
+                  ),
                   onSelected: () => settingsNotifier.setMonitoringView(true),
                 ),
               ],

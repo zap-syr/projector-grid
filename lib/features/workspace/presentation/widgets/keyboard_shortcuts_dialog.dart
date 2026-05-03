@@ -90,6 +90,13 @@ class KeyboardShortcutsDialog extends StatelessWidget {
                       ],
                     ),
                     _Section(
+                      title: 'View',
+                      shortcuts: [
+                        _Shortcut(keys: ['Ctrl', '1'], description: 'Switch to Controls view'),
+                        _Shortcut(keys: ['Ctrl', '2'], description: 'Switch to Monitoring view'),
+                      ],
+                    ),
+                    _Section(
                       title: 'Lens Shift',
                       shortcuts: [
                         _Shortcut(keys: ['↑ ↓ ← →'], description: 'Lens shift — normal speed'),

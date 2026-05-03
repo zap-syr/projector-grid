@@ -50,6 +50,7 @@ class TopMenuBar extends ConsumerWidget {
     required String label,
     required bool checked,
     required VoidCallback onPressed,
+    String? shortcutLabel,
   }) {
     return MenuItemButton(
       leadingIcon: SizedBox(
@@ -57,7 +58,27 @@ class TopMenuBar extends ConsumerWidget {
         child: checked ? const Icon(Icons.check, size: 14) : null,
       ),
       onPressed: onPressed,
-      child: Text(label),
+      child: shortcutLabel == null
+          ? Text(label)
+          : SizedBox(
+              width: 220,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(label),
+                  Text(
+                    shortcutLabel,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: 0.45),
+                    ),
+                  ),
+                ],
+              ),
+            ),
     );
   }
 
@@ -267,12 +288,14 @@ class TopMenuBar extends ConsumerWidget {
                   label: 'Controls',
                   checked: !isMonitoringView,
                   onPressed: () => settingsNotifier.setMonitoringView(false),
+                  shortcutLabel: 'Ctrl+1',
                 ),
                 _viewRadioItem(
                   context,
                   label: 'Monitoring',
                   checked: isMonitoringView,
                   onPressed: () => settingsNotifier.setMonitoringView(true),
+                  shortcutLabel: 'Ctrl+2',
                 ),
                 const Divider(),
                 MenuItemButton(

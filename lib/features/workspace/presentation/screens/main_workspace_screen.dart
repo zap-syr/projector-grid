@@ -40,6 +40,14 @@ class _RefreshIntent extends Intent {
   const _RefreshIntent();
 }
 
+class _ShowControlsIntent extends Intent {
+  const _ShowControlsIntent();
+}
+
+class _ShowMonitoringIntent extends Intent {
+  const _ShowMonitoringIntent();
+}
+
 class MainWorkspaceScreen extends ConsumerStatefulWidget {
   const MainWorkspaceScreen({super.key});
 
@@ -50,15 +58,56 @@ class MainWorkspaceScreen extends ConsumerStatefulWidget {
 
 // Watches both isMonitoringView and showLogs independently so neither
 // triggers a rebuild of the keyboard-shortcut / action tree above it.
-class _WorkspaceBody extends ConsumerWidget {
+// Holds two FocusScopeNodes so it can re-focus the correct view after every
+// IndexedStack switch (IndexedStack wraps inactive children in Visibility,
+// which inserts ExcludeFocus and unfocuses the previously active widget,
+// leaving primaryFocus = null and silently breaking all Shortcuts).
+class _WorkspaceBody extends ConsumerStatefulWidget {
   const _WorkspaceBody();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_WorkspaceBody> createState() => _WorkspaceBodyState();
+}
+
+class _WorkspaceBodyState extends ConsumerState<_WorkspaceBody> {
+  // FocusScopeNode remembers its last focused descendant in _focusedChildren.
+  // When the view becomes inactive, IndexedStack's Visibility wraps it with
+  // ExcludeFocus(excluding: true), making canRequestFocus == false on the scope.
+  // unfocus() only clears _focusedChildren when canRequestFocus == true, so the
+  // inner focus is preserved. When requestFocus() is called on the scope after
+  // the view becomes active again, _doRequestFocus restores the inner Focus —
+  // which means the inner Shortcuts (Ctrl+A, Ctrl+Z, etc.) keep working.
+  final _controlsScopeNode = FocusScopeNode(debugLabel: 'workspace-controls');
+  final _monitoringScopeNode = FocusScopeNode(debugLabel: 'workspace-monitoring');
+
+  @override
+  void dispose() {
+    _controlsScopeNode.dispose();
+    _monitoringScopeNode.dispose();
+    super.dispose();
+  }
+
+  void _requestViewFocus(bool isMonitoring) {
+    // Schedule after the frame so Visibility/ExcludeFocus from IndexedStack
+    // have already updated before we call requestFocus.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      (isMonitoring ? _monitoringScopeNode : _controlsScopeNode)
+          .requestFocus();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final isMonitoringView =
         ref.watch(appSettingsProvider.select((s) => s.isMonitoringView));
     final showLogs =
         ref.watch(appSettingsProvider.select((s) => s.showLogs));
+
+    ref.listen(
+      appSettingsProvider.select((s) => s.isMonitoringView),
+      (_, isMonitoring) => _requestViewFocus(isMonitoring),
+    );
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -72,21 +121,27 @@ class _WorkspaceBody extends ConsumerWidget {
             Expanded(
               child: IndexedStack(
                 index: isMonitoringView ? 1 : 0,
-                children: const [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          children: [
-                            StatusBar(),
-                            Expanded(child: ProjectorWorkspace()),
-                          ],
+                children: [
+                  FocusScope(
+                    node: _controlsScopeNode,
+                    child: const Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            children: [
+                              StatusBar(),
+                              Expanded(child: ProjectorWorkspace()),
+                            ],
+                          ),
                         ),
-                      ),
-                      ControlBar(),
-                    ],
+                        ControlBar(),
+                      ],
+                    ),
                   ),
-                  Focus(autofocus: true, child: MonitoringTable()),
+                  FocusScope(
+                    node: _monitoringScopeNode,
+                    child: const MonitoringTable(),
+                  ),
                 ],
               ),
             ),
@@ -162,6 +217,10 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
         const SingleActivator(LogicalKeyboardKey.keyQ, control: true):
             const _ExitIntent(),
         const SingleActivator(LogicalKeyboardKey.f5): const _RefreshIntent(),
+        const SingleActivator(LogicalKeyboardKey.digit1, control: true):
+            const _ShowControlsIntent(),
+        const SingleActivator(LogicalKeyboardKey.digit2, control: true):
+            const _ShowMonitoringIntent(),
         if (Platform.isMacOS) ...<ShortcutActivator, Intent>{
           const SingleActivator(LogicalKeyboardKey.keyN, meta: true):
               const _NewProjectIntent(),
@@ -173,6 +232,10 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
               const _SaveAsProjectIntent(),
           const SingleActivator(LogicalKeyboardKey.keyQ, meta: true):
               const _ExitIntent(),
+          const SingleActivator(LogicalKeyboardKey.digit1, meta: true):
+              const _ShowControlsIntent(),
+          const SingleActivator(LogicalKeyboardKey.digit2, meta: true):
+              const _ShowMonitoringIntent(),
         },
       },
       child: Actions(
@@ -219,6 +282,18 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
           _RefreshIntent: CallbackAction<_RefreshIntent>(
             onInvoke: (_) {
               workspaceNotifier.refreshAll();
+              return null;
+            },
+          ),
+          _ShowControlsIntent: CallbackAction<_ShowControlsIntent>(
+            onInvoke: (_) {
+              ref.read(appSettingsProvider.notifier).setMonitoringView(false);
+              return null;
+            },
+          ),
+          _ShowMonitoringIntent: CallbackAction<_ShowMonitoringIntent>(
+            onInvoke: (_) {
+              ref.read(appSettingsProvider.notifier).setMonitoringView(true);
               return null;
             },
           ),
