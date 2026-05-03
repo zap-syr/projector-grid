@@ -18,6 +18,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 WizardStyle=modern
 SetupIconFile=windows\runner\resources\app_icon.ico
 UninstallDisplayIcon={app}\{#AppExeName}
+VersionInfoVersion={#AppVersion}
 SourceDir=..\
 
 [Languages]
