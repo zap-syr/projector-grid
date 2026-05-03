@@ -503,6 +503,10 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
                                             builder: (context) =>
                                                 EditProjectorDialog(
                                                   node: node,
+                                                  existingIps: nodes
+                                                      .map((n) => n.ipAddress)
+                                                      .where((ip) => ip != node.ipAddress)
+                                                      .toSet(),
                                                   onSave:
                                                       (ip, login, password) {
                                                         notifier.updateNode(

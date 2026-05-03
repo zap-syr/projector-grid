@@ -3,9 +3,15 @@ import '../../domain/projector_node.dart';
 
 class EditProjectorDialog extends StatefulWidget {
   final ProjectorNode node;
+  final Set<String> existingIps;
   final Function(String ip, String login, String password) onSave;
 
-  const EditProjectorDialog({super.key, required this.node, required this.onSave});
+  const EditProjectorDialog({
+    super.key,
+    required this.node,
+    required this.existingIps,
+    required this.onSave,
+  });
 
   @override
   State<EditProjectorDialog> createState() => _EditProjectorDialogState();
@@ -78,6 +84,7 @@ class _EditProjectorDialogState extends State<EditProjectorDialog> {
                 validator: (val) {
                   if (val == null || val.isEmpty) return 'IP Address is required';
                   if (!_ipRegex.hasMatch(val)) return 'Invalid IP Address format';
+                  if (widget.existingIps.contains(val)) return 'This IP address is already in use';
                   return null;
                 },
               ),
@@ -85,19 +92,11 @@ class _EditProjectorDialogState extends State<EditProjectorDialog> {
               TextFormField(
                 controller: _loginController,
                 decoration: const InputDecoration(labelText: 'Login', border: OutlineInputBorder()),
-                validator: (val) {
-                  if (val == null || val.isEmpty) return 'Login required';
-                  return null;
-                },
               ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _passwordController,
                 decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder()),
-                validator: (val) {
-                  if (val == null || val.isEmpty) return 'Password required';
-                  return null;
-                },
               ),
               const SizedBox(height: 32),
               Row(
