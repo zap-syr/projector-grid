@@ -536,7 +536,7 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
                   children: [
                     Expanded(
                       child: Text(
-                        'Color Correction — ${widget.node.ipAddress}',
+                        'Color Correction - ${widget.node.ipAddress}',
                         style: theme.textTheme.titleMedium,
                       ),
                     ),

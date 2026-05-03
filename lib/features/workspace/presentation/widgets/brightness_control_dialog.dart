@@ -161,7 +161,7 @@ class _BrightnessControlDialogState extends State<BrightnessControlDialog> {
             color: theme.colorScheme.surfaceContainerHigh,
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
             child: Text(
-              'Brightness Control - Projector ${widget.node.ipAddress}',
+              'Brightness Control - ${widget.node.ipAddress}',
               style: theme.textTheme.titleMedium,
             ),
           ),
