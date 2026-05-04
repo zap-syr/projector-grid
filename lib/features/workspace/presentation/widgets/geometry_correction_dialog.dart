@@ -103,6 +103,8 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
   final _keystone = _KeystoneState();
   final _curved = _CurvedState();
 
+  final _cornerCanvasKey = GlobalKey<_CornerCorrectionCanvasState>();
+
   String get _ip => widget.node.ipAddress;
   int get _port => widget.node.port;
   String get _login => widget.node.login;
@@ -297,13 +299,18 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final screenHeight = MediaQuery.of(context).size.height;
 
     return Dialog(
       clipBehavior: Clip.antiAlias,
-      child: SizedBox(
-        width: 620,
-        height: 720,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          minWidth: 520,
+          maxWidth: 920,
+          maxHeight: screenHeight * 0.9,
+        ),
         child: Column(
+          mainAxisSize: MainAxisSize.max,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Title bar
@@ -331,7 +338,7 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
             if (_loading)
               const Expanded(child: Center(child: CircularProgressIndicator()))
             else ...[
-              // Mode dropdown
+              // Mode dropdown — full width across both columns
               Padding(
                 padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
                 child: DropdownMenu<_GeometryMode>(
@@ -378,6 +385,25 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
     _ => _buildPcPlaceholder(),
   };
 
+  // Two-column split: canvas left (5 parts) + scrollable controls right (4 parts).
+  // Both panels grow proportionally so the canvas stays large at any dialog width.
+  Widget _buildSplitLayout({required Widget left, required Widget right}) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(flex: 5, child: left),
+        const VerticalDivider(width: 1, thickness: 1),
+        Expanded(
+          flex: 4,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: right,
+          ),
+        ),
+      ],
+    );
+  }
+
   // ─── Off / PC placeholders ───────────────────────────────────────────────
   Widget _buildOffBody() => Center(
     child: Padding(
@@ -405,7 +431,7 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
     ),
   );
 
-  // ─── Corner Correction body ──────────────────────────────────────────────
+  // ─── Corner Correction ───────────────────────────────────────────────────
   Future<void> _resetAllCorners() async {
     setState(() {
       _corner
@@ -418,45 +444,48 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
   }
 
   Widget _buildCornerBody() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Stack(
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Center(
-                child: _CornerCorrectionCanvas(
-                  state: _corner,
-                  onCornerChanged: () => setState(() {}),
-                  onCornerCommit: (List<(String, int)> commands) async {
-                    for (final (key, value) in commands) {
-                      await _sendInt(key, value);
-                    }
-                  },
-                ),
-              ),
+    return _buildSplitLayout(
+      left: _buildCornerLeftPanel(),
+      right: _buildCornerSliders(),
+    );
+  }
+
+  Widget _buildCornerLeftPanel() {
+    // GestureDetector with translucent behavior catches taps on any empty space
+    // in the panel (padding, area above/below the scaled canvas) and clears
+    // selection. Inner handle detectors still win the arena for handle taps.
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: () => _cornerCanvasKey.currentState?.clearSelection(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Align(
+            alignment: Alignment.topRight,
+            child: IconButton(
+              icon: const Icon(Icons.restart_alt),
+              tooltip: 'Reset all corners',
+              iconSize: 20,
+              onPressed: _resetAllCorners,
             ),
-            Positioned(
-              top: 4,
-              right: 4,
-              child: IconButton(
-                icon: const Icon(Icons.restart_alt),
-                tooltip: 'Reset all corners',
-                iconSize: 20,
-                onPressed: _resetAllCorners,
-              ),
-            ),
-          ],
-        ),
-        const Divider(height: 1),
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
-            child: _buildCornerSliders(),
           ),
-        ),
-      ],
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: _CornerCorrectionCanvas(
+                key: _cornerCanvasKey,
+                state: _corner,
+                onCornerChanged: () => setState(() {}),
+                onCornerCommit: (List<(String, int)> commands) async {
+                  for (final (key, value) in commands) {
+                    await _sendInt(key, value);
+                  }
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -569,7 +598,6 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
     );
   }
 
-  // Compact slider used in corner pincushion/linearity rows.
   Widget _compactSlider({
     required String label,
     required double value,
@@ -612,73 +640,191 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
     );
   }
 
-  // ─── Keystone body ───────────────────────────────────────────────────────
+  // ─── Keystone ────────────────────────────────────────────────────────────
   Widget _buildKeystoneBody() {
+    return _buildSplitLayout(
+      left: _buildTrapezoidPanel(
+        vKeystone: _keystone.gmks8,
+        hKeystone: _keystone.gmks9,
+        vArc: 0,
+        hArc: 0,
+      ),
+      right: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _labeledSlider(
+            label: 'Vertical Keystone',
+            value: _keystone.gmks8,
+            min: -40, max: 40, divisions: 80,
+            display: '${_keystone.gmks8.toStringAsFixed(1)}°',
+            onChanged: (v) => setState(() =>
+                _keystone.gmks8 = double.parse(v.toStringAsFixed(1))),
+            onChangeEnd: (v) => _sendDeg('GMKS8',
+                double.parse(v.toStringAsFixed(1))),
+          ),
+          _labeledSlider(
+            label: 'Horizontal Keystone',
+            value: _keystone.gmks9,
+            min: -15, max: 15, divisions: 30,
+            display: '${_keystone.gmks9.toStringAsFixed(1)}°',
+            onChanged: (v) => setState(() =>
+                _keystone.gmks9 = double.parse(v.toStringAsFixed(1))),
+            onChangeEnd: (v) => _sendDeg('GMKS9',
+                double.parse(v.toStringAsFixed(1))),
+          ),
+          _labeledSlider(
+            label: 'Vertical Balance',
+            value: _keystone.gmki4.toDouble(),
+            min: -60, max: 60, divisions: 120,
+            display: _signed(_keystone.gmki4),
+            onChanged: (v) => setState(() => _keystone.gmki4 = v.round()),
+            onChangeEnd: (v) => _sendInt('GMKI4', v.round()),
+          ),
+          _labeledSlider(
+            label: 'Horizontal Balance',
+            value: _keystone.gmki7.toDouble(),
+            min: -30, max: 30, divisions: 60,
+            display: _signed(_keystone.gmki7),
+            onChanged: (v) => setState(() => _keystone.gmki7 = v.round()),
+            onChangeEnd: (v) => _sendInt('GMKI7', v.round()),
+          ),
+          const SizedBox(height: 8),
+          _throwRatioField(
+            value: _keystone.gmks0,
+            onCommit: (v) {
+              setState(() => _keystone.gmks0 = v);
+              _sendThrow('GMKS0', v);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Curved ──────────────────────────────────────────────────────────────
+  Widget _buildCurvedBody() {
+    return _buildSplitLayout(
+      left: _buildTrapezoidPanel(
+        vKeystone: _curved.gmcs8,
+        hKeystone: _curved.gmcs9,
+        vArc: _curved.gmci3,
+        hArc: _curved.gmci7,
+      ),
+      right: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _labeledSlider(
+            label: 'Vertical Arc',
+            value: _curved.gmci3.toDouble(),
+            min: -40, max: 40, divisions: 80,
+            display: _signed(_curved.gmci3),
+            onChanged: (v) => setState(() => _curved.gmci3 = v.round()),
+            onChangeEnd: (v) => _sendInt('GMCI3', v.round()),
+          ),
+          _labeledSlider(
+            label: 'Horizontal Arc',
+            value: _curved.gmci7.toDouble(),
+            min: -40, max: 40, divisions: 80,
+            display: _signed(_curved.gmci7),
+            onChanged: (v) => setState(() => _curved.gmci7 = v.round()),
+            onChangeEnd: (v) => _sendInt('GMCI7', v.round()),
+          ),
+          _labeledSlider(
+            label: 'Vertical Keystone',
+            value: _curved.gmcs8,
+            min: -40, max: 40, divisions: 80,
+            display: '${_curved.gmcs8.toStringAsFixed(1)}°',
+            onChanged: (v) => setState(() =>
+                _curved.gmcs8 = double.parse(v.toStringAsFixed(1))),
+            onChangeEnd: (v) => _sendDeg('GMCS8',
+                double.parse(v.toStringAsFixed(1))),
+          ),
+          _labeledSlider(
+            label: 'Horizontal Keystone',
+            value: _curved.gmcs9,
+            min: -15, max: 15, divisions: 30,
+            display: '${_curved.gmcs9.toStringAsFixed(1)}°',
+            onChanged: (v) => setState(() =>
+                _curved.gmcs9 = double.parse(v.toStringAsFixed(1))),
+            onChangeEnd: (v) => _sendDeg('GMCS9',
+                double.parse(v.toStringAsFixed(1))),
+          ),
+          _labeledSlider(
+            label: 'Vertical Balance',
+            value: _curved.gmci2.toDouble(),
+            min: -60, max: 60, divisions: 120,
+            display: _signed(_curved.gmci2),
+            onChanged: (v) => setState(() => _curved.gmci2 = v.round()),
+            onChangeEnd: (v) => _sendInt('GMCI2', v.round()),
+          ),
+          _labeledSlider(
+            label: 'Horizontal Balance',
+            value: _curved.gmci6.toDouble(),
+            min: -30, max: 30, divisions: 60,
+            display: _signed(_curved.gmci6),
+            onChanged: (v) => setState(() => _curved.gmci6 = v.round()),
+            onChangeEnd: (v) => _sendInt('GMCI6', v.round()),
+          ),
+          const SizedBox(height: 8),
+          _throwRatioField(
+            value: _curved.gmcs0,
+            onCommit: (v) {
+              setState(() => _curved.gmcs0 = v);
+              _sendThrow('GMCS0', v);
+            },
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Maintain Aspect Ratio',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              Switch(
+                value: _curved.gmcia,
+                onChanged: (v) {
+                  setState(() => _curved.gmcia = v);
+                  _sendBool('GMCIA', v);
+                },
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Left panel canvas for keystone/curved modes — fills available height.
+  Widget _buildTrapezoidPanel({
+    required double vKeystone,
+    required double hKeystone,
+    required int vArc,
+    required int hArc,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          child: Center(
-            child: _TrapezoidCanvas(
-              vKeystone: _keystone.gmks8,
-              hKeystone: _keystone.gmks9,
-              vArc: 0,
-              hArc: 0,
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Text(
+            'Preview',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
             ),
           ),
         ),
-        const Divider(height: 1),
         Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
-            child: Column(
-              children: [
-                _labeledSlider(
-                  label: 'Vertical Keystone',
-                  value: _keystone.gmks8,
-                  min: -40, max: 40, divisions: 80,
-                  display: '${_keystone.gmks8.toStringAsFixed(1)}°',
-                  onChanged: (v) => setState(() =>
-                      _keystone.gmks8 = double.parse(v.toStringAsFixed(1))),
-                  onChangeEnd: (v) => _sendDeg('GMKS8',
-                      double.parse(v.toStringAsFixed(1))),
-                ),
-                _labeledSlider(
-                  label: 'Horizontal Keystone',
-                  value: _keystone.gmks9,
-                  min: -15, max: 15, divisions: 30,
-                  display: '${_keystone.gmks9.toStringAsFixed(1)}°',
-                  onChanged: (v) => setState(() =>
-                      _keystone.gmks9 = double.parse(v.toStringAsFixed(1))),
-                  onChangeEnd: (v) => _sendDeg('GMKS9',
-                      double.parse(v.toStringAsFixed(1))),
-                ),
-                _labeledSlider(
-                  label: 'Vertical Balance',
-                  value: _keystone.gmki4.toDouble(),
-                  min: -60, max: 60, divisions: 120,
-                  display: _signed(_keystone.gmki4),
-                  onChanged: (v) => setState(() => _keystone.gmki4 = v.round()),
-                  onChangeEnd: (v) => _sendInt('GMKI4', v.round()),
-                ),
-                _labeledSlider(
-                  label: 'Horizontal Balance',
-                  value: _keystone.gmki7.toDouble(),
-                  min: -30, max: 30, divisions: 60,
-                  display: _signed(_keystone.gmki7),
-                  onChanged: (v) => setState(() => _keystone.gmki7 = v.round()),
-                  onChangeEnd: (v) => _sendInt('GMKI7', v.round()),
-                ),
-                const SizedBox(height: 8),
-                _throwRatioField(
-                  value: _keystone.gmks0,
-                  onCommit: (v) {
-                    setState(() => _keystone.gmks0 = v);
-                    _sendThrow('GMKS0', v);
-                  },
-                ),
-              ],
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+            child: _TrapezoidCanvas(
+              vKeystone: vKeystone,
+              hKeystone: hKeystone,
+              vArc: vArc,
+              hArc: hArc,
             ),
           ),
         ),
@@ -751,116 +897,6 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
       ],
     );
   }
-
-  // ─── Curved body ─────────────────────────────────────────────────────────
-  Widget _buildCurvedBody() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          child: Center(
-            child: _TrapezoidCanvas(
-              vKeystone: _curved.gmcs8,
-              hKeystone: _curved.gmcs9,
-              vArc: _curved.gmci3,
-              hArc: _curved.gmci7,
-            ),
-          ),
-        ),
-        const Divider(height: 1),
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
-            child: Column(
-              children: [
-                _labeledSlider(
-                  label: 'Vertical Arc',
-                  value: _curved.gmci3.toDouble(),
-                  min: -40, max: 40, divisions: 80,
-                  display: _signed(_curved.gmci3),
-                  onChanged: (v) => setState(() => _curved.gmci3 = v.round()),
-                  onChangeEnd: (v) => _sendInt('GMCI3', v.round()),
-                ),
-                _labeledSlider(
-                  label: 'Horizontal Arc',
-                  value: _curved.gmci7.toDouble(),
-                  min: -40, max: 40, divisions: 80,
-                  display: _signed(_curved.gmci7),
-                  onChanged: (v) => setState(() => _curved.gmci7 = v.round()),
-                  onChangeEnd: (v) => _sendInt('GMCI7', v.round()),
-                ),
-                _labeledSlider(
-                  label: 'Vertical Keystone',
-                  value: _curved.gmcs8,
-                  min: -40, max: 40, divisions: 80,
-                  display: '${_curved.gmcs8.toStringAsFixed(1)}°',
-                  onChanged: (v) => setState(() =>
-                      _curved.gmcs8 = double.parse(v.toStringAsFixed(1))),
-                  onChangeEnd: (v) => _sendDeg('GMCS8',
-                      double.parse(v.toStringAsFixed(1))),
-                ),
-                _labeledSlider(
-                  label: 'Horizontal Keystone',
-                  value: _curved.gmcs9,
-                  min: -15, max: 15, divisions: 30,
-                  display: '${_curved.gmcs9.toStringAsFixed(1)}°',
-                  onChanged: (v) => setState(() =>
-                      _curved.gmcs9 = double.parse(v.toStringAsFixed(1))),
-                  onChangeEnd: (v) => _sendDeg('GMCS9',
-                      double.parse(v.toStringAsFixed(1))),
-                ),
-                _labeledSlider(
-                  label: 'Vertical Balance',
-                  value: _curved.gmci2.toDouble(),
-                  min: -60, max: 60, divisions: 120,
-                  display: _signed(_curved.gmci2),
-                  onChanged: (v) => setState(() => _curved.gmci2 = v.round()),
-                  onChangeEnd: (v) => _sendInt('GMCI2', v.round()),
-                ),
-                _labeledSlider(
-                  label: 'Horizontal Balance',
-                  value: _curved.gmci6.toDouble(),
-                  min: -30, max: 30, divisions: 60,
-                  display: _signed(_curved.gmci6),
-                  onChanged: (v) => setState(() => _curved.gmci6 = v.round()),
-                  onChangeEnd: (v) => _sendInt('GMCI6', v.round()),
-                ),
-                const SizedBox(height: 8),
-                _throwRatioField(
-                  value: _curved.gmcs0,
-                  onCommit: (v) {
-                    setState(() => _curved.gmcs0 = v);
-                    _sendThrow('GMCS0', v);
-                  },
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Maintain Aspect Ratio',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    Switch(
-                      value: _curved.gmcia,
-                      onChanged: (v) {
-                        setState(() => _curved.gmcia = v);
-                        _sendBool('GMCIA', v);
-                      },
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
 }
 
 // ─── Trapezoid Canvas (keystone + curved preview) ──────────────────────────
@@ -880,18 +916,23 @@ class _TrapezoidCanvas extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return SizedBox(
-      width: 480,
-      height: 280,
-      child: CustomPaint(
-        painter: _TrapezoidPainter(
-          vKeystone: vKeystone,
-          hKeystone: hKeystone,
-          vArc: vArc,
-          hArc: hArc,
-          outline: theme.colorScheme.primary,
-          fill: theme.colorScheme.primary.withValues(alpha: 0.10),
-          defaultColor: theme.dividerColor,
+    // FittedBox scales to fill whatever space the parent gives while preserving
+    // the 480×280 internal coordinate system used by the painter.
+    return FittedBox(
+      fit: BoxFit.contain,
+      child: SizedBox(
+        width: 480,
+        height: 280,
+        child: CustomPaint(
+          painter: _TrapezoidPainter(
+            vKeystone: vKeystone,
+            hKeystone: hKeystone,
+            vArc: vArc,
+            hArc: hArc,
+            outline: theme.colorScheme.primary,
+            fill: theme.colorScheme.primary.withValues(alpha: 0.10),
+            defaultColor: theme.dividerColor,
+          ),
         ),
       ),
     );
@@ -938,7 +979,6 @@ class _TrapezoidPainter extends CustomPainter {
     final lr = Offset(defaultRect.right - vSkew, defaultRect.bottom + hSkew);
 
     // Arc bow magnitudes (curved mode only; 0 for keystone).
-    // V arc bows top/bottom edges; H arc bows left/right edges.
     final vBow = (vArc / 40.0) * 30.0;
     final hBow = (hArc / 40.0) * 30.0;
 
@@ -1059,6 +1099,7 @@ class _CornerCorrectionCanvas extends StatefulWidget {
   final Future<void> Function(List<(String, int)>) onCornerCommit;
 
   const _CornerCorrectionCanvas({
+    super.key,
     required this.state,
     required this.onCornerChanged,
     required this.onCornerCommit,
@@ -1098,6 +1139,10 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
   final Map<_Corner, Offset> _dragStartPositions = {};
   Offset? _dragStartGlobal;
 
+  // Tracks how the canvas is scaled relative to its logical _w×_h size.
+  // Used to compensate global pointer deltas when the canvas is rendered smaller.
+  double _renderScale = 1.0;
+
   // Manual double-tap tracking — avoids GestureDetector onDoubleTap which
   // delays onTap by kDoubleTapTimeout on every single tap.
   _Corner? _lastTappedCorner;
@@ -1135,6 +1180,8 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
     _focusNode.dispose();
     super.dispose();
   }
+
+  void clearSelection() => setState(() => _selected.clear());
 
   // ─── Arrow-key movement ───────────────────────────────────────────────────
   void _applyStep(Offset delta) {
@@ -1312,7 +1359,9 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
 
   void _onHandlePanUpdate(DragUpdateDetails details) {
     if (_dragStartGlobal == null) return;
-    final totalDelta = details.globalPosition - _dragStartGlobal!;
+    // Divide by _renderScale to convert screen-space delta to canvas-space delta
+    // when the canvas is displayed smaller than its logical _w×_h size.
+    final totalDelta = (details.globalPosition - _dragStartGlobal!) / _renderScale;
     for (final c in _selected) {
       final start = _dragStartPositions[c];
       if (start == null) continue;
@@ -1334,37 +1383,63 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
     return Focus(
       focusNode: _focusNode,
       onKeyEvent: _onKeyEvent,
-      child: SizedBox(
-      width: _w,
-      height: _h,
-      child: GestureDetector(
-        // Background tap clears selection; opaque so empty-space taps register.
-        // Inner handle GestureDetectors win the arena over this outer one,
-        // so handle taps don't trigger this clear.
-        behavior: HitTestBehavior.opaque,
-        onTap: () => setState(() => _selected.clear()),
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: IgnorePointer(
-                child: CustomPaint(
-                  painter: _CornerCorrectionPainter(
-                    ul: _positionOf(_Corner.ul),
-                    ur: _positionOf(_Corner.ur),
-                    ll: _positionOf(_Corner.ll),
-                    lr: _positionOf(_Corner.lr),
-                    outline: theme.colorScheme.primary,
-                    fill: theme.colorScheme.primary.withValues(alpha: 0.10),
-                    defaultColor: theme.dividerColor,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Compute the uniform scale that fits _w×_h into the available space.
+          final scaleX = constraints.maxWidth.isFinite
+              ? (constraints.maxWidth / _w).clamp(0.0, 1.0)
+              : 1.0;
+          final scaleY = constraints.maxHeight.isFinite
+              ? (constraints.maxHeight / _h).clamp(0.0, 1.0)
+              : 1.0;
+          _renderScale = scaleX < scaleY ? scaleX : scaleY;
+
+          // FittedBox scales the logical canvas to the rendered size while
+          // preserving aspect ratio. GestureDetector sits inside the logical
+          // coordinate system so handle positions need no adjustment.
+          return Center(
+            child: SizedBox(
+              width: _w * _renderScale,
+              height: _h * _renderScale,
+              child: FittedBox(
+                fit: BoxFit.fill,
+                child: SizedBox(
+                  width: _w,
+                  height: _h,
+                  child: GestureDetector(
+                    // Background tap clears selection; opaque so empty-space taps register.
+                    // Inner handle GestureDetectors win the arena over this outer one,
+                    // so handle taps don't trigger this clear.
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => setState(() => _selected.clear()),
+                    child: Stack(
+                      children: [
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: CustomPaint(
+                              painter: _CornerCorrectionPainter(
+                                ul: _positionOf(_Corner.ul),
+                                ur: _positionOf(_Corner.ur),
+                                ll: _positionOf(_Corner.ll),
+                                lr: _positionOf(_Corner.lr),
+                                outline: theme.colorScheme.primary,
+                                fill: theme.colorScheme.primary.withValues(alpha: 0.10),
+                                defaultColor: theme.dividerColor,
+                              ),
+                            ),
+                          ),
+                        ),
+                        for (final c in _Corner.values) _handle(c, _positionOf(c)),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-            for (final c in _Corner.values) _handle(c, _positionOf(c)),
-          ],
-        ),
+          );
+        },
       ),
-    ));
+    );
   }
 
   Widget _handle(_Corner which, Offset pos) {
