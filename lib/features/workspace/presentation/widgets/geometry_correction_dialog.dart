@@ -1133,10 +1133,9 @@ class _TrapezoidPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Default frame: 240w × 160h centered at (240, 140).
     const defaultRect = Rect.fromLTRB(120, 60, 360, 220);
 
-    // Default reference outline (faint).
+    // Draw reference outline first — outside clip so it is always fully visible.
     canvas.drawRect(
       defaultRect,
       Paint()
@@ -1145,40 +1144,48 @@ class _TrapezoidPainter extends CustomPainter {
         ..strokeWidth = 1,
     );
 
-    // V keystone: positive = top wider (TL moves left, TR moves right).
-    final vSkew = (vKeystone / 40.0) * 50.0;
-    // H keystone: positive = right edge longer (TR moves up, BR moves down).
-    final hSkew = (hKeystone / 15.0) * 25.0;
+    // ── Vertex calculation ──────────────────────────────────────────────────
+    final vDelta = (vKeystone / 40.0) * 50.0;
+    final hDelta = (hKeystone / 15.0) * 25.0;
 
-    final ul = Offset(defaultRect.left - vSkew, defaultRect.top + hSkew);
-    final ur = Offset(defaultRect.right + vSkew, defaultRect.top - hSkew);
-    final ll = Offset(defaultRect.left + vSkew, defaultRect.bottom - hSkew);
-    final lr = Offset(defaultRect.right - vSkew, defaultRect.bottom + hSkew);
+    final absV = vDelta.abs();
+    final absH = hDelta.abs();
 
-    // Arc bow magnitudes (curved mode only; 0 for keystone).
+    // Positive pinches the leading edge; negative pinches the opposite edge.
+    final topShift   = vKeystone > 0 ? absV : 0.0;
+    final botShift   = vKeystone < 0 ? absV : 0.0;
+    final rightShift = hKeystone > 0 ? absH : 0.0;
+    final leftShift  = hKeystone < 0 ? absH : 0.0;
+
+    double cx(double x) => x.clamp(defaultRect.left, defaultRect.right);
+    double cy(double y) => y.clamp(defaultRect.top, defaultRect.bottom);
+
+    final topLeft     = Offset(cx(defaultRect.left  + topShift), cy(defaultRect.top    + leftShift));
+    final topRight    = Offset(cx(defaultRect.right - topShift), cy(defaultRect.top    + rightShift));
+    final bottomLeft  = Offset(cx(defaultRect.left  + botShift), cy(defaultRect.bottom - leftShift));
+    final bottomRight = Offset(cx(defaultRect.right - botShift), cy(defaultRect.bottom - rightShift));
+
+    // ── Arc bows (curved mode only; both 0 in keystone mode) ───────────────
     final vBow = (vArc / 40.0) * 30.0;
     final hBow = (hArc / 40.0) * 30.0;
 
-    final path = Path()..moveTo(ul.dx, ul.dy);
+    // ── Build path ──────────────────────────────────────────────────────────
+    final path = Path()..moveTo(topLeft.dx, topLeft.dy);
 
-    // Top edge: bezier from UL to UR, control offset by vBow upward.
-    final topMid = Offset((ul.dx + ur.dx) / 2, (ul.dy + ur.dy) / 2 - vBow);
-    path.quadraticBezierTo(topMid.dx, topMid.dy, ur.dx, ur.dy);
+    final topMid   = Offset((topLeft.dx + topRight.dx) / 2,       (topLeft.dy    + topRight.dy)    / 2 - vBow);
+    final rightMid = Offset((topRight.dx + bottomRight.dx) / 2 + hBow, (topRight.dy + bottomRight.dy) / 2);
+    final botMid   = Offset((bottomRight.dx + bottomLeft.dx) / 2, (bottomRight.dy + bottomLeft.dy) / 2 + vBow);
+    final leftMid  = Offset((bottomLeft.dx + topLeft.dx) / 2 - hBow,  (bottomLeft.dy + topLeft.dy)  / 2);
 
-    // Right edge: bezier from UR to LR, control offset by hBow rightward.
-    final rightMid = Offset((ur.dx + lr.dx) / 2 + hBow, (ur.dy + lr.dy) / 2);
-    path.quadraticBezierTo(rightMid.dx, rightMid.dy, lr.dx, lr.dy);
-
-    // Bottom edge: bezier from LR to LL, control offset by vBow downward.
-    final botMid = Offset((lr.dx + ll.dx) / 2, (lr.dy + ll.dy) / 2 + vBow);
-    path.quadraticBezierTo(botMid.dx, botMid.dy, ll.dx, ll.dy);
-
-    // Left edge: bezier from LL to UL, control offset by hBow leftward.
-    final leftMid = Offset((ll.dx + ul.dx) / 2 - hBow, (ll.dy + ul.dy) / 2);
-    path.quadraticBezierTo(leftMid.dx, leftMid.dy, ul.dx, ul.dy);
-
+    path.quadraticBezierTo(topMid.dx,   topMid.dy,   topRight.dx,    topRight.dy);
+    path.quadraticBezierTo(rightMid.dx, rightMid.dy, bottomRight.dx, bottomRight.dy);
+    path.quadraticBezierTo(botMid.dx,   botMid.dy,   bottomLeft.dx,  bottomLeft.dy);
+    path.quadraticBezierTo(leftMid.dx,  leftMid.dy,  topLeft.dx,     topLeft.dy);
     path.close();
 
+    // Clip to bounding box so arc bows cannot bleed outside the grey frame.
+    canvas.save();
+    canvas.clipRect(defaultRect);
     canvas.drawPath(path, Paint()..color = fill);
     canvas.drawPath(
       path,
@@ -1187,6 +1194,7 @@ class _TrapezoidPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2,
     );
+    canvas.restore();
   }
 
   @override
