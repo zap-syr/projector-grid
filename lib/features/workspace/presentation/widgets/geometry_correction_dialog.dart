@@ -1,0 +1,1271 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../../domain/projector_node.dart';
+import '../../../../core/services/panasonic_protocol_service.dart';
+
+// ─── Mode enum ─────────────────────────────────────────────────────────────
+enum _GeometryMode {
+  off,
+  keystone,
+  curved,
+  pc1,
+  pc2,
+  pc3,
+  corner;
+
+  String get label => switch (this) {
+    off => 'Off',
+    keystone => 'Keystone',
+    curved => 'Curved Correction',
+    pc1 => 'PC-1',
+    pc2 => 'PC-2',
+    pc3 => 'PC-3',
+    corner => 'Corner Correction',
+  };
+
+  String get protocolValue => switch (this) {
+    off => '+00000',
+    keystone => '+00001',
+    curved => '+00002',
+    pc1 => '+00003',
+    pc2 => '+00004',
+    pc3 => '+00005',
+    corner => '+00010',
+  };
+
+  static _GeometryMode fromProtocol(String value) => switch (value.trim()) {
+    '+00001' => keystone,
+    '+00002' => curved,
+    '+00003' => pc1,
+    '+00004' => pc2,
+    '+00005' => pc3,
+    '+00010' => corner,
+    _ => off,
+  };
+}
+
+// ─── Per-mode state holders ────────────────────────────────────────────────
+class _CornerState {
+  // V displacement (GMFI1–4): UL, UR, LL, LR
+  int gmfi1 = 0, gmfi2 = 0, gmfi3 = 0, gmfi4 = 0;
+  // H displacement (GMFI6–9): UL, UR, LL, LR
+  int gmfi6 = 0, gmfi7 = 0, gmfi8 = 0, gmfi9 = 0;
+  // Linearity V/H (GMFI5, GMFIA)
+  int gmfi5 = 0, gmfia = 0;
+  // Pincushion: upper, lower, left, right (GMFIB–E)
+  int gmfib = 0, gmfic = 0, gmfid = 0, gmfie = 0;
+}
+
+class _KeystoneState {
+  double gmks0 = 1.5; // throw ratio
+  int gmki4 = 0;       // V balance
+  int gmki7 = 0;       // H balance
+  double gmks8 = 0.0;  // V keystone
+  double gmks9 = 0.0;  // H keystone
+}
+
+class _CurvedState {
+  double gmcs0 = 1.5; // throw ratio
+  int gmci2 = 0;       // V balance
+  int gmci3 = 0;       // V arc
+  int gmci6 = 0;       // H balance
+  int gmci7 = 0;       // H arc
+  double gmcs8 = 0.0;  // V keystone
+  double gmcs9 = 0.0;  // H keystone
+  bool gmcia = false;  // maintain aspect ratio
+}
+
+// ─── Dialog ─────────────────────────────────────────────────────────────────
+class GeometryCorrectionDialog extends StatefulWidget {
+  final ProjectorNode node;
+
+  const GeometryCorrectionDialog({super.key, required this.node});
+
+  @override
+  State<GeometryCorrectionDialog> createState() =>
+      _GeometryCorrectionDialogState();
+}
+
+class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
+  final _service = PanasonicProtocolService();
+
+  bool _loading = true;
+  bool _modeLoading = false;
+  _GeometryMode _mode = _GeometryMode.off;
+  final Set<_GeometryMode> _loadedModes = {};
+
+  final _corner = _CornerState();
+  final _keystone = _KeystoneState();
+  final _curved = _CurvedState();
+
+  String get _ip => widget.node.ipAddress;
+  int get _port => widget.node.port;
+  String get _login => widget.node.login;
+  String get _password => widget.node.password;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInitial();
+  }
+
+  // ─── Loading ─────────────────────────────────────────────────────────────
+  Future<void> _loadInitial() async {
+    final raw = await _service.sendRawCommand(
+      _ip, _port, _login, _password, 'QVX:GMMI0',
+    );
+    if (!mounted) return;
+
+    final modeRaw = _parseValue(raw, 'GMMI0');
+    if (modeRaw != null) _mode = _GeometryMode.fromProtocol(modeRaw);
+
+    setState(() => _loading = false);
+    await _ensureModeLoaded(_mode);
+  }
+
+  Future<void> _ensureModeLoaded(_GeometryMode mode) async {
+    if (_loadedModes.contains(mode)) return;
+    if (mode == _GeometryMode.off ||
+        mode == _GeometryMode.pc1 ||
+        mode == _GeometryMode.pc2 ||
+        mode == _GeometryMode.pc3) {
+      _loadedModes.add(mode);
+      return;
+    }
+
+    setState(() => _modeLoading = true);
+    switch (mode) {
+      case _GeometryMode.corner:
+        await _loadCorner();
+        break;
+      case _GeometryMode.keystone:
+        await _loadKeystone();
+        break;
+      case _GeometryMode.curved:
+        await _loadCurved();
+        break;
+      default:
+        break;
+    }
+    if (!mounted) return;
+    _loadedModes.add(mode);
+    setState(() => _modeLoading = false);
+  }
+
+  Future<void> _loadCorner() async {
+    final keys = [
+      'GMFI1', 'GMFI2', 'GMFI3', 'GMFI4',
+      'GMFI6', 'GMFI7', 'GMFI8', 'GMFI9',
+      'GMFI5', 'GMFIA',
+      'GMFIB', 'GMFIC', 'GMFID', 'GMFIE',
+    ];
+    final results = await Future.wait(
+      keys.map((k) => _service.sendRawCommand(
+        _ip, _port, _login, _password, 'QVX:$k',
+      )),
+    );
+    if (!mounted) return;
+
+    int parseAt(int i, String key) =>
+        _parseInt(results[i], key) ?? 0;
+
+    _corner
+      ..gmfi1 = parseAt(0, 'GMFI1')
+      ..gmfi2 = parseAt(1, 'GMFI2')
+      ..gmfi3 = parseAt(2, 'GMFI3')
+      ..gmfi4 = parseAt(3, 'GMFI4')
+      ..gmfi6 = parseAt(4, 'GMFI6')
+      ..gmfi7 = parseAt(5, 'GMFI7')
+      ..gmfi8 = parseAt(6, 'GMFI8')
+      ..gmfi9 = parseAt(7, 'GMFI9')
+      ..gmfi5 = parseAt(8, 'GMFI5')
+      ..gmfia = parseAt(9, 'GMFIA')
+      ..gmfib = parseAt(10, 'GMFIB')
+      ..gmfic = parseAt(11, 'GMFIC')
+      ..gmfid = parseAt(12, 'GMFID')
+      ..gmfie = parseAt(13, 'GMFIE');
+  }
+
+  Future<void> _loadKeystone() async {
+    final results = await Future.wait([
+      _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:GMKS0'),
+      _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:GMKI4'),
+      _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:GMKI7'),
+      _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:GMKS8'),
+      _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:GMKS9'),
+    ]);
+    if (!mounted) return;
+
+    _keystone
+      ..gmks0 = _parseDouble(results[0], 'GMKS0') ?? 1.5
+      ..gmki4 = _parseInt(results[1], 'GMKI4') ?? 0
+      ..gmki7 = _parseInt(results[2], 'GMKI7') ?? 0
+      ..gmks8 = _parseDouble(results[3], 'GMKS8') ?? 0.0
+      ..gmks9 = _parseDouble(results[4], 'GMKS9') ?? 0.0;
+  }
+
+  Future<void> _loadCurved() async {
+    final results = await Future.wait([
+      _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:GMCS0'),
+      _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:GMCI2'),
+      _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:GMCI3'),
+      _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:GMCI6'),
+      _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:GMCI7'),
+      _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:GMCS8'),
+      _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:GMCS9'),
+      _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:GMCIA'),
+    ]);
+    if (!mounted) return;
+
+    _curved
+      ..gmcs0 = _parseDouble(results[0], 'GMCS0') ?? 1.5
+      ..gmci2 = _parseInt(results[1], 'GMCI2') ?? 0
+      ..gmci3 = _parseInt(results[2], 'GMCI3') ?? 0
+      ..gmci6 = _parseInt(results[3], 'GMCI6') ?? 0
+      ..gmci7 = _parseInt(results[4], 'GMCI7') ?? 0
+      ..gmcs8 = _parseDouble(results[5], 'GMCS8') ?? 0.0
+      ..gmcs9 = _parseDouble(results[6], 'GMCS9') ?? 0.0
+      ..gmcia = (_parseInt(results[7], 'GMCIA') ?? 0) == 1;
+  }
+
+  // ─── Response parsing ────────────────────────────────────────────────────
+  String? _parseValue(String? response, String key) {
+    if (response == null) return null;
+    final keyed = '$key=';
+    final idx = response.indexOf(keyed);
+    if (idx >= 0) return response.substring(idx + keyed.length).trim();
+    final eq = response.indexOf('=');
+    if (eq >= 0) return response.substring(eq + 1).trim();
+    return response.trim();
+  }
+
+  int? _parseInt(String? response, String key) {
+    final raw = _parseValue(response, key);
+    if (raw == null) return null;
+    return int.tryParse(raw.replaceAll('+', ''));
+  }
+
+  double? _parseDouble(String? response, String key) {
+    final raw = _parseValue(response, key);
+    if (raw == null) return null;
+    return double.tryParse(raw.replaceAll('+', ''));
+  }
+
+  // ─── Formatters ──────────────────────────────────────────────────────────
+  static String _fmtInt(int v) =>
+      '${v >= 0 ? '+' : '-'}${v.abs().toString().padLeft(5, '0')}';
+
+  static String _fmtDeg(double v) {
+    final clamped = double.parse(v.toStringAsFixed(1));
+    return '${clamped >= 0 ? '+' : '-'}${clamped.abs().toStringAsFixed(1)}';
+  }
+
+  static String _fmtThrow(double v) {
+    final clamped = double.parse(v.toStringAsFixed(1));
+    final body = clamped.toStringAsFixed(1).padLeft(4, '0');
+    return '+$body';
+  }
+
+  // ─── Senders ─────────────────────────────────────────────────────────────
+  Future<void> _sendMode(_GeometryMode m) => _service.sendRawCommand(
+    _ip, _port, _login, _password, 'VXX:GMMI0=${m.protocolValue}',
+  );
+
+  Future<void> _sendInt(String key, int v) => _service.sendRawCommand(
+    _ip, _port, _login, _password, 'VXX:$key=${_fmtInt(v)}',
+  );
+
+  Future<void> _sendDeg(String key, double v) => _service.sendRawCommand(
+    _ip, _port, _login, _password, 'VXX:$key=${_fmtDeg(v)}',
+  );
+
+  Future<void> _sendThrow(String key, double v) => _service.sendRawCommand(
+    _ip, _port, _login, _password, 'VXX:$key=${_fmtThrow(v)}',
+  );
+
+  Future<void> _sendBool(String key, bool on) =>
+      _sendInt(key, on ? 1 : 0);
+
+  // ─── Build ───────────────────────────────────────────────────────────────
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Dialog(
+      clipBehavior: Clip.antiAlias,
+      child: SizedBox(
+        width: 620,
+        height: 720,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Title bar
+            Container(
+              color: theme.colorScheme.surfaceContainerHigh,
+              padding: const EdgeInsets.fromLTRB(24, 12, 8, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Geometry Correction - ${widget.node.ipAddress}',
+                      style: theme.textTheme.titleMedium,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    iconSize: 20,
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+
+            if (_loading)
+              const Expanded(child: Center(child: CircularProgressIndicator()))
+            else ...[
+              // Mode dropdown
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+                child: DropdownMenu<_GeometryMode>(
+                  requestFocusOnTap: false,
+                  enableFilter: false,
+                  initialSelection: _mode,
+                  expandedInsets: EdgeInsets.zero,
+                  label: const Text('Correction Mode'),
+                  inputDecorationTheme: const InputDecorationTheme(
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  ),
+                  dropdownMenuEntries: _GeometryMode.values
+                      .map((m) => DropdownMenuEntry(value: m, label: m.label))
+                      .toList(),
+                  onSelected: (m) {
+                    if (m == null || m == _mode) return;
+                    setState(() => _mode = m);
+                    _sendMode(m);
+                    _ensureModeLoaded(m);
+                  },
+                ),
+              ),
+              const Divider(height: 1),
+
+              Expanded(
+                child: _modeLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _buildBody(),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody() => switch (_mode) {
+    _GeometryMode.off => _buildOffBody(),
+    _GeometryMode.corner => _buildCornerBody(),
+    _GeometryMode.keystone => _buildKeystoneBody(),
+    _GeometryMode.curved => _buildCurvedBody(),
+    _ => _buildPcPlaceholder(),
+  };
+
+  // ─── Off / PC placeholders ───────────────────────────────────────────────
+  Widget _buildOffBody() => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(40),
+      child: Text(
+        'Geometry correction is disabled.\nSelect a mode above to enable it.',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+        ),
+      ),
+    ),
+  );
+
+  Widget _buildPcPlaceholder() => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(40),
+      child: Text(
+        'PC correction is not supported in this version.',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+        ),
+      ),
+    ),
+  );
+
+  // ─── Corner Correction body ──────────────────────────────────────────────
+  Widget _buildCornerBody() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Center(
+            child: _CornerCorrectionCanvas(
+              state: _corner,
+              onCornerChanged: () => setState(() {}),
+              onCornerCommit: (List<(String, int)> commands) async {
+                for (final (key, value) in commands) {
+                  await _sendInt(key, value);
+                }
+              },
+            ),
+          ),
+        ),
+        const Divider(height: 1),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+            child: _buildCornerSliders(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCornerSliders() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _compactSlider(
+                label: 'Linearity V',
+                value: _corner.gmfi5.toDouble(),
+                min: -127, max: 127, divisions: 254,
+                onChanged: (v) => setState(() => _corner.gmfi5 = v.round()),
+                onChangeEnd: (v) => _sendInt('GMFI5', v.round()),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _compactSlider(
+                label: 'Linearity H',
+                value: _corner.gmfia.toDouble(),
+                min: -127, max: 127, divisions: 254,
+                onChanged: (v) => setState(() => _corner.gmfia = v.round()),
+                onChangeEnd: (v) => _sendInt('GMFIA', v.round()),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _compactSlider(
+                label: 'Pincushion Upper',
+                value: _corner.gmfib.toDouble(),
+                min: -100, max: 100, divisions: 200,
+                onChanged: (v) => setState(() => _corner.gmfib = v.round()),
+                onChangeEnd: (v) => _sendInt('GMFIB', v.round()),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _compactSlider(
+                label: 'Pincushion Lower',
+                value: _corner.gmfic.toDouble(),
+                min: -100, max: 100, divisions: 200,
+                onChanged: (v) => setState(() => _corner.gmfic = v.round()),
+                onChangeEnd: (v) => _sendInt('GMFIC', v.round()),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _compactSlider(
+                label: 'Pincushion Left',
+                value: _corner.gmfid.toDouble(),
+                min: -100, max: 100, divisions: 200,
+                onChanged: (v) => setState(() => _corner.gmfid = v.round()),
+                onChangeEnd: (v) => _sendInt('GMFID', v.round()),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _compactSlider(
+                label: 'Pincushion Right',
+                value: _corner.gmfie.toDouble(),
+                min: -100, max: 100, divisions: 200,
+                onChanged: (v) => setState(() => _corner.gmfie = v.round()),
+                onChangeEnd: (v) => _sendInt('GMFIE', v.round()),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // Compact slider used in corner pincushion/linearity rows.
+  Widget _compactSlider({
+    required String label,
+    required double value,
+    required double min,
+    required double max,
+    required int divisions,
+    required ValueChanged<double> onChanged,
+    required ValueChanged<double> onChangeEnd,
+  }) {
+    final theme = Theme.of(context);
+    final display = value.round();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(label, style: theme.textTheme.bodySmall),
+            Text(
+              display >= 0 ? '+$display' : '$display',
+              style: theme.textTheme.bodySmall,
+            ),
+          ],
+        ),
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            trackHeight: 2,
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+          ),
+          child: Slider(
+            value: value.clamp(min, max),
+            min: min,
+            max: max,
+            divisions: divisions,
+            onChanged: onChanged,
+            onChangeEnd: onChangeEnd,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ─── Keystone body ───────────────────────────────────────────────────────
+  Widget _buildKeystoneBody() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Center(
+            child: _TrapezoidCanvas(
+              vKeystone: _keystone.gmks8,
+              hKeystone: _keystone.gmks9,
+              vArc: 0,
+              hArc: 0,
+            ),
+          ),
+        ),
+        const Divider(height: 1),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+            child: Column(
+              children: [
+                _labeledSlider(
+                  label: 'Vertical Keystone',
+                  value: _keystone.gmks8,
+                  min: -40, max: 40, divisions: 80,
+                  display: '${_keystone.gmks8.toStringAsFixed(1)}°',
+                  onChanged: (v) => setState(() =>
+                      _keystone.gmks8 = double.parse(v.toStringAsFixed(1))),
+                  onChangeEnd: (v) => _sendDeg('GMKS8',
+                      double.parse(v.toStringAsFixed(1))),
+                ),
+                _labeledSlider(
+                  label: 'Horizontal Keystone',
+                  value: _keystone.gmks9,
+                  min: -15, max: 15, divisions: 30,
+                  display: '${_keystone.gmks9.toStringAsFixed(1)}°',
+                  onChanged: (v) => setState(() =>
+                      _keystone.gmks9 = double.parse(v.toStringAsFixed(1))),
+                  onChangeEnd: (v) => _sendDeg('GMKS9',
+                      double.parse(v.toStringAsFixed(1))),
+                ),
+                _labeledSlider(
+                  label: 'Vertical Balance',
+                  value: _keystone.gmki4.toDouble(),
+                  min: -60, max: 60, divisions: 120,
+                  display: _signed(_keystone.gmki4),
+                  onChanged: (v) => setState(() => _keystone.gmki4 = v.round()),
+                  onChangeEnd: (v) => _sendInt('GMKI4', v.round()),
+                ),
+                _labeledSlider(
+                  label: 'Horizontal Balance',
+                  value: _keystone.gmki7.toDouble(),
+                  min: -30, max: 30, divisions: 60,
+                  display: _signed(_keystone.gmki7),
+                  onChanged: (v) => setState(() => _keystone.gmki7 = v.round()),
+                  onChangeEnd: (v) => _sendInt('GMKI7', v.round()),
+                ),
+                const SizedBox(height: 8),
+                _throwRatioField(
+                  value: _keystone.gmks0,
+                  onCommit: (v) {
+                    setState(() => _keystone.gmks0 = v);
+                    _sendThrow('GMKS0', v);
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Slider with label/value row above; full-width track.
+  Widget _labeledSlider({
+    required String label,
+    required double value,
+    required double min,
+    required double max,
+    required int divisions,
+    required String display,
+    required ValueChanged<double> onChanged,
+    required ValueChanged<double> onChangeEnd,
+  }) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(label, style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              )),
+              Text(display, style: theme.textTheme.titleSmall),
+            ],
+          ),
+          Slider(
+            value: value.clamp(min, max),
+            min: min,
+            max: max,
+            divisions: divisions,
+            onChanged: onChanged,
+            onChangeEnd: onChangeEnd,
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _signed(int v) => v >= 0 ? '+$v' : '$v';
+
+  // Throw ratio editable field (commits on submit/blur).
+  Widget _throwRatioField({
+    required double value,
+    required ValueChanged<double> onCommit,
+  }) {
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        Expanded(
+          flex: 2,
+          child: Text('Lens Throw Ratio', style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.bold,
+          )),
+        ),
+        Expanded(
+          flex: 3,
+          child: _ThrowRatioInput(
+            initialValue: value,
+            onCommit: onCommit,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ─── Curved body ─────────────────────────────────────────────────────────
+  Widget _buildCurvedBody() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Center(
+            child: _TrapezoidCanvas(
+              vKeystone: _curved.gmcs8,
+              hKeystone: _curved.gmcs9,
+              vArc: _curved.gmci3,
+              hArc: _curved.gmci7,
+            ),
+          ),
+        ),
+        const Divider(height: 1),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+            child: Column(
+              children: [
+                _labeledSlider(
+                  label: 'Vertical Arc',
+                  value: _curved.gmci3.toDouble(),
+                  min: -40, max: 40, divisions: 80,
+                  display: _signed(_curved.gmci3),
+                  onChanged: (v) => setState(() => _curved.gmci3 = v.round()),
+                  onChangeEnd: (v) => _sendInt('GMCI3', v.round()),
+                ),
+                _labeledSlider(
+                  label: 'Horizontal Arc',
+                  value: _curved.gmci7.toDouble(),
+                  min: -40, max: 40, divisions: 80,
+                  display: _signed(_curved.gmci7),
+                  onChanged: (v) => setState(() => _curved.gmci7 = v.round()),
+                  onChangeEnd: (v) => _sendInt('GMCI7', v.round()),
+                ),
+                _labeledSlider(
+                  label: 'Vertical Keystone',
+                  value: _curved.gmcs8,
+                  min: -40, max: 40, divisions: 80,
+                  display: '${_curved.gmcs8.toStringAsFixed(1)}°',
+                  onChanged: (v) => setState(() =>
+                      _curved.gmcs8 = double.parse(v.toStringAsFixed(1))),
+                  onChangeEnd: (v) => _sendDeg('GMCS8',
+                      double.parse(v.toStringAsFixed(1))),
+                ),
+                _labeledSlider(
+                  label: 'Horizontal Keystone',
+                  value: _curved.gmcs9,
+                  min: -15, max: 15, divisions: 30,
+                  display: '${_curved.gmcs9.toStringAsFixed(1)}°',
+                  onChanged: (v) => setState(() =>
+                      _curved.gmcs9 = double.parse(v.toStringAsFixed(1))),
+                  onChangeEnd: (v) => _sendDeg('GMCS9',
+                      double.parse(v.toStringAsFixed(1))),
+                ),
+                _labeledSlider(
+                  label: 'Vertical Balance',
+                  value: _curved.gmci2.toDouble(),
+                  min: -60, max: 60, divisions: 120,
+                  display: _signed(_curved.gmci2),
+                  onChanged: (v) => setState(() => _curved.gmci2 = v.round()),
+                  onChangeEnd: (v) => _sendInt('GMCI2', v.round()),
+                ),
+                _labeledSlider(
+                  label: 'Horizontal Balance',
+                  value: _curved.gmci6.toDouble(),
+                  min: -30, max: 30, divisions: 60,
+                  display: _signed(_curved.gmci6),
+                  onChanged: (v) => setState(() => _curved.gmci6 = v.round()),
+                  onChangeEnd: (v) => _sendInt('GMCI6', v.round()),
+                ),
+                const SizedBox(height: 8),
+                _throwRatioField(
+                  value: _curved.gmcs0,
+                  onCommit: (v) {
+                    setState(() => _curved.gmcs0 = v);
+                    _sendThrow('GMCS0', v);
+                  },
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Maintain Aspect Ratio',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    Switch(
+                      value: _curved.gmcia,
+                      onChanged: (v) {
+                        setState(() => _curved.gmcia = v);
+                        _sendBool('GMCIA', v);
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─── Trapezoid Canvas (keystone + curved preview) ──────────────────────────
+class _TrapezoidCanvas extends StatelessWidget {
+  final double vKeystone; // -40..40
+  final double hKeystone; // -15..15
+  final int vArc;          // -40..40
+  final int hArc;          // -40..40
+
+  const _TrapezoidCanvas({
+    required this.vKeystone,
+    required this.hKeystone,
+    required this.vArc,
+    required this.hArc,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SizedBox(
+      width: 480,
+      height: 280,
+      child: CustomPaint(
+        painter: _TrapezoidPainter(
+          vKeystone: vKeystone,
+          hKeystone: hKeystone,
+          vArc: vArc,
+          hArc: hArc,
+          outline: theme.colorScheme.primary,
+          fill: theme.colorScheme.primary.withValues(alpha: 0.10),
+          defaultColor: theme.dividerColor,
+        ),
+      ),
+    );
+  }
+}
+
+class _TrapezoidPainter extends CustomPainter {
+  final double vKeystone, hKeystone;
+  final int vArc, hArc;
+  final Color outline, fill, defaultColor;
+
+  _TrapezoidPainter({
+    required this.vKeystone,
+    required this.hKeystone,
+    required this.vArc,
+    required this.hArc,
+    required this.outline,
+    required this.fill,
+    required this.defaultColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Default frame: 240w × 160h centered at (240, 140).
+    const defaultRect = Rect.fromLTRB(120, 60, 360, 220);
+
+    // Default reference outline (faint).
+    canvas.drawRect(
+      defaultRect,
+      Paint()
+        ..color = defaultColor.withValues(alpha: 0.5)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
+
+    // V keystone: positive = top wider (TL moves left, TR moves right).
+    final vSkew = (vKeystone / 40.0) * 50.0;
+    // H keystone: positive = right edge longer (TR moves up, BR moves down).
+    final hSkew = (hKeystone / 15.0) * 25.0;
+
+    final ul = Offset(defaultRect.left - vSkew, defaultRect.top + hSkew);
+    final ur = Offset(defaultRect.right + vSkew, defaultRect.top - hSkew);
+    final ll = Offset(defaultRect.left + vSkew, defaultRect.bottom - hSkew);
+    final lr = Offset(defaultRect.right - vSkew, defaultRect.bottom + hSkew);
+
+    // Arc bow magnitudes (curved mode only; 0 for keystone).
+    // V arc bows top/bottom edges; H arc bows left/right edges.
+    final vBow = (vArc / 40.0) * 30.0;
+    final hBow = (hArc / 40.0) * 30.0;
+
+    final path = Path()..moveTo(ul.dx, ul.dy);
+
+    // Top edge: bezier from UL to UR, control offset by vBow upward.
+    final topMid = Offset((ul.dx + ur.dx) / 2, (ul.dy + ur.dy) / 2 - vBow);
+    path.quadraticBezierTo(topMid.dx, topMid.dy, ur.dx, ur.dy);
+
+    // Right edge: bezier from UR to LR, control offset by hBow rightward.
+    final rightMid = Offset((ur.dx + lr.dx) / 2 + hBow, (ur.dy + lr.dy) / 2);
+    path.quadraticBezierTo(rightMid.dx, rightMid.dy, lr.dx, lr.dy);
+
+    // Bottom edge: bezier from LR to LL, control offset by vBow downward.
+    final botMid = Offset((lr.dx + ll.dx) / 2, (lr.dy + ll.dy) / 2 + vBow);
+    path.quadraticBezierTo(botMid.dx, botMid.dy, ll.dx, ll.dy);
+
+    // Left edge: bezier from LL to UL, control offset by hBow leftward.
+    final leftMid = Offset((ll.dx + ul.dx) / 2 - hBow, (ll.dy + ul.dy) / 2);
+    path.quadraticBezierTo(leftMid.dx, leftMid.dy, ul.dx, ul.dy);
+
+    path.close();
+
+    canvas.drawPath(path, Paint()..color = fill);
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = outline
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _TrapezoidPainter old) =>
+      old.vKeystone != vKeystone ||
+      old.hKeystone != hKeystone ||
+      old.vArc != vArc ||
+      old.hArc != hArc ||
+      old.outline != outline ||
+      old.fill != fill ||
+      old.defaultColor != defaultColor;
+}
+
+// ─── Throw ratio input ─────────────────────────────────────────────────────
+class _ThrowRatioInput extends StatefulWidget {
+  final double initialValue;
+  final ValueChanged<double> onCommit;
+
+  const _ThrowRatioInput({
+    required this.initialValue,
+    required this.onCommit,
+  });
+
+  @override
+  State<_ThrowRatioInput> createState() => _ThrowRatioInputState();
+}
+
+class _ThrowRatioInputState extends State<_ThrowRatioInput> {
+  late final TextEditingController _controller;
+  late final FocusNode _focusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(
+      text: widget.initialValue.toStringAsFixed(1),
+    );
+    _focusNode = FocusNode();
+    _focusNode.addListener(() {
+      if (!_focusNode.hasFocus) _commit();
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _commit() {
+    final parsed = double.tryParse(_controller.text);
+    if (parsed == null) {
+      _controller.text = widget.initialValue.toStringAsFixed(1);
+      return;
+    }
+    final clamped = parsed.clamp(0.7, 16.5);
+    final formatted = clamped.toStringAsFixed(1);
+    _controller.text = formatted;
+    widget.onCommit(double.parse(formatted));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: _controller,
+      focusNode: _focusNode,
+      textAlign: TextAlign.right,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      decoration: const InputDecoration(
+        isDense: true,
+        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        border: OutlineInputBorder(),
+        suffixText: ':1',
+        helperText: '0.7 – 16.5',
+      ),
+      onSubmitted: (_) => _commit(),
+    );
+  }
+}
+
+// ─── Corner Correction Canvas ──────────────────────────────────────────────
+class _CornerCorrectionCanvas extends StatefulWidget {
+  final _CornerState state;
+  final VoidCallback onCornerChanged;
+  // Commands list is paired (param_key, value) for atomic per-drag commit.
+  final Future<void> Function(List<(String, int)>) onCornerCommit;
+
+  const _CornerCorrectionCanvas({
+    required this.state,
+    required this.onCornerChanged,
+    required this.onCornerCommit,
+  });
+
+  @override
+  State<_CornerCorrectionCanvas> createState() =>
+      _CornerCorrectionCanvasState();
+}
+
+class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
+  // Canvas dimensions and frame layout.
+  // Frame (320×200) represents the full 1920×1200 projector canvas at scale 6.0.
+  static const double _w = 480;
+  static const double _h = 300;
+  // Default frame corners — the un-warped rectangle, centered with 80/50px margins.
+  static const Map<_Corner, Offset> _defaults = {
+    _Corner.ul: Offset(80, 50),
+    _Corner.ur: Offset(400, 50),
+    _Corner.ll: Offset(80, 250),
+    _Corner.lr: Offset(400, 250),
+  };
+
+  // 1 canvas pixel = 6 projector pixels (1920/320 = 1200/200 = 6.0).
+  // Protocol range ±480 H / ±300 V maps to ±80 / ±50 canvas pixels.
+  static const double _scale = 6.0;
+
+  // Each corner's allowed canvas bounds — full ±80px H / ±50px V range.
+  static const Map<_Corner, Rect> _bounds = {
+    _Corner.ul: Rect.fromLTRB(0, 0, 160, 100),
+    _Corner.ur: Rect.fromLTRB(320, 0, 480, 100),
+    _Corner.ll: Rect.fromLTRB(0, 200, 160, 300),
+    _Corner.lr: Rect.fromLTRB(320, 200, 480, 300),
+  };
+
+  final Set<_Corner> _selected = {};
+
+  // ─── Param ↔ canvas conversions ──────────────────────────────────────────
+  Offset _positionOf(_Corner c) {
+    final s = widget.state;
+    final d = _defaults[c]!;
+    return switch (c) {
+      _Corner.ul => Offset(d.dx + s.gmfi6 / _scale, d.dy + s.gmfi1 / _scale),
+      _Corner.ur => Offset(d.dx + s.gmfi7 / _scale, d.dy + s.gmfi2 / _scale),
+      _Corner.ll => Offset(d.dx + s.gmfi8 / _scale, d.dy + s.gmfi3 / _scale),
+      _Corner.lr => Offset(d.dx + s.gmfi9 / _scale, d.dy + s.gmfi4 / _scale),
+    };
+  }
+
+  void _applyCornerPosition(_Corner which, Offset position) {
+    final rect = _bounds[which]!;
+    final defaultPos = _defaults[which]!;
+    final clamped = Offset(
+      position.dx.clamp(rect.left, rect.right),
+      position.dy.clamp(rect.top, rect.bottom),
+    );
+    final hValue = ((clamped.dx - defaultPos.dx) * _scale).round();
+    final vValue = ((clamped.dy - defaultPos.dy) * _scale).round();
+
+    switch (which) {
+      case _Corner.ul:
+        widget.state.gmfi6 = hValue.clamp(-480, 480);
+        widget.state.gmfi1 = vValue.clamp(-300, 300);
+        break;
+      case _Corner.ur:
+        widget.state.gmfi7 = hValue.clamp(-480, 480);
+        widget.state.gmfi2 = vValue.clamp(-300, 300);
+        break;
+      case _Corner.ll:
+        widget.state.gmfi8 = hValue.clamp(-480, 480);
+        widget.state.gmfi3 = vValue.clamp(-300, 300);
+        break;
+      case _Corner.lr:
+        widget.state.gmfi9 = hValue.clamp(-480, 480);
+        widget.state.gmfi4 = vValue.clamp(-300, 300);
+        break;
+    }
+    widget.onCornerChanged();
+  }
+
+  List<(String, int)> _commandsFor(_Corner which) {
+    final s = widget.state;
+    return switch (which) {
+      _Corner.ul => [('GMFI6', s.gmfi6), ('GMFI1', s.gmfi1)],
+      _Corner.ur => [('GMFI7', s.gmfi7), ('GMFI2', s.gmfi2)],
+      _Corner.ll => [('GMFI8', s.gmfi8), ('GMFI3', s.gmfi3)],
+      _Corner.lr => [('GMFI9', s.gmfi9), ('GMFI4', s.gmfi4)],
+    };
+  }
+
+  bool get _multiSelectActive {
+    final keys = HardwareKeyboard.instance.logicalKeysPressed;
+    return keys.contains(LogicalKeyboardKey.controlLeft) ||
+        keys.contains(LogicalKeyboardKey.controlRight) ||
+        keys.contains(LogicalKeyboardKey.metaLeft) ||
+        keys.contains(LogicalKeyboardKey.metaRight) ||
+        keys.contains(LogicalKeyboardKey.shiftLeft) ||
+        keys.contains(LogicalKeyboardKey.shiftRight);
+  }
+
+  void _onHandleTap(_Corner which) {
+    setState(() {
+      if (_multiSelectActive) {
+        if (!_selected.add(which)) _selected.remove(which);
+      } else {
+        _selected
+          ..clear()
+          ..add(which);
+      }
+    });
+  }
+
+  void _onHandlePanStart(_Corner which) {
+    if (!_selected.contains(which)) {
+      setState(() {
+        if (!_multiSelectActive) _selected.clear();
+        _selected.add(which);
+      });
+    }
+  }
+
+  void _onHandlePanUpdate(Offset delta) {
+    for (final c in _selected) {
+      _applyCornerPosition(c, _positionOf(c) + delta);
+    }
+  }
+
+  Future<void> _onHandlePanEnd() async {
+    final commands = <(String, int)>[];
+    for (final c in _selected) {
+      commands.addAll(_commandsFor(c));
+    }
+    await widget.onCornerCommit(commands);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SizedBox(
+      width: _w,
+      height: _h,
+      child: GestureDetector(
+        // Background tap clears selection.
+        behavior: HitTestBehavior.deferToChild,
+        onTap: () => setState(() => _selected.clear()),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: IgnorePointer(
+                child: CustomPaint(
+                  painter: _CornerCorrectionPainter(
+                    ul: _positionOf(_Corner.ul),
+                    ur: _positionOf(_Corner.ur),
+                    ll: _positionOf(_Corner.ll),
+                    lr: _positionOf(_Corner.lr),
+                    outline: theme.colorScheme.primary,
+                    fill: theme.colorScheme.primary.withValues(alpha: 0.10),
+                    defaultColor: theme.dividerColor,
+                  ),
+                ),
+              ),
+            ),
+            for (final c in _Corner.values) _handle(c, _positionOf(c)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _handle(_Corner which, Offset pos) {
+    const radius = 10.0;
+    final theme = Theme.of(context);
+    final isSelected = _selected.contains(which);
+    return Positioned(
+      left: pos.dx - radius,
+      top: pos.dy - radius,
+      child: GestureDetector(
+        onTap: () => _onHandleTap(which),
+        onPanStart: (_) => _onHandlePanStart(which),
+        onPanUpdate: (details) => _onHandlePanUpdate(details.delta),
+        onPanEnd: (_) => _onHandlePanEnd(),
+        child: MouseRegion(
+          cursor: SystemMouseCursors.move,
+          child: Container(
+            width: radius * 2,
+            height: radius * 2,
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? theme.colorScheme.tertiary
+                  : theme.colorScheme.primary,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Colors.white,
+                width: isSelected ? 3 : 2,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.25),
+                  blurRadius: isSelected ? 6 : 4,
+                  offset: const Offset(0, 1),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+enum _Corner { ul, ur, ll, lr }
+
+class _CornerCorrectionPainter extends CustomPainter {
+  final Offset ul, ur, ll, lr;
+  final Color outline, fill, defaultColor;
+
+  _CornerCorrectionPainter({
+    required this.ul,
+    required this.ur,
+    required this.ll,
+    required this.lr,
+    required this.outline,
+    required this.fill,
+    required this.defaultColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Default frame outline (faint reference rectangle).
+    final defaultPaint = Paint()
+      ..color = defaultColor.withValues(alpha: 0.5)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    canvas.drawRect(
+      const Rect.fromLTRB(80, 50, 400, 250),
+      defaultPaint,
+    );
+
+    // Warped quadrilateral: fill + outline.
+    final path = Path()
+      ..moveTo(ul.dx, ul.dy)
+      ..lineTo(ur.dx, ur.dy)
+      ..lineTo(lr.dx, lr.dy)
+      ..lineTo(ll.dx, ll.dy)
+      ..close();
+
+    canvas.drawPath(path, Paint()..color = fill);
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = outline
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2,
+    );
+
+    // 3x3 reference grid inside the warped quad.
+    final gridPaint = Paint()
+      ..color = outline.withValues(alpha: 0.25)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    for (int i = 1; i < 3; i++) {
+      final t = i / 3.0;
+      canvas.drawLine(Offset.lerp(ul, ur, t)!, Offset.lerp(ll, lr, t)!, gridPaint);
+      canvas.drawLine(Offset.lerp(ul, ll, t)!, Offset.lerp(ur, lr, t)!, gridPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _CornerCorrectionPainter old) =>
+      old.ul != ul || old.ur != ur || old.ll != ll || old.lr != lr ||
+      old.outline != outline || old.fill != fill || old.defaultColor != defaultColor;
+}

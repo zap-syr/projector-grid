@@ -15,6 +15,7 @@ class ProjectorCard extends StatefulWidget {
   final VoidCallback onDelete;
   final VoidCallback onColorCorrection;
   final VoidCallback onBrightnessControl;
+  final VoidCallback onGeometryCorrection;
   final VoidCallback? onSelectGroup;
   final List<Widget> Function() buildGroupMenuItems;
 
@@ -31,6 +32,7 @@ class ProjectorCard extends StatefulWidget {
     required this.onDelete,
     required this.onColorCorrection,
     required this.onBrightnessControl,
+    required this.onGeometryCorrection,
     required this.onSelectGroup,
     required this.buildGroupMenuItems,
   });
@@ -88,6 +90,11 @@ class _ProjectorCardState extends State<ProjectorCard> {
               onPressed: () => _closeAndRun(widget.onColorCorrection),
               leadingIcon: const Icon(Icons.tune),
               child: const Text('Color Correction'),
+            ),
+            MenuItemButton(
+              onPressed: () => _closeAndRun(widget.onGeometryCorrection),
+              leadingIcon: const Icon(Icons.grid_4x4_outlined),
+              child: const Text('Geometry Correction'),
             ),
             MenuItemButton(
               onPressed: () => _closeAndRun(() {

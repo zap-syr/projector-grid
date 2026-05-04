@@ -9,6 +9,7 @@ import 'projector_card.dart';
 import 'edit_projector_dialog.dart';
 import 'color_correction_dialog.dart';
 import 'brightness_control_dialog.dart';
+import 'geometry_correction_dialog.dart';
 import 'manage_groups_dialog.dart';
 
 class SelectAllIntent extends Intent {
@@ -565,6 +566,15 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
                                             context: context,
                                             builder: (_) =>
                                                 BrightnessControlDialog(
+                                                  node: node,
+                                                ),
+                                          );
+                                        },
+                                        onGeometryCorrection: () {
+                                          showDialog(
+                                            context: context,
+                                            builder: (_) =>
+                                                GeometryCorrectionDialog(
                                                   node: node,
                                                 ),
                                           );
