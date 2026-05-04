@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart' show kDoubleTapTimeout;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../domain/projector_node.dart';
@@ -405,23 +406,48 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
   );
 
   // ─── Corner Correction body ──────────────────────────────────────────────
+  Future<void> _resetAllCorners() async {
+    setState(() {
+      _corner
+        ..gmfi1 = 0 ..gmfi2 = 0 ..gmfi3 = 0 ..gmfi4 = 0
+        ..gmfi6 = 0 ..gmfi7 = 0 ..gmfi8 = 0 ..gmfi9 = 0;
+    });
+    for (final key in ['GMFI1','GMFI2','GMFI3','GMFI4','GMFI6','GMFI7','GMFI8','GMFI9']) {
+      await _sendInt(key, 0);
+    }
+  }
+
   Widget _buildCornerBody() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          child: Center(
-            child: _CornerCorrectionCanvas(
-              state: _corner,
-              onCornerChanged: () => setState(() {}),
-              onCornerCommit: (List<(String, int)> commands) async {
-                for (final (key, value) in commands) {
-                  await _sendInt(key, value);
-                }
-              },
+        Stack(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Center(
+                child: _CornerCorrectionCanvas(
+                  state: _corner,
+                  onCornerChanged: () => setState(() {}),
+                  onCornerCommit: (List<(String, int)> commands) async {
+                    for (final (key, value) in commands) {
+                      await _sendInt(key, value);
+                    }
+                  },
+                ),
+              ),
             ),
-          ),
+            Positioned(
+              top: 4,
+              right: 4,
+              child: IconButton(
+                icon: const Icon(Icons.restart_alt),
+                tooltip: 'Reset all corners',
+                iconSize: 20,
+                onPressed: _resetAllCorners,
+              ),
+            ),
+          ],
         ),
         const Divider(height: 1),
         Expanded(
@@ -1072,6 +1098,11 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
   final Map<_Corner, Offset> _dragStartPositions = {};
   Offset? _dragStartGlobal;
 
+  // Manual double-tap tracking — avoids GestureDetector onDoubleTap which
+  // delays onTap by kDoubleTapTimeout on every single tap.
+  _Corner? _lastTappedCorner;
+  DateTime? _lastTapTime;
+
   final FocusNode _focusNode = FocusNode();
   Timer? _keyHoldTimer;  // fires after hold threshold to begin continuous movement
   Timer? _keyTimer;      // drives continuous movement once hold threshold is reached
@@ -1222,6 +1253,18 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
   }
 
   void _onHandleTap(_Corner which) {
+    final now = DateTime.now();
+    final isDoubleTap = _lastTappedCorner == which &&
+        _lastTapTime != null &&
+        now.difference(_lastTapTime!) <= kDoubleTapTimeout;
+    _lastTappedCorner = which;
+    _lastTapTime = now;
+
+    if (isDoubleTap) {
+      _onHandleDoubleTap(which);
+      return;
+    }
+
     _focusNode.requestFocus();
     setState(() {
       if (_multiSelectActive) {
@@ -1232,6 +1275,25 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
           ..add(which);
       }
     });
+  }
+
+  Future<void> _onHandleDoubleTap(_Corner which) async {
+    switch (which) {
+      case _Corner.ul:
+        widget.state.gmfi6 = 0;
+        widget.state.gmfi1 = 0;
+      case _Corner.ur:
+        widget.state.gmfi7 = 0;
+        widget.state.gmfi2 = 0;
+      case _Corner.ll:
+        widget.state.gmfi8 = 0;
+        widget.state.gmfi3 = 0;
+      case _Corner.lr:
+        widget.state.gmfi9 = 0;
+        widget.state.gmfi4 = 0;
+    }
+    widget.onCornerChanged();
+    await widget.onCornerCommit(_commandsFor(which));
   }
 
   void _onHandlePanStart(_Corner which, DragStartDetails details) {
