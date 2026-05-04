@@ -608,7 +608,7 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
     required ValueChanged<double>? onChangeEnd,
   }) {
     final theme = Theme.of(context);
-    final display = value.round();
+    final displayInt = value.round();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -616,9 +616,18 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(label, style: theme.textTheme.bodySmall),
-            Text(
-              display >= 0 ? '+$display' : '$display',
+            _EditableValueLabel(
+              value: value,
+              min: min,
+              max: max,
+              display: displayInt >= 0 ? '+$displayInt' : '$displayInt',
               style: theme.textTheme.bodySmall,
+              onCommit: (onChanged != null || onChangeEnd != null)
+                  ? (v) {
+                      onChanged?.call(v);
+                      onChangeEnd?.call(v);
+                    }
+                  : null,
             ),
           ],
         ),
@@ -855,7 +864,17 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
               Text(label, style: theme.textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.bold,
               )),
-              Text(display, style: theme.textTheme.titleSmall),
+              _EditableValueLabel(
+                value: value,
+                min: min,
+                max: max,
+                display: display,
+                style: theme.textTheme.titleSmall,
+                onCommit: (v) {
+                  onChanged(v);
+                  onChangeEnd(v);
+                },
+              ),
             ],
           ),
           Slider(
@@ -895,6 +914,117 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ─── Editable value label ──────────────────────────────────────────────────
+// Shows a formatted value string. Tapping switches to a TextField for exact
+// numeric entry; commits on Enter or focus loss, then returns to display mode.
+// Pass onCommit = null to render as plain read-only text (e.g. in AUTO mode).
+class _EditableValueLabel extends StatefulWidget {
+  final double value;
+  final double min;
+  final double max;
+  final String display;
+  final ValueChanged<double>? onCommit;
+  final TextStyle? style;
+
+  const _EditableValueLabel({
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.display,
+    required this.onCommit,
+    this.style,
+  });
+
+  @override
+  State<_EditableValueLabel> createState() => _EditableValueLabelState();
+}
+
+class _EditableValueLabelState extends State<_EditableValueLabel> {
+  bool _editing = false;
+  final _controller = TextEditingController();
+  final _focusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(() {
+      if (!_focusNode.hasFocus && _editing) _commit();
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  // Produce a clean number string for the input field (no +/° decorations).
+  String get _rawText {
+    final rounded = widget.value.roundToDouble();
+    if (widget.value == rounded) return rounded.toInt().toString();
+    return widget.value.toStringAsFixed(1);
+  }
+
+  void _startEditing() {
+    _controller.text = _rawText;
+    _controller.selection = TextSelection(
+      baseOffset: 0,
+      extentOffset: _controller.text.length,
+    );
+    setState(() => _editing = true);
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _focusNode.requestFocus(),
+    );
+  }
+
+  void _commit() {
+    final raw = _controller.text.trim().replaceAll('+', '');
+    final parsed = double.tryParse(raw);
+    setState(() => _editing = false);
+    if (parsed != null) {
+      widget.onCommit?.call(parsed.clamp(widget.min, widget.max));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_editing) {
+      return SizedBox(
+        width: 68,
+        child: TextField(
+          controller: _controller,
+          focusNode: _focusNode,
+          textAlign: TextAlign.right,
+          style: widget.style,
+          keyboardType: const TextInputType.numberWithOptions(
+            decimal: true,
+            signed: true,
+          ),
+          decoration: const InputDecoration(
+            isDense: true,
+            contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            border: OutlineInputBorder(),
+          ),
+          onSubmitted: (_) => _commit(),
+        ),
+      );
+    }
+
+    if (widget.onCommit == null) {
+      return Text(widget.display, style: widget.style);
+    }
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.text,
+      child: GestureDetector(
+        onTap: _startEditing,
+        child: Text(widget.display, style: widget.style),
+      ),
     );
   }
 }
