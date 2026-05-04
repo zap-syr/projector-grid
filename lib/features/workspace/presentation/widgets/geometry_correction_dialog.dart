@@ -261,6 +261,12 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
   }
 
   // ─── Formatters ──────────────────────────────────────────────────────────
+  // Clean numeric string for SleekStepperInput: integer when whole, 1dp otherwise.
+  static String _cleanStr(double v) {
+    final r = v.roundToDouble();
+    return v == r ? r.toInt().toString() : v.toStringAsFixed(1);
+  }
+
   static String _fmtInt(int v) =>
       '${v >= 0 ? '+' : '-'}${v.abs().toString().padLeft(5, '0')}';
 
@@ -523,82 +529,53 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
           ],
         ),
         const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _compactSlider(
-                label: 'Linearity V',
-                value: _corner.gmfi5.toDouble(),
-                min: -127, max: 127, divisions: 254,
-                onChanged: manual ? (v) => setState(() => _corner.gmfi5 = v.round()) : null,
-                onChangeEnd: manual ? (v) => _sendInt('GMFI5', v.round()) : null,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: _compactSlider(
-                label: 'Linearity H',
-                value: _corner.gmfia.toDouble(),
-                min: -127, max: 127, divisions: 254,
-                onChanged: manual ? (v) => setState(() => _corner.gmfia = v.round()) : null,
-                onChangeEnd: manual ? (v) => _sendInt('GMFIA', v.round()) : null,
-              ),
-            ),
-          ],
+        _sliderRow(
+          label: 'Linearity V',
+          value: _corner.gmfi5.toDouble(),
+          min: -127, max: 127, divisions: 254,
+          onChanged: manual ? (v) => setState(() => _corner.gmfi5 = v.round()) : null,
+          onChangeEnd: manual ? (v) => _sendInt('GMFI5', v.round()) : null,
         ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: _compactSlider(
-                label: 'Pincushion Upper',
-                value: _corner.gmfib.toDouble(),
-                min: -100, max: 100, divisions: 200,
-                onChanged: manual ? (v) => setState(() => _corner.gmfib = v.round()) : null,
-                onChangeEnd: manual ? (v) => _sendInt('GMFIB', v.round()) : null,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: _compactSlider(
-                label: 'Pincushion Lower',
-                value: _corner.gmfic.toDouble(),
-                min: -100, max: 100, divisions: 200,
-                onChanged: manual ? (v) => setState(() => _corner.gmfic = v.round()) : null,
-                onChangeEnd: manual ? (v) => _sendInt('GMFIC', v.round()) : null,
-              ),
-            ),
-          ],
+        _sliderRow(
+          label: 'Linearity H',
+          value: _corner.gmfia.toDouble(),
+          min: -127, max: 127, divisions: 254,
+          onChanged: manual ? (v) => setState(() => _corner.gmfia = v.round()) : null,
+          onChangeEnd: manual ? (v) => _sendInt('GMFIA', v.round()) : null,
         ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: _compactSlider(
-                label: 'Pincushion Left',
-                value: _corner.gmfid.toDouble(),
-                min: -100, max: 100, divisions: 200,
-                onChanged: manual ? (v) => setState(() => _corner.gmfid = v.round()) : null,
-                onChangeEnd: manual ? (v) => _sendInt('GMFID', v.round()) : null,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: _compactSlider(
-                label: 'Pincushion Right',
-                value: _corner.gmfie.toDouble(),
-                min: -100, max: 100, divisions: 200,
-                onChanged: manual ? (v) => setState(() => _corner.gmfie = v.round()) : null,
-                onChangeEnd: manual ? (v) => _sendInt('GMFIE', v.round()) : null,
-              ),
-            ),
-          ],
+        _sliderRow(
+          label: 'Pincushion Upper',
+          value: _corner.gmfib.toDouble(),
+          min: -100, max: 100, divisions: 200,
+          onChanged: manual ? (v) => setState(() => _corner.gmfib = v.round()) : null,
+          onChangeEnd: manual ? (v) => _sendInt('GMFIB', v.round()) : null,
+        ),
+        _sliderRow(
+          label: 'Pincushion Lower',
+          value: _corner.gmfic.toDouble(),
+          min: -100, max: 100, divisions: 200,
+          onChanged: manual ? (v) => setState(() => _corner.gmfic = v.round()) : null,
+          onChangeEnd: manual ? (v) => _sendInt('GMFIC', v.round()) : null,
+        ),
+        _sliderRow(
+          label: 'Pincushion Left',
+          value: _corner.gmfid.toDouble(),
+          min: -100, max: 100, divisions: 200,
+          onChanged: manual ? (v) => setState(() => _corner.gmfid = v.round()) : null,
+          onChangeEnd: manual ? (v) => _sendInt('GMFID', v.round()) : null,
+        ),
+        _sliderRow(
+          label: 'Pincushion Right',
+          value: _corner.gmfie.toDouble(),
+          min: -100, max: 100, divisions: 200,
+          onChanged: manual ? (v) => setState(() => _corner.gmfie = v.round()) : null,
+          onChangeEnd: manual ? (v) => _sendInt('GMFIE', v.round()) : null,
         ),
       ],
     );
   }
 
-  Widget _compactSlider({
+  Widget _sliderRow({
     required String label,
     required double value,
     required double min,
@@ -607,44 +584,54 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
     required ValueChanged<double>? onChanged,
     required ValueChanged<double>? onChangeEnd,
   }) {
-    final theme = Theme.of(context);
-    final displayInt = value.round();
+    final enabled = onChanged != null || onChangeEnd != null;
+    final stepper = SleekStepperInput(
+      initialValue: _cleanStr(value),
+      min: min,
+      max: max,
+      onValueChanged: (s) {
+        final v = double.tryParse(s);
+        if (v != null) {
+          onChanged?.call(v);
+          onChangeEnd?.call(v);
+        }
+      },
+    );
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Text(
+          label,
+          style: const TextStyle(color: Colors.white70, fontSize: 13),
+        ),
+        const SizedBox(height: 8),
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(label, style: theme.textTheme.bodySmall),
-            _EditableValueLabel(
-              value: value,
-              min: min,
-              max: max,
-              display: displayInt >= 0 ? '+$displayInt' : '$displayInt',
-              style: theme.textTheme.bodySmall,
-              onCommit: (onChanged != null || onChangeEnd != null)
-                  ? (v) {
-                      onChanged?.call(v);
-                      onChangeEnd?.call(v);
-                    }
-                  : null,
+            Expanded(
+              child: SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  trackHeight: 2,
+                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                ),
+                child: Slider(
+                  value: value.clamp(min, max),
+                  min: min,
+                  max: max,
+                  divisions: divisions,
+                  onChanged: onChanged,
+                  onChangeEnd: onChangeEnd,
+                ),
+              ),
             ),
+            const SizedBox(width: 16),
+            enabled
+                ? stepper
+                : IgnorePointer(
+                    child: Opacity(opacity: 0.38, child: stepper),
+                  ),
           ],
         ),
-        SliderTheme(
-          data: SliderTheme.of(context).copyWith(
-            trackHeight: 2,
-            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-          ),
-          child: Slider(
-            value: value.clamp(min, max),
-            min: min,
-            max: max,
-            divisions: divisions,
-            onChanged: onChanged,
-            onChangeEnd: onChangeEnd,
-          ),
-        ),
+        const SizedBox(height: 24),
       ],
     );
   }
@@ -665,7 +652,6 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
             label: 'Vertical Keystone',
             value: _keystone.gmks8,
             min: -40, max: 40, divisions: 80,
-            display: '${_keystone.gmks8.toStringAsFixed(1)}°',
             onChanged: (v) => setState(() =>
                 _keystone.gmks8 = double.parse(v.toStringAsFixed(1))),
             onChangeEnd: (v) => _sendDeg('GMKS8',
@@ -675,7 +661,6 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
             label: 'Horizontal Keystone',
             value: _keystone.gmks9,
             min: -15, max: 15, divisions: 30,
-            display: '${_keystone.gmks9.toStringAsFixed(1)}°',
             onChanged: (v) => setState(() =>
                 _keystone.gmks9 = double.parse(v.toStringAsFixed(1))),
             onChangeEnd: (v) => _sendDeg('GMKS9',
@@ -685,7 +670,6 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
             label: 'Vertical Balance',
             value: _keystone.gmki4.toDouble(),
             min: -60, max: 60, divisions: 120,
-            display: _signed(_keystone.gmki4),
             onChanged: (v) => setState(() => _keystone.gmki4 = v.round()),
             onChangeEnd: (v) => _sendInt('GMKI4', v.round()),
           ),
@@ -693,11 +677,9 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
             label: 'Horizontal Balance',
             value: _keystone.gmki7.toDouble(),
             min: -30, max: 30, divisions: 60,
-            display: _signed(_keystone.gmki7),
             onChanged: (v) => setState(() => _keystone.gmki7 = v.round()),
             onChangeEnd: (v) => _sendInt('GMKI7', v.round()),
           ),
-          const SizedBox(height: 8),
           _throwRatioField(
             value: _keystone.gmks0,
             onCommit: (v) {
@@ -726,7 +708,6 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
             label: 'Vertical Arc',
             value: _curved.gmci3.toDouble(),
             min: -40, max: 40, divisions: 80,
-            display: _signed(_curved.gmci3),
             onChanged: (v) => setState(() => _curved.gmci3 = v.round()),
             onChangeEnd: (v) => _sendInt('GMCI3', v.round()),
           ),
@@ -734,7 +715,6 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
             label: 'Horizontal Arc',
             value: _curved.gmci7.toDouble(),
             min: -40, max: 40, divisions: 80,
-            display: _signed(_curved.gmci7),
             onChanged: (v) => setState(() => _curved.gmci7 = v.round()),
             onChangeEnd: (v) => _sendInt('GMCI7', v.round()),
           ),
@@ -742,7 +722,6 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
             label: 'Vertical Keystone',
             value: _curved.gmcs8,
             min: -40, max: 40, divisions: 80,
-            display: '${_curved.gmcs8.toStringAsFixed(1)}°',
             onChanged: (v) => setState(() =>
                 _curved.gmcs8 = double.parse(v.toStringAsFixed(1))),
             onChangeEnd: (v) => _sendDeg('GMCS8',
@@ -752,7 +731,6 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
             label: 'Horizontal Keystone',
             value: _curved.gmcs9,
             min: -15, max: 15, divisions: 30,
-            display: '${_curved.gmcs9.toStringAsFixed(1)}°',
             onChanged: (v) => setState(() =>
                 _curved.gmcs9 = double.parse(v.toStringAsFixed(1))),
             onChangeEnd: (v) => _sendDeg('GMCS9',
@@ -762,7 +740,6 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
             label: 'Vertical Balance',
             value: _curved.gmci2.toDouble(),
             min: -60, max: 60, divisions: 120,
-            display: _signed(_curved.gmci2),
             onChanged: (v) => setState(() => _curved.gmci2 = v.round()),
             onChangeEnd: (v) => _sendInt('GMCI2', v.round()),
           ),
@@ -770,11 +747,9 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
             label: 'Horizontal Balance',
             value: _curved.gmci6.toDouble(),
             min: -30, max: 30, divisions: 60,
-            display: _signed(_curved.gmci6),
             onChanged: (v) => setState(() => _curved.gmci6 = v.round()),
             onChangeEnd: (v) => _sendInt('GMCI6', v.round()),
           ),
-          const SizedBox(height: 8),
           _throwRatioField(
             value: _curved.gmcs0,
             onCommit: (v) {
@@ -782,7 +757,6 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
               _sendThrow('GMCS0', v);
             },
           ),
-          const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
@@ -841,193 +815,266 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
     );
   }
 
-  // Slider with label/value row above; full-width track.
+  // Slider with label/stepper row above; full-width track.
   Widget _labeledSlider({
     required String label,
     required double value,
     required double min,
     required double max,
     required int divisions,
-    required String display,
     required ValueChanged<double> onChanged,
     required ValueChanged<double> onChangeEnd,
   }) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(label, style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-              )),
-              _EditableValueLabel(
-                value: value,
-                min: min,
-                max: max,
-                display: display,
-                style: theme.textTheme.titleSmall,
-                onCommit: (v) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(color: Colors.white70, fontSize: 13),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  trackHeight: 2,
+                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                ),
+                child: Slider(
+                  value: value.clamp(min, max),
+                  min: min,
+                  max: max,
+                  divisions: divisions,
+                  onChanged: onChanged,
+                  onChangeEnd: onChangeEnd,
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            SleekStepperInput(
+              initialValue: _cleanStr(value),
+              min: min,
+              max: max,
+              onValueChanged: (s) {
+                final v = double.tryParse(s);
+                if (v != null) {
                   onChanged(v);
                   onChangeEnd(v);
-                },
-              ),
-            ],
-          ),
-          Slider(
-            value: value.clamp(min, max),
-            min: min,
-            max: max,
-            divisions: divisions,
-            onChanged: onChanged,
-            onChangeEnd: onChangeEnd,
-          ),
-        ],
-      ),
+                }
+              },
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+      ],
     );
   }
 
-  String _signed(int v) => v >= 0 ? '+$v' : '$v';
-
-  // Throw ratio editable field (commits on submit/blur).
   Widget _throwRatioField({
     required double value,
     required ValueChanged<double> onCommit,
   }) {
-    final theme = Theme.of(context);
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          flex: 2,
-          child: Text('Lens Throw Ratio', style: theme.textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.bold,
-          )),
+        const Text(
+          'Lens Throw Ratio',
+          style: TextStyle(color: Colors.white70, fontSize: 13),
         ),
-        Expanded(
-          flex: 3,
-          child: _ThrowRatioInput(
-            initialValue: value,
-            onCommit: onCommit,
-          ),
+        const SizedBox(height: 8),
+        SleekStepperInput(
+          initialValue: value.toStringAsFixed(1),
+          min: 0.7,
+          max: 16.5,
+          onValueChanged: (s) {
+            final v = double.tryParse(s);
+            if (v != null) onCommit(v);
+          },
         ),
+        const SizedBox(height: 24),
       ],
     );
   }
 }
 
-// ─── Editable value label ──────────────────────────────────────────────────
-// Shows a formatted value string. Tapping switches to a TextField for exact
-// numeric entry; commits on Enter or focus loss, then returns to display mode.
-// Pass onCommit = null to render as plain read-only text (e.g. in AUTO mode).
-class _EditableValueLabel extends StatefulWidget {
-  final double value;
+// ─── Sleek stepper input ──────────────────────────────────────────────────
+// Compact numeric input (60×26) with integrated up/down stepper buttons.
+// Commits via Enter or focus loss; auto-selects text on focus so the user can
+// overwrite immediately. Pass autofocus: true to request focus on first build.
+class SleekStepperInput extends StatefulWidget {
+  final String initialValue;
   final double min;
   final double max;
-  final String display;
-  final ValueChanged<double>? onCommit;
-  final TextStyle? style;
+  final void Function(String) onValueChanged;
+  final bool autofocus;
 
-  const _EditableValueLabel({
-    required this.value,
+  const SleekStepperInput({
+    super.key,
+    required this.initialValue,
     required this.min,
     required this.max,
-    required this.display,
-    required this.onCommit,
-    this.style,
+    required this.onValueChanged,
+    this.autofocus = false,
   });
 
   @override
-  State<_EditableValueLabel> createState() => _EditableValueLabelState();
+  State<SleekStepperInput> createState() => _SleekStepperInputState();
 }
 
-class _EditableValueLabelState extends State<_EditableValueLabel> {
-  bool _editing = false;
-  final _controller = TextEditingController();
-  final _focusNode = FocusNode();
+class _SleekStepperInputState extends State<SleekStepperInput> {
+  late final TextEditingController _controller;
+  late final FocusNode _focusNode;
+  bool _hasFocus = false;
+
+  @override
+  void didUpdateWidget(SleekStepperInput old) {
+    super.didUpdateWidget(old);
+    // Sync controller when parent pushes a new value (e.g. slider drag),
+    // but only while the field is not focused so we don't clobber user input.
+    if (old.initialValue != widget.initialValue && !_focusNode.hasFocus) {
+      _controller.text = widget.initialValue;
+    }
+  }
 
   @override
   void initState() {
     super.initState();
-    _focusNode.addListener(() {
-      if (!_focusNode.hasFocus && _editing) _commit();
-    });
+    _controller = TextEditingController(text: widget.initialValue);
+    _focusNode = FocusNode();
+    _focusNode.addListener(_onFocusChange);
+    if (widget.autofocus) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) { if (mounted) _focusNode.requestFocus(); },
+      );
+    }
   }
 
   @override
   void dispose() {
+    _focusNode.removeListener(_onFocusChange);
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
   }
 
-  // Produce a clean number string for the input field (no +/° decorations).
-  String get _rawText {
-    final rounded = widget.value.roundToDouble();
-    if (widget.value == rounded) return rounded.toInt().toString();
-    return widget.value.toStringAsFixed(1);
-  }
-
-  void _startEditing() {
-    _controller.text = _rawText;
-    _controller.selection = TextSelection(
-      baseOffset: 0,
-      extentOffset: _controller.text.length,
-    );
-    setState(() => _editing = true);
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => _focusNode.requestFocus(),
-    );
+  void _onFocusChange() {
+    setState(() => _hasFocus = _focusNode.hasFocus);
+    if (_focusNode.hasFocus) {
+      // Select all text after the frame so the field has fully processed focus.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _focusNode.hasFocus) {
+          _controller.selection = TextSelection(
+            baseOffset: 0,
+            extentOffset: _controller.text.length,
+          );
+        }
+      });
+    } else {
+      _commit();
+    }
   }
 
   void _commit() {
     final raw = _controller.text.trim().replaceAll('+', '');
     final parsed = double.tryParse(raw);
-    setState(() => _editing = false);
-    if (parsed != null) {
-      widget.onCommit?.call(parsed.clamp(widget.min, widget.max));
+    if (parsed == null) {
+      _controller.text = widget.initialValue;
+      widget.onValueChanged(widget.initialValue);
+      return;
     }
+    final formatted = _format(parsed.clamp(widget.min, widget.max));
+    _controller.text = formatted;
+    widget.onValueChanged(formatted);
+  }
+
+  void _step(int delta) {
+    // Unfocus first so any partially typed text is committed before stepping.
+    if (_focusNode.hasFocus) _focusNode.unfocus();
+    final raw = _controller.text.trim().replaceAll('+', '');
+    final current = double.tryParse(raw) ?? widget.min;
+    final formatted = _format((current + delta).clamp(widget.min, widget.max));
+    _controller.text = formatted;
+    widget.onValueChanged(formatted);
+  }
+
+  // Produce a clean numeric string: integer when value is whole, 1dp otherwise.
+  String _format(double v) {
+    final rounded = v.roundToDouble();
+    if (v == rounded) return rounded.toInt().toString();
+    return v.toStringAsFixed(1);
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_editing) {
-      return SizedBox(
-        width: 68,
-        child: TextField(
-          controller: _controller,
-          focusNode: _focusNode,
-          textAlign: TextAlign.right,
-          style: widget.style,
-          keyboardType: const TextInputType.numberWithOptions(
-            decimal: true,
-            signed: true,
-          ),
-          decoration: const InputDecoration(
-            isDense: true,
-            contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-            border: OutlineInputBorder(),
-          ),
-          onSubmitted: (_) => _commit(),
-        ),
-      );
-    }
+    final borderColor = _hasFocus
+        ? Colors.blueAccent.withValues(alpha: 0.5)
+        : Colors.white.withValues(alpha: 0.1);
 
-    if (widget.onCommit == null) {
-      return Text(widget.display, style: widget.style);
-    }
-
-    return MouseRegion(
-      cursor: SystemMouseCursors.text,
-      child: GestureDetector(
-        onTap: _startEditing,
-        child: Text(widget.display, style: widget.style),
+    return Container(
+      width: 60,
+      height: 26,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: borderColor),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _controller,
+              focusNode: _focusNode,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 12,
+                fontFeatures: [FontFeature.tabularFigures()],
+              ),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+                signed: true,
+              ),
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+              ),
+              onSubmitted: (_) => _commit(),
+            ),
+          ),
+          // Vertical divider between text field and stepper buttons.
+          Container(width: 1, color: Colors.white.withValues(alpha: 0.1)),
+          SizedBox(
+            width: 16,
+            child: Column(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => _step(1),
+                    child: const Center(
+                      child: Icon(Icons.arrow_drop_up, size: 14),
+                    ),
+                  ),
+                ),
+                Container(height: 1, color: Colors.white.withValues(alpha: 0.1)),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => _step(-1),
+                    child: const Center(
+                      child: Icon(Icons.arrow_drop_down, size: 14),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 }
+
 
 // ─── Trapezoid Canvas (keystone + curved preview) ──────────────────────────
 class _TrapezoidCanvas extends StatelessWidget {
@@ -1153,73 +1200,6 @@ class _TrapezoidPainter extends CustomPainter {
       old.defaultColor != defaultColor;
 }
 
-// ─── Throw ratio input ─────────────────────────────────────────────────────
-class _ThrowRatioInput extends StatefulWidget {
-  final double initialValue;
-  final ValueChanged<double> onCommit;
-
-  const _ThrowRatioInput({
-    required this.initialValue,
-    required this.onCommit,
-  });
-
-  @override
-  State<_ThrowRatioInput> createState() => _ThrowRatioInputState();
-}
-
-class _ThrowRatioInputState extends State<_ThrowRatioInput> {
-  late final TextEditingController _controller;
-  late final FocusNode _focusNode;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(
-      text: widget.initialValue.toStringAsFixed(1),
-    );
-    _focusNode = FocusNode();
-    _focusNode.addListener(() {
-      if (!_focusNode.hasFocus) _commit();
-    });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    _focusNode.dispose();
-    super.dispose();
-  }
-
-  void _commit() {
-    final parsed = double.tryParse(_controller.text);
-    if (parsed == null) {
-      _controller.text = widget.initialValue.toStringAsFixed(1);
-      return;
-    }
-    final clamped = parsed.clamp(0.7, 16.5);
-    final formatted = clamped.toStringAsFixed(1);
-    _controller.text = formatted;
-    widget.onCommit(double.parse(formatted));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return TextField(
-      controller: _controller,
-      focusNode: _focusNode,
-      textAlign: TextAlign.right,
-      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      decoration: const InputDecoration(
-        isDense: true,
-        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        border: OutlineInputBorder(),
-        suffixText: ':1',
-        helperText: '0.7 – 16.5',
-      ),
-      onSubmitted: (_) => _commit(),
-    );
-  }
-}
 
 // ─── Corner Correction Canvas ──────────────────────────────────────────────
 class _CornerCorrectionCanvas extends StatefulWidget {
