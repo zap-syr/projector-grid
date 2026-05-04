@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../domain/projector_node.dart';
@@ -54,6 +56,8 @@ class _CornerState {
   int gmfi5 = 0, gmfia = 0;
   // Pincushion: upper, lower, left, right (GMFIB–E)
   int gmfib = 0, gmfic = 0, gmfid = 0, gmfie = 0;
+  // Linearity/Pincushion mode: 0 = AUTO, 1 = MANUAL (GMFIF)
+  int gmfif = 0;
 }
 
 class _KeystoneState {
@@ -158,6 +162,7 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
       'GMFI6', 'GMFI7', 'GMFI8', 'GMFI9',
       'GMFI5', 'GMFIA',
       'GMFIB', 'GMFIC', 'GMFID', 'GMFIE',
+      'GMFIF',
     ];
     final results = await Future.wait(
       keys.map((k) => _service.sendRawCommand(
@@ -183,7 +188,8 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
       ..gmfib = parseAt(10, 'GMFIB')
       ..gmfic = parseAt(11, 'GMFIC')
       ..gmfid = parseAt(12, 'GMFID')
-      ..gmfie = parseAt(13, 'GMFIE');
+      ..gmfie = parseAt(13, 'GMFIE')
+      ..gmfif = parseAt(14, 'GMFIF');
   }
 
   Future<void> _loadKeystone() async {
@@ -429,9 +435,39 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
   }
 
   Widget _buildCornerSliders() {
+    final manual = _corner.gmfif == 1;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Linearity & Pincushion',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            SegmentedButton<int>(
+              segments: const [
+                ButtonSegment(value: 0, label: Text('Auto')),
+                ButtonSegment(value: 1, label: Text('Manual')),
+              ],
+              selected: {_corner.gmfif},
+              showSelectedIcon: false,
+              onSelectionChanged: (v) {
+                setState(() => _corner.gmfif = v.first);
+                _sendInt('GMFIF', v.first);
+              },
+              style: ButtonStyle(
+                visualDensity: VisualDensity.compact,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
         Row(
           children: [
             Expanded(
@@ -439,8 +475,8 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
                 label: 'Linearity V',
                 value: _corner.gmfi5.toDouble(),
                 min: -127, max: 127, divisions: 254,
-                onChanged: (v) => setState(() => _corner.gmfi5 = v.round()),
-                onChangeEnd: (v) => _sendInt('GMFI5', v.round()),
+                onChanged: manual ? (v) => setState(() => _corner.gmfi5 = v.round()) : null,
+                onChangeEnd: manual ? (v) => _sendInt('GMFI5', v.round()) : null,
               ),
             ),
             const SizedBox(width: 16),
@@ -449,8 +485,8 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
                 label: 'Linearity H',
                 value: _corner.gmfia.toDouble(),
                 min: -127, max: 127, divisions: 254,
-                onChanged: (v) => setState(() => _corner.gmfia = v.round()),
-                onChangeEnd: (v) => _sendInt('GMFIA', v.round()),
+                onChanged: manual ? (v) => setState(() => _corner.gmfia = v.round()) : null,
+                onChangeEnd: manual ? (v) => _sendInt('GMFIA', v.round()) : null,
               ),
             ),
           ],
@@ -463,8 +499,8 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
                 label: 'Pincushion Upper',
                 value: _corner.gmfib.toDouble(),
                 min: -100, max: 100, divisions: 200,
-                onChanged: (v) => setState(() => _corner.gmfib = v.round()),
-                onChangeEnd: (v) => _sendInt('GMFIB', v.round()),
+                onChanged: manual ? (v) => setState(() => _corner.gmfib = v.round()) : null,
+                onChangeEnd: manual ? (v) => _sendInt('GMFIB', v.round()) : null,
               ),
             ),
             const SizedBox(width: 16),
@@ -473,8 +509,8 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
                 label: 'Pincushion Lower',
                 value: _corner.gmfic.toDouble(),
                 min: -100, max: 100, divisions: 200,
-                onChanged: (v) => setState(() => _corner.gmfic = v.round()),
-                onChangeEnd: (v) => _sendInt('GMFIC', v.round()),
+                onChanged: manual ? (v) => setState(() => _corner.gmfic = v.round()) : null,
+                onChangeEnd: manual ? (v) => _sendInt('GMFIC', v.round()) : null,
               ),
             ),
           ],
@@ -487,8 +523,8 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
                 label: 'Pincushion Left',
                 value: _corner.gmfid.toDouble(),
                 min: -100, max: 100, divisions: 200,
-                onChanged: (v) => setState(() => _corner.gmfid = v.round()),
-                onChangeEnd: (v) => _sendInt('GMFID', v.round()),
+                onChanged: manual ? (v) => setState(() => _corner.gmfid = v.round()) : null,
+                onChangeEnd: manual ? (v) => _sendInt('GMFID', v.round()) : null,
               ),
             ),
             const SizedBox(width: 16),
@@ -497,8 +533,8 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
                 label: 'Pincushion Right',
                 value: _corner.gmfie.toDouble(),
                 min: -100, max: 100, divisions: 200,
-                onChanged: (v) => setState(() => _corner.gmfie = v.round()),
-                onChangeEnd: (v) => _sendInt('GMFIE', v.round()),
+                onChanged: manual ? (v) => setState(() => _corner.gmfie = v.round()) : null,
+                onChangeEnd: manual ? (v) => _sendInt('GMFIE', v.round()) : null,
               ),
             ),
           ],
@@ -514,8 +550,8 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
     required double min,
     required double max,
     required int divisions,
-    required ValueChanged<double> onChanged,
-    required ValueChanged<double> onChangeEnd,
+    required ValueChanged<double>? onChanged,
+    required ValueChanged<double>? onChangeEnd,
   }) {
     final theme = Theme.of(context);
     final display = value.round();
@@ -1033,6 +1069,94 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
   };
 
   final Set<_Corner> _selected = {};
+  final Map<_Corner, Offset> _dragStartPositions = {};
+  Offset? _dragStartGlobal;
+
+  final FocusNode _focusNode = FocusNode();
+  Timer? _keyHoldTimer;  // fires after hold threshold to begin continuous movement
+  Timer? _keyTimer;      // drives continuous movement once hold threshold is reached
+  LogicalKeyboardKey? _heldKey;
+
+  // Short tap → 1 step only. Hold past this delay → continuous movement.
+  static const _keyHoldDelay = Duration(milliseconds: 400);
+  // Continuous movement rate — intentionally slow for fine control.
+  static const _keyRepeatInterval = Duration(milliseconds: 80);
+
+  static final _arrowKeys = {
+    LogicalKeyboardKey.arrowLeft,
+    LogicalKeyboardKey.arrowRight,
+    LogicalKeyboardKey.arrowUp,
+    LogicalKeyboardKey.arrowDown,
+  };
+
+  static Offset _keyDelta(LogicalKeyboardKey key) => switch (key) {
+    LogicalKeyboardKey.arrowLeft  => const Offset(-1, 0),
+    LogicalKeyboardKey.arrowRight => const Offset(1, 0),
+    LogicalKeyboardKey.arrowUp    => const Offset(0, -1),
+    LogicalKeyboardKey.arrowDown  => const Offset(0, 1),
+    _ => Offset.zero,
+  };
+
+  @override
+  void dispose() {
+    _keyHoldTimer?.cancel();
+    _keyTimer?.cancel();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  // ─── Arrow-key movement ───────────────────────────────────────────────────
+  void _applyStep(Offset delta) {
+    if (!mounted || _selected.isEmpty) return;
+    for (final c in _selected) {
+      _applyCornerPosition(c, _positionOf(c) + delta);
+    }
+    setState(() {});
+  }
+
+  void _startKeyMovement(LogicalKeyboardKey key) {
+    if (_heldKey == key) return;
+    _keyHoldTimer?.cancel();
+    _keyTimer?.cancel();
+    _heldKey = key;
+    final delta = _keyDelta(key);
+
+    // Immediate single step on first press.
+    _applyStep(delta);
+
+    // After hold delay, begin slow continuous movement.
+    _keyHoldTimer = Timer(_keyHoldDelay, () {
+      _keyTimer = Timer.periodic(_keyRepeatInterval, (_) => _applyStep(delta));
+    });
+  }
+
+  Future<void> _stopKeyMovement() async {
+    _keyHoldTimer?.cancel();
+    _keyHoldTimer = null;
+    _keyTimer?.cancel();
+    _keyTimer = null;
+    _heldKey = null;
+    final commands = <(String, int)>[];
+    for (final c in _selected) {
+      commands.addAll(_commandsFor(c));
+    }
+    await widget.onCornerCommit(commands);
+  }
+
+  KeyEventResult _onKeyEvent(FocusNode node, KeyEvent event) {
+    if (!_arrowKeys.contains(event.logicalKey)) return KeyEventResult.ignored;
+    if (_selected.isEmpty) return KeyEventResult.ignored;
+    if (event is KeyDownEvent) {
+      _startKeyMovement(event.logicalKey);
+      return KeyEventResult.handled;
+    }
+    if (event is KeyUpEvent) {
+      _stopKeyMovement();
+      return KeyEventResult.handled;
+    }
+    if (event is KeyRepeatEvent) return KeyEventResult.handled;
+    return KeyEventResult.ignored;
+  }
 
   // ─── Param ↔ canvas conversions ──────────────────────────────────────────
   Offset _positionOf(_Corner c) {
@@ -1098,6 +1222,7 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
   }
 
   void _onHandleTap(_Corner which) {
+    _focusNode.requestFocus();
     setState(() {
       if (_multiSelectActive) {
         if (!_selected.add(which)) _selected.remove(which);
@@ -1109,18 +1234,27 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
     });
   }
 
-  void _onHandlePanStart(_Corner which) {
+  void _onHandlePanStart(_Corner which, DragStartDetails details) {
+    _focusNode.requestFocus();
     if (!_selected.contains(which)) {
       setState(() {
         if (!_multiSelectActive) _selected.clear();
         _selected.add(which);
       });
     }
+    _dragStartPositions
+      ..clear()
+      ..addAll({for (final c in _selected) c: _positionOf(c)});
+    _dragStartGlobal = details.globalPosition;
   }
 
-  void _onHandlePanUpdate(Offset delta) {
+  void _onHandlePanUpdate(DragUpdateDetails details) {
+    if (_dragStartGlobal == null) return;
+    final totalDelta = details.globalPosition - _dragStartGlobal!;
     for (final c in _selected) {
-      _applyCornerPosition(c, _positionOf(c) + delta);
+      final start = _dragStartPositions[c];
+      if (start == null) continue;
+      _applyCornerPosition(c, start + totalDelta);
     }
   }
 
@@ -1135,12 +1269,17 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return SizedBox(
+    return Focus(
+      focusNode: _focusNode,
+      onKeyEvent: _onKeyEvent,
+      child: SizedBox(
       width: _w,
       height: _h,
       child: GestureDetector(
-        // Background tap clears selection.
-        behavior: HitTestBehavior.deferToChild,
+        // Background tap clears selection; opaque so empty-space taps register.
+        // Inner handle GestureDetectors win the arena over this outer one,
+        // so handle taps don't trigger this clear.
+        behavior: HitTestBehavior.opaque,
         onTap: () => setState(() => _selected.clear()),
         child: Stack(
           children: [
@@ -1163,7 +1302,7 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
           ],
         ),
       ),
-    );
+    ));
   }
 
   Widget _handle(_Corner which, Offset pos) {
@@ -1175,8 +1314,8 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
       top: pos.dy - radius,
       child: GestureDetector(
         onTap: () => _onHandleTap(which),
-        onPanStart: (_) => _onHandlePanStart(which),
-        onPanUpdate: (details) => _onHandlePanUpdate(details.delta),
+        onPanStart: (details) => _onHandlePanStart(which, details),
+        onPanUpdate: (details) => _onHandlePanUpdate(details),
         onPanEnd: (_) => _onHandlePanEnd(),
         child: MouseRegion(
           cursor: SystemMouseCursors.move,
