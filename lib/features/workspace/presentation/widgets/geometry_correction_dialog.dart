@@ -11,18 +11,12 @@ enum _GeometryMode {
   off,
   keystone,
   curved,
-  pc1,
-  pc2,
-  pc3,
   corner;
 
   String get label => switch (this) {
     off => 'Off',
     keystone => 'Keystone',
     curved => 'Curved Correction',
-    pc1 => 'PC-1',
-    pc2 => 'PC-2',
-    pc3 => 'PC-3',
     corner => 'Corner Correction',
   };
 
@@ -30,18 +24,12 @@ enum _GeometryMode {
     off => '+00000',
     keystone => '+00001',
     curved => '+00002',
-    pc1 => '+00003',
-    pc2 => '+00004',
-    pc3 => '+00005',
     corner => '+00010',
   };
 
   static _GeometryMode fromProtocol(String value) => switch (value.trim()) {
     '+00001' => keystone,
     '+00002' => curved,
-    '+00003' => pc1,
-    '+00004' => pc2,
-    '+00005' => pc3,
     '+00010' => corner,
     _ => off,
   };
@@ -132,10 +120,7 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
 
   Future<void> _ensureModeLoaded(_GeometryMode mode) async {
     if (_loadedModes.contains(mode)) return;
-    if (mode == _GeometryMode.off ||
-        mode == _GeometryMode.pc1 ||
-        mode == _GeometryMode.pc2 ||
-        mode == _GeometryMode.pc3) {
+    if (mode == _GeometryMode.off) {
       _loadedModes.add(mode);
       return;
     }
@@ -388,7 +373,6 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
     _GeometryMode.corner => _buildCornerBody(),
     _GeometryMode.keystone => _buildKeystoneBody(),
     _GeometryMode.curved => _buildCurvedBody(),
-    _ => _buildPcPlaceholder(),
   };
 
   // Two-column split: canvas left (5 parts) + scrollable controls right (4 parts).
@@ -416,19 +400,6 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
       padding: const EdgeInsets.all(40),
       child: Text(
         'Geometry correction is disabled.\nSelect a mode above to enable it.',
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-        ),
-      ),
-    ),
-  );
-
-  Widget _buildPcPlaceholder() => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(40),
-      child: Text(
-        'PC correction is not supported in this version.',
         textAlign: TextAlign.center,
         style: TextStyle(
           color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
