@@ -503,42 +503,42 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
         _sliderRow(
           label: 'Linearity V',
           value: _corner.gmfi5.toDouble(),
-          min: -127, max: 127, divisions: 254,
+          min: -127, max: 127,
           onChanged: manual ? (v) => setState(() => _corner.gmfi5 = v.round()) : null,
           onChangeEnd: manual ? (v) => _sendInt('GMFI5', v.round()) : null,
         ),
         _sliderRow(
           label: 'Linearity H',
           value: _corner.gmfia.toDouble(),
-          min: -127, max: 127, divisions: 254,
+          min: -127, max: 127,
           onChanged: manual ? (v) => setState(() => _corner.gmfia = v.round()) : null,
           onChangeEnd: manual ? (v) => _sendInt('GMFIA', v.round()) : null,
         ),
         _sliderRow(
           label: 'Pincushion Upper',
           value: _corner.gmfib.toDouble(),
-          min: -100, max: 100, divisions: 200,
+          min: -100, max: 100,
           onChanged: manual ? (v) => setState(() => _corner.gmfib = v.round()) : null,
           onChangeEnd: manual ? (v) => _sendInt('GMFIB', v.round()) : null,
         ),
         _sliderRow(
           label: 'Pincushion Lower',
           value: _corner.gmfic.toDouble(),
-          min: -100, max: 100, divisions: 200,
+          min: -100, max: 100,
           onChanged: manual ? (v) => setState(() => _corner.gmfic = v.round()) : null,
           onChangeEnd: manual ? (v) => _sendInt('GMFIC', v.round()) : null,
         ),
         _sliderRow(
           label: 'Pincushion Left',
           value: _corner.gmfid.toDouble(),
-          min: -100, max: 100, divisions: 200,
+          min: -100, max: 100,
           onChanged: manual ? (v) => setState(() => _corner.gmfid = v.round()) : null,
           onChangeEnd: manual ? (v) => _sendInt('GMFID', v.round()) : null,
         ),
         _sliderRow(
           label: 'Pincushion Right',
           value: _corner.gmfie.toDouble(),
-          min: -100, max: 100, divisions: 200,
+          min: -100, max: 100,
           onChanged: manual ? (v) => setState(() => _corner.gmfie = v.round()) : null,
           onChangeEnd: manual ? (v) => _sendInt('GMFIE', v.round()) : null,
         ),
@@ -551,7 +551,6 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
     required double value,
     required double min,
     required double max,
-    required int divisions,
     required ValueChanged<double>? onChanged,
     required ValueChanged<double>? onChangeEnd,
   }) {
@@ -588,7 +587,6 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
                   value: value.clamp(min, max),
                   min: min,
                   max: max,
-                  divisions: divisions,
                   onChanged: onChanged,
                   onChangeEnd: onChangeEnd,
                 ),
@@ -622,7 +620,8 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
           _labeledSlider(
             label: 'Vertical Keystone',
             value: _keystone.gmks8,
-            min: -40, max: 40, divisions: 80,
+            min: -40, max: 40,
+            step: 0.2,
             onChanged: (v) => setState(() =>
                 _keystone.gmks8 = double.parse(v.toStringAsFixed(1))),
             onChangeEnd: (v) => _sendDeg('GMKS8',
@@ -631,7 +630,8 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
           _labeledSlider(
             label: 'Horizontal Keystone',
             value: _keystone.gmks9,
-            min: -15, max: 15, divisions: 30,
+            min: -15, max: 15,
+            step: 0.2,
             onChanged: (v) => setState(() =>
                 _keystone.gmks9 = double.parse(v.toStringAsFixed(1))),
             onChangeEnd: (v) => _sendDeg('GMKS9',
@@ -640,14 +640,14 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
           _labeledSlider(
             label: 'Vertical Balance',
             value: _keystone.gmki4.toDouble(),
-            min: -60, max: 60, divisions: 120,
+            min: -60, max: 60,
             onChanged: (v) => setState(() => _keystone.gmki4 = v.round()),
             onChangeEnd: (v) => _sendInt('GMKI4', v.round()),
           ),
           _labeledSlider(
             label: 'Horizontal Balance',
             value: _keystone.gmki7.toDouble(),
-            min: -30, max: 30, divisions: 60,
+            min: -30, max: 30,
             onChanged: (v) => setState(() => _keystone.gmki7 = v.round()),
             onChangeEnd: (v) => _sendInt('GMKI7', v.round()),
           ),
@@ -678,21 +678,22 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
           _labeledSlider(
             label: 'Vertical Arc',
             value: _curved.gmci3.toDouble(),
-            min: -40, max: 40, divisions: 80,
+            min: -40, max: 40,
             onChanged: (v) => setState(() => _curved.gmci3 = v.round()),
             onChangeEnd: (v) => _sendInt('GMCI3', v.round()),
           ),
           _labeledSlider(
             label: 'Horizontal Arc',
             value: _curved.gmci7.toDouble(),
-            min: -40, max: 40, divisions: 80,
+            min: -40, max: 40,
             onChanged: (v) => setState(() => _curved.gmci7 = v.round()),
             onChangeEnd: (v) => _sendInt('GMCI7', v.round()),
           ),
           _labeledSlider(
             label: 'Vertical Keystone',
             value: _curved.gmcs8,
-            min: -40, max: 40, divisions: 80,
+            min: -40, max: 40,
+            step: 0.2,
             onChanged: (v) => setState(() =>
                 _curved.gmcs8 = double.parse(v.toStringAsFixed(1))),
             onChangeEnd: (v) => _sendDeg('GMCS8',
@@ -701,7 +702,8 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
           _labeledSlider(
             label: 'Horizontal Keystone',
             value: _curved.gmcs9,
-            min: -15, max: 15, divisions: 30,
+            min: -15, max: 15,
+            step: 0.2,
             onChanged: (v) => setState(() =>
                 _curved.gmcs9 = double.parse(v.toStringAsFixed(1))),
             onChangeEnd: (v) => _sendDeg('GMCS9',
@@ -710,14 +712,14 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
           _labeledSlider(
             label: 'Vertical Balance',
             value: _curved.gmci2.toDouble(),
-            min: -60, max: 60, divisions: 120,
+            min: -60, max: 60,
             onChanged: (v) => setState(() => _curved.gmci2 = v.round()),
             onChangeEnd: (v) => _sendInt('GMCI2', v.round()),
           ),
           _labeledSlider(
             label: 'Horizontal Balance',
             value: _curved.gmci6.toDouble(),
-            min: -30, max: 30, divisions: 60,
+            min: -30, max: 30,
             onChanged: (v) => setState(() => _curved.gmci6 = v.round()),
             onChangeEnd: (v) => _sendInt('GMCI6', v.round()),
           ),
@@ -792,9 +794,9 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
     required double value,
     required double min,
     required double max,
-    required int divisions,
     required ValueChanged<double> onChanged,
     required ValueChanged<double> onChangeEnd,
+    double step = 1.0,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -811,12 +813,13 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
                 data: SliderTheme.of(context).copyWith(
                   trackHeight: 2,
                   thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                  tickMarkShape: SliderTickMarkShape.noTickMark,
                 ),
                 child: Slider(
                   value: value.clamp(min, max),
                   min: min,
                   max: max,
-                  divisions: divisions,
+                  divisions: ((max - min) / step).round(),
                   onChanged: onChanged,
                   onChangeEnd: onChangeEnd,
                 ),
@@ -827,6 +830,7 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
               initialValue: _cleanStr(value),
               min: min,
               max: max,
+              step: step,
               onValueChanged: (s) {
                 final v = double.tryParse(s);
                 if (v != null) {
@@ -854,14 +858,21 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
           style: TextStyle(color: Colors.white70, fontSize: 13),
         ),
         const SizedBox(height: 8),
-        SleekStepperInput(
-          initialValue: value.toStringAsFixed(1),
-          min: 0.7,
-          max: 16.5,
-          onValueChanged: (s) {
-            final v = double.tryParse(s);
-            if (v != null) onCommit(v);
-          },
+        Row(
+          children: [
+            const Expanded(child: SizedBox()),
+            const SizedBox(width: 16),
+            SleekStepperInput(
+              initialValue: value.toStringAsFixed(1),
+              min: 0.7,
+              max: 16.5,
+              step: 0.1,
+              onValueChanged: (s) {
+                final v = double.tryParse(s);
+                if (v != null) onCommit(v);
+              },
+            ),
+          ],
         ),
         const SizedBox(height: 24),
       ],
@@ -877,6 +888,7 @@ class SleekStepperInput extends StatefulWidget {
   final String initialValue;
   final double min;
   final double max;
+  final double step;
   final void Function(String) onValueChanged;
   final bool autofocus;
 
@@ -886,6 +898,7 @@ class SleekStepperInput extends StatefulWidget {
     required this.min,
     required this.max,
     required this.onValueChanged,
+    this.step = 1.0,
     this.autofocus = false,
   });
 
@@ -954,7 +967,10 @@ class _SleekStepperInputState extends State<SleekStepperInput> {
       widget.onValueChanged(widget.initialValue);
       return;
     }
-    final formatted = _format(parsed.clamp(widget.min, widget.max));
+    final snapped = double.parse(
+      ((parsed / widget.step).round() * widget.step).toStringAsFixed(1),
+    ).clamp(widget.min, widget.max);
+    final formatted = _format(snapped);
     _controller.text = formatted;
     widget.onValueChanged(formatted);
   }
@@ -964,7 +980,10 @@ class _SleekStepperInputState extends State<SleekStepperInput> {
     if (_focusNode.hasFocus) _focusNode.unfocus();
     final raw = _controller.text.trim().replaceAll('+', '');
     final current = double.tryParse(raw) ?? widget.min;
-    final formatted = _format((current + delta).clamp(widget.min, widget.max));
+    final stepped = double.parse(
+      (current + delta * widget.step).toStringAsFixed(1),
+    ).clamp(widget.min, widget.max);
+    final formatted = _format(stepped);
     _controller.text = formatted;
     widget.onValueChanged(formatted);
   }
