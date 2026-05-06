@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 // Compact numeric input (60×26) with integrated up/down stepper buttons.
@@ -29,6 +31,8 @@ class _SleekStepperInputState extends State<SleekStepperInput> {
   late final TextEditingController _controller;
   late final FocusNode _focusNode;
   bool _hasFocus = false;
+  Timer? _stepDelayTimer;
+  Timer? _stepRepeatTimer;
 
   @override
   void didUpdateWidget(SleekStepperInput old) {
@@ -55,6 +59,8 @@ class _SleekStepperInputState extends State<SleekStepperInput> {
 
   @override
   void dispose() {
+    _stepDelayTimer?.cancel();
+    _stepRepeatTimer?.cancel();
     _focusNode.removeListener(_onFocusChange);
     _controller.dispose();
     _focusNode.dispose();
@@ -105,6 +111,22 @@ class _SleekStepperInputState extends State<SleekStepperInput> {
     final formatted = _format(stepped);
     _controller.text = formatted;
     widget.onValueChanged(formatted);
+  }
+
+  void _startStepping(int delta) {
+    _step(delta);
+    _stepDelayTimer = Timer(const Duration(milliseconds: 400), () {
+      _stepRepeatTimer = Timer.periodic(const Duration(milliseconds: 80), (_) {
+        _step(delta);
+      });
+    });
+  }
+
+  void _stopStepping() {
+    _stepDelayTimer?.cancel();
+    _stepRepeatTimer?.cancel();
+    _stepDelayTimer = null;
+    _stepRepeatTimer = null;
   }
 
   String _format(double v) {
@@ -159,7 +181,9 @@ class _SleekStepperInputState extends State<SleekStepperInput> {
               children: [
                 Expanded(
                   child: GestureDetector(
-                    onTap: () => _step(1),
+                    onTapDown: (_) => _startStepping(1),
+                    onTapUp: (_) => _stopStepping(),
+                    onTapCancel: _stopStepping,
                     child: const Center(
                       child: Icon(Icons.arrow_drop_up, size: 14),
                     ),
@@ -168,7 +192,9 @@ class _SleekStepperInputState extends State<SleekStepperInput> {
                 Container(height: 1, color: Colors.white.withValues(alpha: 0.1)),
                 Expanded(
                   child: GestureDetector(
-                    onTap: () => _step(-1),
+                    onTapDown: (_) => _startStepping(-1),
+                    onTapUp: (_) => _stopStepping(),
+                    onTapCancel: _stopStepping,
                     child: const Center(
                       child: Icon(Icons.arrow_drop_down, size: 14),
                     ),
