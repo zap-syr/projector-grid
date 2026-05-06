@@ -613,6 +613,8 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
         hKeystone: _keystone.gmks9,
         vArc: 0,
         hArc: 0,
+        vBalance: _keystone.gmki4,
+        hBalance: _keystone.gmki7,
       ),
       right: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -671,6 +673,8 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
         hKeystone: _curved.gmcs9,
         vArc: _curved.gmci3,
         hArc: _curved.gmci7,
+        vBalance: _curved.gmci2,
+        hBalance: _curved.gmci6,
       ),
       right: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -760,6 +764,8 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
     required double hKeystone,
     required int vArc,
     required int hArc,
+    required int vBalance,
+    required int hBalance,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -781,6 +787,8 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
               hKeystone: hKeystone,
               vArc: vArc,
               hArc: hArc,
+              vBalance: vBalance,
+              hBalance: hBalance,
             ),
           ),
         ),
@@ -1072,12 +1080,16 @@ class _TrapezoidCanvas extends StatelessWidget {
   final double hKeystone; // -15..15
   final int vArc;          // -40..40
   final int hArc;          // -40..40
+  final int vBalance;      // -60..60
+  final int hBalance;      // -30..30
 
   const _TrapezoidCanvas({
     required this.vKeystone,
     required this.hKeystone,
     required this.vArc,
     required this.hArc,
+    required this.vBalance,
+    required this.hBalance,
   });
 
   @override
@@ -1096,6 +1108,8 @@ class _TrapezoidCanvas extends StatelessWidget {
             hKeystone: hKeystone,
             vArc: vArc,
             hArc: hArc,
+            vBalance: vBalance,
+            hBalance: hBalance,
             outline: theme.colorScheme.primary,
             fill: theme.colorScheme.primary.withValues(alpha: 0.10),
             defaultColor: theme.dividerColor,
@@ -1109,6 +1123,7 @@ class _TrapezoidCanvas extends StatelessWidget {
 class _TrapezoidPainter extends CustomPainter {
   final double vKeystone, hKeystone;
   final int vArc, hArc;
+  final int vBalance, hBalance;
   final Color outline, fill, defaultColor;
 
   _TrapezoidPainter({
@@ -1116,6 +1131,8 @@ class _TrapezoidPainter extends CustomPainter {
     required this.hKeystone,
     required this.vArc,
     required this.hArc,
+    required this.vBalance,
+    required this.hBalance,
     required this.outline,
     required this.fill,
     required this.defaultColor,
@@ -1125,7 +1142,7 @@ class _TrapezoidPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     const defaultRect = Rect.fromLTRB(120, 60, 360, 220);
 
-    // Draw reference outline first — outside clip so it is always fully visible.
+    // Reference outline — outside clip so it is always fully visible.
     canvas.drawRect(
       defaultRect,
       Paint()
@@ -1135,25 +1152,87 @@ class _TrapezoidPainter extends CustomPainter {
     );
 
     // ── Vertex calculation ──────────────────────────────────────────────────
-    final vDelta = (vKeystone / 40.0) * 50.0;
-    final hDelta = (hKeystone / 15.0) * 25.0;
+    // defaultRect is the absolute physical limit. All keystone corrections
+    // shrink INWARDS only — no vertex ever expands beyond it.
+    // Balances shift the result further but are also clamped to defaultRect.
 
-    final absV = vDelta.abs();
-    final absH = hDelta.abs();
+    // All vertices start at the bounding corners.
+    double tlX = defaultRect.left;   double tlY = defaultRect.top;
+    double trX = defaultRect.right;  double trY = defaultRect.top;
+    double blX = defaultRect.left;   double blY = defaultRect.bottom;
+    double brX = defaultRect.right;  double brY = defaultRect.bottom;
 
-    // Positive pinches the leading edge; negative pinches the opposite edge.
-    final topShift   = vKeystone > 0 ? absV : 0.0;
-    final botShift   = vKeystone < 0 ? absV : 0.0;
-    final rightShift = hKeystone > 0 ? absH : 0.0;
-    final leftShift  = hKeystone < 0 ? absH : 0.0;
+    // V keystone
+    if (vKeystone != 0) {
+      final vK  = vKeystone.abs() / 40.0;
+      final hPinch = vK * 60.0;  // horizontal inward pinch on the active corners
+      final vEdge  = vK * 40.0;  // vertical inward shift on the opposite edge
+      if (vKeystone > 0) {
+        // Top corners pinch inward; bottom edge moves up.
+        tlX += hPinch;  trX -= hPinch;
+        blY -= vEdge;   brY -= vEdge;
+      } else {
+        // Bottom corners pinch inward; top edge moves down.
+        blX += hPinch;  brX -= hPinch;
+        tlY += vEdge;   trY += vEdge;
+      }
+    }
 
+    // H keystone — positive: left pinches; negative: right pinches.
+    if (hKeystone != 0) {
+      final hK     = hKeystone.abs() / 15.0;
+      final vPinch = hK * 40.0;  // vertical inward pinch on the active corners
+      final hEdge  = hK * 60.0;  // horizontal inward shift on the opposite edge
+      if (hKeystone > 0) {
+        // Left corners pinch inward; right edge moves left.
+        tlY += vPinch;  blY -= vPinch;
+        trX -= hEdge;   brX -= hEdge;
+      } else {
+        // Right corners pinch inward; left edge moves right.
+        trY += vPinch;  brY -= vPinch;
+        tlX += hEdge;   blX += hEdge;
+      }
+    }
+
+    // ── Balance adjustments ─────────────────────────────────────────────────
+    // Applied after keystone; clamped to defaultRect so nothing escapes.
+    final vBalDelta = (vBalance / 60.0) * 20.0;
+    final hBalDelta = (hBalance / 30.0) * 12.0;
+
+    if (vKeystone.abs() > 0.01) {
+      if (vKeystone > 0) {
+        // vBalance shifts bottom (unpinched) edge vertically — inverted: +balance → image moves UP (Y decreases).
+        blY -= vBalDelta;  brY -= vBalDelta;
+        // hBalance shifts top (pinched) corners horizontally (positive = left).
+        tlX -= hBalDelta;  trX -= hBalDelta;
+      } else {
+        // vBalance shifts top (unpinched) edge — inverted.
+        tlY -= vBalDelta;  trY -= vBalDelta;
+        blX -= hBalDelta;  brX -= hBalDelta;
+      }
+    }
+
+    if (hKeystone.abs() > 0.01) {
+      if (hKeystone > 0) {
+        // hBalance shifts right (unpinched) edge — inverted: +balance → edge moves RIGHT (X increases).
+        trX += hBalDelta;  brX += hBalDelta;
+        // vBalance shifts left (pinched) corners vertically (positive = down).
+        tlY += vBalDelta;  blY += vBalDelta;
+      } else {
+        // hBalance shifts left (unpinched) edge — inverted.
+        tlX += hBalDelta;  blX += hBalDelta;
+        trY += vBalDelta;  brY += vBalDelta;
+      }
+    }
+
+    // Clamp — the physical matrix is the hard limit.
     double cx(double x) => x.clamp(defaultRect.left, defaultRect.right);
     double cy(double y) => y.clamp(defaultRect.top, defaultRect.bottom);
 
-    final topLeft     = Offset(cx(defaultRect.left  + topShift), cy(defaultRect.top    + leftShift));
-    final topRight    = Offset(cx(defaultRect.right - topShift), cy(defaultRect.top    + rightShift));
-    final bottomLeft  = Offset(cx(defaultRect.left  + botShift), cy(defaultRect.bottom - leftShift));
-    final bottomRight = Offset(cx(defaultRect.right - botShift), cy(defaultRect.bottom - rightShift));
+    final topLeft     = Offset(cx(tlX), cy(tlY));
+    final topRight    = Offset(cx(trX), cy(trY));
+    final bottomLeft  = Offset(cx(blX), cy(blY));
+    final bottomRight = Offset(cx(brX), cy(brY));
 
     // ── Arc bows (curved mode only; both 0 in keystone mode) ───────────────
     final vBow = (vArc / 40.0) * 30.0;
@@ -1162,10 +1241,10 @@ class _TrapezoidPainter extends CustomPainter {
     // ── Build path ──────────────────────────────────────────────────────────
     final path = Path()..moveTo(topLeft.dx, topLeft.dy);
 
-    final topMid   = Offset((topLeft.dx + topRight.dx) / 2,       (topLeft.dy    + topRight.dy)    / 2 - vBow);
-    final rightMid = Offset((topRight.dx + bottomRight.dx) / 2 + hBow, (topRight.dy + bottomRight.dy) / 2);
-    final botMid   = Offset((bottomRight.dx + bottomLeft.dx) / 2, (bottomRight.dy + bottomLeft.dy) / 2 + vBow);
-    final leftMid  = Offset((bottomLeft.dx + topLeft.dx) / 2 - hBow,  (bottomLeft.dy + topLeft.dy)  / 2);
+    final topMid   = Offset((topLeft.dx   + topRight.dx)    / 2,       (topLeft.dy    + topRight.dy)    / 2 - vBow);
+    final rightMid = Offset((topRight.dx  + bottomRight.dx) / 2 + hBow, (topRight.dy  + bottomRight.dy) / 2);
+    final botMid   = Offset((bottomRight.dx + bottomLeft.dx) / 2,       (bottomRight.dy + bottomLeft.dy) / 2 + vBow);
+    final leftMid  = Offset((bottomLeft.dx + topLeft.dx)    / 2 - hBow, (bottomLeft.dy + topLeft.dy)    / 2);
 
     path.quadraticBezierTo(topMid.dx,   topMid.dy,   topRight.dx,    topRight.dy);
     path.quadraticBezierTo(rightMid.dx, rightMid.dy, bottomRight.dx, bottomRight.dy);
@@ -1173,7 +1252,7 @@ class _TrapezoidPainter extends CustomPainter {
     path.quadraticBezierTo(leftMid.dx,  leftMid.dy,  topLeft.dx,     topLeft.dy);
     path.close();
 
-    // Clip to bounding box so arc bows cannot bleed outside the grey frame.
+    // Clip so arc bows cannot bleed outside the grey reference frame.
     canvas.save();
     canvas.clipRect(defaultRect);
     canvas.drawPath(path, Paint()..color = fill);
@@ -1193,6 +1272,8 @@ class _TrapezoidPainter extends CustomPainter {
       old.hKeystone != hKeystone ||
       old.vArc != vArc ||
       old.hArc != hArc ||
+      old.vBalance != vBalance ||
+      old.hBalance != hBalance ||
       old.outline != outline ||
       old.fill != fill ||
       old.defaultColor != defaultColor;
@@ -1235,12 +1316,17 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
   // Protocol range ±480 H / ±300 V maps to ±80 / ±50 canvas pixels.
   static const double _scale = 6.0;
 
-  // Each corner's allowed canvas bounds — full ±80px H / ±50px V range.
+  // Asymmetrical hardware limits (protocol values ÷ 6 = canvas pixels):
+  // H: outward 384 (64px), inward 480 (80px). V: outward 240 (40px), inward 300 (50px).
   static const Map<_Corner, Rect> _bounds = {
-    _Corner.ul: Rect.fromLTRB(0, 0, 160, 100),
-    _Corner.ur: Rect.fromLTRB(320, 0, 480, 100),
-    _Corner.ll: Rect.fromLTRB(0, 200, 160, 300),
-    _Corner.lr: Rect.fromLTRB(320, 200, 480, 300),
+    // Left default X:80. Outward -64px → 16. Inward +80px → 160.
+    // Top default Y:50.  Outward -40px → 10. Inward +50px → 100.
+    _Corner.ul: Rect.fromLTRB(16, 10, 160, 100),
+    // Right default X:400. Inward -80px → 320. Outward +64px → 464.
+    _Corner.ur: Rect.fromLTRB(320, 10, 464, 100),
+    // Bottom default Y:250. Inward -50px → 200. Outward +40px → 290.
+    _Corner.ll: Rect.fromLTRB(16, 200, 160, 290),
+    _Corner.lr: Rect.fromLTRB(320, 200, 464, 290),
   };
 
   final Set<_Corner> _selected = {};
@@ -1274,10 +1360,10 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
   };
 
   static Offset _keyDelta(LogicalKeyboardKey key) => switch (key) {
-    LogicalKeyboardKey.arrowLeft  => const Offset(-1, 0),
-    LogicalKeyboardKey.arrowRight => const Offset(1, 0),
-    LogicalKeyboardKey.arrowUp    => const Offset(0, -1),
-    LogicalKeyboardKey.arrowDown  => const Offset(0, 1),
+    LogicalKeyboardKey.arrowLeft  => const Offset(-1 / _scale, 0),
+    LogicalKeyboardKey.arrowRight => const Offset(1 / _scale, 0),
+    LogicalKeyboardKey.arrowUp    => const Offset(0, -1 / _scale),
+    LogicalKeyboardKey.arrowDown  => const Offset(0, 1 / _scale),
     _ => Offset.zero,
   };
 
@@ -1368,20 +1454,20 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
 
     switch (which) {
       case _Corner.ul:
-        widget.state.gmfi6 = hValue.clamp(-480, 480);
-        widget.state.gmfi1 = vValue.clamp(-300, 300);
+        widget.state.gmfi6 = hValue.clamp(-384, 480);
+        widget.state.gmfi1 = vValue.clamp(-240, 300);
         break;
       case _Corner.ur:
-        widget.state.gmfi7 = hValue.clamp(-480, 480);
-        widget.state.gmfi2 = vValue.clamp(-300, 300);
+        widget.state.gmfi7 = hValue.clamp(-480, 384);
+        widget.state.gmfi2 = vValue.clamp(-240, 300);
         break;
       case _Corner.ll:
-        widget.state.gmfi8 = hValue.clamp(-480, 480);
-        widget.state.gmfi3 = vValue.clamp(-300, 300);
+        widget.state.gmfi8 = hValue.clamp(-384, 480);
+        widget.state.gmfi3 = vValue.clamp(-300, 240);
         break;
       case _Corner.lr:
-        widget.state.gmfi9 = hValue.clamp(-480, 480);
-        widget.state.gmfi4 = vValue.clamp(-300, 300);
+        widget.state.gmfi9 = hValue.clamp(-480, 384);
+        widget.state.gmfi4 = vValue.clamp(-300, 240);
         break;
     }
     widget.onCornerChanged();
