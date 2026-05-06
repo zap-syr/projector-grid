@@ -1,3 +1,10 @@
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-green.svg)](https://www.gnu.org/licenses/gpl-3.0) [![Gumroad](https://img.shields.io/badge/GUMROAD-36a9ae?style=for-the-badge&logo=gumroad&logoColor=white)](https://projectorhub.gumroad.com/l/projectorgrid)
+
+## Download the latest release
+
+- [Download for Windows](https://github.com/zap-syr/projector-grid/releases/latest/download/ProjectorGrid_Setup.exe)
+- [Download for macOS (Universal)](https://github.com/zap-syr/projector-grid/releases/latest/download/ProjectorGrid-macOS.dmg)
+
 # Projector Grid
 
 Projector Grid is a desktop application for controlling and monitoring multiple Panasonic projectors over a local network.
@@ -16,6 +23,8 @@ With Projector Grid, you can manage an entire projector rig from one place - mon
 
 - **Brightness and color** - adjust light output with operating mode profiles (Normal/Eco/Quiet/User), fine-tune color matching (3-color, 7-color), and dial in color temperature with white balance controls.
 
+- **Geometry correction** - correct image distortion with keystone, curved, and corner correction modes. Corner mode offers an interactive canvas with draggable handles and arrow-key fine-tuning. Includes linearity and pincushion.
+
 - **OSC integration** - receive commands from show control systems over UDP and broadcast live projector status back. Works with any OSC-capable tool (Qlab, TouchDesigner, Resolume, etc.).
 
 - **Persistent projects** - save and reopen workspace layouts, with undo/redo, dirty tracking, and a recent projects list.
@@ -23,6 +32,8 @@ With Projector Grid, you can manage an entire projector rig from one place - mon
 - **Auto-discovery** - scan your local subnet to find projectors automatically without entering IPs manually.
 
 ![Control Window](https://github.com/zap-syr/projector-grid/blob/main/.github/aux-images/control.png)
+
+![App Overview](https://github.com/zap-syr/projector-grid/blob/main/.github/aux-images/app-overview.png)
 
 ## Contributing
 
