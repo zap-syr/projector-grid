@@ -1213,7 +1213,7 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
   // Short tap → 1 step only. Hold past this delay → continuous movement.
   static const _keyHoldDelay = Duration(milliseconds: 400);
   // Continuous movement rate — intentionally slow for fine control.
-  static const _keyRepeatInterval = Duration(milliseconds: 80);
+  static const _keyRepeatInterval = Duration(milliseconds: 40);
 
   static final _arrowKeys = {
     LogicalKeyboardKey.arrowLeft,
