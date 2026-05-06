@@ -1,3 +1,4 @@
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
@@ -212,7 +213,9 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
             .clamp(constraints.maxHeight, double.infinity);
 
     return MouseRegion(
-      cursor: _isPanning ? SystemMouseCursors.move : MouseCursor.defer,
+      cursor: _isPanning
+          ? (Platform.isMacOS ? SystemMouseCursors.grabbing : SystemMouseCursors.move)
+          : MouseCursor.defer,
       child: Stack(
       children: [
         // The Scrollable Workspace
@@ -406,6 +409,7 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
                               notifier.deselectAll();
                             },
                             onPanStart: (details) {
+                              if (_isPanning) return;
                               setState(() {
                                 _selectionStart =
                                     details.localPosition / _currentZoom;
@@ -417,6 +421,7 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
                               );
                             },
                             onPanUpdate: (details) {
+                              if (_isPanning) return;
                               setState(() {
                                 _selectionCurrent =
                                     details.localPosition / _currentZoom;
@@ -434,6 +439,7 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
                               }
                             },
                             onPanEnd: (details) {
+                              if (_isPanning) return;
                               setState(() {
                                 _selectionStart = null;
                                 _selectionCurrent = null;

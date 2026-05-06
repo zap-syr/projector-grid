@@ -10,6 +10,7 @@ void main() async {
   if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
     await windowManager.ensureInitialized();
     WindowOptions windowOptions = const WindowOptions(
+      size: Size(1280, 720),
       minimumSize: Size(800, 600),
       center: true,
       title: 'Projector Grid',

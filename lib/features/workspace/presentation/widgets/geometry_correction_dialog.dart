@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:flutter/gestures.dart' show kDoubleTapTimeout;
 import 'package:flutter/material.dart';
@@ -1512,7 +1513,7 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
         onPanUpdate: (details) => _onHandlePanUpdate(details),
         onPanEnd: (_) => _onHandlePanEnd(),
         child: MouseRegion(
-          cursor: SystemMouseCursors.move,
+          cursor: Platform.isMacOS ? SystemMouseCursors.grab : SystemMouseCursors.move,
           child: Container(
             width: radius * 2,
             height: radius * 2,
