@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../domain/projector_node.dart';
 import '../../../../core/services/panasonic_protocol_service.dart';
+import 'sleek_stepper_input.dart';
 
 enum _TempMode { defaultTemp, user1, user2, custom }
 
@@ -279,7 +280,7 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
     required double min,
     required double max,
     required int divisions,
-    required String displayValue,
+    double step = 1.0,
     required ValueChanged<double> onChanged,
     required ValueChanged<double> onChangeEnd,
   }) {
@@ -315,9 +316,19 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
               ),
             ),
           ),
-          SizedBox(
-            width: 42,
-            child: Text(displayValue, style: const TextStyle(fontSize: 11), textAlign: TextAlign.right),
+          const SizedBox(width: 8),
+          SleekStepperInput(
+            initialValue: value.toString(),
+            min: min,
+            max: max,
+            step: step,
+            onValueChanged: (s) {
+              final v = double.tryParse(s);
+              if (v != null) {
+                onChanged(v);
+                onChangeEnd(v);
+              }
+            },
           ),
         ],
       ),
@@ -340,7 +351,6 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
       min: 0,
       max: 2048,
       divisions: 2048,
-      displayValue: '$value',
       onChanged: onChanged,
       onChangeEnd: onChangeEnd,
     );
@@ -430,7 +440,26 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('Color Temperature', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
-              Text('${_customK}K', style: theme.textTheme.titleSmall),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SleekStepperInput(
+                    initialValue: _customK.toString(),
+                    min: 3200,
+                    max: 13000,
+                    step: 100,
+                    onValueChanged: (s) {
+                      final v = double.tryParse(s);
+                      if (v != null) {
+                        setState(() => _customK = v.round());
+                        _sendColorTemp(_TempMode.custom);
+                      }
+                    },
+                  ),
+                  const SizedBox(width: 4),
+                  Text('K', style: theme.textTheme.titleSmall),
+                ],
+              ),
             ],
           ),
           // Stack: gradient Container behind a transparent-track Slider.
@@ -488,7 +517,6 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
               min: 0,
               max: 255,
               divisions: 255,
-              displayValue: '${_whHigh[t.$1]}',
               onChanged: (v) => setState(() => _whHigh[t.$1] = v.round()),
               onChangeEnd: (v) => _sendWhHigh(t.$1, v.round()),
             ),
@@ -505,7 +533,6 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
               min: -127,
               max: 127,
               divisions: 254,
-              displayValue: '${_whLow[t.$1] >= 0 ? '+' : ''}${_whLow[t.$1]}',
               onChanged: (v) => setState(() => _whLow[t.$1] = v.abs() <= 3.0 ? 0 : v.round()),
               onChangeEnd: (_) => _sendWhLow(t.$1, _whLow[t.$1]),
             ),
