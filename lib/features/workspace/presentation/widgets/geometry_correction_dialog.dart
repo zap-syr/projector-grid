@@ -608,14 +608,7 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
   // ─── Keystone ────────────────────────────────────────────────────────────
   Widget _buildKeystoneBody() {
     return _buildSplitLayout(
-      left: _buildTrapezoidPanel(
-        vKeystone: _keystone.gmks8,
-        hKeystone: _keystone.gmks9,
-        vArc: 0,
-        hArc: 0,
-        vBalance: _keystone.gmki4,
-        hBalance: _keystone.gmki7,
-      ),
+      left: _buildPreviewUnavailable(),
       right: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -668,14 +661,7 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
   // ─── Curved ──────────────────────────────────────────────────────────────
   Widget _buildCurvedBody() {
     return _buildSplitLayout(
-      left: _buildTrapezoidPanel(
-        vKeystone: _curved.gmcs8,
-        hKeystone: _curved.gmcs9,
-        vArc: _curved.gmci3,
-        hArc: _curved.gmci7,
-        vBalance: _curved.gmci2,
-        hBalance: _curved.gmci6,
-      ),
+      left: _buildPreviewUnavailable(),
       right: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -758,7 +744,34 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
     );
   }
 
+  Widget _buildPreviewUnavailable() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.visibility_off_outlined,
+              size: 36,
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Preview not available',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.45),
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // Left panel canvas for keystone/curved modes — fills available height.
+  // ignore: unused_element
   Widget _buildTrapezoidPanel({
     required double vKeystone,
     required double hKeystone,
@@ -1152,45 +1165,79 @@ class _TrapezoidPainter extends CustomPainter {
     );
 
     // ── Vertex calculation ──────────────────────────────────────────────────
-    // defaultRect is the absolute physical limit. All keystone corrections
-    // shrink INWARDS only — no vertex ever expands beyond it.
-    // Balances shift the result further but are also clamped to defaultRect.
+    double min(double a, double b) => a < b ? a : b;
 
-    // All vertices start at the bounding corners.
+    final double vK = vKeystone.abs() / 40.0;
+    final double hK = hKeystone.abs() / 15.0;
+
+    final double vPinchX = vK * 60.0;
+    final double vCompY  = vK * 40.0;
+
+    final double hPinchY = hK * 40.0;
+    final double hCompX  = hK * 60.0;
+
     double tlX = defaultRect.left;   double tlY = defaultRect.top;
     double trX = defaultRect.right;  double trY = defaultRect.top;
     double blX = defaultRect.left;   double blY = defaultRect.bottom;
     double brX = defaultRect.right;  double brY = defaultRect.bottom;
 
-    // V keystone
-    if (vKeystone != 0) {
-      final vK  = vKeystone.abs() / 40.0;
-      final hPinch = vK * 60.0;  // horizontal inward pinch on the active corners
-      final vEdge  = vK * 40.0;  // vertical inward shift on the opposite edge
-      if (vKeystone > 0) {
-        // Top corners pinch inward; bottom edge moves up.
-        tlX += hPinch;  trX -= hPinch;
-        blY -= vEdge;   brY -= vEdge;
-      } else {
-        // Bottom corners pinch inward; top edge moves down.
-        blX += hPinch;  brX -= hPinch;
-        tlY += vEdge;   trY += vEdge;
-      }
+    // 1. Base Vertical Keystone
+    if (vKeystone > 0) {
+      tlX += vPinchX; trX -= vPinchX; // Top pinches inward
+      blY -= vCompY;  brY -= vCompY;  // Bottom compensates UP
+    } else if (vKeystone < 0) {
+      blX += vPinchX; brX -= vPinchX; // Bottom pinches inward
+      tlY += vCompY;  trY += vCompY;  // Top compensates DOWN
     }
 
-    // H keystone — positive: left pinches; negative: right pinches.
-    if (hKeystone != 0) {
-      final hK     = hKeystone.abs() / 15.0;
-      final vPinch = hK * 40.0;  // vertical inward pinch on the active corners
-      final hEdge  = hK * 60.0;  // horizontal inward shift on the opposite edge
-      if (hKeystone > 0) {
-        // Left corners pinch inward; right edge moves left.
-        tlY += vPinch;  blY -= vPinch;
-        trX -= hEdge;   brX -= hEdge;
+    // 2. Horizontal Keystone with Matrix Overlap Sliding
+
+    // [!] TWEAK THIS VALUE (0.35 - 0.40) TO ADJUST THE MAXIMUM SLIDE LIMIT
+    final double maxSlideY = defaultRect.height * 0.46;
+
+    if (hKeystone > 0) {
+      tlY += hPinchY; blY -= hPinchY; // Left pinches inward
+
+      if (vKeystone > 0) {
+        // vKeystone moved bottom edge UP. LEFT edge slides DOWN to absorb hPinch.
+        double slideY = min(vCompY + hPinchY, 2 * hPinchY);
+        slideY = min(slideY, maxSlideY); // Apply hard limit to prevent triangle folding
+        tlY += slideY; blY += slideY;
+
+        double remRatio = hPinchY == 0 ? 0.0 : ((hPinchY - vCompY) / hPinchY).clamp(0.0, 1.0);
+        trX -= hCompX * remRatio; brX -= hCompX * remRatio;
+      } else if (vKeystone < 0) {
+        // vKeystone moved top edge DOWN. LEFT edge slides UP to absorb hPinch.
+        double slideY = min(vCompY + hPinchY, 2 * hPinchY);
+        slideY = min(slideY, maxSlideY); // Apply hard limit to prevent triangle folding
+        tlY -= slideY; blY -= slideY;
+
+        double remRatio = hPinchY == 0 ? 0.0 : ((hPinchY - vCompY) / hPinchY).clamp(0.0, 1.0);
+        trX -= hCompX * remRatio; brX -= hCompX * remRatio;
       } else {
-        // Right corners pinch inward; left edge moves right.
-        trY += vPinch;  brY -= vPinch;
-        tlX += hEdge;   blX += hEdge;
+        trX -= hCompX; brX -= hCompX;
+      }
+    } else if (hKeystone < 0) {
+      trY += hPinchY; brY -= hPinchY; // Right pinches inward
+
+      if (vKeystone > 0) {
+        // vKeystone moved bottom edge UP. RIGHT edge slides DOWN to absorb hPinch.
+        double slideY = min(vCompY + hPinchY, 2 * hPinchY);
+        slideY = min(slideY, maxSlideY); // Apply hard limit to prevent triangle folding
+        trY += slideY; brY += slideY;
+
+        double remRatio = hPinchY == 0 ? 0.0 : ((hPinchY - vCompY) / hPinchY).clamp(0.0, 1.0);
+        tlX += hCompX * remRatio; blX += hCompX * remRatio;
+      } else if (vKeystone < 0) {
+        // vKeystone moved top edge DOWN. RIGHT edge slides UP to absorb hPinch.
+        double slideY = min(vCompY + hPinchY, 2 * hPinchY);
+        slideY = min(slideY, maxSlideY); // Apply hard limit to prevent triangle folding
+        trY -= slideY; brY -= slideY;
+
+        double remRatio = hPinchY == 0 ? 0.0 : ((hPinchY - vCompY) / hPinchY).clamp(0.0, 1.0);
+        tlX += hCompX * remRatio; blX += hCompX * remRatio;
+      } else {
+        tlX += hCompX; blX += hCompX;
       }
     }
 
@@ -1201,7 +1248,7 @@ class _TrapezoidPainter extends CustomPainter {
 
     if (vKeystone.abs() > 0.01) {
       if (vKeystone > 0) {
-        // vBalance shifts bottom (unpinched) edge vertically — inverted: +balance → image moves UP (Y decreases).
+        // vBalance shifts bottom (unpinched) edge vertically — inverted.
         blY -= vBalDelta;  brY -= vBalDelta;
         // hBalance shifts top (pinched) corners horizontally (positive = left).
         tlX -= hBalDelta;  trX -= hBalDelta;
@@ -1214,7 +1261,7 @@ class _TrapezoidPainter extends CustomPainter {
 
     if (hKeystone.abs() > 0.01) {
       if (hKeystone > 0) {
-        // hBalance shifts right (unpinched) edge — inverted: +balance → edge moves RIGHT (X increases).
+        // hBalance shifts right (unpinched) edge — inverted.
         trX += hBalDelta;  brX += hBalDelta;
         // vBalance shifts left (pinched) corners vertically (positive = down).
         tlY += vBalDelta;  blY += vBalDelta;
