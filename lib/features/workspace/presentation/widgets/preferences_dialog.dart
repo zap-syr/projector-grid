@@ -171,6 +171,7 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
                               ButtonSegment(value: ThemeMode.dark, label: Text('Dark'), icon: Icon(Icons.dark_mode)),
                             ],
                             selected: {_selectedTheme},
+                            showSelectedIcon: false,
                             onSelectionChanged: (selection) {
                               setState(() => _selectedTheme = selection.first);
                             },
