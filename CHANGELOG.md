@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.2.0] - 2026-05-06
+
+### Added
+- Geometry Correction dialog with three correction modes: Keystone, Curved, and
+  Corner - accessible per projector from the right-click context menu
+- Corner Correction canvas with four independently draggable points, keyboard
+  arrow-key nudging, double-tap to reset individual points, and a Reset All button
+- Compact numeric stepper fields with up/down buttons - tap once to step by one,
+  hold to change the value continuously
+
+### Changed
+- Color Correction dialog inputs replaced with compact stepper fields
+- App settings (theme mode, polling interval, OSC port) are now persisted to
+  disk as JSON in the platform config directory so they survive restarts
+
+### Fixed
+- Segmented button selected-icon visibility corrected to remain consistent
+  across state changes
+- Default window size on macOS set to a sensible initial value
+- Mouse cursor behaviour on macOS corrected to use appropriate system cursors
+
 ## [1.1.0] - 2026-05-03
 
 ### Added
