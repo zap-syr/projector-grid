@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -49,46 +51,114 @@ class AppSettings {
       isMonitoringView: isMonitoringView ?? this.isMonitoringView,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'pollingIntervalSeconds': pollingIntervalSeconds,
+    'themeMode': themeMode.name,
+    'oscActive': oscActive,
+    'oscNetworkDevice': oscNetworkDevice,
+    'oscReceivePort': oscReceivePort,
+    'oscSendIp': oscSendIp,
+    'oscSendPort': oscSendPort,
+    'showLogs': showLogs,
+    'isMonitoringView': isMonitoringView,
+  };
+
+  factory AppSettings.fromJson(Map<String, dynamic> json) => AppSettings(
+    pollingIntervalSeconds: (json['pollingIntervalSeconds'] as int?) ?? 60,
+    themeMode: ThemeMode.values.firstWhere(
+      (m) => m.name == json['themeMode'],
+      orElse: () => ThemeMode.dark,
+    ),
+    oscActive: (json['oscActive'] as bool?) ?? false,
+    oscNetworkDevice: (json['oscNetworkDevice'] as String?) ?? '',
+    oscReceivePort: (json['oscReceivePort'] as int?) ?? 8000,
+    oscSendIp: (json['oscSendIp'] as String?) ?? '127.0.0.1',
+    oscSendPort: (json['oscSendPort'] as int?) ?? 9000,
+    showLogs: (json['showLogs'] as bool?) ?? false,
+    isMonitoringView: (json['isMonitoringView'] as bool?) ?? false,
+  );
 }
 
 @riverpod
 class AppSettingsNotifier extends _$AppSettingsNotifier {
+  static String get _filePath {
+    if (Platform.isWindows) {
+      final appData = Platform.environment['APPDATA'] ?? '';
+      return '$appData\\ProjectorGrid\\app_settings.json';
+    } else if (Platform.isMacOS) {
+      final home = Platform.environment['HOME'] ?? '';
+      return '$home/Library/Application Support/ProjectorGrid/app_settings.json';
+    } else {
+      final home = Platform.environment['HOME'] ?? '';
+      return '$home/.config/ProjectorGrid/app_settings.json';
+    }
+  }
+
   @override
-  AppSettings build() => const AppSettings();
+  AppSettings build() => _load();
+
+  AppSettings _load() {
+    try {
+      final file = File(_filePath);
+      if (!file.existsSync()) return const AppSettings();
+      final json = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+      return AppSettings.fromJson(json);
+    } catch (_) {
+      return const AppSettings();
+    }
+  }
+
+  void _save(AppSettings settings) {
+    try {
+      final file = File(_filePath);
+      file.parent.createSync(recursive: true);
+      file.writeAsStringSync(jsonEncode(settings.toJson()));
+    } catch (_) {}
+  }
 
   void setPollingInterval(int seconds) {
     state = state.copyWith(pollingIntervalSeconds: seconds);
+    _save(state);
   }
 
   void setThemeMode(ThemeMode mode) {
     state = state.copyWith(themeMode: mode);
+    _save(state);
   }
 
   void setOscActive(bool active) {
     state = state.copyWith(oscActive: active);
+    _save(state);
   }
 
   void setOscNetworkDevice(String device) {
     state = state.copyWith(oscNetworkDevice: device);
+    _save(state);
   }
 
   void setOscReceivePort(int port) {
     state = state.copyWith(oscReceivePort: port);
+    _save(state);
   }
 
   void setOscSendIp(String ip) {
     state = state.copyWith(oscSendIp: ip);
+    _save(state);
   }
 
   void setOscSendPort(int port) {
     state = state.copyWith(oscSendPort: port);
+    _save(state);
   }
 
   void setShowLogs(bool show) {
     state = state.copyWith(showLogs: show);
+    _save(state);
   }
 
   void setMonitoringView(bool monitoring) {
     state = state.copyWith(isMonitoringView: monitoring);
+    _save(state);
   }
 }
