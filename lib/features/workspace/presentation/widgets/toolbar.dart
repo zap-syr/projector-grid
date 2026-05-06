@@ -68,6 +68,7 @@ class MainToolbar extends ConsumerWidget {
               ),
             ],
             selected: {isMonitoringView},
+            showSelectedIcon: false,
             onSelectionChanged: (set) {
               settingsNotifier.setMonitoringView(set.first);
             },
