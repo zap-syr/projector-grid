@@ -3,7 +3,9 @@ import 'dart:io';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../domain/projector_node.dart';
 import '../../domain/projector_group.dart';
+import '../../domain/log_event.dart';
 import 'workspace_provider.dart';
+import 'event_log_provider.dart';
 
 part 'project_provider.g.dart';
 
@@ -128,8 +130,12 @@ class ProjectStateNotifier extends _$ProjectStateNotifier {
         recentProjects: updated,
       );
       _saveRecentProjects(updated);
-    } catch (_) {
-      // File corrupt or unreadable — leave state unchanged
+    } catch (e) {
+      ref.read(eventLogProvider.notifier).log(LogEvent(
+        severity: LogSeverity.error,
+        type: LogEventType.command,
+        message: 'Failed to open project: $e',
+      ));
     }
   }
 

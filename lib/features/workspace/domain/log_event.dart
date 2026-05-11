@@ -1,11 +1,8 @@
-int _nextId = 0;
-
 enum LogSeverity { error, warning, info, success }
 
 enum LogEventType { connectivity, command, osc, hardware }
 
 class LogEvent {
-  final int id;
   final DateTime timestamp;
   final LogSeverity severity;
   final LogEventType type;
@@ -20,8 +17,7 @@ class LogEvent {
     this.projectorIp,
     this.projectorName,
     DateTime? timestamp,
-  })  : id = _nextId++,
-        timestamp = timestamp ?? DateTime.now();
+  }) : timestamp = timestamp ?? DateTime.now();
 }
 
 String commandLabel(String cmd) {
