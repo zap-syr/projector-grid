@@ -222,14 +222,16 @@ class OscService {
         final slug = commandPath.substring('custom/'.length);
         final ntCmd = resolveCustomCommand?.call(slug);
         if (ntCmd != null && onCommand != null) {
-          onCommand!(ntcontrolCmd: ntCmd, all: true);
+          unawaited(onCommand!(ntcontrolCmd: ntCmd, all: true)
+              .catchError((Object e) => debugPrint('OSC command error: $e')));
         } else {
           debugPrint('OSC: Unknown custom command slug: $slug');
         }
       } else {
         final ntCmd = _oscCommandMap[commandPath];
         if (ntCmd != null && onCommand != null) {
-          onCommand!(ntcontrolCmd: ntCmd, all: true);
+          unawaited(onCommand!(ntcontrolCmd: ntCmd, all: true)
+              .catchError((Object e) => debugPrint('OSC command error: $e')));
         } else {
           debugPrint('OSC: Unknown command path: $commandPath');
         }
@@ -258,7 +260,8 @@ class OscService {
         final slug = commandPath.substring('custom/'.length);
         final ntCmd = resolveCustomCommand?.call(slug);
         if (ntCmd != null && onCommand != null) {
-          onCommand!(ntcontrolCmd: ntCmd, groupId: groupId, all: false);
+          unawaited(onCommand!(ntcontrolCmd: ntCmd, groupId: groupId, all: false)
+              .catchError((Object e) => debugPrint('OSC command error: $e')));
         } else {
           debugPrint('OSC: Unknown custom command slug: $slug');
         }
@@ -268,7 +271,10 @@ class OscService {
           debugPrint('OSC: Unknown command path: $commandPath');
           return;
         }
-        onCommand?.call(ntcontrolCmd: ntCmd, groupId: groupId, all: false);
+        if (onCommand != null) {
+          unawaited(onCommand!(ntcontrolCmd: ntCmd, groupId: groupId, all: false)
+              .catchError((Object e) => debugPrint('OSC command error: $e')));
+        }
       }
       return;
     }
