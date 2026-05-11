@@ -37,7 +37,7 @@ class _ControlBarState extends ConsumerState<ControlBar> {
   String _selectedProjectionMethod = 'OIL:0';
   String _selectedShutterFadeIn = 'VXX:SEFS1=0.0';
   String _selectedShutterFadeOut = 'VXX:SEFS2=0.0';
-  List<String> _favorites = [];
+  final List<String?> _favorites = List.filled(4, null);
 
   // ── Data ──────────────────────────────────────────────────────────────────
   static const Map<String, String> _lensOptions = {
@@ -207,11 +207,12 @@ class _ControlBarState extends ConsumerState<ControlBar> {
       final file = File(_favoritesFilePath);
       if (!file.existsSync()) return;
       final list = jsonDecode(file.readAsStringSync()) as List<dynamic>;
-      _favorites = list
-          .cast<String>()
-          .where(_testPatternOptions.containsKey)
-          .take(4)
-          .toList();
+      for (int i = 0; i < 4 && i < list.length; i++) {
+        final val = list[i];
+        if (val is String && _testPatternOptions.containsKey(val)) {
+          _favorites[i] = val;
+        }
+      }
     } catch (_) {}
   }
 
@@ -223,16 +224,15 @@ class _ControlBarState extends ConsumerState<ControlBar> {
     } catch (_) {}
   }
 
-  void _addFavorite() {
-    if (_favorites.length >= 4) return;
+  void _addFavorite(int index) {
+    if (_favorites[index] != null) return;
     if (_favorites.contains(_selectedTestPattern)) return;
-    setState(() => _favorites.add(_selectedTestPattern));
+    setState(() => _favorites[index] = _selectedTestPattern);
     _saveFavorites();
   }
 
   void _clearFavorite(int index) {
-    if (index >= _favorites.length) return;
-    setState(() => _favorites.removeAt(index));
+    setState(() => _favorites[index] = null);
     _saveFavorites();
   }
 
@@ -665,9 +665,7 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                       // Favorites row — always 4 slots
                       Row(
                         children: List.generate(4, (i) {
-                          final code = i < _favorites.length
-                              ? _favorites[i]
-                              : null;
+                          final code = _favorites[i];
                           final canAdd =
                               code == null &&
                               !_favorites.contains(_selectedTestPattern);
@@ -693,7 +691,7 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                                           .read(workspaceProvider.notifier)
                                           .sendCommandToSelected(code)
                                     : null,
-                                onAdd: canAdd ? _addFavorite : null,
+                                onAdd: canAdd ? () => _addFavorite(i) : null,
                                 onClear: code != null
                                     ? () => _clearFavorite(i)
                                     : null,
