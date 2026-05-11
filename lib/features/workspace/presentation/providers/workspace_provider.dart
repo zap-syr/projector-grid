@@ -19,6 +19,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
   final List<_WorkspaceSnapshot> _undoStack = [];
   final List<_WorkspaceSnapshot> _redoStack = [];
   bool _isDragging = false;
+  final List<Timer> _optimisticTimers = [];
 
   List<ProjectorGroup> _groups = [];
   List<ProjectorGroup> get groups => List.unmodifiable(_groups);
@@ -31,6 +32,9 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     // Make sure to clean up the timer when the provider is destroyed
     ref.onDispose(() {
       _pollingTimer?.cancel();
+      for (final t in _optimisticTimers) {
+        t.cancel();
+      }
     });
 
     return [];
@@ -469,7 +473,8 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
       }).toList();
       _notifyStateChanged();
 
-      final targetNode = state.firstWhere((n) => n.id == id);
+      final targetNode = state.where((n) => n.id == id).firstOrNull;
+      if (targetNode == null) return;
       await _pollSingleProjector(targetNode);
     }
   }
@@ -577,13 +582,17 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     if (cmd == 'PON') {
       state = state.map((n) => n.id == nodeId ? n.copyWith(powerStatus: PowerStatus.on) : n).toList();
       _notifyStateChanged();
-      final node = state.firstWhere((n) => n.id == nodeId);
-      Future.delayed(const Duration(seconds: 8), () => _pollSpecificTelemetry(node, 'QSH'));
+      final node = state.where((n) => n.id == nodeId).firstOrNull;
+      if (node != null) {
+        _optimisticTimers.add(Timer(const Duration(seconds: 8), () => _pollSpecificTelemetry(node, 'QSH')));
+      }
     } else if (cmd == 'POF') {
       state = state.map((n) => n.id == nodeId ? n.copyWith(powerStatus: PowerStatus.standby) : n).toList();
       _notifyStateChanged();
-      final node = state.firstWhere((n) => n.id == nodeId);
-      Future.delayed(const Duration(seconds: 5), () => _pollSpecificTelemetry(node, 'QSH'));
+      final node = state.where((n) => n.id == nodeId).firstOrNull;
+      if (node != null) {
+        _optimisticTimers.add(Timer(const Duration(seconds: 5), () => _pollSpecificTelemetry(node, 'QSH')));
+      }
     } else if (cmd == 'OSH:0') {
       state = state.map((n) => n.id == nodeId ? n.copyWith(shutterStatus: ShutterStatus.open) : n).toList();
       _notifyStateChanged();
@@ -604,7 +613,8 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     Offset totalDelta,
     Map<String, Offset> startPositions,
   ) {
-    final targetNode = state.firstWhere((n) => n.id == id);
+    final targetNode = state.where((n) => n.id == id).firstOrNull;
+    if (targetNode == null) return;
     if (targetNode.isSelected) {
       state = state.map((node) {
         final start = startPositions[node.id];
@@ -662,7 +672,8 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
 
   void snapNodeToGrid(String id) {
     double snap(double val) => (val / 20).round() * 20.0;
-    final targetNode = state.firstWhere((n) => n.id == id);
+    final targetNode = state.where((n) => n.id == id).firstOrNull;
+    if (targetNode == null) return;
     if (targetNode.isSelected) {
       state = state.map((node) {
         if (node.isSelected) {
@@ -687,7 +698,8 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
   }
 
   void selectNodeOnDown(String id, {bool multiSelect = false}) {
-    final targetNode = state.firstWhere((n) => n.id == id);
+    final targetNode = state.where((n) => n.id == id).firstOrNull;
+    if (targetNode == null) return;
     if (multiSelect) {
       state = state.map((node) {
         if (node.id == id) {
