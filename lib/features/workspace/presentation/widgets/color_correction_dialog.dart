@@ -603,6 +603,7 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
                                 ButtonSegment(value: 2, label: Text('7 Colors')),
                               ],
                               selected: {_method},
+                              showSelectedIcon: false,
                               onSelectionChanged: (s) => _setMethod(s.first),
                             ),
                           ),
