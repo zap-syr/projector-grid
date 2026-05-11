@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.2.2] - 2026-05-11
+
+### Fixed
+- Workspace scrollbars no longer freeze after long sessions - on Windows and
+  macOS, switching away from the app while holding Ctrl/Cmd could cause the
+  key-up event to be dropped, permanently locking the scroll views into
+  zoom-only mode until the app was restarted
+- Polling no longer stacks up overlapping cycles when projectors are slow to
+  respond; each poll now waits for the previous one to complete before
+  scheduling the next, preventing runaway async operations after many hours
+  of use
+- Changing the polling interval in Preferences while a poll was in flight
+  could spawn two concurrent poll chains; a generation counter now ensures
+  only one chain is ever active
+- Power on/off follow-up timers are now removed from the internal list as soon
+  as they fire, preventing unbounded memory growth during long sessions with
+  frequent power commands
+
 ## [1.2.1] - 2026-05-11
 
 ### Fixed
