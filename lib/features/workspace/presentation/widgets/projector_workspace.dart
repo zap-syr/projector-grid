@@ -45,7 +45,8 @@ class ProjectorWorkspace extends ConsumerStatefulWidget {
   ConsumerState<ProjectorWorkspace> createState() => _ProjectorWorkspaceState();
 }
 
-class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
+class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
+    with WidgetsBindingObserver {
   Offset? _selectionStart;
   Offset? _selectionCurrent;
 
@@ -65,16 +66,29 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     HardwareKeyboard.instance.addHandler(_handleKeyEvent);
     _isMultiSelect = _checkIsMultiSelect();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
     _verticalController.dispose();
     _horizontalController.dispose();
     super.dispose();
+  }
+
+  // On Windows/macOS, holding Ctrl/Cmd then switching away from the window
+  // can cause the key-up event to be dropped, leaving _isMultiSelect stuck as
+  // true and permanently applying NeverScrollableScrollPhysics. Resetting on
+  // resume clears any stale modifier-key state as soon as the window refocuses.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _isMultiSelect) {
+      setState(() => _isMultiSelect = false);
+    }
   }
 
   bool _checkIsMultiSelect() {

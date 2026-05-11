@@ -14,6 +14,9 @@ part 'workspace_provider.g.dart';
 class WorkspaceNotifier extends _$WorkspaceNotifier {
   final _protocolService = PanasonicProtocolService();
   Timer? _pollingTimer;
+  int _pollingIntervalSeconds = 60;
+  int _pollingGeneration = 0;
+  bool _isPollingDisposed = false;
 
   static const int _maxHistorySize = 50;
   final List<_WorkspaceSnapshot> _undoStack = [];
@@ -31,6 +34,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
 
     // Make sure to clean up the timer when the provider is destroyed
     ref.onDispose(() {
+      _isPollingDisposed = true;
       _pollingTimer?.cancel();
       for (final t in _optimisticTimers) {
         t.cancel();
@@ -176,10 +180,23 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
   }
 
   void _startPolling({int seconds = 60}) {
+    _pollingIntervalSeconds = seconds;
+    _pollingGeneration++;          // invalidates any in-flight poll's reschedule
     _pollingTimer?.cancel();
-    _pollingTimer = Timer.periodic(Duration(seconds: seconds), (_) async {
+    _pollingTimer = null;
+    _scheduleNextPoll(_pollingGeneration);
+  }
+
+  void _scheduleNextPoll(int generation) {
+    _pollingTimer = Timer(Duration(seconds: _pollingIntervalSeconds), () async {
       await _pollAllProjectors();
-      _notifyStateChanged();
+      // Only reschedule if this generation is still the active one.
+      // If _startPolling was called while we were awaiting, the generation
+      // will have been bumped and we bail out — the new chain is already running.
+      if (!_isPollingDisposed && _pollingGeneration == generation) {
+        _notifyStateChanged();
+        _scheduleNextPoll(generation);
+      }
     });
   }
 
@@ -584,14 +601,24 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
       _notifyStateChanged();
       final node = state.where((n) => n.id == nodeId).firstOrNull;
       if (node != null) {
-        _optimisticTimers.add(Timer(const Duration(seconds: 8), () => _pollSpecificTelemetry(node, 'QSH')));
+        late Timer t;
+        t = Timer(const Duration(seconds: 8), () {
+          _optimisticTimers.remove(t);
+          _pollSpecificTelemetry(node, 'QSH');
+        });
+        _optimisticTimers.add(t);
       }
     } else if (cmd == 'POF') {
       state = state.map((n) => n.id == nodeId ? n.copyWith(powerStatus: PowerStatus.standby) : n).toList();
       _notifyStateChanged();
       final node = state.where((n) => n.id == nodeId).firstOrNull;
       if (node != null) {
-        _optimisticTimers.add(Timer(const Duration(seconds: 5), () => _pollSpecificTelemetry(node, 'QSH')));
+        late Timer t;
+        t = Timer(const Duration(seconds: 5), () {
+          _optimisticTimers.remove(t);
+          _pollSpecificTelemetry(node, 'QSH');
+        });
+        _optimisticTimers.add(t);
       }
     } else if (cmd == 'OSH:0') {
       state = state.map((n) => n.id == nodeId ? n.copyWith(shutterStatus: ShutterStatus.open) : n).toList();
