@@ -1,15 +1,15 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-green.svg)](https://www.gnu.org/licenses/gpl-3.0) [![Gumroad](https://img.shields.io/badge/GUMROAD-36a9ae?style=for-the-badge&logo=gumroad&logoColor=white)](https://projectorhub.gumroad.com/l/projectorgrid)
 
-## Download the latest release
-
-- [Download for Windows](https://github.com/zap-syr/projector-grid/releases/latest/download/ProjectorGrid_Setup.exe)
-- [Download for macOS (Universal)](https://github.com/zap-syr/projector-grid/releases/latest/download/ProjectorGrid-macOS.dmg)
-
 # Projector Grid
 
 Projector Grid is a desktop application for controlling and monitoring multiple Panasonic projectors over a local network.
 
 With Projector Grid, you can manage an entire projector rig from one place - monitor live status, send commands, adjust image settings, and automate your workflow through OSC integration.
+
+## Download the latest release
+
+- [Download for Windows](https://github.com/zap-syr/projector-grid/releases/latest/download/ProjectorGrid_Setup.exe)
+- [Download for macOS (Universal)](https://github.com/zap-syr/projector-grid/releases/latest/download/ProjectorGrid-macOS.dmg)
 
 ## Main features
 
