@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.2.1] - 2026-05-11
+
+### Fixed
+- App no longer crashes when a projector is deleted while a drag, snap, or
+  power command is still in progress
+- Errors from OSC-triggered projector commands are now printed to the debug
+  console instead of disappearing silently
+- Power on/off follow-up polls are now properly cancelled when the app shuts
+  down, preventing callbacks from firing after the app state is torn down
+- A helpful error message now appears in the Event Log when a project file
+  fails to open, instead of nothing happening
+- Tooltips no longer block mouse clicks and hover events on the buttons beneath
+  them; the tooltip overlay is now fully transparent to pointer input
+- Saving a test pattern to a favourite slot now stores it in the exact slot you
+  clicked, previously it always filled the first available slot from the left
+
 ## [1.2.0] - 2026-05-06
 
 ### Added
