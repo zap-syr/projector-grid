@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../domain/projector_node.dart';
 import '../../../../core/services/panasonic_protocol_service.dart';
+import 'custom_tooltip.dart';
 import 'sleek_stepper_input.dart';
 
 // ─── Mode enum ─────────────────────────────────────────────────────────────
@@ -441,11 +442,13 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
         children: [
           Align(
             alignment: Alignment.topRight,
-            child: IconButton(
-              icon: const Icon(Icons.restart_alt),
-              tooltip: 'Reset all corners',
-              iconSize: 20,
-              onPressed: _resetAllCorners,
+            child: CustomTooltip(
+              message: 'Reset all corners',
+              child: IconButton(
+                icon: const Icon(Icons.restart_alt),
+                iconSize: 20,
+                onPressed: _resetAllCorners,
+              ),
             ),
           ),
           Expanded(

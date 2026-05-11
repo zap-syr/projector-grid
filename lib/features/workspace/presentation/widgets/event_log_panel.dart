@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/log_event.dart';
+import 'custom_tooltip.dart';
 import '../providers/app_settings_provider.dart';
 import '../providers/event_log_provider.dart';
 
@@ -316,7 +317,7 @@ class _IconBtn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
+    return CustomTooltip(
       message: tooltip,
       child: IconButton(
         icon: Icon(icon, size: 14),

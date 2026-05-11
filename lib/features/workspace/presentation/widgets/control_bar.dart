@@ -9,6 +9,7 @@ import '../../domain/custom_command.dart';
 import '../providers/custom_commands_provider.dart';
 import '../providers/workspace_provider.dart';
 import 'custom_command_dialog.dart';
+import 'custom_tooltip.dart';
 
 class ControlBar extends ConsumerStatefulWidget {
   const ControlBar({super.key});
@@ -1203,10 +1204,10 @@ class _PatternSlot extends StatelessWidget {
               : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.25),
         ),
       );
-      return tip.isEmpty ? button : _CustomTooltip(message: tip, child: button);
+      return tip.isEmpty ? button : CustomTooltip(message: tip, child: button);
     }
     // Filled slot — normal click sends, Ctrl+click clears.
-    return _CustomTooltip(
+    return CustomTooltip(
       message: '${label ?? code!}\nCtrl+click to remove',
       child: OutlinedButton(
         style: _slotStyle,
@@ -1229,109 +1230,6 @@ class _PatternSlot extends StatelessWidget {
                 ),
               ),
       ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// A tooltip that is transparent to the mouse pointer via [IgnorePointer].
-///
-/// Visibility is driven solely by the button's [MouseRegion], so the tooltip
-/// never blocks hover/click events on elements behind it, and it disappears
-/// the moment the cursor leaves the button — even if it physically moves over
-/// the tooltip overlay.
-class _CustomTooltip extends StatefulWidget {
-  final String message;
-  final Widget child;
-
-  const _CustomTooltip({required this.message, required this.child});
-
-  @override
-  State<_CustomTooltip> createState() => _CustomTooltipState();
-}
-
-class _CustomTooltipState extends State<_CustomTooltip> {
-  final _key = GlobalKey();
-  OverlayEntry? _entry;
-
-  void _show() {
-    if (_entry != null || !mounted) return;
-    final box = _key.currentContext?.findRenderObject() as RenderBox?;
-    if (box == null || !box.hasSize) return;
-    final position = box.localToGlobal(Offset.zero);
-    final size = box.size;
-
-    _entry = OverlayEntry(
-      builder: (overlayContext) {
-        final colorScheme = Theme.of(overlayContext).colorScheme;
-        final lines = widget.message.split('\n');
-        return Positioned(
-          // Anchor at horizontal center of the button, 6px above its top edge.
-          left: position.dx + size.width / 2,
-          top: position.dy - 6,
-          child: FractionalTranslation(
-            // Shift left by 50% of own width (centers it) and up by 100% of own
-            // height (places it fully above the button).
-            translation: const Offset(-0.5, -1.0),
-            child: IgnorePointer(
-              child: Material(
-                color: Colors.transparent,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: colorScheme.inverseSurface,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      for (int i = 0; i < lines.length; i++)
-                        Text(
-                          lines[i],
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: colorScheme.onInverseSurface,
-                            fontSize: 12,
-                            fontStyle: i > 0
-                                ? FontStyle.italic
-                                : FontStyle.normal,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-    Overlay.of(context).insert(_entry!);
-  }
-
-  void _hide() {
-    _entry?.remove();
-    _entry = null;
-  }
-
-  @override
-  void dispose() {
-    _hide();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      key: _key,
-      onEnter: (_) => _show(),
-      onExit: (_) => _hide(),
-      child: widget.child,
     );
   }
 }
