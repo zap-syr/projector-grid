@@ -7,19 +7,19 @@ enum ProbeResult { online, unauthorized, offline, unprotected }
 
 class PanasonicProtocolService {
   /// Scans a given subnet (e.g. "192.168.1") for Panasonic projectors on the specified port.
-  /// Yields results as they are found.
+  /// Yields results as they are found. Addresses are probed in batches of 50 to
+  /// avoid opening all 254 sockets simultaneously.
   Stream<Map<String, dynamic>> scanNetwork(String subnet, int port, {String login = '', String password = ''}) async* {
-    final List<Future<Map<String, dynamic>?>> tasks = [];
+    const batchSize = 50;
+    final ips = [for (int i = 1; i <= 254; i++) '$subnet.$i'];
 
-    for (int i = 1; i <= 254; i++) {
-      final ip = '$subnet.$i';
-      tasks.add(_pingProjector(ip, port, login, password));
-    }
-
-    for (final task in tasks) {
-      final result = await task;
-      if (result != null) {
-        yield result;
+    for (int start = 0; start < ips.length; start += batchSize) {
+      final batch = ips.sublist(start, (start + batchSize).clamp(0, ips.length));
+      final results = await Future.wait(
+        batch.map((ip) => _pingProjector(ip, port, login, password)),
+      );
+      for (final result in results) {
+        if (result != null) yield result;
       }
     }
   }

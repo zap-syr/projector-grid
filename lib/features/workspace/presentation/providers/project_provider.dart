@@ -202,6 +202,8 @@ if ($r -eq 'OK') { Write-Output $dialog.FileName }
         defaultName.endsWith('.pgrid') ? defaultName : '$defaultName.pgrid';
 
     if (Platform.isWindows) {
+      // Escape single quotes for PowerShell single-quoted string literals.
+      final escaped = safeName.replaceAll("'", "''");
       final result = await Process.run('powershell', [
         '-NoProfile', '-NonInteractive', '-Command',
         '''
@@ -211,7 +213,7 @@ Add-Type -AssemblyName System.Windows.Forms
 \$dialog = New-Object System.Windows.Forms.SaveFileDialog
 \$dialog.Filter = 'Projector Grid Project (*.pgrid)|*.pgrid'
 \$dialog.DefaultExt = 'pgrid'
-\$dialog.FileName = '$safeName'
+\$dialog.FileName = '$escaped'
 \$dialog.Title = 'Save Project'
 \$r = \$dialog.ShowDialog(\$owner)
 \$owner.Dispose()
@@ -221,9 +223,11 @@ if (\$r -eq 'OK') { Write-Output \$dialog.FileName }
       final path = result.stdout.toString().trim();
       return path.isEmpty ? null : path;
     } else if (Platform.isMacOS) {
+      // Escape double quotes for the AppleScript string literal.
+      final escaped = safeName.replaceAll('"', '\\"');
       final result = await Process.run('osascript', [
         '-e',
-        'POSIX path of (choose file name with prompt "Save Project" default name "$safeName")',
+        'POSIX path of (choose file name with prompt "Save Project" default name "$escaped")',
       ]);
       final path = result.stdout.toString().trim();
       return path.isEmpty ? null : path;
@@ -282,11 +286,14 @@ if (\$r -eq 'OK') { Write-Output \$dialog.FileName }
 
   List<ProjectorNode> _deserializeNodes(Map<String, dynamic> json) {
     final nodes = json['nodes'] as List<dynamic>;
+    if (nodes.length > 500) {
+      throw FormatException('Project contains too many nodes (${nodes.length}); maximum is 500');
+    }
     return nodes.map((n) => ProjectorNode(
       id: n['id'] as String,
       name: n['name'] as String,
       ipAddress: n['ipAddress'] as String,
-      port: n['port'] as int,
+      port: (n['port'] as int).clamp(1, 65535),
       login: n['login'] as String,
       password: n['password'] as String,
       x: (n['x'] as num).toDouble(),
