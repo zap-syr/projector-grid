@@ -143,6 +143,12 @@ class OscService {
   String _sendIp = '127.0.0.1';
   int _sendPort = 9000;
 
+  // Per-address cooldown: the same OSC address cannot trigger more than once
+  // per _commandCooldown. This prevents a runaway show controller from
+  // flooding the app with concurrent TCP operations.
+  static const _commandCooldown = Duration(milliseconds: 50);
+  final Map<String, DateTime> _lastCommandTimes = {};
+
   // Previous counts — used to detect changes and skip redundant sends.
   int? _lastOnline;
   int? _lastOffline;
@@ -200,6 +206,7 @@ class OscService {
     _socket?.close();
     _socket = null;
     _isActive = false;
+    _lastCommandTimes.clear();
   }
 
   void _handleDatagram(Datagram datagram) {
@@ -213,6 +220,11 @@ class OscService {
 
   void _processMessage(OSCMessage msg) {
     final address = msg.address;
+
+    final now = DateTime.now();
+    final last = _lastCommandTimes[address];
+    if (last != null && now.difference(last) < _commandCooldown) return;
+    _lastCommandTimes[address] = now;
 
     // /pgrid/all/{command...}
     // Also handles /pgrid/all/custom/{slug} for user-defined commands.
