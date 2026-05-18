@@ -1,11 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import '../../domain/projector_node.dart';
-import '../../domain/projector_group.dart';
 import '../../domain/log_event.dart';
-import 'workspace_provider.dart';
+import '../../domain/projector_group.dart';
+import '../../domain/projector_node.dart';
+import '../../domain/scheduled_task.dart';
 import 'event_log_provider.dart';
+import 'scheduled_tasks_provider.dart';
+import 'workspace_provider.dart';
 
 part 'project_provider.g.dart';
 
@@ -62,6 +64,14 @@ class ProjectStateNotifier extends _$ProjectStateNotifier {
       }
     });
 
+    ref.listen<List<ScheduledTask>>(scheduledTasksProvider,
+        (previous, next) {
+      if (_suppressDirty || previous == null) return;
+      if (_taskConfigChanged(previous, next)) {
+        state = state.copyWith(isDirty: true);
+      }
+    });
+
     return ProjectState(recentProjects: recentProjects);
   }
 
@@ -90,6 +100,41 @@ class ProjectStateNotifier extends _$ProjectStateNotifier {
     return false;
   }
 
+  bool _taskConfigChanged(
+    List<ScheduledTask> prev,
+    List<ScheduledTask> next,
+  ) {
+    if (prev.length != next.length) return true;
+    final prevMap = {for (final t in prev) t.id: t};
+    for (final t in next) {
+      final p = prevMap[t.id];
+      if (p == null) return true;
+      if (p.name != t.name ||
+          p.command != t.command ||
+          p.commandLabel != t.commandLabel ||
+          p.target != t.target ||
+          p.targetGroupId != t.targetGroupId ||
+          p.scheduleType != t.scheduleType ||
+          p.oneTimeAt != t.oneTimeAt ||
+          p.timeOfDay != t.timeOfDay ||
+          !_listsEqual(p.weekdays, t.weekdays) ||
+          p.enabled != t.enabled) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static bool _listsEqual<T>(List<T>? a, List<T>? b) {
+    if (a == null && b == null) return true;
+    if (a == null || b == null) return false;
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
   // ── Project operations ────────────────────────────────────────────────────
 
   void newProject() {
@@ -97,6 +142,7 @@ class ProjectStateNotifier extends _$ProjectStateNotifier {
     final wsNotifier = ref.read(workspaceProvider.notifier);
     wsNotifier.setNodes([]);
     wsNotifier.setGroups([]);
+    ref.read(scheduledTasksProvider.notifier).loadTasks([]);
     _suppressDirty = false;
     state = state.copyWith(clearCurrentFilePath: true, isDirty: false);
   }
@@ -121,6 +167,8 @@ class ProjectStateNotifier extends _$ProjectStateNotifier {
       wsNotifier.setNodes(nodes);
       wsNotifier.setGroups(groups);
       wsNotifier.refreshAll();
+      ref.read(scheduledTasksProvider.notifier)
+          .loadTasks(_deserializeTasks(json));
       _suppressDirty = false;
 
       final updated = _addToRecent(path, state.recentProjects);
@@ -240,10 +288,12 @@ if (\$r -eq 'OK') { Write-Output \$dialog.FileName }
       final wsNotifier = ref.read(workspaceProvider.notifier);
       final nodes = ref.read(workspaceProvider);
       final groups = wsNotifier.groups;
+      final tasks = ref.read(scheduledTasksProvider);
       final json = jsonEncode({
         'version': 2,
         'groups': groups.map(_serializeGroup).toList(),
         'nodes': nodes.map(_serializeNode).toList(),
+        'scheduledTasks': tasks.map(_scheduledTaskToJson).toList(),
       });
 
       final file = File(path);
@@ -312,6 +362,56 @@ if (\$r -eq 'OK') { Write-Output \$dialog.FileName }
       oscAddress: (g['oscAddress'] as String?) ?? '',
     )).toList();
   }
+
+  static List<ScheduledTask> _deserializeTasks(Map<String, dynamic> json) {
+    final list = json['scheduledTasks'] as List<dynamic>?;
+    if (list == null) return [];
+    return list
+        .map((e) => _scheduledTaskFromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  static ScheduledTask _scheduledTaskFromJson(Map<String, dynamic> j) =>
+      ScheduledTask(
+        id: j['id'] as String,
+        name: j['name'] as String,
+        command: j['command'] as String,
+        commandLabel: j['commandLabel'] as String,
+        target: ScheduleTarget.values.firstWhere(
+          (e) => e.name == j['target'],
+          orElse: () => ScheduleTarget.all,
+        ),
+        targetGroupId: j['targetGroupId'] as String?,
+        scheduleType: ScheduleType.values.firstWhere(
+          (e) => e.name == j['scheduleType'],
+          orElse: () => ScheduleType.daily,
+        ),
+        oneTimeAt: j['oneTimeAt'] != null
+            ? DateTime.tryParse(j['oneTimeAt'] as String)
+            : null,
+        timeOfDay: j['timeOfDay'] as String?,
+        weekdays:
+            (j['weekdays'] as List<dynamic>?)?.map((e) => e as int).toList(),
+        enabled: j['enabled'] as bool? ?? true,
+        lastRunAt: j['lastRunAt'] != null
+            ? DateTime.tryParse(j['lastRunAt'] as String)
+            : null,
+      );
+
+  static Map<String, dynamic> _scheduledTaskToJson(ScheduledTask t) => {
+        'id': t.id,
+        'name': t.name,
+        'command': t.command,
+        'commandLabel': t.commandLabel,
+        'target': t.target.name,
+        if (t.targetGroupId != null) 'targetGroupId': t.targetGroupId,
+        'scheduleType': t.scheduleType.name,
+        if (t.oneTimeAt != null) 'oneTimeAt': t.oneTimeAt!.toIso8601String(),
+        if (t.timeOfDay != null) 'timeOfDay': t.timeOfDay,
+        if (t.weekdays != null) 'weekdays': t.weekdays,
+        'enabled': t.enabled,
+        if (t.lastRunAt != null) 'lastRunAt': t.lastRunAt!.toIso8601String(),
+      };
 
   // ── Recent projects ───────────────────────────────────────────────────────
 
