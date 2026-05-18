@@ -4,6 +4,7 @@ import '../providers/app_settings_provider.dart';
 import '../providers/workspace_provider.dart';
 import 'add_projector_dialog.dart';
 import 'manage_groups_dialog.dart';
+import 'scheduled_tasks_dialog.dart';
 
 class MainToolbar extends ConsumerWidget {
   const MainToolbar({super.key});
@@ -26,34 +27,56 @@ class MainToolbar extends ConsumerWidget {
       ),
       child: Row(
         children: [
-          FilledButton.icon(
-            onPressed: () {
-              final existingIps = ref.read(workspaceProvider).map((n) => n.ipAddress).toList();
-              showDialog(
-                context: context,
-                builder: (context) => AddProjectorDialog(
-                  existingIps: existingIps,
-                  onAddProjectors: (projectors) {
-                    ref.read(workspaceProvider.notifier).addProjectors(projectors);
-                  },
-                ),
-              );
-            },
-            icon: const Icon(Icons.add),
-            label: const Text('Add Projectors'),
+          // Left actions — scrollable so narrow windows never overflow
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  FilledButton.icon(
+                    onPressed: () {
+                      final existingIps = ref.read(workspaceProvider).map((n) => n.ipAddress).toList();
+                      showDialog(
+                        context: context,
+                        builder: (context) => AddProjectorDialog(
+                          existingIps: existingIps,
+                          onAddProjectors: (projectors) {
+                            ref.read(workspaceProvider.notifier).addProjectors(projectors);
+                          },
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add Projectors'),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      showDialog(
+                        context: context,
+                        builder: (_) => const ManageGroupsDialog(),
+                      );
+                    },
+                    icon: const Icon(Icons.workspaces_outlined, size: 18),
+                    label: const Text('Manage Groups'),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      showDialog(
+                        context: context,
+                        builder: (_) => const ScheduledTasksDialog(),
+                      );
+                    },
+                    icon: const Icon(Icons.schedule, size: 18),
+                    label: const Text('Scheduled Tasks'),
+                  ),
+                ],
+              ),
+            ),
           ),
           const SizedBox(width: 8),
-          OutlinedButton.icon(
-            onPressed: () {
-              showDialog(
-                context: context,
-                builder: (_) => const ManageGroupsDialog(),
-              );
-            },
-            icon: const Icon(Icons.workspaces_outlined, size: 18),
-            label: const Text('Manage Groups'),
-          ),
-          const Spacer(),
           SegmentedButton<bool>(
             segments: const [
               ButtonSegment(

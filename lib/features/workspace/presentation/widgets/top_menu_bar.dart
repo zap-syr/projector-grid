@@ -6,6 +6,7 @@ import '../providers/project_provider.dart';
 import '../providers/app_settings_provider.dart';
 import 'preferences_dialog.dart';
 import 'manage_groups_dialog.dart';
+import 'scheduled_tasks_dialog.dart';
 import 'keyboard_shortcuts_dialog.dart';
 import 'about_dialog.dart';
 import '../../../../core/services/docs_service.dart';
@@ -266,6 +267,14 @@ class TopMenuBar extends ConsumerWidget {
                   onPressed: () => showDialog(
                     context: context,
                     builder: (_) => const ManageGroupsDialog(),
+                  ),
+                ),
+                _menuItem(
+                  context,
+                  label: 'Scheduled Tasks',
+                  onPressed: () => showDialog(
+                    context: context,
+                    builder: (_) => const ScheduledTasksDialog(),
                   ),
                 ),
                 _menuItem(

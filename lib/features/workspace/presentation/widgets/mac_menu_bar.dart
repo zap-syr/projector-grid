@@ -12,6 +12,7 @@ import 'about_dialog.dart';
 import 'keyboard_shortcuts_dialog.dart';
 import 'manage_groups_dialog.dart';
 import 'preferences_dialog.dart';
+import 'scheduled_tasks_dialog.dart';
 import 'top_menu_bar.dart';
 
 /// Wraps [child] with a native macOS menu bar via [PlatformMenuBar].
@@ -241,6 +242,16 @@ class MacMenuBar extends ConsumerWidget {
                     showDialog(
                       context: context,
                       builder: (_) => const ManageGroupsDialog(),
+                    );
+                  },
+                ),
+                PlatformMenuItem(
+                  label: 'Scheduled Tasks',
+                  onSelected: () {
+                    if (!context.mounted) return;
+                    showDialog(
+                      context: context,
+                      builder: (_) => const ScheduledTasksDialog(),
                     );
                   },
                 ),
