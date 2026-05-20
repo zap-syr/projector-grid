@@ -4,6 +4,39 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.3.0] - 2026-05-18
+
+### Added
+- Scheduled Tasks - automate projector commands on a once, daily, or weekly
+  schedule; each task targets all projectors or a specific group and is
+  managed via the new Scheduled Tasks dialog in the toolbar
+- Scheduled tasks are stored inside the project file (.pgrid) so tasks always
+  travel with the project they belong to; opening a different project loads
+  that project's tasks automatically
+
+### Fixed
+- Opening a project file with a specially crafted filename and then saving
+  could inject arbitrary commands into the OS file dialog script on Windows
+  and macOS; the filename is now properly escaped before being passed to
+  PowerShell and AppleScript
+- OSC: a runaway show controller sending the same command address in a tight
+  loop could flood the app with hundreds of concurrent projector commands per
+  second; each OSC address is now rate-limited to one dispatch per 50 ms
+- Loading a maliciously crafted project file containing an excessive number of
+  projector nodes no longer hangs the app; files with more than 500 nodes are
+  now rejected with an error in the Event Log
+- Out-of-range port numbers in project files are now silently clamped to the
+  valid TCP range (1-65535) instead of being passed through to socket calls
+- Network scan no longer opens all 254 probe connections simultaneously;
+  addresses are now checked in batches of 50, reducing peak socket usage and
+  preventing resource exhaustion on constrained systems; a Cancel Scanning
+  button is now available to stop the scan mid-run while keeping
+  already-discovered projectors in the list
+- Text field labels across all dialogs are now visually dimmed when the field
+  is empty and unfocused, preventing them from being mistaken for entered
+  values; the label returns to full prominence once a value is present or the
+  field is focused
+
 ## [1.2.2] - 2026-05-11
 
 ### Fixed
