@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:async';
 import 'dart:io';
 import '../../../../core/services/panasonic_protocol_service.dart';
 
@@ -334,6 +335,7 @@ class _AutoDiscoveryTabState extends State<_AutoDiscoveryTab> {
   String? _selectedIp;
 
   bool _isScanning = false;
+  StreamSubscription<Map<String, dynamic>>? _scanSubscription;
   List<Map<String, dynamic>> _foundProjectors = [];
   final Set<String> _selectedIps = {};
 
@@ -347,10 +349,17 @@ class _AutoDiscoveryTabState extends State<_AutoDiscoveryTab> {
 
   @override
   void dispose() {
+    _scanSubscription?.cancel();
     _portController.dispose();
     _loginController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  void _stopScan() {
+    _scanSubscription?.cancel();
+    _scanSubscription = null;
+    if (mounted) setState(() => _isScanning = false);
   }
 
   Future<void> _loadInterfaces() async {
@@ -399,7 +408,7 @@ class _AutoDiscoveryTabState extends State<_AutoDiscoveryTab> {
 
     final stream = _protocolService.scanNetwork(subnet, port, login: login, password: password);
 
-    stream.listen((result) {
+    _scanSubscription = stream.listen((result) {
       if (mounted) {
         setState(() {
           final ip = result['ip'] as String;
@@ -413,6 +422,7 @@ class _AutoDiscoveryTabState extends State<_AutoDiscoveryTab> {
       if (mounted) {
         setState(() {
           _isScanning = false;
+          _scanSubscription = null;
         });
       }
     });
@@ -524,11 +534,11 @@ class _AutoDiscoveryTabState extends State<_AutoDiscoveryTab> {
           Align(
             alignment: Alignment.centerRight,
             child: FilledButton.icon(
-              onPressed: _isScanning ? null : _startScan,
+              onPressed: _isScanning ? _stopScan : _startScan,
               icon: _isScanning
                   ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.search),
-              label: Text(_isScanning ? 'Scanning Subnet...' : 'Scan Network'),
+              label: Text(_isScanning ? 'Cancel Scanning' : 'Scan Network'),
             ),
           ),
           const Divider(height: 32),
