@@ -236,7 +236,7 @@ class MacMenuBar extends ConsumerWidget {
                   onSelected: () => wsNotifier.refreshAll(),
                 ),
                 PlatformMenuItem(
-                  label: 'Manage Groups…',
+                  label: 'Manage Groups',
                   onSelected: () {
                     if (!context.mounted) return;
                     showDialog(

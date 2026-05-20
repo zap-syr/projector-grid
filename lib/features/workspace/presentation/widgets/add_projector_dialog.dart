@@ -203,6 +203,13 @@ class _ManualAddTabState extends State<_ManualAddTab> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    InputDecoration dec(String label) => InputDecoration(
+      labelText: label,
+      border: const OutlineInputBorder(),
+      labelStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
+      floatingLabelStyle: TextStyle(color: cs.primary),
+    );
     return Form(
       key: _formKey,
       child: ListView(
@@ -224,7 +231,7 @@ class _ManualAddTabState extends State<_ManualAddTab> {
           if (!_isRange)
             TextFormField(
               controller: _ipController,
-              decoration: const InputDecoration(labelText: 'IP Address', border: OutlineInputBorder()),
+              decoration: dec('IP Address'),
               validator: _validateIp,
             )
           else ...[
@@ -233,7 +240,7 @@ class _ManualAddTabState extends State<_ManualAddTab> {
                 Expanded(
                   child: TextFormField(
                     controller: _startIpController,
-                    decoration: const InputDecoration(labelText: 'Start IP Address', border: OutlineInputBorder()),
+                    decoration: dec('Start IP Address'),
                     validator: _validateIp,
                   ),
                 ),
@@ -241,7 +248,7 @@ class _ManualAddTabState extends State<_ManualAddTab> {
                 Expanded(
                   child: TextFormField(
                     controller: _endIpController,
-                    decoration: const InputDecoration(labelText: 'End IP Address', border: OutlineInputBorder()),
+                    decoration: dec('End IP Address'),
                     validator: _validateIp,
                   ),
                 ),
@@ -251,7 +258,7 @@ class _ManualAddTabState extends State<_ManualAddTab> {
           const SizedBox(height: 16),
           TextFormField(
             controller: _portController,
-            decoration: const InputDecoration(labelText: 'Port', border: OutlineInputBorder()),
+            decoration: dec('Port'),
             keyboardType: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             validator: (val) {
@@ -264,12 +271,12 @@ class _ManualAddTabState extends State<_ManualAddTab> {
           const SizedBox(height: 16),
           TextFormField(
             controller: _loginController,
-            decoration: const InputDecoration(labelText: 'Login', border: OutlineInputBorder()),
+            decoration: dec('Login'),
           ),
           const SizedBox(height: 16),
           TextFormField(
             controller: _passwordController,
-            decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder()),
+            decoration: dec('Password'),
           ),
           const SizedBox(height: 10),
           Row(
@@ -414,6 +421,13 @@ class _AutoDiscoveryTabState extends State<_AutoDiscoveryTab> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    InputDecoration dec(String label) => InputDecoration(
+      labelText: label,
+      border: const OutlineInputBorder(),
+      labelStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
+      floatingLabelStyle: TextStyle(color: cs.primary),
+    );
     return Padding(
       padding: const EdgeInsets.all(24.0),
       child: Column(
@@ -466,7 +480,7 @@ class _AutoDiscoveryTabState extends State<_AutoDiscoveryTab> {
                   flex: 1,
                   child: TextFormField(
                     controller: _portController,
-                    decoration: const InputDecoration(labelText: 'Port', border: OutlineInputBorder()),
+                    decoration: dec('Port'),
                     keyboardType: TextInputType.number,
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   ),
@@ -479,14 +493,14 @@ class _AutoDiscoveryTabState extends State<_AutoDiscoveryTab> {
               Expanded(
                 child: TextFormField(
                   controller: _loginController,
-                  decoration: const InputDecoration(labelText: 'Login', border: OutlineInputBorder()),
+                  decoration: dec('Login'),
                 ),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: TextFormField(
                   controller: _passwordController,
-                  decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder()),
+                  decoration: dec('Password'),
                 ),
               ),
             ],
