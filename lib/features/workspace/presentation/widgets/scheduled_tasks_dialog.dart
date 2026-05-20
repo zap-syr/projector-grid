@@ -1083,17 +1083,18 @@ class _HybridDateFieldState extends State<_HybridDateField> {
   final _portalController = OverlayPortalController();
   final LayerLink _layerLink = LayerLink();
   bool _openUpward = false;
+  String? _pastDateError;
 
   static String _toDisplay(DateTime dt) =>
-      '${dt.month.toString().padLeft(2, '0')}/'
       '${dt.day.toString().padLeft(2, '0')}/'
+      '${dt.month.toString().padLeft(2, '0')}/'
       '${dt.year}';
 
   static DateTime? _parse(String text) {
     final parts = text.split('/');
     if (parts.length != 3) return null;
-    final m = int.tryParse(parts[0]);
-    final d = int.tryParse(parts[1]);
+    final d = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
     final y = int.tryParse(parts[2]);
     if (m == null || d == null || y == null) return null;
     if (m < 1 || m > 12 || d < 1 || d > 31 || y < 2000) return null;
@@ -1131,6 +1132,7 @@ class _HybridDateFieldState extends State<_HybridDateField> {
         widget.value != null &&
         !_focusNode.hasFocus) {
       _ctrl.text = _toDisplay(widget.value!);
+      if (_pastDateError != null) setState(() => _pastDateError = null);
     }
   }
 
@@ -1231,12 +1233,12 @@ class _HybridDateFieldState extends State<_HybridDateField> {
           keyboardType: TextInputType.number,
           inputFormatters: [_DateInputFormatter()],
           decoration: InputDecoration(
-            hintText: 'MM/DD/YYYY',
+            hintText: 'DD/MM/YYYY',
             border: const OutlineInputBorder(),
             isDense: true,
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            errorText: widget.hasError ? 'Please enter a date' : null,
+            errorText: _pastDateError ?? (widget.hasError ? 'Please enter a date' : null),
             errorStyle: TextStyle(
               fontSize: 11,
               color: theme.colorScheme.error,
@@ -1257,7 +1259,18 @@ class _HybridDateFieldState extends State<_HybridDateField> {
           ),
           onChanged: (text) {
             final dt = _parse(text);
-            if (dt != null) widget.onPicked(dt);
+            if (dt != null) {
+              final today = DateTime.now();
+              final todayDate = DateTime(today.year, today.month, today.day);
+              if (dt.isBefore(todayDate)) {
+                setState(() => _pastDateError = 'Date cannot be in the past');
+              } else {
+                setState(() => _pastDateError = null);
+                widget.onPicked(dt);
+              }
+            } else if (_pastDateError != null) {
+              setState(() => _pastDateError = null);
+            }
           },
         ),
       ),
@@ -1477,6 +1490,7 @@ class _TimeFieldState extends State<_TimeField> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return SizedBox(
       width: 68,
       child: TextField(
@@ -1493,6 +1507,8 @@ class _TimeFieldState extends State<_TimeField> {
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
           counterText: '',
+          labelStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
+          floatingLabelStyle: TextStyle(color: cs.primary),
         ),
         onSubmitted: (_) => _commit(),
       ),
