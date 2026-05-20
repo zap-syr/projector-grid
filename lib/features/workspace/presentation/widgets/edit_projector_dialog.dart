@@ -51,6 +51,16 @@ class _EditProjectorDialogState extends State<EditProjectorDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    InputDecoration dec(String label) => InputDecoration(
+      labelText: label,
+      border: const OutlineInputBorder(),
+      labelStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
+      floatingLabelStyle: WidgetStateTextStyle.resolveWith((states) {
+        if (states.contains(WidgetState.error)) return TextStyle(color: cs.error);
+        return TextStyle(color: cs.primary);
+      }),
+    );
     return Dialog(
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -80,7 +90,7 @@ class _EditProjectorDialogState extends State<EditProjectorDialog> {
             children: [
               TextFormField(
                 controller: _ipController,
-                decoration: const InputDecoration(labelText: 'IP Address', border: OutlineInputBorder()),
+                decoration: dec('IP Address'),
                 validator: (val) {
                   if (val == null || val.isEmpty) return 'IP Address is required';
                   if (!_ipRegex.hasMatch(val)) return 'Invalid IP Address format';
@@ -91,12 +101,12 @@ class _EditProjectorDialogState extends State<EditProjectorDialog> {
               const SizedBox(height: 16),
               TextFormField(
                 controller: _loginController,
-                decoration: const InputDecoration(labelText: 'Login', border: OutlineInputBorder()),
+                decoration: dec('Login'),
               ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _passwordController,
-                decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder()),
+                decoration: dec('Password'),
               ),
               const SizedBox(height: 32),
               Row(

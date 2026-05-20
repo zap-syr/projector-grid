@@ -61,6 +61,7 @@ class _CustomCommandDialogState extends ConsumerState<CustomCommandDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     final slug = _slug;
     final title = widget.existing == null ? 'Add Command' : 'Edit Command';
 
@@ -94,6 +95,11 @@ class _CustomCommandDialogState extends ConsumerState<CustomCommandDialog> {
                       labelText: 'Name',
                       border: const OutlineInputBorder(),
                       errorText: _isDuplicate ? 'Name already used' : null,
+                      labelStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
+                      floatingLabelStyle: WidgetStateTextStyle.resolveWith((states) {
+                        if (states.contains(WidgetState.error)) return TextStyle(color: cs.error);
+                        return TextStyle(color: cs.primary);
+                      }),
                     ),
                     onChanged: (_) => setState(() {}),
                     autofocus: true,
@@ -102,10 +108,11 @@ class _CustomCommandDialogState extends ConsumerState<CustomCommandDialog> {
                   const SizedBox(height: 16),
                   TextField(
                     controller: _cmdCtrl,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Command',
-                      hintText: 'e.g. PON, OSH:1, VXX:LNSI1=+00001',
-                      border: OutlineInputBorder(),
+                      border: const OutlineInputBorder(),
+                      labelStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
+                      floatingLabelStyle: TextStyle(color: cs.primary),
                     ),
                     onChanged: (_) => setState(() {}),
                     onSubmitted: (_) => _isValid ? _submit() : null,

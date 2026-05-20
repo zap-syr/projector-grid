@@ -39,6 +39,7 @@ Future<ProjectorGroup?> showGroupEditorDialog(
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setDialogState) {
         final theme = Theme.of(ctx);
+        final cs = theme.colorScheme;
         return Dialog(
           clipBehavior: Clip.antiAlias,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -71,6 +72,11 @@ Future<ProjectorGroup?> showGroupEditorDialog(
                           labelText: 'Group Name',
                           border: const OutlineInputBorder(),
                           errorText: nameError,
+                          labelStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
+                          floatingLabelStyle: WidgetStateTextStyle.resolveWith((states) {
+                            if (states.contains(WidgetState.error)) return TextStyle(color: cs.error);
+                            return TextStyle(color: cs.primary);
+                          }),
                         ),
                         autofocus: true,
                         onChanged: (_) {
