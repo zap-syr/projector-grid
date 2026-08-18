@@ -217,7 +217,7 @@ return $default(_that.id,_that.name,_that.command,_that.commandLabel,_that.targe
 
 
 class _ScheduledTask implements ScheduledTask {
-  const _ScheduledTask({required this.id, required this.name, required this.command, required this.commandLabel, required this.target, this.targetGroupId, required this.scheduleType, this.oneTimeAt, this.timeOfDay, final  List<int>? weekdays, this.enabled = true, this.lastRunAt}): _weekdays = weekdays;
+  const _ScheduledTask({required this.id, required this.name, required this.command, required this.commandLabel, required this.target, this.targetGroupId, required this.scheduleType, this.oneTimeAt, this.timeOfDay, this.weekdays, this.enabled = true, this.lastRunAt});
   
 
 @override final  String id;
@@ -229,15 +229,7 @@ class _ScheduledTask implements ScheduledTask {
 @override final  ScheduleType scheduleType;
 @override final  DateTime? oneTimeAt;
 @override final  String? timeOfDay;
- final  List<int>? _weekdays;
-@override List<int>? get weekdays {
-  final value = _weekdays;
-  if (value == null) return null;
-  if (_weekdays is EqualUnmodifiableListView) return _weekdays;
-  // ignore: implicit_dynamic_type
-  return EqualUnmodifiableListView(value);
-}
-
+@override final  List<int>? weekdays;
 @override@JsonKey() final  bool enabled;
 @override final  DateTime? lastRunAt;
 
@@ -251,12 +243,12 @@ _$ScheduledTaskCopyWith<_ScheduledTask> get copyWith => __$ScheduledTaskCopyWith
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ScheduledTask&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.command, command) || other.command == command)&&(identical(other.commandLabel, commandLabel) || other.commandLabel == commandLabel)&&(identical(other.target, target) || other.target == target)&&(identical(other.targetGroupId, targetGroupId) || other.targetGroupId == targetGroupId)&&(identical(other.scheduleType, scheduleType) || other.scheduleType == scheduleType)&&(identical(other.oneTimeAt, oneTimeAt) || other.oneTimeAt == oneTimeAt)&&(identical(other.timeOfDay, timeOfDay) || other.timeOfDay == timeOfDay)&&const DeepCollectionEquality().equals(other._weekdays, _weekdays)&&(identical(other.enabled, enabled) || other.enabled == enabled)&&(identical(other.lastRunAt, lastRunAt) || other.lastRunAt == lastRunAt));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ScheduledTask&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.command, command) || other.command == command)&&(identical(other.commandLabel, commandLabel) || other.commandLabel == commandLabel)&&(identical(other.target, target) || other.target == target)&&(identical(other.targetGroupId, targetGroupId) || other.targetGroupId == targetGroupId)&&(identical(other.scheduleType, scheduleType) || other.scheduleType == scheduleType)&&(identical(other.oneTimeAt, oneTimeAt) || other.oneTimeAt == oneTimeAt)&&(identical(other.timeOfDay, timeOfDay) || other.timeOfDay == timeOfDay)&&const DeepCollectionEquality().equals(other.weekdays, weekdays)&&(identical(other.enabled, enabled) || other.enabled == enabled)&&(identical(other.lastRunAt, lastRunAt) || other.lastRunAt == lastRunAt));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,name,command,commandLabel,target,targetGroupId,scheduleType,oneTimeAt,timeOfDay,const DeepCollectionEquality().hash(_weekdays),enabled,lastRunAt);
+int get hashCode => Object.hash(runtimeType,id,name,command,commandLabel,target,targetGroupId,scheduleType,oneTimeAt,timeOfDay,const DeepCollectionEquality().hash(weekdays),enabled,lastRunAt);
 
 @override
 String toString() {
@@ -299,7 +291,7 @@ as ScheduleTarget,targetGroupId: freezed == targetGroupId ? _self.targetGroupId 
 as String?,scheduleType: null == scheduleType ? _self.scheduleType : scheduleType // ignore: cast_nullable_to_non_nullable
 as ScheduleType,oneTimeAt: freezed == oneTimeAt ? _self.oneTimeAt : oneTimeAt // ignore: cast_nullable_to_non_nullable
 as DateTime?,timeOfDay: freezed == timeOfDay ? _self.timeOfDay : timeOfDay // ignore: cast_nullable_to_non_nullable
-as String?,weekdays: freezed == weekdays ? _self._weekdays : weekdays // ignore: cast_nullable_to_non_nullable
+as String?,weekdays: freezed == weekdays ? _self.weekdays : weekdays // ignore: cast_nullable_to_non_nullable
 as List<int>?,enabled: null == enabled ? _self.enabled : enabled // ignore: cast_nullable_to_non_nullable
 as bool,lastRunAt: freezed == lastRunAt ? _self.lastRunAt : lastRunAt // ignore: cast_nullable_to_non_nullable
 as DateTime?,
