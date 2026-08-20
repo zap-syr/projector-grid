@@ -356,7 +356,35 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
     );
   }
 
-  Widget _buildColorTile(
+  // Flat, always-visible section card used for both color-matching entries
+  // and color-temperature groups — no collapse/expand, so nothing gets added
+  // to or removed from the accessibility tree when switching modes.
+  Widget _sectionCard(BuildContext context, {required Widget child}) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
+      decoration: BoxDecoration(
+        // surfaceContainerHighest, not surfaceContainerHigh: the Dialog's own
+        // Material background already uses surfaceContainerHigh by default,
+        // so matching it here would make the cards blend into the dialog body.
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.9),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+
+  Widget _buildColorCard(
     BuildContext context,
     String colorName,
     Map<String, List<int>> valuesMap,
@@ -364,78 +392,69 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
   ) {
     final rgb = valuesMap[colorName]!;
     final swatch = _swatchFor(colorName);
+    final theme = Theme.of(context);
 
-    return ExpansionTile(
-      initiallyExpanded: true,
-      leading: Container(
-        width: 14,
-        height: 14,
-        decoration: BoxDecoration(
-          color: swatch,
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.4),
-            width: 1,
-          ),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: _sectionCard(
+        context,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 16,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    color: swatch,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: theme.colorScheme.outline.withValues(alpha: 0.4),
+                      width: 1.2,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  colorName,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            _buildColorMatchSliderRow(
+              context, 'R', Colors.red, rgb[0],
+              (v) => setState(() => valuesMap[colorName]![0] = v.round()),
+              (_) => onSend(colorName, List.from(valuesMap[colorName]!)),
+            ),
+            _buildColorMatchSliderRow(
+              context, 'G', Colors.green, rgb[1],
+              (v) => setState(() => valuesMap[colorName]![1] = v.round()),
+              (_) => onSend(colorName, List.from(valuesMap[colorName]!)),
+            ),
+            _buildColorMatchSliderRow(
+              context, 'B', Colors.blue, rgb[2],
+              (v) => setState(() => valuesMap[colorName]![2] = v.round()),
+              (_) => onSend(colorName, List.from(valuesMap[colorName]!)),
+            ),
+          ],
         ),
       ),
-      title: Text(colorName, style: const TextStyle(fontSize: 13)),
-      childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      children: [
-        _buildColorMatchSliderRow(
-          context, 'R', Colors.red, rgb[0],
-          (v) => setState(() => valuesMap[colorName]![0] = v.round()),
-          (_) => onSend(colorName, List.from(valuesMap[colorName]!)),
-        ),
-        _buildColorMatchSliderRow(
-          context, 'G', Colors.green, rgb[1],
-          (v) => setState(() => valuesMap[colorName]![1] = v.round()),
-          (_) => onSend(colorName, List.from(valuesMap[colorName]!)),
-        ),
-        _buildColorMatchSliderRow(
-          context, 'B', Colors.blue, rgb[2],
-          (v) => setState(() => valuesMap[colorName]![2] = v.round()),
-          (_) => onSend(colorName, List.from(valuesMap[colorName]!)),
-        ),
-      ],
     );
   }
 
   // ── Color Temperature tab ─────────────────────────────────────────────────
-  Widget _buildColorTempTab(BuildContext context) {
+  Widget _buildKelvinCard(BuildContext context) {
     final theme = Theme.of(context);
-    final showCustom = _tempMode == _TempMode.custom;
-    final showWhiteBalance = _tempMode == _TempMode.user1 || _tempMode == _TempMode.user2;
-
-    return ListView(
-      padding: const EdgeInsets.all(20),
-      children: [
-        DropdownMenu<_TempMode>(
-          initialSelection: _tempMode,
-          expandedInsets: EdgeInsets.zero,
-          requestFocusOnTap: false,
-          enableFilter: false,
-          label: const Text('Color Temperature'),
-          inputDecorationTheme: const InputDecorationTheme(
-            border: OutlineInputBorder(),
-            isDense: true,
-            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          ),
-          dropdownMenuEntries: const [
-            DropdownMenuEntry(value: _TempMode.defaultTemp, label: 'Default'),
-            DropdownMenuEntry(value: _TempMode.user1, label: 'User 1'),
-            DropdownMenuEntry(value: _TempMode.user2, label: 'User 2'),
-            DropdownMenuEntry(value: _TempMode.custom, label: 'Custom'),
-          ],
-          onSelected: (mode) {
-            if (mode == null) return;
-            setState(() => _tempMode = mode);
-            _sendColorTemp(mode);
-          },
-        ),
-
-        if (showCustom) ...[
-          const SizedBox(height: 24),
+    return _sectionCard(
+      context,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -503,40 +522,116 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
             ),
           ),
         ],
+      ),
+    );
+  }
 
-        if (showWhiteBalance) ...[
-          const SizedBox(height: 24),
-          Text('White Balance High', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+  Widget _buildWhiteBalanceCard(
+    BuildContext context, {
+    required String title,
+    required List<int> values,
+    required double min,
+    required double max,
+    required int divisions,
+    required void Function(int channel, int value) onChanged,
+    required void Function(int channel, int value) onChangeEnd,
+  }) {
+    final theme = Theme.of(context);
+    return _sectionCard(
+      context,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(title, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 4),
           for (final t in [(0, 'R', Colors.red), (1, 'G', Colors.green), (2, 'B', Colors.blue)])
             _buildRgbSlider(
               context,
               label: t.$2,
               color: t.$3,
-              value: _whHigh[t.$1],
-              min: 0,
-              max: 255,
-              divisions: 255,
-              onChanged: (v) => setState(() => _whHigh[t.$1] = v.round()),
-              onChangeEnd: (v) => _sendWhHigh(t.$1, v.round()),
-            ),
-
-          const SizedBox(height: 20),
-          Text('White Balance Low', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 4),
-          for (final t in [(0, 'R', Colors.red), (1, 'G', Colors.green), (2, 'B', Colors.blue)])
-            _buildRgbSlider(
-              context,
-              label: t.$2,
-              color: t.$3,
-              value: _whLow[t.$1],
-              min: -127,
-              max: 127,
-              divisions: 254,
-              onChanged: (v) => setState(() => _whLow[t.$1] = v.abs() <= 3.0 ? 0 : v.round()),
-              onChangeEnd: (_) => _sendWhLow(t.$1, _whLow[t.$1]),
+              value: values[t.$1],
+              min: min,
+              max: max,
+              divisions: divisions,
+              onChanged: (v) => onChanged(t.$1, v.round()),
+              onChangeEnd: (v) => onChangeEnd(t.$1, v.round()),
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildColorTempTab(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+          child: SegmentedButton<_TempMode>(
+            segments: const [
+              ButtonSegment(value: _TempMode.defaultTemp, label: Text('Default')),
+              ButtonSegment(value: _TempMode.user1, label: Text('User 1')),
+              ButtonSegment(value: _TempMode.user2, label: Text('User 2')),
+              ButtonSegment(value: _TempMode.custom, label: Text('Custom')),
+            ],
+            selected: {_tempMode},
+            showSelectedIcon: false,
+            onSelectionChanged: (s) {
+              final mode = s.first;
+              setState(() => _tempMode = mode);
+              _sendColorTemp(mode);
+            },
+          ),
+        ),
+        const SizedBox(height: 12),
+        const Divider(height: 1),
+        Expanded(
+          child: switch (_tempMode) {
+            _TempMode.defaultTemp => Center(
+                child: Text(
+                  'Using the factory default color temperature',
+                  style: TextStyle(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.45),
+                  ),
+                ),
+              ),
+            _TempMode.custom => SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+                child: _buildKelvinCard(context),
+              ),
+            _TempMode.user1 || _TempMode.user2 => SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildWhiteBalanceCard(
+                      context,
+                      title: 'White Balance High',
+                      values: _whHigh,
+                      min: 0,
+                      max: 255,
+                      divisions: 255,
+                      onChanged: (ch, v) => setState(() => _whHigh[ch] = v),
+                      onChangeEnd: (ch, v) => _sendWhHigh(ch, v),
+                    ),
+                    const SizedBox(height: 10),
+                    _buildWhiteBalanceCard(
+                      context,
+                      title: 'White Balance Low',
+                      values: _whLow,
+                      min: -127,
+                      max: 127,
+                      divisions: 254,
+                      onChanged: (ch, v) => setState(() => _whLow[ch] = v.abs() <= 3 ? 0 : v),
+                      onChangeEnd: (ch, v) => _sendWhLow(ch, _whLow[ch]),
+                    ),
+                  ],
+                ),
+              ),
+          },
+        ),
       ],
     );
   }
@@ -548,8 +643,8 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
     return Dialog(
       clipBehavior: Clip.antiAlias,
       child: SizedBox(
-        width: 520,
-        height: 660,
+        width: 560,
+        height: 680,
         child: DefaultTabController(
           length: 2,
           child: Column(
@@ -619,16 +714,20 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
                                       ),
                                     ),
                                   )
-                                : ListView(
-                                    children: (_method == 1
-                                            ? ['Red', 'Green', 'Blue']
-                                            : ['Red', 'Green', 'Blue', 'Cyan', 'Magenta', 'Yellow', 'White'])
-                                        .map((c) => _buildColorTile(
-                                              context, c,
-                                              _method == 1 ? _values3 : _values7,
-                                              _method == 1 ? _set3Color : _set7Color,
-                                            ))
-                                        .toList(),
+                                : SingleChildScrollView(
+                                    padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                                      children: (_method == 1
+                                              ? ['Red', 'Green', 'Blue']
+                                              : ['Red', 'Green', 'Blue', 'Cyan', 'Magenta', 'Yellow', 'White'])
+                                          .map((c) => _buildColorCard(
+                                                context, c,
+                                                _method == 1 ? _values3 : _values7,
+                                                _method == 1 ? _set3Color : _set7Color,
+                                              ))
+                                          .toList(),
+                                    ),
                                   ),
                           ),
                         ],
