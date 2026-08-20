@@ -222,6 +222,7 @@ class _ManualAddTabState extends State<_ManualAddTab> {
               ButtonSegment(value: true, label: Text('IP Range')),
             ],
             selected: {_isRange},
+            showSelectedIcon: false,
             onSelectionChanged: (set) {
               setState(() {
                 _isRange = set.first;
