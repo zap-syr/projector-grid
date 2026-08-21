@@ -210,27 +210,39 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     _startPolling(seconds: seconds);
   }
 
+  /// Polls every node in batches of [_networkBatchSize] concurrently, rather
+  /// than awaiting each node's full telemetry chain in sequence. A single
+  /// node's own poll (probe + up to 10 telemetry commands) still happens as
+  /// one connect-per-command sequence internally — batching only overlaps
+  /// *different* nodes' polls with each other, which is what keeps a full
+  /// cycle from taking N-times-longer as the projector count grows.
   Future<void> _pollAllProjectors() async {
     // We must poll ALL nodes, not just connected ones, so offline nodes can reconnect.
     // Also, we must not take a static copy of state into a loop, because state might change
     // while we are awaiting. We should iterate over the current IDs.
     final currentIds = state.map((n) => n.id).toList();
-    
-    for (var id in currentIds) {
-      // Find the latest version of the node just before polling
-      final nodeIndex = state.indexWhere((n) => n.id == id);
-      if (nodeIndex == -1) continue; // Node was deleted
-      
-      final node = state[nodeIndex];
-      
-      // Offline nodes get a cheap TCP check first (1.5s) before full probe.
-      // All other states (connected, unprotected, unauthorized) go straight to
-      // _pollSingleProjector so no intermediate state is written before auth is confirmed.
-      if (node.connectionStatus == ConnectionStatus.offline) {
-        await _checkAndSetNodeStatus(node.id, node.ipAddress, node.port);
-      } else {
-        await _pollSingleProjector(node);
-      }
+
+    for (var start = 0; start < currentIds.length; start += _networkBatchSize) {
+      final batchIds = currentIds.sublist(
+        start,
+        (start + _networkBatchSize).clamp(0, currentIds.length),
+      );
+      await Future.wait(batchIds.map((id) async {
+        // Find the latest version of the node just before polling
+        final nodeIndex = state.indexWhere((n) => n.id == id);
+        if (nodeIndex == -1) return; // Node was deleted
+
+        final node = state[nodeIndex];
+
+        // Offline nodes get a cheap TCP check first (1.5s) before full probe.
+        // All other states (connected, unprotected, unauthorized) go straight to
+        // _pollSingleProjector so no intermediate state is written before auth is confirmed.
+        if (node.connectionStatus == ConnectionStatus.offline) {
+          await _checkAndSetNodeStatus(node.id, node.ipAddress, node.port);
+        } else {
+          await _pollSingleProjector(node);
+        }
+      }));
     }
   }
 
@@ -496,11 +508,34 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     }
   }
 
-  Future<void> sendCommandToSelected(String cmd) async {
-    final selectedNodes = state.where((n) => n.isSelected).toList();
-    for (var node in selectedNodes) {
-      if (node.connectionStatus == ConnectionStatus.connected ||
-          node.connectionStatus == ConnectionStatus.unprotected) {
+  Future<void> sendCommandToSelected(String cmd) =>
+      _dispatchToNodes(state.where((n) => n.isSelected), cmd);
+
+  // Caps how many TCP connections _dispatchToNodes and _pollAllProjectors
+  // open at once. Firing every node in one Future.wait would open one socket
+  // per target with no ceiling — fine for a handful of projectors, but large
+  // installs (100+) could push the controlling machine's open-file-descriptor
+  // limit. Batches keep both operations effectively simultaneous while
+  // bounding peak socket usage, the same way scanNetwork bounds concurrent
+  // scan probes.
+  static const _networkBatchSize = 100;
+
+  /// Sends [cmd] to every reachable node in [nodes] concurrently in batches
+  /// of [_networkBatchSize], rather than awaiting each one's TCP round-trip
+  /// in sequence.
+  Future<void> _dispatchToNodes(Iterable<ProjectorNode> nodes, String cmd) async {
+    final targets = nodes
+        .where((n) =>
+            n.connectionStatus == ConnectionStatus.connected ||
+            n.connectionStatus == ConnectionStatus.unprotected)
+        .toList();
+
+    for (var start = 0; start < targets.length; start += _networkBatchSize) {
+      final batch = targets.sublist(
+        start,
+        (start + _networkBatchSize).clamp(0, targets.length),
+      );
+      await Future.wait(batch.map((node) async {
         final success = await _protocolService.sendCommand(
           node.ipAddress, node.port, node.login, node.password, cmd,
         );
@@ -516,7 +551,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
         if (success) {
           _applyOptimisticUpdate(node.id, cmd);
         }
-      }
+      }));
     }
   }
 
@@ -548,52 +583,10 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     }
   }
 
-  Future<void> sendCommandToGroup(String groupId, String cmd) async {
-    final groupNodes = state.where((n) => n.groupId == groupId).toList();
-    for (var node in groupNodes) {
-      if (node.connectionStatus == ConnectionStatus.connected ||
-          node.connectionStatus == ConnectionStatus.unprotected) {
-        final success = await _protocolService.sendCommand(
-          node.ipAddress, node.port, node.login, node.password, cmd,
-        );
-        _logEvent(LogEvent(
-          severity: success ? LogSeverity.info : LogSeverity.error,
-          type: LogEventType.command,
-          message: success
-              ? 'Sent: ${commandLabel(cmd)}'
-              : 'Failed: ${commandLabel(cmd)}',
-          projectorIp: node.ipAddress,
-          projectorName: node.name,
-        ));
-        if (success) {
-          _applyOptimisticUpdate(node.id, cmd);
-        }
-      }
-    }
-  }
+  Future<void> sendCommandToGroup(String groupId, String cmd) =>
+      _dispatchToNodes(state.where((n) => n.groupId == groupId), cmd);
 
-  Future<void> sendCommandToAll(String cmd) async {
-    for (var node in state) {
-      if (node.connectionStatus == ConnectionStatus.connected ||
-          node.connectionStatus == ConnectionStatus.unprotected) {
-        final success = await _protocolService.sendCommand(
-          node.ipAddress, node.port, node.login, node.password, cmd,
-        );
-        _logEvent(LogEvent(
-          severity: success ? LogSeverity.info : LogSeverity.error,
-          type: LogEventType.command,
-          message: success
-              ? 'Sent: ${commandLabel(cmd)}'
-              : 'Failed: ${commandLabel(cmd)}',
-          projectorIp: node.ipAddress,
-          projectorName: node.name,
-        ));
-        if (success) {
-          _applyOptimisticUpdate(node.id, cmd);
-        }
-      }
-    }
-  }
+  Future<void> sendCommandToAll(String cmd) => _dispatchToNodes(state, cmd);
 
   void _applyOptimisticUpdate(String nodeId, String cmd) {
     if (cmd == 'PON') {
