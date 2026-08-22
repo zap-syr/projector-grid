@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../../domain/projector_node.dart';
 import '../../../../core/services/panasonic_protocol_service.dart';
 
@@ -147,7 +148,6 @@ class _BrightnessControlDialogState extends State<BrightnessControlDialog> {
     final isUserMode = _mode.isUserMode;
     // In user modes the light output ceiling is the max light output value.
     final lightMax = isUserMode ? _maxLightOutput : 100.0;
-    final clampedLight = _lightOutput.clamp(8.0, lightMax);
 
     return AlertDialog(
       clipBehavior: Clip.antiAlias,
@@ -210,65 +210,38 @@ class _BrightnessControlDialogState extends State<BrightnessControlDialog> {
                   const SizedBox(height: 24),
 
                   // ── Light Output ────────────────────────────────────────────
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Light Output',
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        '${clampedLight.round()}%',
-                        style: theme.textTheme.titleSmall,
-                      ),
-                    ],
-                  ),
-                  Slider(
+                  // A self-contained widget: it tracks its own value while the
+                  // thumb is being dragged, so a drag only rebuilds this small
+                  // subtree instead of the whole dialog (dropdown, other
+                  // slider) on every pointer-move frame.
+                  _PercentSlider(
+                    title: 'Light Output',
+                    value: _lightOutput,
                     min: 8,
                     max: lightMax,
-                    divisions: (lightMax - 8).round().clamp(1, 92),
-                    value: clampedLight,
-                    label: '${clampedLight.round()}%',
-                    onChanged: (v) => setState(() => _lightOutput = v),
-                    onChangeEnd: _sendLightOutput,
+                    onCommit: (v) {
+                      setState(() => _lightOutput = v);
+                      _sendLightOutput(v);
+                    },
                   ),
                   const SizedBox(height: 16),
 
                   // ── Max Light Output ────────────────────────────────────────
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Max Light Output',
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: isUserMode ? null : theme.disabledColor,
-                        ),
-                      ),
-                      Text(
-                        '${_maxLightOutput.round()}%',
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          color: isUserMode ? null : theme.disabledColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                  Slider(
+                  _PercentSlider(
+                    title: 'Max Light Output',
+                    value: _maxLightOutput,
                     min: 8,
                     max: 100,
-                    divisions: 92,
-                    value: _maxLightOutput,
-                    label: '${_maxLightOutput.round()}%',
-                    onChanged: isUserMode
-                        ? (v) => setState(() {
-                            _maxLightOutput = v;
-                            // Keep light output within new ceiling.
-                            if (_lightOutput > v) _lightOutput = v;
-                          })
-                        : null,
-                    onChangeEnd: isUserMode ? _sendMaxLightOutput : null,
+                    enabled: isUserMode,
+                    disabledColor: theme.disabledColor,
+                    onCommit: (v) {
+                      setState(() {
+                        _maxLightOutput = v;
+                        // Keep light output within new ceiling.
+                        if (_lightOutput > v) _lightOutput = v;
+                      });
+                      _sendMaxLightOutput(v);
+                    },
                   ),
                   Visibility(
                     maintainSize: true,
@@ -289,6 +262,101 @@ class _BrightnessControlDialogState extends State<BrightnessControlDialog> {
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Close'),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Percent slider ───────────────────────────────────────────────────────
+// Tracks its own value locally while being dragged so a drag rebuilds only
+// this row (label + slider) instead of the whole dialog. The authoritative
+// value still lives in the parent and is committed back via [onCommit] once
+// the drag ends; [didUpdateWidget] re-syncs the local value whenever the
+// parent's changes externally (e.g. mode switch, or the other slider
+// clamping this one) — but only while not actively being dragged, so it
+// never fights an in-progress gesture.
+class _PercentSlider extends StatefulWidget {
+  final String title;
+  final double value;
+  final double min;
+  final double max;
+  final bool enabled;
+  final Color? disabledColor;
+  final ValueChanged<double> onCommit;
+
+  const _PercentSlider({
+    required this.title,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.onCommit,
+    this.enabled = true,
+    this.disabledColor,
+  });
+
+  @override
+  State<_PercentSlider> createState() => _PercentSliderState();
+}
+
+class _PercentSliderState extends State<_PercentSlider> {
+  late double _value = widget.value.clamp(widget.min, widget.max);
+  bool _dragging = false;
+
+  @override
+  void didUpdateWidget(covariant _PercentSlider old) {
+    super.didUpdateWidget(old);
+    if (!_dragging) {
+      _value = widget.value.clamp(widget.min, widget.max);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final clamped = _value.clamp(widget.min, widget.max);
+    final color = widget.enabled ? null : widget.disabledColor;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              widget.title,
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+            Text(
+              '${clamped.round()}%',
+              style: theme.textTheme.titleSmall?.copyWith(color: color),
+            ),
+          ],
+        ),
+        SliderTheme(
+          data: SliderTheme.of(context)
+              .copyWith(tickMarkShape: SliderTickMarkShape.noTickMark),
+          child: Slider(
+            min: widget.min,
+            max: widget.max,
+            divisions: (widget.max - widget.min).round().clamp(1, 999),
+            value: clamped,
+            label: '${clamped.round()}%',
+            onChanged: widget.enabled
+                ? (v) {
+                    _dragging = true;
+                    setState(() => _value = v);
+                  }
+                : null,
+            onChangeEnd: widget.enabled
+                ? (v) {
+                    _dragging = false;
+                    widget.onCommit(v);
+                  }
+                : null,
+          ),
         ),
       ],
     );

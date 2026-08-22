@@ -4,6 +4,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/gestures.dart' show kDoubleTapTimeout;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import '../../domain/projector_node.dart';
 import '../../../../core/services/panasonic_protocol_service.dart';
 import 'custom_tooltip.dart';
@@ -54,21 +55,21 @@ class _CornerState {
 
 class _KeystoneState {
   double gmks0 = 1.5; // throw ratio
-  int gmki4 = 0;       // V balance
-  int gmki7 = 0;       // H balance
-  double gmks8 = 0.0;  // V keystone
-  double gmks9 = 0.0;  // H keystone
+  int gmki4 = 0; // V balance
+  int gmki7 = 0; // H balance
+  double gmks8 = 0.0; // V keystone
+  double gmks9 = 0.0; // H keystone
 }
 
 class _CurvedState {
   double gmcs0 = 1.5; // throw ratio
-  int gmci2 = 0;       // V balance
-  int gmci3 = 0;       // V arc
-  int gmci6 = 0;       // H balance
-  int gmci7 = 0;       // H arc
-  double gmcs8 = 0.0;  // V keystone
-  double gmcs9 = 0.0;  // H keystone
-  bool gmcia = false;  // maintain aspect ratio
+  int gmci2 = 0; // V balance
+  int gmci3 = 0; // V arc
+  int gmci6 = 0; // H balance
+  int gmci7 = 0; // H arc
+  double gmcs8 = 0.0; // V keystone
+  double gmcs9 = 0.0; // H keystone
+  bool gmcia = false; // maintain aspect ratio
 }
 
 // ─── Dialog ─────────────────────────────────────────────────────────────────
@@ -110,7 +111,11 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
   // ─── Loading ─────────────────────────────────────────────────────────────
   Future<void> _loadInitial() async {
     final raw = await _service.sendRawCommand(
-      _ip, _port, _login, _password, 'QVX:GMMI0',
+      _ip,
+      _port,
+      _login,
+      _password,
+      'QVX:GMMI0',
     );
     if (!mounted) return;
 
@@ -149,21 +154,30 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
 
   Future<void> _loadCorner() async {
     final keys = [
-      'GMFI1', 'GMFI2', 'GMFI3', 'GMFI4',
-      'GMFI6', 'GMFI7', 'GMFI8', 'GMFI9',
-      'GMFI5', 'GMFIA',
-      'GMFIB', 'GMFIC', 'GMFID', 'GMFIE',
+      'GMFI1',
+      'GMFI2',
+      'GMFI3',
+      'GMFI4',
+      'GMFI6',
+      'GMFI7',
+      'GMFI8',
+      'GMFI9',
+      'GMFI5',
+      'GMFIA',
+      'GMFIB',
+      'GMFIC',
+      'GMFID',
+      'GMFIE',
       'GMFIF',
     ];
     final results = await Future.wait(
-      keys.map((k) => _service.sendRawCommand(
-        _ip, _port, _login, _password, 'QVX:$k',
-      )),
+      keys.map(
+        (k) => _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:$k'),
+      ),
     );
     if (!mounted) return;
 
-    int parseAt(int i, String key) =>
-        _parseInt(results[i], key) ?? 0;
+    int parseAt(int i, String key) => _parseInt(results[i], key) ?? 0;
 
     _corner
       ..gmfi1 = parseAt(0, 'GMFI1')
@@ -271,23 +285,38 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
 
   // ─── Senders ─────────────────────────────────────────────────────────────
   Future<void> _sendMode(_GeometryMode m) => _service.sendRawCommand(
-    _ip, _port, _login, _password, 'VXX:GMMI0=${m.protocolValue}',
+    _ip,
+    _port,
+    _login,
+    _password,
+    'VXX:GMMI0=${m.protocolValue}',
   );
 
   Future<void> _sendInt(String key, int v) => _service.sendRawCommand(
-    _ip, _port, _login, _password, 'VXX:$key=${_fmtInt(v)}',
+    _ip,
+    _port,
+    _login,
+    _password,
+    'VXX:$key=${_fmtInt(v)}',
   );
 
   Future<void> _sendDeg(String key, double v) => _service.sendRawCommand(
-    _ip, _port, _login, _password, 'VXX:$key=${_fmtDeg(v)}',
+    _ip,
+    _port,
+    _login,
+    _password,
+    'VXX:$key=${_fmtDeg(v)}',
   );
 
   Future<void> _sendThrow(String key, double v) => _service.sendRawCommand(
-    _ip, _port, _login, _password, 'VXX:$key=${_fmtThrow(v)}',
+    _ip,
+    _port,
+    _login,
+    _password,
+    'VXX:$key=${_fmtThrow(v)}',
   );
 
-  Future<void> _sendBool(String key, bool on) =>
-      _sendInt(key, on ? 1 : 0);
+  Future<void> _sendBool(String key, bool on) => _sendInt(key, on ? 1 : 0);
 
   // ─── Build ───────────────────────────────────────────────────────────────
   @override
@@ -344,7 +373,10 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
                   inputDecorationTheme: const InputDecorationTheme(
                     border: OutlineInputBorder(),
                     isDense: true,
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
                   ),
                   dropdownMenuEntries: _GeometryMode.values
                       .map((m) => DropdownMenuEntry(value: m, label: m.label))
@@ -415,10 +447,25 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
   Future<void> _resetAllCorners() async {
     setState(() {
       _corner
-        ..gmfi1 = 0 ..gmfi2 = 0 ..gmfi3 = 0 ..gmfi4 = 0
-        ..gmfi6 = 0 ..gmfi7 = 0 ..gmfi8 = 0 ..gmfi9 = 0;
+        ..gmfi1 = 0
+        ..gmfi2 = 0
+        ..gmfi3 = 0
+        ..gmfi4 = 0
+        ..gmfi6 = 0
+        ..gmfi7 = 0
+        ..gmfi8 = 0
+        ..gmfi9 = 0;
     });
-    for (final key in ['GMFI1','GMFI2','GMFI3','GMFI4','GMFI6','GMFI7','GMFI8','GMFI9']) {
+    for (final key in [
+      'GMFI1',
+      'GMFI2',
+      'GMFI3',
+      'GMFI4',
+      'GMFI6',
+      'GMFI7',
+      'GMFI8',
+      'GMFI9',
+    ]) {
       await _sendInt(key, 0);
     }
   }
@@ -457,7 +504,6 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
               child: _CornerCorrectionCanvas(
                 key: _cornerCanvasKey,
                 state: _corner,
-                onCornerChanged: () => setState(() {}),
                 onCornerCommit: (List<(String, int)> commands) async {
                   for (final (key, value) in commands) {
                     await _sendInt(key, value);
@@ -481,9 +527,8 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
             Expanded(
               child: Text(
                 'Linearity & Pincushion',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                style: Theme.of(context).textTheme.titleSmall
+                    ?.copyWith(fontWeight: FontWeight.bold),
               ),
             ),
             SegmentedButton<int>(
@@ -508,43 +553,61 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
         _sliderRow(
           label: 'Linearity V',
           value: _corner.gmfi5.toDouble(),
-          min: -127, max: 127,
-          onChanged: manual ? (v) => setState(() => _corner.gmfi5 = v.round()) : null,
+          min: -127,
+          max: 127,
+          onChanged: manual
+              ? (v) => setState(() => _corner.gmfi5 = v.round())
+              : null,
           onChangeEnd: manual ? (v) => _sendInt('GMFI5', v.round()) : null,
         ),
         _sliderRow(
           label: 'Linearity H',
           value: _corner.gmfia.toDouble(),
-          min: -127, max: 127,
-          onChanged: manual ? (v) => setState(() => _corner.gmfia = v.round()) : null,
+          min: -127,
+          max: 127,
+          onChanged: manual
+              ? (v) => setState(() => _corner.gmfia = v.round())
+              : null,
           onChangeEnd: manual ? (v) => _sendInt('GMFIA', v.round()) : null,
         ),
         _sliderRow(
           label: 'Pincushion Upper',
           value: _corner.gmfib.toDouble(),
-          min: -100, max: 100,
-          onChanged: manual ? (v) => setState(() => _corner.gmfib = v.round()) : null,
+          min: -100,
+          max: 100,
+          onChanged: manual
+              ? (v) => setState(() => _corner.gmfib = v.round())
+              : null,
           onChangeEnd: manual ? (v) => _sendInt('GMFIB', v.round()) : null,
         ),
         _sliderRow(
           label: 'Pincushion Lower',
           value: _corner.gmfic.toDouble(),
-          min: -100, max: 100,
-          onChanged: manual ? (v) => setState(() => _corner.gmfic = v.round()) : null,
+          min: -100,
+          max: 100,
+          onChanged: manual
+              ? (v) => setState(() => _corner.gmfic = v.round())
+              : null,
           onChangeEnd: manual ? (v) => _sendInt('GMFIC', v.round()) : null,
         ),
         _sliderRow(
           label: 'Pincushion Left',
           value: _corner.gmfid.toDouble(),
-          min: -100, max: 100,
-          onChanged: manual ? (v) => setState(() => _corner.gmfid = v.round()) : null,
+          min: -100,
+          max: 100,
+          onChanged: manual
+              ? (v) => setState(() => _corner.gmfid = v.round())
+              : null,
           onChangeEnd: manual ? (v) => _sendInt('GMFID', v.round()) : null,
         ),
         _sliderRow(
           label: 'Pincushion Right',
           value: _corner.gmfie.toDouble(),
-          min: -100, max: 100,
-          onChanged: manual ? (v) => setState(() => _corner.gmfie = v.round()) : null,
+          min: -100,
+          max: 100,
+          onChanged: manual
+              ? (v) => setState(() => _corner.gmfie = v.round())
+              : null,
           onChangeEnd: manual ? (v) => _sendInt('GMFIE', v.round()) : null,
         ),
       ],
@@ -586,7 +649,9 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
               child: SliderTheme(
                 data: SliderTheme.of(context).copyWith(
                   trackHeight: 2,
-                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                  thumbShape: const RoundSliderThumbShape(
+                    enabledThumbRadius: 6,
+                  ),
                 ),
                 child: Slider(
                   value: value.clamp(min, max),
@@ -598,11 +663,14 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
               ),
             ),
             const SizedBox(width: 16),
-            enabled
-                ? stepper
-                : IgnorePointer(
-                    child: Opacity(opacity: 0.38, child: stepper),
-                  ),
+            // Always wrap in the same ancestor shape (only toggling its
+            // properties) so the stepper's Element/State — and its text-field
+            // semantics — survive Auto/Manual switches instead of being torn
+            // down and recreated.
+            IgnorePointer(
+              ignoring: !enabled,
+              child: Opacity(opacity: enabled ? 1.0 : 0.38, child: stepper),
+            ),
           ],
         ),
         const SizedBox(height: 24),
@@ -620,34 +688,40 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
           _labeledSlider(
             label: 'Vertical Keystone',
             value: _keystone.gmks8,
-            min: -40, max: 40,
+            min: -40,
+            max: 40,
             step: 0.2,
-            onChanged: (v) => setState(() =>
-                _keystone.gmks8 = double.parse(v.toStringAsFixed(1))),
-            onChangeEnd: (v) => _sendDeg('GMKS8',
-                double.parse(v.toStringAsFixed(1))),
+            onChanged: (v) => setState(
+              () => _keystone.gmks8 = double.parse(v.toStringAsFixed(1)),
+            ),
+            onChangeEnd: (v) =>
+                _sendDeg('GMKS8', double.parse(v.toStringAsFixed(1))),
           ),
           _labeledSlider(
             label: 'Horizontal Keystone',
             value: _keystone.gmks9,
-            min: -15, max: 15,
+            min: -15,
+            max: 15,
             step: 0.2,
-            onChanged: (v) => setState(() =>
-                _keystone.gmks9 = double.parse(v.toStringAsFixed(1))),
-            onChangeEnd: (v) => _sendDeg('GMKS9',
-                double.parse(v.toStringAsFixed(1))),
+            onChanged: (v) => setState(
+              () => _keystone.gmks9 = double.parse(v.toStringAsFixed(1)),
+            ),
+            onChangeEnd: (v) =>
+                _sendDeg('GMKS9', double.parse(v.toStringAsFixed(1))),
           ),
           _labeledSlider(
             label: 'Vertical Balance',
             value: _keystone.gmki4.toDouble(),
-            min: -60, max: 60,
+            min: -60,
+            max: 60,
             onChanged: (v) => setState(() => _keystone.gmki4 = v.round()),
             onChangeEnd: (v) => _sendInt('GMKI4', v.round()),
           ),
           _labeledSlider(
             label: 'Horizontal Balance',
             value: _keystone.gmki7.toDouble(),
-            min: -30, max: 30,
+            min: -30,
+            max: 30,
             onChanged: (v) => setState(() => _keystone.gmki7 = v.round()),
             onChangeEnd: (v) => _sendInt('GMKI7', v.round()),
           ),
@@ -673,48 +747,56 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
           _labeledSlider(
             label: 'Vertical Arc',
             value: _curved.gmci3.toDouble(),
-            min: -40, max: 40,
+            min: -40,
+            max: 40,
             onChanged: (v) => setState(() => _curved.gmci3 = v.round()),
             onChangeEnd: (v) => _sendInt('GMCI3', v.round()),
           ),
           _labeledSlider(
             label: 'Horizontal Arc',
             value: _curved.gmci7.toDouble(),
-            min: -40, max: 40,
+            min: -40,
+            max: 40,
             onChanged: (v) => setState(() => _curved.gmci7 = v.round()),
             onChangeEnd: (v) => _sendInt('GMCI7', v.round()),
           ),
           _labeledSlider(
             label: 'Vertical Keystone',
             value: _curved.gmcs8,
-            min: -40, max: 40,
+            min: -40,
+            max: 40,
             step: 0.2,
-            onChanged: (v) => setState(() =>
-                _curved.gmcs8 = double.parse(v.toStringAsFixed(1))),
-            onChangeEnd: (v) => _sendDeg('GMCS8',
-                double.parse(v.toStringAsFixed(1))),
+            onChanged: (v) => setState(
+              () => _curved.gmcs8 = double.parse(v.toStringAsFixed(1)),
+            ),
+            onChangeEnd: (v) =>
+                _sendDeg('GMCS8', double.parse(v.toStringAsFixed(1))),
           ),
           _labeledSlider(
             label: 'Horizontal Keystone',
             value: _curved.gmcs9,
-            min: -15, max: 15,
+            min: -15,
+            max: 15,
             step: 0.2,
-            onChanged: (v) => setState(() =>
-                _curved.gmcs9 = double.parse(v.toStringAsFixed(1))),
-            onChangeEnd: (v) => _sendDeg('GMCS9',
-                double.parse(v.toStringAsFixed(1))),
+            onChanged: (v) => setState(
+              () => _curved.gmcs9 = double.parse(v.toStringAsFixed(1)),
+            ),
+            onChangeEnd: (v) =>
+                _sendDeg('GMCS9', double.parse(v.toStringAsFixed(1))),
           ),
           _labeledSlider(
             label: 'Vertical Balance',
             value: _curved.gmci2.toDouble(),
-            min: -60, max: 60,
+            min: -60,
+            max: 60,
             onChanged: (v) => setState(() => _curved.gmci2 = v.round()),
             onChangeEnd: (v) => _sendInt('GMCI2', v.round()),
           ),
           _labeledSlider(
             label: 'Horizontal Balance',
             value: _curved.gmci6.toDouble(),
-            min: -30, max: 30,
+            min: -30,
+            max: 30,
             onChanged: (v) => setState(() => _curved.gmci6 = v.round()),
             onChangeEnd: (v) => _sendInt('GMCI6', v.round()),
           ),
@@ -730,9 +812,8 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
               Expanded(
                 child: Text(
                   'Maintain Aspect Ratio',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: Theme.of(context).textTheme.titleSmall
+                      ?.copyWith(fontWeight: FontWeight.bold),
                 ),
               ),
               Switch(
@@ -759,13 +840,15 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
             Icon(
               Icons.visibility_off_outlined,
               size: 36,
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
+              color: Theme.of(context).colorScheme.onSurface
+                  .withValues(alpha: 0.3),
             ),
             const SizedBox(height: 12),
             Text(
               'Preview not available',
               style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.45),
+                color: Theme.of(context).colorScheme.onSurface
+                    .withValues(alpha: 0.45),
                 fontSize: 13,
               ),
             ),
@@ -793,7 +876,8 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
           child: Text(
             'Preview',
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+              color: Theme.of(context).colorScheme.onSurface
+                  .withValues(alpha: 0.6),
             ),
           ),
         ),
@@ -838,7 +922,9 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
               child: SliderTheme(
                 data: SliderTheme.of(context).copyWith(
                   trackHeight: 2,
-                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                  thumbShape: const RoundSliderThumbShape(
+                    enabledThumbRadius: 6,
+                  ),
                   tickMarkShape: SliderTickMarkShape.noTickMark,
                 ),
                 child: Slider(
@@ -906,15 +992,14 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
   }
 }
 
-
 // ─── Trapezoid Canvas (keystone + curved preview) ──────────────────────────
 class _TrapezoidCanvas extends StatelessWidget {
   final double vKeystone; // -40..40
   final double hKeystone; // -15..15
-  final int vArc;          // -40..40
-  final int hArc;          // -40..40
-  final int vBalance;      // -60..60
-  final int hBalance;      // -30..30
+  final int vArc; // -40..40
+  final int hArc; // -40..40
+  final int vBalance; // -60..60
+  final int hBalance; // -30..30
 
   const _TrapezoidCanvas({
     required this.vKeystone,
@@ -991,23 +1076,31 @@ class _TrapezoidPainter extends CustomPainter {
     final double hK = hKeystone.abs() / 15.0;
 
     final double vPinchX = vK * 60.0;
-    final double vCompY  = vK * 40.0;
+    final double vCompY = vK * 40.0;
 
     final double hPinchY = hK * 40.0;
-    final double hCompX  = hK * 60.0;
+    final double hCompX = hK * 60.0;
 
-    double tlX = defaultRect.left;   double tlY = defaultRect.top;
-    double trX = defaultRect.right;  double trY = defaultRect.top;
-    double blX = defaultRect.left;   double blY = defaultRect.bottom;
-    double brX = defaultRect.right;  double brY = defaultRect.bottom;
+    double tlX = defaultRect.left;
+    double tlY = defaultRect.top;
+    double trX = defaultRect.right;
+    double trY = defaultRect.top;
+    double blX = defaultRect.left;
+    double blY = defaultRect.bottom;
+    double brX = defaultRect.right;
+    double brY = defaultRect.bottom;
 
     // 1. Base Vertical Keystone
     if (vKeystone > 0) {
-      tlX += vPinchX; trX -= vPinchX; // Top pinches inward
-      blY -= vCompY;  brY -= vCompY;  // Bottom compensates UP
+      tlX += vPinchX;
+      trX -= vPinchX; // Top pinches inward
+      blY -= vCompY;
+      brY -= vCompY; // Bottom compensates UP
     } else if (vKeystone < 0) {
-      blX += vPinchX; brX -= vPinchX; // Bottom pinches inward
-      tlY += vCompY;  trY += vCompY;  // Top compensates DOWN
+      blX += vPinchX;
+      brX -= vPinchX; // Bottom pinches inward
+      tlY += vCompY;
+      trY += vCompY; // Top compensates DOWN
     }
 
     // 2. Horizontal Keystone with Matrix Overlap Sliding
@@ -1016,48 +1109,80 @@ class _TrapezoidPainter extends CustomPainter {
     final double maxSlideY = defaultRect.height * 0.46;
 
     if (hKeystone > 0) {
-      tlY += hPinchY; blY -= hPinchY; // Left pinches inward
+      tlY += hPinchY;
+      blY -= hPinchY; // Left pinches inward
 
       if (vKeystone > 0) {
         // vKeystone moved bottom edge UP. LEFT edge slides DOWN to absorb hPinch.
         double slideY = min(vCompY + hPinchY, 2 * hPinchY);
-        slideY = min(slideY, maxSlideY); // Apply hard limit to prevent triangle folding
-        tlY += slideY; blY += slideY;
+        slideY = min(
+          slideY,
+          maxSlideY,
+        ); // Apply hard limit to prevent triangle folding
+        tlY += slideY;
+        blY += slideY;
 
-        double remRatio = hPinchY == 0 ? 0.0 : ((hPinchY - vCompY) / hPinchY).clamp(0.0, 1.0);
-        trX -= hCompX * remRatio; brX -= hCompX * remRatio;
+        double remRatio = hPinchY == 0
+            ? 0.0
+            : ((hPinchY - vCompY) / hPinchY).clamp(0.0, 1.0);
+        trX -= hCompX * remRatio;
+        brX -= hCompX * remRatio;
       } else if (vKeystone < 0) {
         // vKeystone moved top edge DOWN. LEFT edge slides UP to absorb hPinch.
         double slideY = min(vCompY + hPinchY, 2 * hPinchY);
-        slideY = min(slideY, maxSlideY); // Apply hard limit to prevent triangle folding
-        tlY -= slideY; blY -= slideY;
+        slideY = min(
+          slideY,
+          maxSlideY,
+        ); // Apply hard limit to prevent triangle folding
+        tlY -= slideY;
+        blY -= slideY;
 
-        double remRatio = hPinchY == 0 ? 0.0 : ((hPinchY - vCompY) / hPinchY).clamp(0.0, 1.0);
-        trX -= hCompX * remRatio; brX -= hCompX * remRatio;
+        double remRatio = hPinchY == 0
+            ? 0.0
+            : ((hPinchY - vCompY) / hPinchY).clamp(0.0, 1.0);
+        trX -= hCompX * remRatio;
+        brX -= hCompX * remRatio;
       } else {
-        trX -= hCompX; brX -= hCompX;
+        trX -= hCompX;
+        brX -= hCompX;
       }
     } else if (hKeystone < 0) {
-      trY += hPinchY; brY -= hPinchY; // Right pinches inward
+      trY += hPinchY;
+      brY -= hPinchY; // Right pinches inward
 
       if (vKeystone > 0) {
         // vKeystone moved bottom edge UP. RIGHT edge slides DOWN to absorb hPinch.
         double slideY = min(vCompY + hPinchY, 2 * hPinchY);
-        slideY = min(slideY, maxSlideY); // Apply hard limit to prevent triangle folding
-        trY += slideY; brY += slideY;
+        slideY = min(
+          slideY,
+          maxSlideY,
+        ); // Apply hard limit to prevent triangle folding
+        trY += slideY;
+        brY += slideY;
 
-        double remRatio = hPinchY == 0 ? 0.0 : ((hPinchY - vCompY) / hPinchY).clamp(0.0, 1.0);
-        tlX += hCompX * remRatio; blX += hCompX * remRatio;
+        double remRatio = hPinchY == 0
+            ? 0.0
+            : ((hPinchY - vCompY) / hPinchY).clamp(0.0, 1.0);
+        tlX += hCompX * remRatio;
+        blX += hCompX * remRatio;
       } else if (vKeystone < 0) {
         // vKeystone moved top edge DOWN. RIGHT edge slides UP to absorb hPinch.
         double slideY = min(vCompY + hPinchY, 2 * hPinchY);
-        slideY = min(slideY, maxSlideY); // Apply hard limit to prevent triangle folding
-        trY -= slideY; brY -= slideY;
+        slideY = min(
+          slideY,
+          maxSlideY,
+        ); // Apply hard limit to prevent triangle folding
+        trY -= slideY;
+        brY -= slideY;
 
-        double remRatio = hPinchY == 0 ? 0.0 : ((hPinchY - vCompY) / hPinchY).clamp(0.0, 1.0);
-        tlX += hCompX * remRatio; blX += hCompX * remRatio;
+        double remRatio = hPinchY == 0
+            ? 0.0
+            : ((hPinchY - vCompY) / hPinchY).clamp(0.0, 1.0);
+        tlX += hCompX * remRatio;
+        blX += hCompX * remRatio;
       } else {
-        tlX += hCompX; blX += hCompX;
+        tlX += hCompX;
+        blX += hCompX;
       }
     }
 
@@ -1069,26 +1194,34 @@ class _TrapezoidPainter extends CustomPainter {
     if (vKeystone.abs() > 0.01) {
       if (vKeystone > 0) {
         // vBalance shifts bottom (unpinched) edge vertically — inverted.
-        blY -= vBalDelta;  brY -= vBalDelta;
+        blY -= vBalDelta;
+        brY -= vBalDelta;
         // hBalance shifts top (pinched) corners horizontally (positive = left).
-        tlX -= hBalDelta;  trX -= hBalDelta;
+        tlX -= hBalDelta;
+        trX -= hBalDelta;
       } else {
         // vBalance shifts top (unpinched) edge — inverted.
-        tlY -= vBalDelta;  trY -= vBalDelta;
-        blX -= hBalDelta;  brX -= hBalDelta;
+        tlY -= vBalDelta;
+        trY -= vBalDelta;
+        blX -= hBalDelta;
+        brX -= hBalDelta;
       }
     }
 
     if (hKeystone.abs() > 0.01) {
       if (hKeystone > 0) {
         // hBalance shifts right (unpinched) edge — inverted.
-        trX += hBalDelta;  brX += hBalDelta;
+        trX += hBalDelta;
+        brX += hBalDelta;
         // vBalance shifts left (pinched) corners vertically (positive = down).
-        tlY += vBalDelta;  blY += vBalDelta;
+        tlY += vBalDelta;
+        blY += vBalDelta;
       } else {
         // hBalance shifts left (unpinched) edge — inverted.
-        tlX += hBalDelta;  blX += hBalDelta;
-        trY += vBalDelta;  brY += vBalDelta;
+        tlX += hBalDelta;
+        blX += hBalDelta;
+        trY += vBalDelta;
+        brY += vBalDelta;
       }
     }
 
@@ -1096,9 +1229,9 @@ class _TrapezoidPainter extends CustomPainter {
     double cx(double x) => x.clamp(defaultRect.left, defaultRect.right);
     double cy(double y) => y.clamp(defaultRect.top, defaultRect.bottom);
 
-    final topLeft     = Offset(cx(tlX), cy(tlY));
-    final topRight    = Offset(cx(trX), cy(trY));
-    final bottomLeft  = Offset(cx(blX), cy(blY));
+    final topLeft = Offset(cx(tlX), cy(tlY));
+    final topRight = Offset(cx(trX), cy(trY));
+    final bottomLeft = Offset(cx(blX), cy(blY));
     final bottomRight = Offset(cx(brX), cy(brY));
 
     // ── Arc bows (curved mode only; both 0 in keystone mode) ───────────────
@@ -1108,15 +1241,32 @@ class _TrapezoidPainter extends CustomPainter {
     // ── Build path ──────────────────────────────────────────────────────────
     final path = Path()..moveTo(topLeft.dx, topLeft.dy);
 
-    final topMid   = Offset((topLeft.dx   + topRight.dx)    / 2,       (topLeft.dy    + topRight.dy)    / 2 - vBow);
-    final rightMid = Offset((topRight.dx  + bottomRight.dx) / 2 + hBow, (topRight.dy  + bottomRight.dy) / 2);
-    final botMid   = Offset((bottomRight.dx + bottomLeft.dx) / 2,       (bottomRight.dy + bottomLeft.dy) / 2 + vBow);
-    final leftMid  = Offset((bottomLeft.dx + topLeft.dx)    / 2 - hBow, (bottomLeft.dy + topLeft.dy)    / 2);
+    final topMid = Offset(
+      (topLeft.dx + topRight.dx) / 2,
+      (topLeft.dy + topRight.dy) / 2 - vBow,
+    );
+    final rightMid = Offset(
+      (topRight.dx + bottomRight.dx) / 2 + hBow,
+      (topRight.dy + bottomRight.dy) / 2,
+    );
+    final botMid = Offset(
+      (bottomRight.dx + bottomLeft.dx) / 2,
+      (bottomRight.dy + bottomLeft.dy) / 2 + vBow,
+    );
+    final leftMid = Offset(
+      (bottomLeft.dx + topLeft.dx) / 2 - hBow,
+      (bottomLeft.dy + topLeft.dy) / 2,
+    );
 
-    path.quadraticBezierTo(topMid.dx,   topMid.dy,   topRight.dx,    topRight.dy);
-    path.quadraticBezierTo(rightMid.dx, rightMid.dy, bottomRight.dx, bottomRight.dy);
-    path.quadraticBezierTo(botMid.dx,   botMid.dy,   bottomLeft.dx,  bottomLeft.dy);
-    path.quadraticBezierTo(leftMid.dx,  leftMid.dy,  topLeft.dx,     topLeft.dy);
+    path.quadraticBezierTo(topMid.dx, topMid.dy, topRight.dx, topRight.dy);
+    path.quadraticBezierTo(
+      rightMid.dx,
+      rightMid.dy,
+      bottomRight.dx,
+      bottomRight.dy,
+    );
+    path.quadraticBezierTo(botMid.dx, botMid.dy, bottomLeft.dx, bottomLeft.dy);
+    path.quadraticBezierTo(leftMid.dx, leftMid.dy, topLeft.dx, topLeft.dy);
     path.close();
 
     // Clip so arc bows cannot bleed outside the grey reference frame.
@@ -1146,18 +1296,15 @@ class _TrapezoidPainter extends CustomPainter {
       old.defaultColor != defaultColor;
 }
 
-
 // ─── Corner Correction Canvas ──────────────────────────────────────────────
 class _CornerCorrectionCanvas extends StatefulWidget {
   final _CornerState state;
-  final VoidCallback onCornerChanged;
   // Commands list is paired (param_key, value) for atomic per-drag commit.
   final Future<void> Function(List<(String, int)>) onCornerCommit;
 
   const _CornerCorrectionCanvas({
     super.key,
     required this.state,
-    required this.onCornerChanged,
     required this.onCornerCommit,
   });
 
@@ -1210,8 +1357,9 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
   DateTime? _lastTapTime;
 
   final FocusNode _focusNode = FocusNode();
-  Timer? _keyHoldTimer;  // fires after hold threshold to begin continuous movement
-  Timer? _keyTimer;      // drives continuous movement once hold threshold is reached
+  Timer?
+  _keyHoldTimer; // fires after hold threshold to begin continuous movement
+  Timer? _keyTimer; // drives continuous movement once hold threshold is reached
   LogicalKeyboardKey? _heldKey;
 
   // Short tap → 1 step only. Hold past this delay → continuous movement.
@@ -1227,10 +1375,10 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
   };
 
   static Offset _keyDelta(LogicalKeyboardKey key) => switch (key) {
-    LogicalKeyboardKey.arrowLeft  => const Offset(-1 / _scale, 0),
+    LogicalKeyboardKey.arrowLeft => const Offset(-1 / _scale, 0),
     LogicalKeyboardKey.arrowRight => const Offset(1 / _scale, 0),
-    LogicalKeyboardKey.arrowUp    => const Offset(0, -1 / _scale),
-    LogicalKeyboardKey.arrowDown  => const Offset(0, 1 / _scale),
+    LogicalKeyboardKey.arrowUp => const Offset(0, -1 / _scale),
+    LogicalKeyboardKey.arrowDown => const Offset(0, 1 / _scale),
     _ => Offset.zero,
   };
 
@@ -1337,7 +1485,6 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
         widget.state.gmfi4 = vValue.clamp(-300, 240);
         break;
     }
-    widget.onCornerChanged();
   }
 
   List<(String, int)> _commandsFor(_Corner which) {
@@ -1362,7 +1509,8 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
 
   void _onHandleTap(_Corner which) {
     final now = DateTime.now();
-    final isDoubleTap = _lastTappedCorner == which &&
+    final isDoubleTap =
+        _lastTappedCorner == which &&
         _lastTapTime != null &&
         now.difference(_lastTapTime!) <= kDoubleTapTimeout;
     _lastTappedCorner = which;
@@ -1386,21 +1534,22 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
   }
 
   Future<void> _onHandleDoubleTap(_Corner which) async {
-    switch (which) {
-      case _Corner.ul:
-        widget.state.gmfi6 = 0;
-        widget.state.gmfi1 = 0;
-      case _Corner.ur:
-        widget.state.gmfi7 = 0;
-        widget.state.gmfi2 = 0;
-      case _Corner.ll:
-        widget.state.gmfi8 = 0;
-        widget.state.gmfi3 = 0;
-      case _Corner.lr:
-        widget.state.gmfi9 = 0;
-        widget.state.gmfi4 = 0;
-    }
-    widget.onCornerChanged();
+    setState(() {
+      switch (which) {
+        case _Corner.ul:
+          widget.state.gmfi6 = 0;
+          widget.state.gmfi1 = 0;
+        case _Corner.ur:
+          widget.state.gmfi7 = 0;
+          widget.state.gmfi2 = 0;
+        case _Corner.ll:
+          widget.state.gmfi8 = 0;
+          widget.state.gmfi3 = 0;
+        case _Corner.lr:
+          widget.state.gmfi9 = 0;
+          widget.state.gmfi4 = 0;
+      }
+    });
     await widget.onCornerCommit(_commandsFor(which));
   }
 
@@ -1422,12 +1571,18 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
     if (_dragStartGlobal == null) return;
     // Divide by _renderScale to convert screen-space delta to canvas-space delta
     // when the canvas is displayed smaller than its logical _w×_h size.
-    final totalDelta = (details.globalPosition - _dragStartGlobal!) / _renderScale;
-    for (final c in _selected) {
-      final start = _dragStartPositions[c];
-      if (start == null) continue;
-      _applyCornerPosition(c, start + totalDelta);
-    }
+    final totalDelta =
+        (details.globalPosition - _dragStartGlobal!) / _renderScale;
+    // Local setState only — repaints just this canvas instead of forcing the
+    // whole dialog (tooltip, segmented button, 6 sliders) to rebuild on every
+    // pointer-move frame of the drag.
+    setState(() {
+      for (final c in _selected) {
+        final start = _dragStartPositions[c];
+        if (start == null) continue;
+        _applyCornerPosition(c, start + totalDelta);
+      }
+    });
   }
 
   Future<void> _onHandlePanEnd() async {
@@ -1484,13 +1639,16 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
                                 ll: _positionOf(_Corner.ll),
                                 lr: _positionOf(_Corner.lr),
                                 outline: theme.colorScheme.primary,
-                                fill: theme.colorScheme.primary.withValues(alpha: 0.10),
+                                fill: theme.colorScheme.primary.withValues(
+                                  alpha: 0.10,
+                                ),
                                 defaultColor: theme.dividerColor,
                               ),
                             ),
                           ),
                         ),
-                        for (final c in _Corner.values) _handle(c, _positionOf(c)),
+                        for (final c in _Corner.values)
+                          _handle(c, _positionOf(c)),
                       ],
                     ),
                   ),
@@ -1516,7 +1674,9 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
         onPanUpdate: (details) => _onHandlePanUpdate(details),
         onPanEnd: (_) => _onHandlePanEnd(),
         child: MouseRegion(
-          cursor: Platform.isMacOS ? SystemMouseCursors.grab : SystemMouseCursors.move,
+          cursor: Platform.isMacOS
+              ? SystemMouseCursors.grab
+              : SystemMouseCursors.move,
           child: Container(
             width: radius * 2,
             height: radius * 2,
@@ -1567,10 +1727,7 @@ class _CornerCorrectionPainter extends CustomPainter {
       ..color = defaultColor.withValues(alpha: 0.5)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
-    canvas.drawRect(
-      const Rect.fromLTRB(80, 50, 400, 250),
-      defaultPaint,
-    );
+    canvas.drawRect(const Rect.fromLTRB(80, 50, 400, 250), defaultPaint);
 
     // Warped quadrilateral: fill + outline.
     final path = Path()
@@ -1596,13 +1753,26 @@ class _CornerCorrectionPainter extends CustomPainter {
       ..strokeWidth = 1;
     for (int i = 1; i < 3; i++) {
       final t = i / 3.0;
-      canvas.drawLine(Offset.lerp(ul, ur, t)!, Offset.lerp(ll, lr, t)!, gridPaint);
-      canvas.drawLine(Offset.lerp(ul, ll, t)!, Offset.lerp(ur, lr, t)!, gridPaint);
+      canvas.drawLine(
+        Offset.lerp(ul, ur, t)!,
+        Offset.lerp(ll, lr, t)!,
+        gridPaint,
+      );
+      canvas.drawLine(
+        Offset.lerp(ul, ll, t)!,
+        Offset.lerp(ur, lr, t)!,
+        gridPaint,
+      );
     }
   }
 
   @override
   bool shouldRepaint(covariant _CornerCorrectionPainter old) =>
-      old.ul != ul || old.ur != ur || old.ll != ll || old.lr != lr ||
-      old.outline != outline || old.fill != fill || old.defaultColor != defaultColor;
+      old.ul != ul ||
+      old.ur != ur ||
+      old.ll != ll ||
+      old.lr != lr ||
+      old.outline != outline ||
+      old.fill != fill ||
+      old.defaultColor != defaultColor;
 }
