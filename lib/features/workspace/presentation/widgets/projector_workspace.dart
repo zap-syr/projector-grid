@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/workspace_provider.dart';
+import '../providers/selection_provider.dart';
 import '../../domain/projector_node.dart';
 import '../../domain/projector_group.dart';
 import 'projector_card.dart';
@@ -173,9 +174,9 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
     List<ProjectorGroup> groups,
   ) {
     // Collect affected node IDs: if the node is selected, apply to all selected.
-    final nodes = ref.read(workspaceProvider);
-    final targetIds = node.isSelected
-        ? nodes.where((n) => n.isSelected).map((n) => n.id).toList()
+    final selected = ref.read(selectionProvider);
+    final targetIds = selected.contains(node.id)
+        ? selected.toList()
         : [node.id];
 
     return [
@@ -215,6 +216,7 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
   @override
   Widget build(BuildContext context) {
     final nodes = ref.watch(workspaceProvider);
+    final selectedIds = ref.watch(selectionProvider);
     final notifier = ref.read(workspaceProvider.notifier);
     final groups = notifier.groups;
     final groupMap = {for (var g in groups) g.id: g};
@@ -309,7 +311,7 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
               ),
               DeleteIntent: CallbackAction<DeleteIntent>(
                 onInvoke: (intent) async {
-                  final selectedCount = nodes.where((n) => n.isSelected).length;
+                  final selectedCount = selectedIds.length;
                   if (selectedCount == 0) return;
                   final confirm = await showDialog<bool>(
                     context: context,
@@ -480,6 +482,7 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
                                         key: ValueKey(node.id),
                                         node: node,
                                         group: node.groupId != null ? groupMap[node.groupId] : null,
+                                        isSelected: selectedIds.contains(node.id),
                                         zoom: _currentZoom,
                                         onTap: () {
                                           notifier.selectNodeOnTap(
@@ -496,8 +499,8 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
                                         onPanUpdate: (details) {
                                           if (_panStartPositions == null) {
                                             notifier.saveBeforeMove();
-                                            final affected = node.isSelected
-                                                ? nodes.where((n) => n.isSelected)
+                                            final affected = selectedIds.contains(node.id)
+                                                ? nodes.where((n) => selectedIds.contains(n.id))
                                                 : [node];
                                             _panStartPositions = {
                                               for (final n in affected)
@@ -541,8 +544,8 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
                                           );
                                         },
                                         onDelete: () async {
-                                          final selectedCount = nodes.where((n) => n.isSelected).length;
-                                          final isMultiDelete = node.isSelected && selectedCount > 1;
+                                          final selectedCount = selectedIds.length;
+                                          final isMultiDelete = selectedIds.contains(node.id) && selectedCount > 1;
                                           final confirm = await showDialog<bool>(
                                             context: context,
                                             builder: (context) => AlertDialog(

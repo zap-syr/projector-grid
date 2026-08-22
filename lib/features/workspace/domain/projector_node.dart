@@ -17,7 +17,6 @@ abstract class ProjectorNode with _$ProjectorNode {
     @Default('panasonic') String password,
     required double x,
     required double y,
-    @Default(false) bool isSelected,
     @Default(PowerStatus.standby) PowerStatus powerStatus,
     @Default(ShutterStatus.closed) ShutterStatus shutterStatus,
     @Default(ConnectionStatus.offline) ConnectionStatus connectionStatus,

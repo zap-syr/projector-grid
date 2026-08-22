@@ -6,6 +6,7 @@ import '../../domain/projector_group.dart';
 class ProjectorCard extends StatefulWidget {
   final ProjectorNode node;
   final ProjectorGroup? group;
+  final bool isSelected;
   final double zoom;
   final VoidCallback onTap;
   final GestureDragDownCallback onPanDown;
@@ -23,6 +24,7 @@ class ProjectorCard extends StatefulWidget {
     super.key,
     required this.node,
     this.group,
+    required this.isSelected,
     required this.zoom,
     required this.onTap,
     required this.onPanDown,
@@ -154,13 +156,13 @@ class _ProjectorCardState extends State<ProjectorCard> {
                 Container(
                   width: 120,
                   height: 100,
-                  padding: EdgeInsets.all(node.isSelected ? 0 : 1),
+                  padding: EdgeInsets.all(widget.isSelected ? 0 : 1),
                   decoration: BoxDecoration(
                     color: colorScheme.surface,
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: node.isSelected ? colorScheme.primary : theme.dividerColor,
-                      width: node.isSelected ? 2 : 1,
+                      color: widget.isSelected ? colorScheme.primary : theme.dividerColor,
+                      width: widget.isSelected ? 2 : 1,
                     ),
                     boxShadow: [
                       BoxShadow(

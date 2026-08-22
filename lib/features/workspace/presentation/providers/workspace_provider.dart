@@ -7,6 +7,7 @@ import '../../domain/projector_group.dart';
 import '../../domain/log_event.dart';
 import '../../../../core/services/panasonic_protocol_service.dart';
 import 'event_log_provider.dart';
+import 'selection_provider.dart';
 
 part 'workspace_provider.g.dart';
 
@@ -52,7 +53,6 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
   /// Strips transient fields so snapshots only capture user-editable state.
   List<ProjectorNode> _stripTransient(List<ProjectorNode> nodes) {
     return nodes.map((n) => n.copyWith(
-      isSelected: false,
       connectionStatus: ConnectionStatus.offline,
       powerStatus: PowerStatus.standby,
       shutterStatus: ShutterStatus.closed,
@@ -110,6 +110,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
   void _restoreSnapshot(_WorkspaceSnapshot snapshot) {
     state = _mergeWithTelemetry(snapshot.nodes);
     _groups = List.of(snapshot.groups);
+    ref.read(selectionProvider.notifier).clear();
     _notifyStateChanged();
   }
 
@@ -204,6 +205,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
 
   void setNodes(List<ProjectorNode> nodes) {
     state = List<ProjectorNode>.from(nodes);
+    ref.read(selectionProvider.notifier).clear();
   }
 
   void setPollingInterval(int seconds) {
@@ -508,8 +510,10 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     }
   }
 
-  Future<void> sendCommandToSelected(String cmd) =>
-      _dispatchToNodes(state.where((n) => n.isSelected), cmd);
+  Future<void> sendCommandToSelected(String cmd) {
+    final selected = ref.read(selectionProvider);
+    return _dispatchToNodes(state.where((n) => selected.contains(n.id)), cmd);
+  }
 
   // Caps how many TCP connections _dispatchToNodes and _pollAllProjectors
   // open at once. Firing every node in one Future.wait would open one socket
@@ -635,10 +639,11 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
   ) {
     final targetNode = state.where((n) => n.id == id).firstOrNull;
     if (targetNode == null) return;
-    if (targetNode.isSelected) {
+    final selected = ref.read(selectionProvider);
+    if (selected.contains(id)) {
       state = state.map((node) {
         final start = startPositions[node.id];
-        if (node.isSelected && start != null) {
+        if (selected.contains(node.id) && start != null) {
           return node.copyWith(
             x: _clampX(start.dx + totalDelta.dx),
             y: _clampY(start.dy + totalDelta.dy),
@@ -680,13 +685,16 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
 
   void deleteSelected() {
     _saveSnapshot();
-    state = state.where((node) => !node.isSelected).toList();
+    final selected = ref.read(selectionProvider);
+    state = state.where((node) => !selected.contains(node.id)).toList();
+    ref.read(selectionProvider.notifier).clear();
     _notifyStateChanged();
   }
 
   void deleteNode(String id) {
     _saveSnapshot();
     state = state.where((node) => node.id != id).toList();
+    ref.read(selectionProvider.notifier).removeIds([id]);
     _notifyStateChanged();
   }
 
@@ -694,9 +702,10 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     double snap(double val) => (val / 20).round() * 20.0;
     final targetNode = state.where((n) => n.id == id).firstOrNull;
     if (targetNode == null) return;
-    if (targetNode.isSelected) {
+    final selected = ref.read(selectionProvider);
+    if (selected.contains(id)) {
       state = state.map((node) {
-        if (node.isSelected) {
+        if (selected.contains(node.id)) {
           return node.copyWith(
             x: _clampX(snap(node.x)),
             y: _clampY(snap(node.y)),
@@ -720,20 +729,14 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
   void selectNodeOnDown(String id, {bool multiSelect = false}) {
     final targetNode = state.where((n) => n.id == id).firstOrNull;
     if (targetNode == null) return;
+    final selectionNotifier = ref.read(selectionProvider.notifier);
     if (multiSelect) {
-      state = state.map((node) {
-        if (node.id == id) {
-          return node.copyWith(isSelected: !node.isSelected);
-        }
-        return node;
-      }).toList();
+      selectionNotifier.toggle(id);
     } else {
       // If not selected, select it and deselect others
       // If already selected, do nothing on mouse down to allow dragging multiple
-      if (!targetNode.isSelected) {
-        state = state.map((node) {
-          return node.copyWith(isSelected: node.id == id);
-        }).toList();
+      if (!ref.read(selectionProvider).contains(id)) {
+        selectionNotifier.selectOnly(id);
       }
     }
   }
@@ -741,37 +744,31 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
   void selectNodeOnTap(String id, {bool multiSelect = false}) {
     if (!multiSelect) {
       // On mouse up without drag, if no modifier key is pressed, ensure only this node is selected
-      state = state.map((node) {
-        return node.copyWith(isSelected: node.id == id);
-      }).toList();
+      ref.read(selectionProvider.notifier).selectOnly(id);
     }
   }
 
   void deselectAll() {
-    state = state.map((node) => node.copyWith(isSelected: false)).toList();
+    ref.read(selectionProvider.notifier).clear();
   }
 
   void selectAll() {
-    state = state.map((node) => node.copyWith(isSelected: true)).toList();
+    ref.read(selectionProvider.notifier).set(state.map((n) => n.id).toSet());
   }
 
   void selectNodesInGroup(String groupId) {
-    state = state
-        .map((node) => node.copyWith(isSelected: node.groupId == groupId))
-        .toList();
+    final ids = state.where((n) => n.groupId == groupId).map((n) => n.id).toSet();
+    ref.read(selectionProvider.notifier).set(ids);
   }
 
   Set<String> _preDragSelection = {};
 
   void startMarqueeSelection({bool append = false}) {
     if (append) {
-      _preDragSelection = state
-          .where((n) => n.isSelected)
-          .map((n) => n.id)
-          .toSet();
+      _preDragSelection = Set<String>.of(ref.read(selectionProvider));
     } else {
       _preDragSelection = {};
-      state = state.map((node) => node.copyWith(isSelected: false)).toList();
+      ref.read(selectionProvider.notifier).clear();
     }
   }
 
@@ -780,7 +777,8 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
   }
 
   void selectNodesInRect(Rect selectionRect, {bool append = false}) {
-    state = state.map((node) {
+    final next = <String>{};
+    for (final node in state) {
       // Fixed size for cards for intersection logic (120x100 based on 6x5 grid cells)
       final nodeRect = Rect.fromLTWH(node.x, node.y, 120, 100);
       final isOverlapping = selectionRect.overlaps(nodeRect);
@@ -788,14 +786,15 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
       if (append) {
         final wasSelected = _preDragSelection.contains(node.id);
         // If appending (Ctrl/Cmd pressed): toggle the state of overlapping items
-        return node.copyWith(
-          isSelected: isOverlapping ? !wasSelected : wasSelected,
-        );
+        if (isOverlapping ? !wasSelected : wasSelected) {
+          next.add(node.id);
+        }
       } else {
         // Normal selection: only overlapping items are selected
-        return node.copyWith(isSelected: isOverlapping);
+        if (isOverlapping) next.add(node.id);
       }
-    }).toList();
+    }
+    ref.read(selectionProvider.notifier).set(next);
   }
 }
 

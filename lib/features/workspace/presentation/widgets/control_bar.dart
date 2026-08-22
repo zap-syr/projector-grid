@@ -8,6 +8,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../domain/custom_command.dart';
 import '../providers/custom_commands_provider.dart';
 import '../providers/workspace_provider.dart';
+import '../providers/selection_provider.dart';
 import 'custom_command_dialog.dart';
 import 'custom_tooltip.dart';
 
@@ -375,7 +376,7 @@ class _ControlBarState extends ConsumerState<ControlBar> {
   @override
   Widget build(BuildContext context) {
     final hasSelection = ref.watch(
-      workspaceProvider.select((nodes) => nodes.any((n) => n.isSelected)),
+      selectionProvider.select((ids) => ids.isNotEmpty),
     );
 
     return Container(
