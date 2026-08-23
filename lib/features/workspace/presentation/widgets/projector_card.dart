@@ -1,5 +1,7 @@
 import 'dart:io';
+
 import 'package:flutter/material.dart';
+
 import '../../domain/projector_node.dart';
 import '../../domain/projector_group.dart';
 
@@ -7,6 +9,7 @@ class ProjectorCard extends StatefulWidget {
   final ProjectorNode node;
   final ProjectorGroup? group;
   final bool isSelected;
+  final bool isDragging;
   final double zoom;
   final VoidCallback onTap;
   final GestureDragDownCallback onPanDown;
@@ -25,6 +28,7 @@ class ProjectorCard extends StatefulWidget {
     required this.node,
     this.group,
     required this.isSelected,
+    required this.isDragging,
     required this.zoom,
     required this.onTap,
     required this.onPanDown,
@@ -45,6 +49,8 @@ class ProjectorCard extends StatefulWidget {
 
 class _ProjectorCardState extends State<ProjectorCard> {
   final _menuController = MenuController();
+  bool _isHovered = false;
+  double? _lastZoom;
 
   void _closeAndRun(VoidCallback action) {
     _menuController.close();
@@ -59,8 +65,12 @@ class _ProjectorCardState extends State<ProjectorCard> {
     final colorScheme = theme.colorScheme;
 
     // Status colors
-    final powerColor = node.powerStatus == PowerStatus.on ? Colors.green : Colors.red;
-    final shutterColor = node.shutterStatus == ShutterStatus.open ? Colors.green : Colors.red;
+    final powerColor = node.powerStatus == PowerStatus.on
+        ? Colors.green
+        : Colors.red;
+    final shutterColor = node.shutterStatus == ShutterStatus.open
+        ? Colors.green
+        : Colors.red;
     final connectionColor = switch (node.connectionStatus) {
       ConnectionStatus.connected => Colors.green,
       ConnectionStatus.unprotected => Colors.green,
@@ -68,7 +78,17 @@ class _ProjectorCardState extends State<ProjectorCard> {
       ConnectionStatus.offline => Colors.red,
     };
 
-    return Positioned(
+    // Zoom changes rescale left/top just like a real position change would,
+    // but should snap instantly rather than ease like an actual drag-snap
+    // correction — otherwise every card visibly "jumps" on every zoom step.
+    final zoomChanged = widget.zoom != _lastZoom;
+    _lastZoom = widget.zoom;
+
+    return AnimatedPositioned(
+      duration: (widget.isDragging || zoomChanged)
+          ? Duration.zero
+          : const Duration(milliseconds: 130),
+      curve: Curves.easeOut,
       left: node.x * widget.zoom,
       top: node.y * widget.zoom,
       child: Transform.scale(
@@ -142,133 +162,183 @@ class _ProjectorCardState extends State<ProjectorCard> {
               ),
             ),
           ],
-          child: GestureDetector(
-            onTap: widget.onTap,
-            onPanDown: widget.onPanDown,
-            onPanUpdate: widget.onPanUpdate,
-            onPanEnd: widget.onPanEnd,
-            onSecondaryTapUp: (details) {
-              _menuController.open(position: details.localPosition * widget.zoom);
-            },
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 120,
-                  height: 100,
-                  padding: EdgeInsets.all(widget.isSelected ? 0 : 1),
-                  decoration: BoxDecoration(
-                    color: colorScheme.surface,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: widget.isSelected ? colorScheme.primary : theme.dividerColor,
-                      width: widget.isSelected ? 2 : 1,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.1),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            onEnter: (_) => setState(() => _isHovered = true),
+            onExit: (_) => setState(() => _isHovered = false),
+            child: GestureDetector(
+              onTap: widget.onTap,
+              onPanDown: widget.onPanDown,
+              onPanUpdate: widget.onPanUpdate,
+              onPanEnd: widget.onPanEnd,
+              onSecondaryTapUp: (details) {
+                _menuController.open(
+                  position: details.localPosition * widget.zoom,
+                );
+              },
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 120),
+                    width: 120,
+                    height: 100,
+                    padding: EdgeInsets.all(widget.isSelected ? 0 : 1),
+                    decoration: BoxDecoration(
+                      color: colorScheme.surface,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: widget.isSelected
+                            ? colorScheme.primary
+                            : (_isHovered
+                                  ? colorScheme.primary.withValues(alpha: 0.85)
+                                  : colorScheme.outline),
+                        width: widget.isSelected ? 2 : 1,
                       ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Top Bar with optional group color stripe overlaid
-                      Stack(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: colorScheme.surfaceContainerHighest,
-                              borderRadius: const BorderRadius.vertical(top: Radius.circular(7)),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(Icons.power_settings_new, size: 14, color: powerColor),
-                                const SizedBox(width: 4),
-                                Icon(Icons.visibility, size: 14, color: shutterColor),
-                                const SizedBox(width: 4),
-                                if (node.errors != 'NO ERRORS' && node.errors != '-')
-                                  const Icon(Icons.warning_amber_rounded, size: 14, color: Colors.orange),
-                                const Spacer(),
-                                if (node.connectionStatus == ConnectionStatus.unauthorized)
-                                  const Icon(Icons.lock_outline, size: 12, color: Colors.amber),
-                                if (node.connectionStatus == ConnectionStatus.unprotected)
-                                  const Icon(Icons.lock_open, size: 12, color: Colors.blue),
-                                const SizedBox(width: 4),
-                                Container(
-                                  width: 8,
-                                  height: 8,
-                                  decoration: BoxDecoration(
-                                    color: connectionColor,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          // Group color stripe overlay
-                          if (group != null)
-                            Positioned(
-                              top: 0,
-                              left: 0,
-                              right: 0,
-                              child: Container(
-                                height: 4,
-                                decoration: BoxDecoration(
-                                  color: Color(group.color),
-                                  borderRadius: const BorderRadius.vertical(top: Radius.circular(7)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.1),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Top Bar with optional group color stripe overlaid
+                        Stack(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: colorScheme.surfaceContainerHighest,
+                                borderRadius: const BorderRadius.vertical(
+                                  top: Radius.circular(7),
                                 ),
                               ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.power_settings_new,
+                                    size: 14,
+                                    color: powerColor,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Icon(
+                                    Icons.visibility,
+                                    size: 14,
+                                    color: shutterColor,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  if (node.errors != 'NO ERRORS' &&
+                                      node.errors != '-')
+                                    const Icon(
+                                      Icons.warning_amber_rounded,
+                                      size: 14,
+                                      color: Colors.orange,
+                                    ),
+                                  const Spacer(),
+                                  if (node.connectionStatus ==
+                                      ConnectionStatus.unauthorized)
+                                    const Icon(
+                                      Icons.lock_outline,
+                                      size: 12,
+                                      color: Colors.amber,
+                                    ),
+                                  if (node.connectionStatus ==
+                                      ConnectionStatus.unprotected)
+                                    const Icon(
+                                      Icons.lock_open,
+                                      size: 12,
+                                      color: Colors.blue,
+                                    ),
+                                  const SizedBox(width: 4),
+                                  Container(
+                                    width: 8,
+                                    height: 8,
+                                    decoration: BoxDecoration(
+                                      color: connectionColor,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                        ],
-                      ),
-                      const Spacer(),
-                      // Content area
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-                        child: Text(
-                          node.name,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
+                            // Group color stripe overlay
+                            if (group != null)
+                              Positioned(
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                child: Container(
+                                  height: 4,
+                                  decoration: BoxDecoration(
+                                    color: Color(group.color),
+                                    borderRadius: const BorderRadius.vertical(
+                                      top: Radius.circular(7),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        const Spacer(),
+                        // Content area
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8.0,
+                            vertical: 4.0,
                           ),
+                          child: Text(
+                            node.name,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(
+                            left: 8.0,
+                            right: 8.0,
+                            bottom: 8.0,
+                          ),
+                          child: Text(
+                            node.ipAddress,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.textTheme.bodySmall?.color
+                                  ?.withValues(alpha: 0.7),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Group label
+                  if (group != null)
+                    SizedBox(
+                      width: 120,
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          group.name,
+                          textAlign: TextAlign.center,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.only(left: 8.0, right: 8.0, bottom: 8.0),
-                        child: Text(
-                          node.ipAddress,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.7),
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: Color(group.color),
+                            fontSize: 9,
                           ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                // Group label
-                if (group != null)
-                  SizedBox(
-                    width: 120,
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Text(
-                        group.name,
-                        textAlign: TextAlign.center,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: Color(group.color),
-                          fontSize: 9,
                         ),
                       ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
