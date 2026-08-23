@@ -50,7 +50,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           body_path: release_notes.md
-          files: installer/output/ProjectorGrid_Setup.exe
+          files: installer/output/ProjectorGrid_Setup_${{ steps.version.outputs.VERSION }}.exe
 
   build-macos:
     name: macOS (Universal)
@@ -88,10 +88,10 @@ jobs:
             -volname "Projector Grid" \
             -srcfolder dmg_staging \
             -ov -format UDZO \
-            "ProjectorGrid-macOS.dmg"
+            "ProjectorGrid-macOS-${{ steps.version.outputs.VERSION }}.dmg"
 
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
           body_path: release_notes.md
-          files: ProjectorGrid-macOS.dmg
+          files: ProjectorGrid-macOS-${{ steps.version.outputs.VERSION }}.dmg
