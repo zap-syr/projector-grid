@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 
 class KeyboardShortcutsDialog extends StatelessWidget {
@@ -20,7 +22,12 @@ class KeyboardShortcutsDialog extends StatelessWidget {
             // Title bar
             Container(
               color: colorScheme.surfaceContainerHigh,
-              padding: const EdgeInsets.only(left: 20, right: 8, top: 4, bottom: 4),
+              padding: const EdgeInsets.only(
+                left: 20,
+                right: 8,
+                top: 4,
+                bottom: 4,
+              ),
               child: Row(
                 children: [
                   Text(
@@ -44,64 +51,144 @@ class KeyboardShortcutsDialog extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    _Section(
+                  children: [
+                    const _Section(
                       title: 'Project',
                       shortcuts: [
-                        _Shortcut(keys: ['Ctrl', 'N'], description: 'New project'),
-                        _Shortcut(keys: ['Ctrl', 'O'], description: 'Open project'),
-                        _Shortcut(keys: ['Ctrl', 'S'], description: 'Save project'),
-                        _Shortcut(keys: ['Ctrl', 'Shift', 'S'], description: 'Save project as…'),
-                        _Shortcut(keys: ['Ctrl', 'Q'], description: 'Exit application'),
-                        _Shortcut(keys: ['F5'], description: 'Refresh all projectors'),
+                        _Shortcut(
+                          keys: ['Ctrl', 'N'],
+                          description: 'New project',
+                        ),
+                        _Shortcut(
+                          keys: ['Ctrl', 'O'],
+                          description: 'Open project',
+                        ),
+                        _Shortcut(
+                          keys: ['Ctrl', 'S'],
+                          description: 'Save project',
+                        ),
+                        _Shortcut(
+                          keys: ['Ctrl', 'Shift', 'S'],
+                          description: 'Save project as…',
+                        ),
+                        _Shortcut(
+                          keys: ['Ctrl', 'Q'],
+                          description: 'Exit application',
+                        ),
+                        _Shortcut(
+                          keys: ['F5'],
+                          description: 'Refresh all projectors',
+                        ),
                       ],
                     ),
-                    _Section(
+                    const _Section(
                       title: 'Canvas Navigation',
                       shortcuts: [
-                        _Shortcut(keys: ['Middle drag'], description: 'Pan the canvas'),
-                        _Shortcut(keys: ['Ctrl', 'Scroll'], description: 'Zoom in / out (50 – 200%)'),
-                        _Shortcut(keys: ['Click', 'empty space'], description: 'Deselect all'),
+                        _Shortcut(
+                          keys: ['Middle drag'],
+                          description: 'Pan the canvas',
+                        ),
+                        _Shortcut(
+                          keys: ['Ctrl', 'Scroll'],
+                          description: 'Zoom in / out (50 – 200%)',
+                        ),
+                        _Shortcut(
+                          keys: ['Click', 'empty space'],
+                          description: 'Deselect all',
+                        ),
                       ],
                     ),
-                    _Section(
+                    const _Section(
                       title: 'Selection',
                       shortcuts: [
-                        _Shortcut(keys: ['Click'], description: 'Select projector (deselects others)'),
-                        _Shortcut(keys: ['Ctrl', 'Click'], description: 'Toggle projector in selection'),
-                        _Shortcut(keys: ['Ctrl', 'Drag'], description: 'Marquee (box) select'),
-                        _Shortcut(keys: ['Ctrl', 'A'], description: 'Select all projectors'),
-                        _Shortcut(keys: ['Ctrl', 'D'], description: 'Deselect all projectors'),
+                        _Shortcut(
+                          keys: ['Click'],
+                          description: 'Select projector (deselects others)',
+                        ),
+                        _Shortcut(
+                          keys: ['Ctrl', 'Click'],
+                          description: 'Toggle projector in selection',
+                        ),
+                        _Shortcut(
+                          keys: ['Ctrl', 'Drag'],
+                          description: 'Marquee (box) select',
+                        ),
+                        _Shortcut(
+                          keys: ['Ctrl', 'A'],
+                          description: 'Select all projectors',
+                        ),
+                        _Shortcut(
+                          keys: ['Ctrl', 'D'],
+                          description: 'Deselect all projectors',
+                        ),
                       ],
                     ),
-                    _Section(
+                    const _Section(
                       title: 'Projector Control',
                       shortcuts: [
-                        _Shortcut(keys: ['I'], description: 'Open shutter on selected projectors'),
-                        _Shortcut(keys: ['O'], description: 'Close shutter on selected projectors'),
-                        _Shortcut(keys: ['Delete'], description: 'Delete selected projectors'),
+                        _Shortcut(
+                          keys: ['I'],
+                          description: 'Open shutter on selected projectors',
+                        ),
+                        _Shortcut(
+                          keys: ['O'],
+                          description: 'Close shutter on selected projectors',
+                        ),
+                        _Shortcut(
+                          keys: ['Delete'],
+                          description: 'Delete selected projectors',
+                        ),
                       ],
                     ),
                     _Section(
                       title: 'Edit',
                       shortcuts: [
-                        _Shortcut(keys: ['Ctrl', 'Z'], description: 'Undo'),
-                        _Shortcut(keys: ['Ctrl', 'Y'], description: 'Redo'),
+                        const _Shortcut(
+                          keys: ['Ctrl', 'Z'],
+                          description: 'Undo',
+                        ),
+                        // macOS binds Redo to the platform-conventional
+                        // Cmd+Shift+Z (native Edit menu); Windows/Linux use
+                        // Ctrl+Y. Previously the in-canvas Shortcuts widget
+                        // also bound Cmd+Y as a second, non-standard Redo
+                        // combo — removed so there's exactly one macOS
+                        // binding, matching what's documented here.
+                        _Shortcut(
+                          keys: Platform.isMacOS
+                              ? const ['Ctrl', 'Shift', 'Z']
+                              : const ['Ctrl', 'Y'],
+                          description: 'Redo',
+                        ),
                       ],
                     ),
-                    _Section(
+                    const _Section(
                       title: 'View',
                       shortcuts: [
-                        _Shortcut(keys: ['Ctrl', '1'], description: 'Switch to Controls view'),
-                        _Shortcut(keys: ['Ctrl', '2'], description: 'Switch to Monitoring view'),
+                        _Shortcut(
+                          keys: ['Ctrl', '1'],
+                          description: 'Switch to Controls view',
+                        ),
+                        _Shortcut(
+                          keys: ['Ctrl', '2'],
+                          description: 'Switch to Monitoring view',
+                        ),
                       ],
                     ),
-                    _Section(
+                    const _Section(
                       title: 'Lens Shift',
                       shortcuts: [
-                        _Shortcut(keys: ['↑ ↓ ← →'], description: 'Lens shift — normal speed'),
-                        _Shortcut(keys: ['Shift', '↑ ↓ ← →'], description: 'Lens shift — fast speed'),
-                        _Shortcut(keys: ['Ctrl', '↑ ↓ ← →'], description: 'Lens shift — slow speed'),
+                        _Shortcut(
+                          keys: ['↑ ↓ ← →'],
+                          description: 'Lens shift — normal speed',
+                        ),
+                        _Shortcut(
+                          keys: ['Shift', '↑ ↓ ← →'],
+                          description: 'Lens shift — fast speed',
+                        ),
+                        _Shortcut(
+                          keys: ['Ctrl', '↑ ↓ ← →'],
+                          description: 'Lens shift — slow speed',
+                        ),
                       ],
                     ),
                   ],
@@ -197,12 +284,31 @@ class _KeyBadge extends StatelessWidget {
 
   const _KeyBadge({required this.label});
 
+  // Shortcut data is written generically (e.g. 'Ctrl'); this maps it to the
+  // symbol/label a user actually expects on their platform. macOS has no
+  // physical "Ctrl" key in the Windows sense, and every one of these
+  // shortcuts is registered with both control and meta modifiers
+  // (see projector_workspace.dart), so Cmd is what's really bound there.
+  static String _platformLabel(String label) {
+    if (!Platform.isMacOS) return label;
+    return switch (label) {
+      'Ctrl' => '⌘',
+      'Shift' => '⇧',
+      _ => label,
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final isSingleSymbol = label.length == 1 ||
-        label == '↑' || label == '↓' || label == '←' || label == '→' ||
-        label == '↑ ↓ ← →';
+    final displayLabel = _platformLabel(label);
+    final isSingleSymbol =
+        displayLabel.length == 1 ||
+        displayLabel == '↑' ||
+        displayLabel == '↓' ||
+        displayLabel == '←' ||
+        displayLabel == '→' ||
+        displayLabel == '↑ ↓ ← →';
 
     return Container(
       padding: EdgeInsets.symmetric(
@@ -212,10 +318,7 @@ class _KeyBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(5),
-        border: Border.all(
-          color: colorScheme.outlineVariant,
-          width: 1,
-        ),
+        border: Border.all(color: colorScheme.outlineVariant, width: 1),
         boxShadow: [
           BoxShadow(
             color: colorScheme.shadow.withValues(alpha: 0.15),
@@ -225,7 +328,7 @@ class _KeyBadge extends StatelessWidget {
         ],
       ),
       child: Text(
-        label,
+        displayLabel,
         style: TextStyle(
           fontFamily: 'monospace',
           fontSize: 12,
