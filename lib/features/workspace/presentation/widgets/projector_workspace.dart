@@ -1,4 +1,5 @@
 import 'dart:io' show Platform;
+import 'dart:math' show min, max;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -39,6 +40,11 @@ class UndoIntent extends Intent {
 
 class RedoIntent extends Intent {
   const RedoIntent();
+}
+
+class FocusOnNodesIntent extends Intent {
+  final bool allProjectors;
+  const FocusOnNodesIntent({required this.allProjectors});
 }
 
 class ProjectorWorkspace extends ConsumerStatefulWidget {
@@ -168,6 +174,87 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
         _currentZoom = newZoom;
       });
     }
+  }
+
+  // Card size mirrors the fixed dimensions in projector_card.dart — the
+  // bounding box needs the cards' visual extent, not just their x/y anchors.
+  static const double _cardWidth = 120.0;
+  static const double _cardHeight = 100.0;
+  static const double _focusPadding = 60.0;
+
+  /// Zooms/scrolls so [targets] are centered and fit in the viewport.
+  ///
+  /// Unlike [_setZoom] (which keeps a point fixed at its current on-screen
+  /// position — right for zoom-under-cursor/zoom-buttons), this jumps the
+  /// viewport to a brand-new center, so it computes the target scroll
+  /// offset directly rather than an anchor-preserving delta.
+  void _focusOnNodes(List<ProjectorNode> targets) {
+    if (targets.isEmpty) return;
+    if (!_horizontalController.hasClients || !_verticalController.hasClients) {
+      return;
+    }
+
+    final minX = targets.map((n) => n.x).reduce(min);
+    final maxX = targets.map((n) => n.x + _cardWidth).reduce(max);
+    final minY = targets.map((n) => n.y).reduce(min);
+    final maxY = targets.map((n) => n.y + _cardHeight).reduce(max);
+
+    final boxWidth = (maxX - minX) + _focusPadding * 2;
+    final boxHeight = (maxY - minY) + _focusPadding * 2;
+    final centerX = (minX + maxX) / 2;
+    final centerY = (minY + maxY) / 2;
+
+    final viewportWidth = _horizontalController.position.viewportDimension;
+    final viewportHeight = _verticalController.position.viewportDimension;
+
+    final fitZoom = min(viewportWidth / boxWidth, viewportHeight / boxHeight);
+    final newZoom = fitZoom.clamp(0.5, 2.0).toDouble();
+
+    final newScrollX = (centerX * newZoom) - (viewportWidth / 2);
+    final newScrollY = (centerY * newZoom) - (viewportHeight / 2);
+
+    if (newZoom == _currentZoom) {
+      // Zoom isn't changing, so canvasWidth/canvasHeight (derived from
+      // _currentZoom) won't change either, which means nothing forces a
+      // relayout to pick up a correctPixels()-style silent adjustment —
+      // correctPixels only takes visible effect piggybacking on a relayout
+      // that was going to happen anyway (see _setZoom's early-return for
+      // the same reason). A plain jumpTo() goes through the normal,
+      // notifying scroll pipeline instead, so it repaints on its own.
+      _horizontalController.jumpTo(
+        newScrollX.clamp(0.0, _horizontalController.position.maxScrollExtent),
+      );
+      _verticalController.jumpTo(
+        newScrollY.clamp(0.0, _verticalController.position.maxScrollExtent),
+      );
+      return;
+    }
+
+    // Same "correct pixels before setState" trick as _setZoom, so the
+    // scroll view doesn't visibly jump/animate across two frames.
+    _horizontalController.position.correctPixels(
+      newScrollX.clamp(0.0, double.infinity),
+    );
+    _verticalController.position.correctPixels(
+      newScrollY.clamp(0.0, double.infinity),
+    );
+
+    setState(() {
+      _currentZoom = newZoom;
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_horizontalController.hasClients) {
+        _horizontalController.jumpTo(
+          newScrollX.clamp(0.0, _horizontalController.position.maxScrollExtent),
+        );
+      }
+      if (_verticalController.hasClients) {
+        _verticalController.jumpTo(
+          newScrollY.clamp(0.0, _verticalController.position.maxScrollExtent),
+        );
+      }
+    });
   }
 
   List<Widget> _buildGroupMenuItems(
@@ -354,6 +441,12 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
                       const SendCommandIntent('OSH:1'),
                   const SingleActivator(LogicalKeyboardKey.keyO):
                       const SendCommandIntent('OSH:0'),
+
+                  // ── Focus (F = selected, falls back to all; Shift+F = all) ───
+                  const SingleActivator(LogicalKeyboardKey.keyF):
+                      const FocusOnNodesIntent(allProjectors: false),
+                  const SingleActivator(LogicalKeyboardKey.keyF, shift: true):
+                      const FocusOnNodesIntent(allProjectors: true),
                 },
                 child: Actions(
                   actions: {
@@ -372,6 +465,18 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
                     ),
                     RedoIntent: CallbackAction<RedoIntent>(
                       onInvoke: (intent) => notifier.redo(),
+                    ),
+                    FocusOnNodesIntent: CallbackAction<FocusOnNodesIntent>(
+                      onInvoke: (intent) {
+                        final targets =
+                            (intent.allProjectors || selectedIds.isEmpty)
+                            ? nodes
+                            : nodes
+                                  .where((n) => selectedIds.contains(n.id))
+                                  .toList();
+                        _focusOnNodes(targets);
+                        return null;
+                      },
                     ),
                     DeleteIntent: CallbackAction<DeleteIntent>(
                       onInvoke: (intent) async {

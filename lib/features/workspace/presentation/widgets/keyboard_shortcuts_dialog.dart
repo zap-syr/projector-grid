@@ -96,6 +96,14 @@ class KeyboardShortcutsDialog extends StatelessWidget {
                           keys: ['Click', 'empty space'],
                           description: 'Deselect all',
                         ),
+                        _Shortcut(
+                          keys: ['F'],
+                          description: 'Focus selected projectors (or all, if none selected)',
+                        ),
+                        _Shortcut(
+                          keys: ['Shift', 'F'],
+                          description: 'Focus all projectors',
+                        ),
                       ],
                     ),
                     const _Section(
