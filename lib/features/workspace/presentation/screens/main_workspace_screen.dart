@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
+
 import '../providers/app_settings_provider.dart';
 import '../providers/project_provider.dart';
 import '../providers/workspace_provider.dart';
@@ -78,7 +79,9 @@ class _WorkspaceBodyState extends ConsumerState<_WorkspaceBody> {
   // the view becomes active again, _doRequestFocus restores the inner Focus —
   // which means the inner Shortcuts (Ctrl+A, Ctrl+Z, etc.) keep working.
   final _controlsScopeNode = FocusScopeNode(debugLabel: 'workspace-controls');
-  final _monitoringScopeNode = FocusScopeNode(debugLabel: 'workspace-monitoring');
+  final _monitoringScopeNode = FocusScopeNode(
+    debugLabel: 'workspace-monitoring',
+  );
 
   @override
   void dispose() {
@@ -92,17 +95,16 @@ class _WorkspaceBodyState extends ConsumerState<_WorkspaceBody> {
     // have already updated before we call requestFocus.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      (isMonitoring ? _monitoringScopeNode : _controlsScopeNode)
-          .requestFocus();
+      (isMonitoring ? _monitoringScopeNode : _controlsScopeNode).requestFocus();
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final isMonitoringView =
-        ref.watch(appSettingsProvider.select((s) => s.isMonitoringView));
-    final showLogs =
-        ref.watch(appSettingsProvider.select((s) => s.showLogs));
+    final isMonitoringView = ref.watch(
+      appSettingsProvider.select((s) => s.isMonitoringView),
+    );
+    final showLogs = ref.watch(appSettingsProvider.select((s) => s.showLogs));
 
     ref.listen(
       appSettingsProvider.select((s) => s.isMonitoringView),
@@ -113,11 +115,17 @@ class _WorkspaceBodyState extends ConsumerState<_WorkspaceBody> {
       builder: (context, constraints) {
         // Reserve at least 150px for the workspace above the log panel.
         const minWorkspaceHeight = 150.0;
-        final maxLogHeight = (constraints.maxHeight - minWorkspaceHeight)
-            .clamp(EventLogPanel.minHeight, EventLogPanel.defaultHeight);
+        final maxLogHeight = (constraints.maxHeight - minWorkspaceHeight).clamp(
+          EventLogPanel.minHeight,
+          EventLogPanel.defaultHeight,
+        );
 
         return Column(
           children: [
+            // Shared above the Controls/Monitoring switch (rather than
+            // nested inside the Controls branch) so it stays visible in
+            // both views instead of disappearing in Monitoring.
+            const StatusBar(),
             Expanded(
               child: IndexedStack(
                 index: isMonitoringView ? 1 : 0,
@@ -126,14 +134,7 @@ class _WorkspaceBodyState extends ConsumerState<_WorkspaceBody> {
                     node: _controlsScopeNode,
                     child: const Row(
                       children: [
-                        Expanded(
-                          child: Column(
-                            children: [
-                              StatusBar(),
-                              Expanded(child: ProjectorWorkspace()),
-                            ],
-                          ),
-                        ),
+                        Expanded(child: ProjectorWorkspace()),
                         ControlBar(),
                       ],
                     ),
@@ -205,110 +206,117 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
 
     return MacMenuBar(
       child: Shortcuts(
-      shortcuts: {
-        const SingleActivator(LogicalKeyboardKey.keyN, control: true):
-            const _NewProjectIntent(),
-        const SingleActivator(LogicalKeyboardKey.keyO, control: true):
-            const _OpenProjectIntent(),
-        const SingleActivator(LogicalKeyboardKey.keyS, control: true):
-            const _SaveProjectIntent(),
-        const SingleActivator(LogicalKeyboardKey.keyS, control: true, shift: true):
-            const _SaveAsProjectIntent(),
-        const SingleActivator(LogicalKeyboardKey.keyQ, control: true):
-            const _ExitIntent(),
-        const SingleActivator(LogicalKeyboardKey.f5): const _RefreshIntent(),
-        const SingleActivator(LogicalKeyboardKey.digit1, control: true):
-            const _ShowControlsIntent(),
-        const SingleActivator(LogicalKeyboardKey.digit2, control: true):
-            const _ShowMonitoringIntent(),
-        if (Platform.isMacOS) ...<ShortcutActivator, Intent>{
-          const SingleActivator(LogicalKeyboardKey.keyN, meta: true):
+        shortcuts: {
+          const SingleActivator(LogicalKeyboardKey.keyN, control: true):
               const _NewProjectIntent(),
-          const SingleActivator(LogicalKeyboardKey.keyO, meta: true):
+          const SingleActivator(LogicalKeyboardKey.keyO, control: true):
               const _OpenProjectIntent(),
-          const SingleActivator(LogicalKeyboardKey.keyS, meta: true):
+          const SingleActivator(LogicalKeyboardKey.keyS, control: true):
               const _SaveProjectIntent(),
-          const SingleActivator(LogicalKeyboardKey.keyS, meta: true, shift: true):
-              const _SaveAsProjectIntent(),
-          const SingleActivator(LogicalKeyboardKey.keyQ, meta: true):
+          const SingleActivator(
+            LogicalKeyboardKey.keyS,
+            control: true,
+            shift: true,
+          ): const _SaveAsProjectIntent(),
+          const SingleActivator(LogicalKeyboardKey.keyQ, control: true):
               const _ExitIntent(),
-          const SingleActivator(LogicalKeyboardKey.digit1, meta: true):
+          const SingleActivator(LogicalKeyboardKey.f5): const _RefreshIntent(),
+          const SingleActivator(LogicalKeyboardKey.digit1, control: true):
               const _ShowControlsIntent(),
-          const SingleActivator(LogicalKeyboardKey.digit2, meta: true):
+          const SingleActivator(LogicalKeyboardKey.digit2, control: true):
               const _ShowMonitoringIntent(),
+          if (Platform.isMacOS) ...<ShortcutActivator, Intent>{
+            const SingleActivator(LogicalKeyboardKey.keyN, meta: true):
+                const _NewProjectIntent(),
+            const SingleActivator(LogicalKeyboardKey.keyO, meta: true):
+                const _OpenProjectIntent(),
+            const SingleActivator(LogicalKeyboardKey.keyS, meta: true):
+                const _SaveProjectIntent(),
+            const SingleActivator(
+              LogicalKeyboardKey.keyS,
+              meta: true,
+              shift: true,
+            ): const _SaveAsProjectIntent(),
+            const SingleActivator(LogicalKeyboardKey.keyQ, meta: true):
+                const _ExitIntent(),
+            const SingleActivator(LogicalKeyboardKey.digit1, meta: true):
+                const _ShowControlsIntent(),
+            const SingleActivator(LogicalKeyboardKey.digit2, meta: true):
+                const _ShowMonitoringIntent(),
+          },
         },
-      },
-      child: Actions(
-        actions: {
-          _NewProjectIntent: CallbackAction<_NewProjectIntent>(
-            onInvoke: (_) async {
-              if (!await TopMenuBar.confirmUnsavedChanges(context, ref)) {
+        child: Actions(
+          actions: {
+            _NewProjectIntent: CallbackAction<_NewProjectIntent>(
+              onInvoke: (_) async {
+                if (!await TopMenuBar.confirmUnsavedChanges(context, ref)) {
+                  return null;
+                }
+                projectNotifier.newProject();
                 return null;
-              }
-              projectNotifier.newProject();
-              return null;
-            },
-          ),
-          _OpenProjectIntent: CallbackAction<_OpenProjectIntent>(
-            onInvoke: (_) async {
-              if (!await TopMenuBar.confirmUnsavedChanges(context, ref)) {
+              },
+            ),
+            _OpenProjectIntent: CallbackAction<_OpenProjectIntent>(
+              onInvoke: (_) async {
+                if (!await TopMenuBar.confirmUnsavedChanges(context, ref)) {
+                  return null;
+                }
+                await projectNotifier.pickAndOpenProject();
                 return null;
-              }
-              await projectNotifier.pickAndOpenProject();
-              return null;
-            },
-          ),
-          _SaveProjectIntent: CallbackAction<_SaveProjectIntent>(
-            onInvoke: (_) async {
-              await projectNotifier.saveProject();
-              return null;
-            },
-          ),
-          _SaveAsProjectIntent: CallbackAction<_SaveAsProjectIntent>(
-            onInvoke: (_) async {
-              await projectNotifier.saveProjectAs();
-              return null;
-            },
-          ),
-          _ExitIntent: CallbackAction<_ExitIntent>(
-            onInvoke: (_) async {
-              if (!await TopMenuBar.confirmUnsavedChanges(context, ref)) {
+              },
+            ),
+            _SaveProjectIntent: CallbackAction<_SaveProjectIntent>(
+              onInvoke: (_) async {
+                await projectNotifier.saveProject();
                 return null;
-              }
-              await windowManager.destroy();
-              return null;
-            },
-          ),
-          _RefreshIntent: CallbackAction<_RefreshIntent>(
-            onInvoke: (_) {
-              workspaceNotifier.refreshAll();
-              return null;
-            },
-          ),
-          _ShowControlsIntent: CallbackAction<_ShowControlsIntent>(
-            onInvoke: (_) {
-              ref.read(appSettingsProvider.notifier).setMonitoringView(false);
-              return null;
-            },
-          ),
-          _ShowMonitoringIntent: CallbackAction<_ShowMonitoringIntent>(
-            onInvoke: (_) {
-              ref.read(appSettingsProvider.notifier).setMonitoringView(true);
-              return null;
-            },
-          ),
-        },
-        child: Scaffold(
-          backgroundColor: Theme.of(context).colorScheme.surface,
-          body: Column(
-            children: [
-              if (!Platform.isMacOS) const TopMenuBar(),
-              const MainToolbar(),
-              const Expanded(child: _WorkspaceBody()),
-            ],
+              },
+            ),
+            _SaveAsProjectIntent: CallbackAction<_SaveAsProjectIntent>(
+              onInvoke: (_) async {
+                await projectNotifier.saveProjectAs();
+                return null;
+              },
+            ),
+            _ExitIntent: CallbackAction<_ExitIntent>(
+              onInvoke: (_) async {
+                if (!await TopMenuBar.confirmUnsavedChanges(context, ref)) {
+                  return null;
+                }
+                await windowManager.destroy();
+                return null;
+              },
+            ),
+            _RefreshIntent: CallbackAction<_RefreshIntent>(
+              onInvoke: (_) {
+                workspaceNotifier.refreshAll();
+                return null;
+              },
+            ),
+            _ShowControlsIntent: CallbackAction<_ShowControlsIntent>(
+              onInvoke: (_) {
+                ref.read(appSettingsProvider.notifier).setMonitoringView(false);
+                return null;
+              },
+            ),
+            _ShowMonitoringIntent: CallbackAction<_ShowMonitoringIntent>(
+              onInvoke: (_) {
+                ref.read(appSettingsProvider.notifier).setMonitoringView(true);
+                return null;
+              },
+            ),
+          },
+          child: Scaffold(
+            backgroundColor: Theme.of(context).colorScheme.surface,
+            body: Column(
+              children: [
+                if (!Platform.isMacOS) const TopMenuBar(),
+                const MainToolbar(),
+                const Expanded(child: _WorkspaceBody()),
+              ],
+            ),
           ),
         ),
       ),
-    ));
+    );
   }
 }

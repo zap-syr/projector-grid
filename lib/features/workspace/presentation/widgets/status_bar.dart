@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../domain/projector_node.dart';
+import '../providers/poll_status_provider.dart';
 import '../providers/workspace_provider.dart';
 
 class StatusBar extends ConsumerWidget {
@@ -9,11 +11,14 @@ class StatusBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final nodes = ref.watch(workspaceProvider);
+    final pollStatus = ref.watch(pollStatusProvider);
     final total = nodes.length;
     final online = nodes
-        .where((n) =>
-          n.connectionStatus == ConnectionStatus.connected ||
-          n.connectionStatus == ConnectionStatus.unprotected)
+        .where(
+          (n) =>
+              n.connectionStatus == ConnectionStatus.connected ||
+              n.connectionStatus == ConnectionStatus.unprotected,
+        )
         .length;
     final offline = nodes
         .where((n) => n.connectionStatus == ConnectionStatus.offline)
@@ -26,7 +31,7 @@ class StatusBar extends ConsumerWidget {
       height: 36,
       padding: const EdgeInsets.symmetric(horizontal: 16.0),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        color: Theme.of(context).colorScheme.surfaceContainerHigh,
         border: Border(
           bottom: BorderSide(
             color: Theme.of(context).dividerColor.withValues(alpha: 0.2),
@@ -46,8 +51,51 @@ class StatusBar extends ConsumerWidget {
           _StatusItem(label: 'Offline', count: offline, color: Colors.grey),
           const SizedBox(width: 16),
           _StatusItem(label: 'Warning', count: warnings, color: Colors.orange),
+          const Spacer(),
+          _RefreshStatusItem(pollStatus: pollStatus),
         ],
       ),
+    );
+  }
+}
+
+class _RefreshStatusItem extends StatelessWidget {
+  final PollStatus pollStatus;
+
+  const _RefreshStatusItem({required this.pollStatus});
+
+  static String _formatTime(DateTime t) {
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${two(t.hour)}:${two(t.minute)}:${two(t.second)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final textStyle = Theme.of(context).textTheme.bodySmall;
+    final label = pollStatus.isPolling
+        ? 'Refreshing…'
+        : pollStatus.lastCompletedAt != null
+        ? 'Last refresh: ${_formatTime(pollStatus.lastCompletedAt!)}'
+        : 'Last refresh: —';
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (pollStatus.isPolling)
+          const SizedBox(
+            width: 12,
+            height: 12,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          )
+        else
+          Icon(
+            Icons.schedule,
+            size: 14,
+            color: textStyle?.color?.withValues(alpha: 0.7),
+          ),
+        const SizedBox(width: 6),
+        Text(label, style: textStyle),
+      ],
     );
   }
 }

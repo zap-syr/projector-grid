@@ -1,13 +1,16 @@
 import 'dart:math';
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+
 import '../../domain/projector_node.dart';
 import '../../domain/projector_group.dart';
 import '../../domain/log_event.dart';
 import '../../../../core/services/panasonic_protocol_service.dart';
 import 'event_log_provider.dart';
 import 'selection_provider.dart';
+import 'poll_status_provider.dart';
 
 part 'workspace_provider.g.dart';
 
@@ -52,19 +55,23 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
 
   /// Strips transient fields so snapshots only capture user-editable state.
   List<ProjectorNode> _stripTransient(List<ProjectorNode> nodes) {
-    return nodes.map((n) => n.copyWith(
-      connectionStatus: ConnectionStatus.offline,
-      powerStatus: PowerStatus.standby,
-      shutterStatus: ShutterStatus.closed,
-      serialNumber: '-',
-      runtime: '-',
-      intakeTemp: '-',
-      exhaustTemp: '-',
-      acVoltage: '-',
-      errors: '-',
-      input: '-',
-      signal: '-',
-    )).toList();
+    return nodes
+        .map(
+          (n) => n.copyWith(
+            connectionStatus: ConnectionStatus.offline,
+            powerStatus: PowerStatus.standby,
+            shutterStatus: ShutterStatus.closed,
+            serialNumber: '-',
+            runtime: '-',
+            intakeTemp: '-',
+            exhaustTemp: '-',
+            acVoltage: '-',
+            errors: '-',
+            input: '-',
+            signal: '-',
+          ),
+        )
+        .toList();
   }
 
   _WorkspaceSnapshot _createSnapshot() {
@@ -162,13 +169,17 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     _saveSnapshot();
     _groups = _groups.where((g) => g.id != groupId).toList();
     // Unassign nodes that belonged to the deleted group.
-    state = state.map((n) => n.groupId == groupId ? n.copyWith(groupId: null) : n).toList();
+    state = state
+        .map((n) => n.groupId == groupId ? n.copyWith(groupId: null) : n)
+        .toList();
   }
 
   void assignNodesToGroup(List<String> nodeIds, String? groupId) {
     _saveSnapshot();
     final idSet = nodeIds.toSet();
-    state = state.map((n) => idSet.contains(n.id) ? n.copyWith(groupId: groupId) : n).toList();
+    state = state
+        .map((n) => idSet.contains(n.id) ? n.copyWith(groupId: groupId) : n)
+        .toList();
   }
 
   /// Invoked whenever projector connection/status state changes (used by OSC to push status).
@@ -182,7 +193,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
 
   void _startPolling({int seconds = 60}) {
     _pollingIntervalSeconds = seconds;
-    _pollingGeneration++;          // invalidates any in-flight poll's reschedule
+    _pollingGeneration++; // invalidates any in-flight poll's reschedule
     _pollingTimer?.cancel();
     _pollingTimer = null;
     _scheduleNextPoll(_pollingGeneration);
@@ -219,32 +230,43 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
   /// *different* nodes' polls with each other, which is what keeps a full
   /// cycle from taking N-times-longer as the projector count grows.
   Future<void> _pollAllProjectors() async {
-    // We must poll ALL nodes, not just connected ones, so offline nodes can reconnect.
-    // Also, we must not take a static copy of state into a loop, because state might change
-    // while we are awaiting. We should iterate over the current IDs.
-    final currentIds = state.map((n) => n.id).toList();
+    ref.read(pollStatusProvider.notifier).started();
+    try {
+      // We must poll ALL nodes, not just connected ones, so offline nodes can reconnect.
+      // Also, we must not take a static copy of state into a loop, because state might change
+      // while we are awaiting. We should iterate over the current IDs.
+      final currentIds = state.map((n) => n.id).toList();
 
-    for (var start = 0; start < currentIds.length; start += _networkBatchSize) {
-      final batchIds = currentIds.sublist(
-        start,
-        (start + _networkBatchSize).clamp(0, currentIds.length),
-      );
-      await Future.wait(batchIds.map((id) async {
-        // Find the latest version of the node just before polling
-        final nodeIndex = state.indexWhere((n) => n.id == id);
-        if (nodeIndex == -1) return; // Node was deleted
+      for (
+        var start = 0;
+        start < currentIds.length;
+        start += _networkBatchSize
+      ) {
+        final batchIds = currentIds.sublist(
+          start,
+          (start + _networkBatchSize).clamp(0, currentIds.length),
+        );
+        await Future.wait(
+          batchIds.map((id) async {
+            // Find the latest version of the node just before polling
+            final nodeIndex = state.indexWhere((n) => n.id == id);
+            if (nodeIndex == -1) return; // Node was deleted
 
-        final node = state[nodeIndex];
+            final node = state[nodeIndex];
 
-        // Offline nodes get a cheap TCP check first (1.5s) before full probe.
-        // All other states (connected, unprotected, unauthorized) go straight to
-        // _pollSingleProjector so no intermediate state is written before auth is confirmed.
-        if (node.connectionStatus == ConnectionStatus.offline) {
-          await _checkAndSetNodeStatus(node.id, node.ipAddress, node.port);
-        } else {
-          await _pollSingleProjector(node);
-        }
-      }));
+            // Offline nodes get a cheap TCP check first (1.5s) before full probe.
+            // All other states (connected, unprotected, unauthorized) go straight to
+            // _pollSingleProjector so no intermediate state is written before auth is confirmed.
+            if (node.connectionStatus == ConnectionStatus.offline) {
+              await _checkAndSetNodeStatus(node.id, node.ipAddress, node.port);
+            } else {
+              await _pollSingleProjector(node);
+            }
+          }),
+        );
+      }
+    } finally {
+      ref.read(pollStatusProvider.notifier).completed();
     }
   }
 
@@ -253,39 +275,54 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     final oldErrors = node.errors;
 
     final probe = await _protocolService.probeProjector(
-      node.ipAddress, node.port, node.login, node.password,
+      node.ipAddress,
+      node.port,
+      node.login,
+      node.password,
     );
 
     if (probe == ProbeResult.unauthorized) {
       if (oldStatus != ConnectionStatus.unauthorized) {
-        _logEvent(LogEvent(
-          severity: LogSeverity.error,
-          type: LogEventType.connectivity,
-          message: 'Authentication failed',
-          projectorIp: node.ipAddress,
-          projectorName: node.name,
-        ));
+        _logEvent(
+          LogEvent(
+            severity: LogSeverity.error,
+            type: LogEventType.connectivity,
+            message: 'Authentication failed',
+            projectorIp: node.ipAddress,
+            projectorName: node.name,
+          ),
+        );
       }
-      state = state.map((n) => n.id == node.id
-          ? n.copyWith(connectionStatus: ConnectionStatus.unauthorized)
-          : n).toList();
+      state = state
+          .map(
+            (n) => n.id == node.id
+                ? n.copyWith(connectionStatus: ConnectionStatus.unauthorized)
+                : n,
+          )
+          .toList();
       _notifyStateChanged();
       return;
     }
 
     if (probe == ProbeResult.offline) {
       if (oldStatus != ConnectionStatus.offline) {
-        _logEvent(LogEvent(
-          severity: LogSeverity.warning,
-          type: LogEventType.connectivity,
-          message: 'Went offline',
-          projectorIp: node.ipAddress,
-          projectorName: node.name,
-        ));
+        _logEvent(
+          LogEvent(
+            severity: LogSeverity.warning,
+            type: LogEventType.connectivity,
+            message: 'Went offline',
+            projectorIp: node.ipAddress,
+            projectorName: node.name,
+          ),
+        );
       }
-      state = state.map((n) => n.id == node.id
-          ? n.copyWith(connectionStatus: ConnectionStatus.offline)
-          : n).toList();
+      state = state
+          .map(
+            (n) => n.id == node.id
+                ? n.copyWith(connectionStatus: ConnectionStatus.offline)
+                : n,
+          )
+          .toList();
       _notifyStateChanged();
       return;
     }
@@ -304,13 +341,15 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     if (telemetry != null) {
       if (oldStatus == ConnectionStatus.offline ||
           oldStatus == ConnectionStatus.unauthorized) {
-        _logEvent(LogEvent(
-          severity: LogSeverity.success,
-          type: LogEventType.connectivity,
-          message: 'Came online',
-          projectorIp: node.ipAddress,
-          projectorName: node.name,
-        ));
+        _logEvent(
+          LogEvent(
+            severity: LogSeverity.success,
+            type: LogEventType.connectivity,
+            message: 'Came online',
+            projectorIp: node.ipAddress,
+            projectorName: node.name,
+          ),
+        );
       }
 
       state = state.map((n) {
@@ -334,13 +373,17 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
           }
 
           // Parse Signal
-          String signal = (telemetry['signal'] as String).replaceAll('NSGS1=', '').trim();
+          String signal = (telemetry['signal'] as String)
+              .replaceAll('NSGS1=', '')
+              .trim();
           if (signal == 'ER401' || signal == 'NO SIGNAL' || signal.isEmpty) {
             signal = 'NO SIGNAL';
           }
 
           // Parse Runtime
-          String runtimeRaw = (telemetry['runtime'] as String).replaceAll('RTMS1=', '').trim();
+          String runtimeRaw = (telemetry['runtime'] as String)
+              .replaceAll('RTMS1=', '')
+              .trim();
           String runtime = runtimeRaw.isEmpty || runtimeRaw == 'ER401'
               ? '-'
               : '${runtimeRaw}H';
@@ -361,7 +404,9 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
           }
 
           // Parse Voltage
-          String voltageRaw = (telemetry['acVoltage'] as String).replaceAll('VMOI2=', '').trim();
+          String voltageRaw = (telemetry['acVoltage'] as String)
+              .replaceAll('VMOI2=', '')
+              .trim();
           String voltage = '-';
           if (voltageRaw != 'ER401' && voltageRaw.length > 3) {
             voltage = '${voltageRaw.substring(3)}V';
@@ -370,7 +415,9 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
           }
 
           // Parse Errors
-          String errorsRaw = (telemetry['errors'] as String).replaceAll('ERRS2=', '').trim();
+          String errorsRaw = (telemetry['errors'] as String)
+              .replaceAll('ERRS2=', '')
+              .trim();
           String errors = errorsRaw.isEmpty ? 'NO ERRORS' : errorsRaw;
 
           return n.copyWith(
@@ -404,24 +451,28 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
       if (updatedNode.errors != 'NO ERRORS' &&
           updatedNode.errors != '-' &&
           updatedNode.errors != oldErrors) {
-        _logEvent(LogEvent(
-          severity: LogSeverity.error,
-          type: LogEventType.hardware,
-          message: 'Hardware error: ${updatedNode.errors}',
-          projectorIp: node.ipAddress,
-          projectorName: node.name,
-        ));
+        _logEvent(
+          LogEvent(
+            severity: LogSeverity.error,
+            type: LogEventType.hardware,
+            message: 'Hardware error: ${updatedNode.errors}',
+            projectorIp: node.ipAddress,
+            projectorName: node.name,
+          ),
+        );
       }
     } else {
       // If telemetry fails, mark as offline
       if (oldStatus != ConnectionStatus.offline) {
-        _logEvent(LogEvent(
-          severity: LogSeverity.warning,
-          type: LogEventType.connectivity,
-          message: 'Went offline',
-          projectorIp: node.ipAddress,
-          projectorName: node.name,
-        ));
+        _logEvent(
+          LogEvent(
+            severity: LogSeverity.warning,
+            type: LogEventType.connectivity,
+            message: 'Went offline',
+            projectorIp: node.ipAddress,
+            projectorName: node.name,
+          ),
+        );
       }
       state = state.map((n) {
         if (n.id == node.id) {
@@ -527,11 +578,16 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
   /// Sends [cmd] to every reachable node in [nodes] concurrently in batches
   /// of [_networkBatchSize], rather than awaiting each one's TCP round-trip
   /// in sequence.
-  Future<void> _dispatchToNodes(Iterable<ProjectorNode> nodes, String cmd) async {
+  Future<void> _dispatchToNodes(
+    Iterable<ProjectorNode> nodes,
+    String cmd,
+  ) async {
     final targets = nodes
-        .where((n) =>
-            n.connectionStatus == ConnectionStatus.connected ||
-            n.connectionStatus == ConnectionStatus.unprotected)
+        .where(
+          (n) =>
+              n.connectionStatus == ConnectionStatus.connected ||
+              n.connectionStatus == ConnectionStatus.unprotected,
+        )
         .toList();
 
     for (var start = 0; start < targets.length; start += _networkBatchSize) {
@@ -539,46 +595,64 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
         start,
         (start + _networkBatchSize).clamp(0, targets.length),
       );
-      await Future.wait(batch.map((node) async {
-        final success = await _protocolService.sendCommand(
-          node.ipAddress, node.port, node.login, node.password, cmd,
-        );
-        _logEvent(LogEvent(
-          severity: success ? LogSeverity.info : LogSeverity.error,
-          type: LogEventType.command,
-          message: success
-              ? 'Sent: ${commandLabel(cmd)}'
-              : 'Failed: ${commandLabel(cmd)}',
-          projectorIp: node.ipAddress,
-          projectorName: node.name,
-        ));
-        if (success) {
-          _applyOptimisticUpdate(node.id, cmd);
-        }
-      }));
+      await Future.wait(
+        batch.map((node) async {
+          final success = await _protocolService.sendCommand(
+            node.ipAddress,
+            node.port,
+            node.login,
+            node.password,
+            cmd,
+          );
+          _logEvent(
+            LogEvent(
+              severity: success ? LogSeverity.info : LogSeverity.error,
+              type: LogEventType.command,
+              message: success
+                  ? 'Sent: ${commandLabel(cmd)}'
+                  : 'Failed: ${commandLabel(cmd)}',
+              projectorIp: node.ipAddress,
+              projectorName: node.name,
+            ),
+          );
+          if (success) {
+            _applyOptimisticUpdate(node.id, cmd);
+          }
+        }),
+      );
     }
   }
 
   // Helper to fetch a single specific telemetry string without hitting the entire sequence
-  Future<void> _pollSpecificTelemetry(ProjectorNode initialNode, String command) async {
+  Future<void> _pollSpecificTelemetry(
+    ProjectorNode initialNode,
+    String command,
+  ) async {
     // Re-find the node to ensure we have the most current credentials/IP
     final idx = state.indexWhere((n) => n.id == initialNode.id);
     if (idx == -1) return;
     final node = state[idx];
 
     final response = await _protocolService.sendRawCommand(
-      node.ipAddress, 
-      node.port, 
-      node.login, 
-      node.password, 
-      command
+      node.ipAddress,
+      node.port,
+      node.login,
+      node.password,
+      command,
     );
 
-    if (response != null && response != 'Timeout' && !response.contains('Error') && !response.contains('ERRA')) {
+    if (response != null &&
+        response != 'Timeout' &&
+        !response.contains('Error') &&
+        !response.contains('ERRA')) {
       state = state.map((n) {
         if (n.id == node.id) {
           if (command == 'QSH') {
-             return n.copyWith(shutterStatus: response == '1' ? ShutterStatus.closed : ShutterStatus.open);
+            return n.copyWith(
+              shutterStatus: response == '1'
+                  ? ShutterStatus.closed
+                  : ShutterStatus.open,
+            );
           }
           // Add other specific telemetry command parses here if needed later
         }
@@ -594,7 +668,11 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
 
   void _applyOptimisticUpdate(String nodeId, String cmd) {
     if (cmd == 'PON') {
-      state = state.map((n) => n.id == nodeId ? n.copyWith(powerStatus: PowerStatus.on) : n).toList();
+      state = state
+          .map(
+            (n) => n.id == nodeId ? n.copyWith(powerStatus: PowerStatus.on) : n,
+          )
+          .toList();
       _notifyStateChanged();
       final node = state.where((n) => n.id == nodeId).firstOrNull;
       if (node != null) {
@@ -606,7 +684,13 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
         _optimisticTimers.add(t);
       }
     } else if (cmd == 'POF') {
-      state = state.map((n) => n.id == nodeId ? n.copyWith(powerStatus: PowerStatus.standby) : n).toList();
+      state = state
+          .map(
+            (n) => n.id == nodeId
+                ? n.copyWith(powerStatus: PowerStatus.standby)
+                : n,
+          )
+          .toList();
       _notifyStateChanged();
       final node = state.where((n) => n.id == nodeId).firstOrNull;
       if (node != null) {
@@ -618,10 +702,22 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
         _optimisticTimers.add(t);
       }
     } else if (cmd == 'OSH:0') {
-      state = state.map((n) => n.id == nodeId ? n.copyWith(shutterStatus: ShutterStatus.open) : n).toList();
+      state = state
+          .map(
+            (n) => n.id == nodeId
+                ? n.copyWith(shutterStatus: ShutterStatus.open)
+                : n,
+          )
+          .toList();
       _notifyStateChanged();
     } else if (cmd == 'OSH:1') {
-      state = state.map((n) => n.id == nodeId ? n.copyWith(shutterStatus: ShutterStatus.closed) : n).toList();
+      state = state
+          .map(
+            (n) => n.id == nodeId
+                ? n.copyWith(shutterStatus: ShutterStatus.closed)
+                : n,
+          )
+          .toList();
       _notifyStateChanged();
     }
   }
@@ -630,7 +726,8 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
   static const double _workspaceHeight = 3000.0;
 
   static double _clampX(double x) => x.clamp(0.0, _workspaceWidth - _cardWidth);
-  static double _clampY(double y) => y.clamp(0.0, _workspaceHeight - _cardHeight);
+  static double _clampY(double y) =>
+      y.clamp(0.0, _workspaceHeight - _cardHeight);
 
   void setNodePositionsFromDrag(
     String id,
@@ -757,7 +854,10 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
   }
 
   void selectNodesInGroup(String groupId) {
-    final ids = state.where((n) => n.groupId == groupId).map((n) => n.id).toSet();
+    final ids = state
+        .where((n) => n.groupId == groupId)
+        .map((n) => n.id)
+        .toSet();
     ref.read(selectionProvider.notifier).set(ids);
   }
 
