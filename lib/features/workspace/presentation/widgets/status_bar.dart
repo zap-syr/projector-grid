@@ -48,7 +48,7 @@ class StatusBar extends ConsumerWidget {
           const SizedBox(width: 16),
           _StatusItem(label: 'Online', count: online, color: Colors.green),
           const SizedBox(width: 16),
-          _StatusItem(label: 'Offline', count: offline, color: Colors.grey),
+          _StatusItem(label: 'Offline', count: offline, color: Colors.red),
           const SizedBox(width: 16),
           _StatusItem(label: 'Warning', count: warnings, color: Colors.orange),
           const Spacer(),
