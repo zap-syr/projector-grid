@@ -230,6 +230,11 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
   /// *different* nodes' polls with each other, which is what keeps a full
   /// cycle from taking N-times-longer as the projector count grows.
   Future<void> _pollAllProjectors() async {
+    // Guards against F5/Refresh overlapping the auto-poll timer (or a
+    // second auto-poll firing before a slow one finishes) — without this,
+    // two full poll cycles could run concurrently over every node.
+    if (ref.read(pollStatusProvider).isPolling) return;
+
     ref.read(pollStatusProvider.notifier).started();
     try {
       // We must poll ALL nodes, not just connected ones, so offline nodes can reconnect.

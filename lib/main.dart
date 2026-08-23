@@ -51,8 +51,17 @@ void main() async {
 /// Resize/move events fire continuously while the user is actively dragging,
 /// so writes are debounced rather than saved on every event. Close is
 /// special-cased: `setPreventClose(true)` above holds the window open long
-/// enough for one final synchronous save before we destroy it ourselves,
-/// otherwise a resize immediately followed by closing could be lost.
+/// enough for one final synchronous save on close.
+///
+/// This listener deliberately only ever saves — it never calls
+/// `windowManager.destroy()` itself. `_MainWorkspaceScreenState.onWindowClose`
+/// (main_workspace_screen.dart) is the sole place that decides whether the
+/// window is actually allowed to close, since it shows an unsaved-changes
+/// confirmation dialog first. `window_manager` dispatches a close event to
+/// every registered listener without awaiting any of them, so if this
+/// listener also destroyed the window, its much faster save-only chain
+/// could win the race and close the app before that confirmation dialog
+/// ever has a chance to appear — silently discarding unsaved changes.
 class _WindowGeometryPersistence with WindowListener {
   Timer? _debounce;
 
@@ -91,6 +100,5 @@ class _WindowGeometryPersistence with WindowListener {
   void onWindowClose() async {
     _debounce?.cancel();
     await _saveNow();
-    await windowManager.destroy();
   }
 }
