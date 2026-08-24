@@ -156,17 +156,48 @@ class _WorkspaceBodyState extends ConsumerState<_WorkspaceBody> {
 
 class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
     with WindowListener {
+  static const _quitChannel = MethodChannel('projector_grid/quit');
+
   @override
   void initState() {
     super.initState();
     windowManager.addListener(this);
     windowManager.setPreventClose(true);
+    if (Platform.isMacOS) {
+      _quitChannel.setMethodCallHandler(_handleQuitChannelCall);
+    }
   }
 
   @override
   void dispose() {
     windowManager.removeListener(this);
+    if (Platform.isMacOS) {
+      _quitChannel.setMethodCallHandler(null);
+    }
     super.dispose();
+  }
+
+  /// Answers AppDelegate's `applicationShouldTerminate` — invoked when the
+  /// app is quit via the system menu bar (or its Cmd+Q equivalent when no
+  /// Flutter view has focus), which bypasses `onWindowClose` below entirely.
+  Future<bool> _handleQuitChannelCall(MethodCall call) async {
+    if (call.method != 'confirmQuit') return true;
+    if (!mounted) return true;
+    return TopMenuBar.confirmUnsavedChanges(context, ref);
+  }
+
+  /// `windowManager.destroy()` always calls `NSApp.terminate(nil)` under the
+  /// hood, which re-enters AppDelegate's `applicationShouldTerminate` on
+  /// macOS. Call this right before `destroy()` in a path that already ran
+  /// its own confirmation, so that re-entry doesn't prompt a second time.
+  static Future<void> _markTerminationApproved() async {
+    if (!Platform.isMacOS) return;
+    try {
+      await _quitChannel.invokeMethod('markTerminationApproved');
+    } catch (_) {
+      // Best-effort: if this doesn't land, applicationShouldTerminate falls
+      // back to asking Flutter again via confirmQuit.
+    }
   }
 
   static const _appName = 'Projector Grid';
@@ -193,6 +224,7 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
     }
     final canProceed = await TopMenuBar.confirmUnsavedChanges(context, ref);
     if (canProceed) {
+      await _markTerminationApproved();
       await windowManager.destroy();
     }
   }
@@ -282,6 +314,7 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
                 if (!await TopMenuBar.confirmUnsavedChanges(context, ref)) {
                   return null;
                 }
+                await _markTerminationApproved();
                 await windowManager.destroy();
                 return null;
               },
