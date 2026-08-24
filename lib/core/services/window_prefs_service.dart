@@ -33,9 +33,15 @@ class WindowPrefs {
   };
 
   /// Returns null on missing/malformed fields, or on values sane-checked to
-  /// be corrupt (e.g. a wildly negative position) — this is a basic sanity
-  /// clamp, not real multi-monitor validation, so a saved position from a
-  /// monitor that's since been disconnected can still open off-screen.
+  /// be corrupt (e.g. an absurdly large position). This only guards against
+  /// clearly-broken data — real multi-monitor validation (is this position
+  /// actually on a connected display) happens downstream, against live
+  /// display bounds, via `_isPositionOnScreen` in `main.dart`. The x/y range
+  /// is deliberately wide and symmetric (not just barely-negative) because a
+  /// monitor positioned left of or above the primary display — a completely
+  /// normal setup — produces legitimately large negative coordinates; a
+  /// tight lower bound here would reject those before the real per-display
+  /// check downstream ever got a chance to evaluate them correctly.
   static WindowPrefs? fromJson(Map<String, dynamic> json) {
     final width = (json['width'] as num?)?.toDouble();
     final height = (json['height'] as num?)?.toDouble();
@@ -46,8 +52,8 @@ class WindowPrefs {
     }
     if (width < 400 ||
         height < 300 ||
-        x < -100 ||
-        y < -100 ||
+        x < -20000 ||
+        y < -20000 ||
         x > 20000 ||
         y > 20000) {
       return null;
