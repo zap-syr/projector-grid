@@ -409,7 +409,11 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
                     'VXX:LNSI2=+00200',
                   ),
 
-                  // ── Lens Shift — slow speed (Ctrl + arrow) ───────────────────
+                  // ── Lens Shift — slow speed (Ctrl + arrow; also Cmd + arrow
+                  // on macOS, matching how every other Ctrl-bound shortcut in
+                  // this map registers a meta variant too, and how the
+                  // Keyboard Shortcuts dialog already labels this row ⌘ on
+                  // macOS) ───────────────────
                   const SingleActivator(
                     LogicalKeyboardKey.arrowUp,
                     control: true,
@@ -431,6 +435,30 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
                   const SingleActivator(
                     LogicalKeyboardKey.arrowRight,
                     control: true,
+                  ): const SendCommandIntent(
+                    'VXX:LNSI2=+00000',
+                  ),
+                  const SingleActivator(
+                    LogicalKeyboardKey.arrowUp,
+                    meta: true,
+                  ): const SendCommandIntent(
+                    'VXX:LNSI3=+00000',
+                  ),
+                  const SingleActivator(
+                    LogicalKeyboardKey.arrowDown,
+                    meta: true,
+                  ): const SendCommandIntent(
+                    'VXX:LNSI3=+00001',
+                  ),
+                  const SingleActivator(
+                    LogicalKeyboardKey.arrowLeft,
+                    meta: true,
+                  ): const SendCommandIntent(
+                    'VXX:LNSI2=+00001',
+                  ),
+                  const SingleActivator(
+                    LogicalKeyboardKey.arrowRight,
+                    meta: true,
                   ): const SendCommandIntent(
                     'VXX:LNSI2=+00000',
                   ),
