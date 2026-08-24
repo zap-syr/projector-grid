@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:screen_retriever/screen_retriever.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'app/app.dart';
@@ -9,13 +10,46 @@ import 'core/services/window_prefs_service.dart';
 
 import 'dart:io' show Platform;
 
+/// Whether a window at [prefs]'s saved geometry would land visibly on one of
+/// the currently-connected displays.
+///
+/// `WindowPrefs.fromJson`'s own sanity clamp only rejects wildly-off-range
+/// numbers, not a position that's valid but on a display that's since been
+/// disconnected (e.g. an external monitor unplugged since last launch) — so
+/// this is checked separately, against live monitor bounds, right before the
+/// saved position would actually be applied. Fails open (returns true) on
+/// any platform-call error, so a transient screen_retriever failure can't
+/// discard otherwise-valid saved prefs.
+Future<bool> _isPositionOnScreen(WindowPrefs prefs) async {
+  try {
+    final windowRect = Rect.fromLTWH(
+      prefs.x,
+      prefs.y,
+      prefs.width,
+      prefs.height,
+    );
+    final displays = await screenRetriever.getAllDisplays();
+    for (final display in displays) {
+      final position = display.visiblePosition ?? Offset.zero;
+      final size = display.visibleSize ?? display.size;
+      if (windowRect.overlaps(position & size)) return true;
+    }
+    return false;
+  } catch (_) {
+    return true;
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
     await windowManager.ensureInitialized();
 
-    final savedPrefs = WindowPrefsService.load();
+    var savedPrefs = WindowPrefsService.load();
+    if (savedPrefs != null && !await _isPositionOnScreen(savedPrefs)) {
+      savedPrefs = null;
+    }
 
     final windowOptions = WindowOptions(
       size: savedPrefs != null
@@ -32,9 +66,10 @@ void main() async {
     await windowManager.setPreventClose(true);
 
     windowManager.waitUntilReadyToShow(windowOptions, () async {
-      if (savedPrefs != null) {
-        await windowManager.setPosition(Offset(savedPrefs.x, savedPrefs.y));
-        if (savedPrefs.isMaximized) {
+      final prefs = savedPrefs;
+      if (prefs != null) {
+        await windowManager.setPosition(Offset(prefs.x, prefs.y));
+        if (prefs.isMaximized) {
           await windowManager.maximize();
         }
       }
