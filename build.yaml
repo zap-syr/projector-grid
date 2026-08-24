@@ -1,6 +1,0 @@
-targets:
-  $default:
-    builders:
-      freezed:
-        options:
-          make_collections_unmodifiable: false

@@ -6,7 +6,7 @@ enum ScheduleTarget { all, group }
 
 enum ScheduleType { once, daily, weekly }
 
-@freezed
+@Freezed(makeCollectionsUnmodifiable: false)
 abstract class ScheduledTask with _$ScheduledTask {
   const factory ScheduledTask({
     required String id,
