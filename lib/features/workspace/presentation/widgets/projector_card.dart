@@ -1,14 +1,15 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/projector_node.dart';
 import '../../domain/projector_group.dart';
+import '../providers/selection_provider.dart';
 
-class ProjectorCard extends StatefulWidget {
+class ProjectorCard extends ConsumerStatefulWidget {
   final ProjectorNode node;
   final ProjectorGroup? group;
-  final bool isSelected;
   final bool isDragging;
   final double zoom;
   final VoidCallback onTap;
@@ -27,7 +28,6 @@ class ProjectorCard extends StatefulWidget {
     super.key,
     required this.node,
     this.group,
-    required this.isSelected,
     required this.isDragging,
     required this.zoom,
     required this.onTap,
@@ -44,10 +44,10 @@ class ProjectorCard extends StatefulWidget {
   });
 
   @override
-  State<ProjectorCard> createState() => _ProjectorCardState();
+  ConsumerState<ProjectorCard> createState() => _ProjectorCardState();
 }
 
-class _ProjectorCardState extends State<ProjectorCard> {
+class _ProjectorCardState extends ConsumerState<ProjectorCard> {
   final _menuController = MenuController();
   bool _isHovered = false;
   double? _lastZoom;
@@ -63,6 +63,9 @@ class _ProjectorCardState extends State<ProjectorCard> {
     final group = widget.group;
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final isSelected = ref.watch(
+      selectionProvider.select((ids) => ids.contains(node.id)),
+    );
 
     // Status colors
     final powerColor = node.powerStatus == PowerStatus.on
@@ -183,17 +186,17 @@ class _ProjectorCardState extends State<ProjectorCard> {
                     duration: const Duration(milliseconds: 120),
                     width: 120,
                     height: 100,
-                    padding: EdgeInsets.all(widget.isSelected ? 0 : 1),
+                    padding: EdgeInsets.all(isSelected ? 0 : 1),
                     decoration: BoxDecoration(
                       color: colorScheme.surface,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                        color: widget.isSelected
+                        color: isSelected
                             ? colorScheme.primary
                             : (_isHovered
                                   ? colorScheme.primary.withValues(alpha: 0.85)
                                   : colorScheme.outline),
-                        width: widget.isSelected ? 2 : 1,
+                        width: isSelected ? 2 : 1,
                       ),
                       boxShadow: [
                         BoxShadow(

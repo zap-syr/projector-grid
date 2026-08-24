@@ -311,7 +311,6 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
   @override
   Widget build(BuildContext context) {
     final nodes = ref.watch(workspaceProvider);
-    final selectedIds = ref.watch(selectionProvider);
     final notifier = ref.read(workspaceProvider.notifier);
     final groups = notifier.groups;
     final groupMap = {for (var g in groups) g.id: g};
@@ -468,6 +467,7 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
                     ),
                     FocusOnNodesIntent: CallbackAction<FocusOnNodesIntent>(
                       onInvoke: (intent) {
+                        final selectedIds = ref.read(selectionProvider);
                         final targets =
                             (intent.allProjectors || selectedIds.isEmpty)
                             ? nodes
@@ -480,7 +480,7 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
                     ),
                     DeleteIntent: CallbackAction<DeleteIntent>(
                       onInvoke: (intent) async {
-                        final selectedCount = selectedIds.length;
+                        final selectedCount = ref.read(selectionProvider).length;
                         if (selectedCount == 0) return;
                         final confirm = await showDialog<bool>(
                           context: context,
@@ -668,9 +668,6 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
                                               group: node.groupId != null
                                                   ? groupMap[node.groupId]
                                                   : null,
-                                              isSelected: selectedIds.contains(
-                                                node.id,
-                                              ),
                                               isDragging:
                                                   _panStartPositions
                                                       ?.containsKey(node.id) ??
@@ -692,6 +689,9 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
                                                 if (_panStartPositions ==
                                                     null) {
                                                   notifier.saveBeforeMove();
+                                                  final selectedIds = ref.read(
+                                                    selectionProvider,
+                                                  );
                                                   final affected =
                                                       selectedIds.contains(
                                                         node.id,
@@ -763,6 +763,9 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
                                                 );
                                               },
                                               onDelete: () async {
+                                                final selectedIds = ref.read(
+                                                  selectionProvider,
+                                                );
                                                 final selectedCount =
                                                     selectedIds.length;
                                                 final isMultiDelete =
