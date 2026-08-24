@@ -1,24 +1,14 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import '../../../../core/services/app_config_dir.dart';
 import '../../domain/custom_command.dart';
 
 part 'custom_commands_provider.g.dart';
 
 @riverpod
 class CustomCommandsNotifier extends _$CustomCommandsNotifier {
-  static String get _filePath {
-    if (Platform.isWindows) {
-      final appData = Platform.environment['APPDATA'] ?? '';
-      return '$appData\\ProjectorGrid\\custom_commands.json';
-    } else if (Platform.isMacOS) {
-      final home = Platform.environment['HOME'] ?? '';
-      return '$home/Library/Application Support/ProjectorGrid/custom_commands.json';
-    } else {
-      final home = Platform.environment['HOME'] ?? '';
-      return '$home/.config/ProjectorGrid/custom_commands.json';
-    }
-  }
+  static String get _filePath => appConfigFilePath('custom_commands.json');
 
   @override
   List<CustomCommand> build() => _load();

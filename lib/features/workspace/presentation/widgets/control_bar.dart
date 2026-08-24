@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import '../../../../core/services/app_config_dir.dart';
 import '../../domain/custom_command.dart';
 import '../providers/custom_commands_provider.dart';
 import '../providers/workspace_provider.dart';
@@ -190,18 +191,8 @@ class _ControlBarState extends ConsumerState<ControlBar> {
 
   // ── Favorites persistence ─────────────────────────────────────────────────
 
-  static String get _favoritesFilePath {
-    if (Platform.isWindows) {
-      final appData = Platform.environment['APPDATA'] ?? '';
-      return '$appData\\ProjectorGrid\\test_pattern_favorites.json';
-    } else if (Platform.isMacOS) {
-      final home = Platform.environment['HOME'] ?? '';
-      return '$home/Library/Application Support/ProjectorGrid/test_pattern_favorites.json';
-    } else {
-      final home = Platform.environment['HOME'] ?? '';
-      return '$home/.config/ProjectorGrid/test_pattern_favorites.json';
-    }
-  }
+  static String get _favoritesFilePath =>
+      appConfigFilePath('test_pattern_favorites.json');
 
   void _loadFavorites() {
     try {

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import '../../../../core/services/app_config_dir.dart';
 import '../../domain/log_event.dart';
 import '../../domain/projector_group.dart';
 import '../../domain/projector_node.dart';
@@ -40,18 +41,7 @@ class ProjectState {
 class ProjectStateNotifier extends _$ProjectStateNotifier {
   bool _suppressDirty = false;
 
-  static String get _recentProjectsPath {
-    if (Platform.isWindows) {
-      final appData = Platform.environment['APPDATA'] ?? '';
-      return '$appData\\ProjectorGrid\\recent.json';
-    } else if (Platform.isMacOS) {
-      final home = Platform.environment['HOME'] ?? '';
-      return '$home/Library/Application Support/ProjectorGrid/recent.json';
-    } else {
-      final home = Platform.environment['HOME'] ?? '';
-      return '$home/.config/ProjectorGrid/recent.json';
-    }
-  }
+  static String get _recentProjectsPath => appConfigFilePath('recent.json');
 
   @override
   ProjectState build() {

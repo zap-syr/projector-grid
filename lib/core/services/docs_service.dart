@@ -1,20 +1,11 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import '../docs/osc_reference_html.dart';
+import 'app_config_dir.dart';
 
 class DocsService {
-  static String get _oscReferencePath {
-    if (Platform.isWindows) {
-      final appData = Platform.environment['APPDATA'] ?? '';
-      return '$appData\\ProjectorGrid\\osc_reference.html';
-    } else if (Platform.isMacOS) {
-      final home = Platform.environment['HOME'] ?? '';
-      return '$home/Library/Application Support/ProjectorGrid/osc_reference.html';
-    } else {
-      final home = Platform.environment['HOME'] ?? '';
-      return '$home/.config/ProjectorGrid/osc_reference.html';
-    }
-  }
+  static String get _oscReferencePath =>
+      appConfigFilePath('osc_reference.html');
 
   /// Writes the OSC reference HTML to the app data directory and opens it
   /// in the system default browser.

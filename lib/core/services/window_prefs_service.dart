@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'app_config_dir.dart';
+
 /// Persisted window geometry (size, position, maximized state).
 ///
 /// Deliberately independent of `AppSettingsNotifier`/Riverpod — it must be
@@ -61,18 +63,7 @@ class WindowPrefs {
 }
 
 class WindowPrefsService {
-  static String get _filePath {
-    if (Platform.isWindows) {
-      final appData = Platform.environment['APPDATA'] ?? '';
-      return '$appData\\ProjectorGrid\\window_prefs.json';
-    } else if (Platform.isMacOS) {
-      final home = Platform.environment['HOME'] ?? '';
-      return '$home/Library/Application Support/ProjectorGrid/window_prefs.json';
-    } else {
-      final home = Platform.environment['HOME'] ?? '';
-      return '$home/.config/ProjectorGrid/window_prefs.json';
-    }
-  }
+  static String get _filePath => appConfigFilePath('window_prefs.json');
 
   static WindowPrefs? load() {
     try {

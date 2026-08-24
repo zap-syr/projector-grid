@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import '../../../../core/services/app_config_dir.dart';
 
 part 'app_settings_provider.g.dart';
 
@@ -82,18 +83,7 @@ class AppSettings {
 
 @riverpod
 class AppSettingsNotifier extends _$AppSettingsNotifier {
-  static String get _filePath {
-    if (Platform.isWindows) {
-      final appData = Platform.environment['APPDATA'] ?? '';
-      return '$appData\\ProjectorGrid\\app_settings.json';
-    } else if (Platform.isMacOS) {
-      final home = Platform.environment['HOME'] ?? '';
-      return '$home/Library/Application Support/ProjectorGrid/app_settings.json';
-    } else {
-      final home = Platform.environment['HOME'] ?? '';
-      return '$home/.config/ProjectorGrid/app_settings.json';
-    }
-  }
+  static String get _filePath => appConfigFilePath('app_settings.json');
 
   @override
   AppSettings build() => _load();
