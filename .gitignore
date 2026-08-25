@@ -54,3 +54,5 @@ support_docs/
 .claude
 GEMINI.md
 CLAUDE.md
+# Widget Preview related
+.widget_preview/
