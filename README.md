@@ -35,6 +35,12 @@ With Projector Grid, you can manage an entire projector rig from one place - mon
 
 ![App Overview](https://github.com/zap-syr/projector-grid/blob/main/.github/aux-images/app-overview.png)
 
+## System requirements
+
+- **Windows**: Windows 10 (64-bit) or later
+- **macOS**: macOS 12 (Monterey) or later - Universal binary (Intel and Apple Silicon)
+- A local network connection to your projectors (NTCONTROL/TCP); OSC integration additionally requires UDP access on your configured port
+
 ## Contributing
 
 All contributions are welcome - bug reports, feature requests, or code.
