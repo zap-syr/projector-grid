@@ -9,6 +9,7 @@ import '../providers/app_settings_provider.dart';
 import '../providers/project_provider.dart';
 import '../providers/workspace_provider.dart';
 import 'about_dialog.dart';
+import 'add_projector_dialog.dart';
 import 'keyboard_shortcuts_dialog.dart';
 import 'manage_groups_dialog.dart';
 import 'preferences_dialog.dart';
@@ -228,12 +229,35 @@ class MacMenuBar extends ConsumerWidget {
                 ),
               ],
             ),
+          ],
+        ),
+
+        // ── Tools ─────────────────────────────────────────────────────────
+        PlatformMenu(
+          label: 'Tools',
+          menus: <PlatformMenuItem>[
             PlatformMenuItemGroup(
               members: <PlatformMenuItem>[
                 PlatformMenuItem(
-                  label: 'Refresh',
-                  shortcut: const SingleActivator(LogicalKeyboardKey.f5),
-                  onSelected: () => wsNotifier.refreshAll(),
+                  label: 'Add Projectors',
+                  onSelected: () {
+                    if (!context.mounted) return;
+                    final existingIps = ref
+                        .read(workspaceProvider)
+                        .map((n) => n.ipAddress)
+                        .toList();
+                    showDialog(
+                      context: context,
+                      builder: (context) => AddProjectorDialog(
+                        existingIps: existingIps,
+                        onAddProjectors: (projectors) {
+                          ref
+                              .read(workspaceProvider.notifier)
+                              .addProjectors(projectors);
+                        },
+                      ),
+                    );
+                  },
                 ),
                 PlatformMenuItem(
                   label: 'Manage Groups',
@@ -254,6 +278,15 @@ class MacMenuBar extends ConsumerWidget {
                       builder: (_) => const ScheduledTasksDialog(),
                     );
                   },
+                ),
+              ],
+            ),
+            PlatformMenuItemGroup(
+              members: <PlatformMenuItem>[
+                PlatformMenuItem(
+                  label: 'Refresh',
+                  shortcut: const SingleActivator(LogicalKeyboardKey.f5),
+                  onSelected: () => wsNotifier.refreshAll(),
                 ),
               ],
             ),

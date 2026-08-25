@@ -9,6 +9,7 @@ import 'manage_groups_dialog.dart';
 import 'scheduled_tasks_dialog.dart';
 import 'keyboard_shortcuts_dialog.dart';
 import 'about_dialog.dart';
+import 'add_projector_dialog.dart';
 import '../../../../core/services/docs_service.dart';
 
 class TopMenuBar extends ConsumerWidget {
@@ -253,13 +254,33 @@ class TopMenuBar extends ConsumerWidget {
                   shortcutLabel: 'Ctrl+Y',
                   onPressed: wsNotifier.canRedo ? () => wsNotifier.redo() : null,
                 ),
-                const Divider(),
+              ],
+              child: const Text('Edit'),
+            ),
+
+            // ── Tools ─────────────────────────────────────────────────────
+            SubmenuButton(
+              menuChildren: [
                 _menuItem(
                   context,
-                  label: 'Refresh',
-                  shortcutLabel: 'F5',
-                  onPressed: () =>
-                      ref.read(workspaceProvider.notifier).refreshAll(),
+                  label: 'Add Projectors',
+                  onPressed: () {
+                    final existingIps = ref
+                        .read(workspaceProvider)
+                        .map((n) => n.ipAddress)
+                        .toList();
+                    showDialog(
+                      context: context,
+                      builder: (context) => AddProjectorDialog(
+                        existingIps: existingIps,
+                        onAddProjectors: (projectors) {
+                          ref
+                              .read(workspaceProvider.notifier)
+                              .addProjectors(projectors);
+                        },
+                      ),
+                    );
+                  },
                 ),
                 _menuItem(
                   context,
@@ -277,6 +298,15 @@ class TopMenuBar extends ConsumerWidget {
                     builder: (_) => const ScheduledTasksDialog(),
                   ),
                 ),
+                const Divider(),
+                _menuItem(
+                  context,
+                  label: 'Refresh',
+                  shortcutLabel: 'F5',
+                  onPressed: () =>
+                      ref.read(workspaceProvider.notifier).refreshAll(),
+                ),
+                const Divider(),
                 _menuItem(
                   context,
                   label: 'Preferences',
@@ -286,7 +316,7 @@ class TopMenuBar extends ConsumerWidget {
                   ),
                 ),
               ],
-              child: const Text('Edit'),
+              child: const Text('Tools'),
             ),
 
             // ── View ──────────────────────────────────────────────────────
