@@ -46,11 +46,17 @@ jobs:
         run: |
           "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\projector_grid.iss /DAppVersion=${{ steps.version.outputs.VERSION }}
 
+      - name: Copy stable-named installer
+        shell: bash
+        run: cp "installer/output/ProjectorGrid_Setup_${{ steps.version.outputs.VERSION }}.exe" installer/output/ProjectorGrid_Setup.exe
+
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
           body_path: release_notes.md
-          files: installer/output/ProjectorGrid_Setup_${{ steps.version.outputs.VERSION }}.exe
+          files: |
+            installer/output/ProjectorGrid_Setup_${{ steps.version.outputs.VERSION }}.exe
+            installer/output/ProjectorGrid_Setup.exe
 
   build-macos:
     name: macOS (Universal)
@@ -90,8 +96,13 @@ jobs:
             -ov -format UDZO \
             "ProjectorGrid-macOS-${{ steps.version.outputs.VERSION }}.dmg"
 
+      - name: Copy stable-named DMG
+        run: cp "ProjectorGrid-macOS-${{ steps.version.outputs.VERSION }}.dmg" ProjectorGrid-macOS.dmg
+
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
           body_path: release_notes.md
-          files: ProjectorGrid-macOS-${{ steps.version.outputs.VERSION }}.dmg
+          files: |
+            ProjectorGrid-macOS-${{ steps.version.outputs.VERSION }}.dmg
+            ProjectorGrid-macOS.dmg
