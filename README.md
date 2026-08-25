@@ -8,8 +8,8 @@ With Projector Grid, you can manage an entire projector rig from one place - mon
 
 ## Download the latest release
 
-- [Download for Windows](https://github.com/zap-syr/projector-grid/releases/latest/download/ProjectorGrid_Setup.exe)
-- [Download for macOS (Universal)](https://github.com/zap-syr/projector-grid/releases/latest/download/ProjectorGrid-macOS.dmg)
+- [Download for Windows](https://github.com/zap-syr/projector-grid/releases/download/v1.4.0/ProjectorGrid_Setup_1.4.0.exe)
+- [Download for macOS (Universal)](https://github.com/zap-syr/projector-grid/releases/download/v1.4.0/ProjectorGrid-macOS-1.4.0.dmg)
 
 ## Main features
 
