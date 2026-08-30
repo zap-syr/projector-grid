@@ -168,12 +168,20 @@ class OscService {
 
   bool get isActive => _isActive;
 
+  // Bumped by every start()/stop() call. A start() in flight checks this
+  // right after its RawDatagramSocket.bind() await resolves — if a newer
+  // start()/stop() call has since superseded it, its freshly-bound socket is
+  // closed immediately instead of being kept, so overlapping calls (rapid
+  // toggling, a Preferences save racing app init) can't leak a socket.
+  int _startGeneration = 0;
+
   Future<void> start({
     required String networkDevice,
     required int receivePort,
     required String sendIp,
     required int sendPort,
   }) async {
+    final generation = ++_startGeneration;
     await stop();
     _sendIp = sendIp;
     _sendPort = sendPort;
@@ -185,7 +193,15 @@ class OscService {
       final bindAddress = networkDevice.isEmpty
           ? InternetAddress.anyIPv4
           : InternetAddress(networkDevice);
-      _socket = await RawDatagramSocket.bind(bindAddress, receivePort);
+      final socket = await RawDatagramSocket.bind(bindAddress, receivePort);
+
+      if (generation != _startGeneration) {
+        // Superseded by a newer start()/stop() while the bind was pending.
+        socket.close();
+        return;
+      }
+
+      _socket = socket;
       _isActive = true;
 
       _socket!.listen((event) {
@@ -203,6 +219,7 @@ class OscService {
   }
 
   Future<void> stop() async {
+    _startGeneration++; // invalidate any in-flight start()
     _socket?.close();
     _socket = null;
     _isActive = false;

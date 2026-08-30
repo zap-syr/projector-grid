@@ -60,6 +60,11 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
   }
 
   void _save() {
+    // Captured before any OSC field writes below, so we can tell whether the
+    // connection parameters actually changed (needed to decide whether a
+    // live socket needs rebinding, not just whether OSC was toggled).
+    final oldSettings = ref.read(appSettingsProvider);
+
     // General
     final interval = int.tryParse(_intervalController.text);
     if (interval != null && interval > 0) {
@@ -73,17 +78,29 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
     settingsNotifier.setOscNetworkDevice(_selectedNetworkDevice);
     final recvPort = int.tryParse(_oscReceivePortController.text);
     if (recvPort != null && recvPort > 0) settingsNotifier.setOscReceivePort(recvPort);
-    settingsNotifier.setOscSendIp(_oscSendIpController.text.trim());
+    final sendIp = _oscSendIpController.text.trim();
+    settingsNotifier.setOscSendIp(sendIp);
     final sendPort = int.tryParse(_oscSendPortController.text);
     if (sendPort != null && sendPort > 0) settingsNotifier.setOscSendPort(sendPort);
 
     // OSC active toggle — compare against persisted setting, not auto-dispose provider state
     final oscNotifier = ref.read(oscProvider.notifier);
-    final wasActive = ref.read(appSettingsProvider).oscActive;
+    final wasActive = oldSettings.oscActive;
+    final connectionParamsChanged =
+        _selectedNetworkDevice != oldSettings.oscNetworkDevice ||
+        (recvPort != null && recvPort > 0 && recvPort != oldSettings.oscReceivePort) ||
+        sendIp != oldSettings.oscSendIp ||
+        (sendPort != null && sendPort > 0 && sendPort != oldSettings.oscSendPort);
+
     if (_oscActive && !wasActive) {
       oscNotifier.start();
     } else if (!_oscActive && wasActive) {
       oscNotifier.stop();
+    } else if (_oscActive && wasActive && connectionParamsChanged) {
+      // OSC stays enabled but the receive port/device or send IP/port
+      // changed — the already-bound socket won't pick that up on its own,
+      // so rebind it with the new settings.
+      oscNotifier.restart();
     }
 
     Navigator.of(context).pop();

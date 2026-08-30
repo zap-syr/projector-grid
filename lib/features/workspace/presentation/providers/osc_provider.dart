@@ -18,7 +18,17 @@ class OscNotifier extends _$OscNotifier {
     ref.onDispose(() {
       _service.stop();
     });
-    return false; // not active initially
+
+    // Restore a persisted "OSC enabled" setting on launch. `start()` is
+    // fire-and-forget here (not awaited) — its state mutations all happen
+    // after the socket bind's `await`, so they land safely after this
+    // synchronous build() phase, same pattern as WorkspaceNotifier.build()
+    // calling _startPolling().
+    if (ref.read(appSettingsProvider).oscActive) {
+      start();
+    }
+
+    return false; // real state syncs shortly after via start(), if active
   }
 
   void _wireCallbacks() {
@@ -108,6 +118,14 @@ class OscNotifier extends _$OscNotifier {
     } else {
       await start();
     }
+  }
+
+  /// Rebinds the socket with the current settings — used when the receive
+  /// port, network device, or send IP/port changes while OSC stays enabled,
+  /// since neither is picked up by an already-bound socket on its own.
+  Future<void> restart() async {
+    await stop();
+    await start();
   }
 
   /// Call after polling to broadcast status.
