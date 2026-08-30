@@ -24,7 +24,7 @@ cd projector-grid
 flutter pub get
 
 # Run code generation (required on first clone)
-dart run build_runner build
+dart run build_runner build --delete-conflicting-outputs
 
 # Run the app in debug mode
 flutter run -d windows   # or macos
@@ -48,6 +48,8 @@ lib/
     ├── domain/
     │   ├── projector_node.dart      # Freezed - 21-field model (telemetry, position, status)
     │   ├── projector_group.dart     # Freezed - group name, color + OSC address
+    │   ├── scheduled_task.dart      # Freezed - a timed/recurring action
+    │   ├── log_event.dart           # Plain Dart class - event log entry
     │   └── custom_command.dart      # Plain Dart class - user-defined commands
     └── presentation/
         ├── providers/               # Riverpod state (Notifier-based, codegen)
@@ -68,18 +70,20 @@ Key providers:
 | `workspaceProvider` | Projector node list, group assignments, undo/redo stack, polling timers |
 | `projectStateProvider` | Current file path, dirty flag, recent projects list |
 | `appSettingsProvider` | Theme mode, polling interval, OSC port/enabled |
-| `oscProvider` | OSC UDP server/client lifecycle |
+| `oscProvider` | OSC UDP server/client lifecycle (`keepAlive`) |
 | `customCommandsProvider` | User-defined commands with auto-generated OSC slugs |
+| `eventLogProvider` | Rolling log of app events, capped at 500 entries (`keepAlive`) |
+| `scheduledTasksProvider` | Timed/recurring task list and its internal scheduler `Timer` (`keepAlive`) |
 
 ### Data Models
 
-`ProjectorNode` and `ProjectorGroup` are Freezed immutable classes. When adding fields to either:
+`ProjectorNode`, `ProjectorGroup`, and `ScheduledTask` are Freezed immutable classes. When adding fields to any of them:
 
 1. Edit the `.dart` source file.
-2. Regenerate with `dart run build_runner build`.
+2. Regenerate with `dart run build_runner build --delete-conflicting-outputs`.
 3. Never touch the generated `.freezed.dart` files.
 
-`CustomCommand` is a plain Dart class (no Freezed) with manual `toJson`/`fromJson`. Extend it directly without running code generation.
+`CustomCommand` and `LogEvent` are plain Dart classes (no Freezed, no codegen). `CustomCommand` has manual `toJson`/`fromJson`. Extend either directly without running code generation.
 
 ### Network Protocols
 
@@ -101,13 +105,13 @@ Project state is saved as JSON in the platform config directory:
 Riverpod and Freezed both require code generation. Run this after any change to files that contain `@riverpod` or `@freezed` annotations:
 
 ```bash
-dart run build_runner build
+dart run build_runner build --delete-conflicting-outputs
 ```
 
 During active development, use watch mode to regenerate automatically:
 
 ```bash
-dart run build_runner watch
+dart run build_runner watch --delete-conflicting-outputs
 ```
 
 ### Linting and Analysis
@@ -139,7 +143,7 @@ flutter build windows --release
 flutter build macos --release
 ```
 
-Releases are automated via GitHub Actions (`.github/workflows/release.yml`). Pushing a tag in `v*.*.*` format triggers a build for Windows and macOS and creates a GitHub Release with the installer and DMG attached.
+Releases are automated via GitHub Actions (`.github/workflows/release.yml`). Pushing a tag in `v*.*.*` format triggers a build for Windows and macOS, creates a GitHub Release with the installer and DMG attached, then a final job updates README.md's download links to point at that tag's exact versioned filenames and pushes the change back to `main`.
 
 ## Contributing
 
