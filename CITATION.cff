@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+title: Projector Grid
+message: "If you use this software, please cite it using these metadata."
+type: software
+authors:
+  - given-names: Aleksei
+    family-names: Vlasov
+repository-code: "https://github.com/zap-syr/projector-grid"
+url: "https://projectorgrid.com"
+abstract: >-
+  Free, open-source desktop application for controlling and monitoring arrays of
+  Panasonic network projectors — power, shutter, input, geometry and colour, plus
+  live status monitoring — with OSC input and output for show-control systems.
+  Runs on Windows and macOS.
+keywords:
+  - projector control
+  - projection mapping
+  - Panasonic
+  - NTCONTROL
+  - OSC
+  - show control
+  - AV
+  - projector monitoring
+license: GPL-3.0-or-later
+version: 1.4.0
+date-released: "2026-08-25"
