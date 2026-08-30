@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/projector_group.dart';
+import '../providers/scheduled_tasks_provider.dart';
 import '../providers/workspace_provider.dart';
 
 const List<Color> _presetColors = [
@@ -188,15 +189,29 @@ class _ManageGroupsDialogState extends ConsumerState<ManageGroupsDialog> {
   void _confirmDeleteGroup(ProjectorGroup group) {
     final nodes = ref.read(workspaceProvider);
     final memberCount = nodes.where((n) => n.groupId == group.id).length;
+    // Deleting a group doesn't touch scheduled tasks that target it — such
+    // a task would keep "running" on schedule but silently match zero
+    // projectors afterward, so warn about that here rather than let it
+    // happen invisibly.
+    final taskCount = ref
+        .read(scheduledTasksProvider)
+        .where((t) => t.targetGroupId == group.id)
+        .length;
+
+    final warnings = <String>[
+      if (memberCount > 0) '$memberCount projector(s) will be unassigned.',
+      if (taskCount > 0)
+        '$taskCount scheduled task(s) target this group and will stop doing anything once it\'s deleted.',
+    ];
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete Group'),
         content: Text(
-          memberCount > 0
-              ? 'Are you sure you want to delete "${group.name}"?\n$memberCount projector(s) will be unassigned.'
-              : 'Are you sure you want to delete "${group.name}"?',
+          warnings.isEmpty
+              ? 'Are you sure you want to delete "${group.name}"?'
+              : 'Are you sure you want to delete "${group.name}"?\n${warnings.join('\n')}',
         ),
         actions: [
           TextButton(
