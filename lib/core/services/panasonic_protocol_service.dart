@@ -130,11 +130,18 @@ class PanasonicProtocolService {
       String commandPrefix = '00';
       if (isProtected) {
         final tokenMatch = RegExp(r'NTCONTROL\s1\s([0-9a-fA-F]{8})').firstMatch(initResponse);
-        if (tokenMatch != null) {
-          final token = tokenMatch.group(1)!;
-          final hashStr = '$login:$password:$token';
-          commandPrefix = '${md5.convert(utf8.encode(hashStr))}00';
+        if (tokenMatch == null) {
+          // The projector announced protected mode but its challenge token
+          // doesn't match the expected 8-hex-char format — sending the
+          // command with the unauthenticated '00' prefix anyway would just
+          // get silently rejected with no indication why, so fail
+          // explicitly instead of guessing.
+          await subscription.cancel();
+          return ('Error: Unrecognized Auth Token', false);
         }
+        final token = tokenMatch.group(1)!;
+        final hashStr = '$login:$password:$token';
+        commandPrefix = '${md5.convert(utf8.encode(hashStr))}00';
       }
 
       currentCompleter = Completer<String>();
