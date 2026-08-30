@@ -769,6 +769,11 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
   }
 
   void updateNode(String id, String ip, String login, String password) {
+    // Edit Projector doesn't let the port be changed, so the node's existing
+    // port carries over unchanged by copyWith below — grab it up front for
+    // the immediate reconnect check instead of hardcoding the NTCONTROL
+    // default, so projectors on a non-default port aren't probed wrong.
+    final port = state.where((n) => n.id == id).firstOrNull?.port ?? 1024;
     _saveSnapshot();
     state = state.map((node) {
       if (node.id == id) {
@@ -782,7 +787,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
       return node;
     }).toList();
     _notifyStateChanged();
-    _checkAndSetNodeStatus(id, ip, 1024);
+    _checkAndSetNodeStatus(id, ip, port);
   }
 
   void deleteSelected() {
