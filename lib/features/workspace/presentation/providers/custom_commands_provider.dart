@@ -18,10 +18,20 @@ class CustomCommandsNotifier extends _$CustomCommandsNotifier {
       final file = File(_filePath);
       if (!file.existsSync()) return [];
       final list = jsonDecode(file.readAsStringSync()) as List<dynamic>;
-      return list
-          .map((e) => CustomCommand.fromJson(e as Map<String, dynamic>))
-          .toList();
+      // Parse each entry independently so one malformed command (e.g. from
+      // a partial write during a crash) doesn't discard every other
+      // previously-saved command — only that one entry is dropped.
+      final commands = <CustomCommand>[];
+      for (final e in list) {
+        try {
+          commands.add(CustomCommand.fromJson(e as Map<String, dynamic>));
+        } catch (_) {
+          // Skip just this entry; the rest of the file may still be valid.
+        }
+      }
+      return commands;
     } catch (_) {
+      // The file itself isn't valid JSON at all — nothing to salvage.
       return [];
     }
   }
