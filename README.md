@@ -2,7 +2,7 @@
 
 # Projector Grid
 
-Projector Grid is a desktop application for controlling and monitoring multiple Panasonic projectors over a local network.
+Projector Grid is a free, open-source desktop application for controlling and monitoring multiple Panasonic projectors over a local network, with native builds for Windows and macOS.
 
 With Projector Grid, you can manage an entire projector rig from one place - monitor live status, send commands, adjust image settings, and automate your workflow through OSC integration.
 
