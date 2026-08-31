@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../domain/log_event.dart' show commandLabel;
 import '../../domain/projector_node.dart';
 import '../../../../core/services/panasonic_protocol_service.dart';
 import 'sleek_stepper_input.dart';
@@ -19,7 +21,6 @@ const _kKelvinGradient = LinearGradient(
   ],
   stops: [0.000, 0.133, 0.235, 0.337, 0.490, 0.694, 1.000],
 );
-
 
 class _KelvinThumbShape extends SliderComponentShape {
   const _KelvinThumbShape();
@@ -93,13 +94,13 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
 
   // ── Color Temperature ─────────────────────────────────────────────────────
   _TempMode _tempMode = _TempMode.defaultTemp;
-  int _customK = 6500;          // 3200–13000 step 100
+  int _customK = 6500; // 3200–13000 step 100
   List<int> _whHigh = [128, 128, 128]; // R,G,B  0–255
-  List<int> _whLow  = [0, 0, 0];      // R,G,B  -127..+127 (display)
+  List<int> _whLow = [0, 0, 0]; // R,G,B  -127..+127 (display)
 
-  String get _ip       => widget.node.ipAddress;
-  int    get _port     => widget.node.port;
-  String get _login    => widget.node.login;
+  String get _ip => widget.node.ipAddress;
+  int get _port => widget.node.port;
+  String get _login => widget.node.login;
   String get _password => widget.node.password;
 
   @override
@@ -149,7 +150,15 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
       }
     }
 
-    final keys7 = ['Red', 'Green', 'Blue', 'Cyan', 'Magenta', 'Yellow', 'White'];
+    final keys7 = [
+      'Red',
+      'Green',
+      'Blue',
+      'Cyan',
+      'Magenta',
+      'Yellow',
+      'White',
+    ];
     for (int i = 0; i < 7; i++) {
       final raw = results[4 + i];
       if (raw != null) {
@@ -205,71 +214,137 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
     return values.cast<int>();
   }
 
-  static String _fmt(int v)  => v.toString().padLeft(4, '0');
+  static String _fmt(int v) => v.toString().padLeft(4, '0');
   static String _fmt3(int v) => v.toString().padLeft(3, '0');
+
+  // Shows a SnackBar when a write command fails — this dialog talks to the
+  // projector through its own PanasonicProtocolService instance rather than
+  // workspace_provider's centralized dispatch (which logs to the Event Log),
+  // so without this a failed send here would otherwise be entirely silent.
+  void _notifyFailure(String cmd) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Failed to send: ${commandLabel(cmd)}')),
+    );
+  }
 
   // ── Color Matching sends ──────────────────────────────────────────────────
   Future<void> _setMethod(int method) async {
     setState(() => _method = method);
-    await _service.sendRawCommand(
-      _ip, _port, _login, _password,
-      'VXX:CMAI0=+${method.toString().padLeft(5, '0')}',
+    final cmd = 'VXX:CMAI0=+${method.toString().padLeft(5, '0')}';
+    final response = await _service.sendRawCommand(
+      _ip,
+      _port,
+      _login,
+      _password,
+      cmd,
     );
+    if (response == null) _notifyFailure(cmd);
   }
 
   Future<void> _set3Color(String color, List<int> rgb) async {
     final prefix = switch (color) {
-      'Red'   => 'VMR',
+      'Red' => 'VMR',
       'Green' => 'VMG',
-      _       => 'VMB',
+      _ => 'VMB',
     };
-    await _service.sendRawCommand(
-      _ip, _port, _login, _password,
-      '$prefix:${_fmt(rgb[0])},${_fmt(rgb[1])},${_fmt(rgb[2])}',
+    final cmd = '$prefix:${_fmt(rgb[0])},${_fmt(rgb[1])},${_fmt(rgb[2])}';
+    final response = await _service.sendRawCommand(
+      _ip,
+      _port,
+      _login,
+      _password,
+      cmd,
     );
+    if (response == null) _notifyFailure(cmd);
   }
 
   Future<void> _set7Color(String color, List<int> rgb) async {
-    const keys7 = ['Red', 'Green', 'Blue', 'Cyan', 'Magenta', 'Yellow', 'White'];
+    const keys7 = [
+      'Red',
+      'Green',
+      'Blue',
+      'Cyan',
+      'Magenta',
+      'Yellow',
+      'White',
+    ];
     final idx = keys7.indexOf(color);
     if (idx == -1) return;
-    await _service.sendRawCommand(
-      _ip, _port, _login, _password,
-      'VXX:C7CS$idx=${_fmt(rgb[0])},${_fmt(rgb[1])},${_fmt(rgb[2])}',
+    final cmd = 'VXX:C7CS$idx=${_fmt(rgb[0])},${_fmt(rgb[1])},${_fmt(rgb[2])}';
+    final response = await _service.sendRawCommand(
+      _ip,
+      _port,
+      _login,
+      _password,
+      cmd,
     );
+    if (response == null) _notifyFailure(cmd);
   }
 
   // ── Color Temperature sends ───────────────────────────────────────────────
   Future<void> _sendColorTemp(_TempMode mode) async {
     final code = switch (mode) {
       _TempMode.defaultTemp => '10',
-      _TempMode.user1       => '04',
-      _TempMode.user2       => '09',
-      _TempMode.custom      => '$_customK',
+      _TempMode.user1 => '04',
+      _TempMode.user2 => '09',
+      _TempMode.custom => '$_customK',
     };
-    await _service.sendRawCommand(_ip, _port, _login, _password, 'OTE:$code');
+    final cmd = 'OTE:$code';
+    final response = await _service.sendRawCommand(
+      _ip,
+      _port,
+      _login,
+      _password,
+      cmd,
+    );
+    if (response == null) _notifyFailure(cmd);
   }
 
   Future<void> _sendWhHigh(int channel, int value) async {
-    final cmd = switch (channel) { 0 => 'VHR', 1 => 'VHG', _ => 'VHB' };
-    await _service.sendRawCommand(_ip, _port, _login, _password, '$cmd:${_fmt3(value)}');
+    final prefix = switch (channel) {
+      0 => 'VHR',
+      1 => 'VHG',
+      _ => 'VHB',
+    };
+    final cmd = '$prefix:${_fmt3(value)}';
+    final response = await _service.sendRawCommand(
+      _ip,
+      _port,
+      _login,
+      _password,
+      cmd,
+    );
+    if (response == null) _notifyFailure(cmd);
   }
 
   Future<void> _sendWhLow(int channel, int displayValue) async {
-    final cmd = switch (channel) { 0 => 'VOR', 1 => 'VOG', _ => 'VOB' };
+    final prefix = switch (channel) {
+      0 => 'VOR',
+      1 => 'VOG',
+      _ => 'VOB',
+    };
     final protocol = (displayValue + 128).clamp(1, 255);
-    await _service.sendRawCommand(_ip, _port, _login, _password, '$cmd:${_fmt3(protocol)}');
+    final cmd = '$prefix:${_fmt3(protocol)}';
+    final response = await _service.sendRawCommand(
+      _ip,
+      _port,
+      _login,
+      _password,
+      cmd,
+    );
+    if (response == null) _notifyFailure(cmd);
   }
 
   // ── Shared helpers ────────────────────────────────────────────────────────
   static Color _swatchFor(String name) => switch (name) {
-    'Red'     => Colors.red,
-    'Green'   => Colors.green,
-    'Blue'    => Colors.blue,
-    'Cyan'    => Colors.cyan,
+    'Red' => Colors.red,
+    'Green' => Colors.green,
+    'Blue' => Colors.blue,
+    'Cyan' => Colors.cyan,
     'Magenta' => const Color(0xFFCC44CC),
-    'Yellow'  => Colors.yellow,
-    _         => Colors.white,
+    'Yellow' => Colors.yellow,
+    _ => Colors.white,
   };
 
   Widget _buildRgbSlider(
@@ -292,7 +367,11 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
             width: 14,
             child: Text(
               label,
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color),
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
             ),
           ),
           const SizedBox(width: 8),
@@ -427,17 +506,26 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
             ),
             const SizedBox(height: 6),
             _buildColorMatchSliderRow(
-              context, 'R', Colors.red, rgb[0],
+              context,
+              'R',
+              Colors.red,
+              rgb[0],
               (v) => setState(() => valuesMap[colorName]![0] = v.round()),
               (_) => onSend(colorName, List.from(valuesMap[colorName]!)),
             ),
             _buildColorMatchSliderRow(
-              context, 'G', Colors.green, rgb[1],
+              context,
+              'G',
+              Colors.green,
+              rgb[1],
               (v) => setState(() => valuesMap[colorName]![1] = v.round()),
               (_) => onSend(colorName, List.from(valuesMap[colorName]!)),
             ),
             _buildColorMatchSliderRow(
-              context, 'B', Colors.blue, rgb[2],
+              context,
+              'B',
+              Colors.blue,
+              rgb[2],
               (v) => setState(() => valuesMap[colorName]![2] = v.round()),
               (_) => onSend(colorName, List.from(valuesMap[colorName]!)),
             ),
@@ -458,7 +546,12 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Color Temperature', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+              Text(
+                'Color Temperature',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -514,7 +607,8 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
                     divisions: 98,
                     value: _customK.toDouble(),
                     label: '${_customK}K',
-                    onChanged: (v) => setState(() => _customK = (v.round() ~/ 100) * 100),
+                    onChanged: (v) =>
+                        setState(() => _customK = (v.round() ~/ 100) * 100),
                     onChangeEnd: (_) => _sendColorTemp(_TempMode.custom),
                   ),
                 ),
@@ -542,9 +636,18 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(title, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+          Text(
+            title,
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           const SizedBox(height: 4),
-          for (final t in [(0, 'R', Colors.red), (1, 'G', Colors.green), (2, 'B', Colors.blue)])
+          for (final t in [
+            (0, 'R', Colors.red),
+            (1, 'G', Colors.green),
+            (2, 'B', Colors.blue),
+          ])
             _buildRgbSlider(
               context,
               label: t.$2,
@@ -571,7 +674,10 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
           padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
           child: SegmentedButton<_TempMode>(
             segments: const [
-              ButtonSegment(value: _TempMode.defaultTemp, label: Text('Default')),
+              ButtonSegment(
+                value: _TempMode.defaultTemp,
+                label: Text('Default'),
+              ),
               ButtonSegment(value: _TempMode.user1, label: Text('User 1')),
               ButtonSegment(value: _TempMode.user2, label: Text('User 2')),
               ButtonSegment(value: _TempMode.custom, label: Text('Custom')),
@@ -590,46 +696,47 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
         Expanded(
           child: switch (_tempMode) {
             _TempMode.defaultTemp => Center(
-                child: Text(
-                  'Using the factory default color temperature',
-                  style: TextStyle(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.45),
-                  ),
+              child: Text(
+                'Using the factory default color temperature',
+                style: TextStyle(
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.45),
                 ),
               ),
+            ),
             _TempMode.custom => SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
-                child: _buildKelvinCard(context),
-              ),
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+              child: _buildKelvinCard(context),
+            ),
             _TempMode.user1 || _TempMode.user2 => SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _buildWhiteBalanceCard(
-                      context,
-                      title: 'White Balance High',
-                      values: _whHigh,
-                      min: 0,
-                      max: 255,
-                      divisions: 255,
-                      onChanged: (ch, v) => setState(() => _whHigh[ch] = v),
-                      onChangeEnd: (ch, v) => _sendWhHigh(ch, v),
-                    ),
-                    const SizedBox(height: 10),
-                    _buildWhiteBalanceCard(
-                      context,
-                      title: 'White Balance Low',
-                      values: _whLow,
-                      min: -127,
-                      max: 127,
-                      divisions: 254,
-                      onChanged: (ch, v) => setState(() => _whLow[ch] = v.abs() <= 3 ? 0 : v),
-                      onChangeEnd: (ch, v) => _sendWhLow(ch, _whLow[ch]),
-                    ),
-                  ],
-                ),
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildWhiteBalanceCard(
+                    context,
+                    title: 'White Balance High',
+                    values: _whHigh,
+                    min: 0,
+                    max: 255,
+                    divisions: 255,
+                    onChanged: (ch, v) => setState(() => _whHigh[ch] = v),
+                    onChangeEnd: (ch, v) => _sendWhHigh(ch, v),
+                  ),
+                  const SizedBox(height: 10),
+                  _buildWhiteBalanceCard(
+                    context,
+                    title: 'White Balance Low',
+                    values: _whLow,
+                    min: -127,
+                    max: 127,
+                    divisions: 254,
+                    onChanged: (ch, v) =>
+                        setState(() => _whLow[ch] = v.abs() <= 3 ? 0 : v),
+                    onChangeEnd: (ch, v) => _sendWhLow(ch, _whLow[ch]),
+                  ),
+                ],
               ),
+            ),
           },
         ),
       ],
@@ -675,12 +782,16 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
                   Tab(text: 'Color Matching'),
                   Tab(text: 'Color Temperature'),
                 ],
-                labelStyle: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                labelStyle: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const Divider(height: 1),
 
               if (_loading)
-                const Expanded(child: Center(child: CircularProgressIndicator()))
+                const Expanded(
+                  child: Center(child: CircularProgressIndicator()),
+                )
               else
                 Expanded(
                   child: TabBarView(
@@ -694,8 +805,14 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
                             child: SegmentedButton<int>(
                               segments: const [
                                 ButtonSegment(value: 0, label: Text('Off')),
-                                ButtonSegment(value: 1, label: Text('3 Colors')),
-                                ButtonSegment(value: 2, label: Text('7 Colors')),
+                                ButtonSegment(
+                                  value: 1,
+                                  label: Text('3 Colors'),
+                                ),
+                                ButtonSegment(
+                                  value: 2,
+                                  label: Text('7 Colors'),
+                                ),
                               ],
                               selected: {_method},
                               showSelectedIcon: false,
@@ -710,23 +827,46 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
                                     child: Text(
                                       'Color matching is disabled',
                                       style: TextStyle(
-                                        color: theme.colorScheme.onSurface.withValues(alpha: 0.45),
+                                        color: theme.colorScheme.onSurface
+                                            .withValues(alpha: 0.45),
                                       ),
                                     ),
                                   )
                                 : SingleChildScrollView(
-                                    padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+                                    padding: const EdgeInsets.fromLTRB(
+                                      20,
+                                      14,
+                                      20,
+                                      16,
+                                    ),
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                                      children: (_method == 1
-                                              ? ['Red', 'Green', 'Blue']
-                                              : ['Red', 'Green', 'Blue', 'Cyan', 'Magenta', 'Yellow', 'White'])
-                                          .map((c) => _buildColorCard(
-                                                context, c,
-                                                _method == 1 ? _values3 : _values7,
-                                                _method == 1 ? _set3Color : _set7Color,
-                                              ))
-                                          .toList(),
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children:
+                                          (_method == 1
+                                                  ? ['Red', 'Green', 'Blue']
+                                                  : [
+                                                      'Red',
+                                                      'Green',
+                                                      'Blue',
+                                                      'Cyan',
+                                                      'Magenta',
+                                                      'Yellow',
+                                                      'White',
+                                                    ])
+                                              .map(
+                                                (c) => _buildColorCard(
+                                                  context,
+                                                  c,
+                                                  _method == 1
+                                                      ? _values3
+                                                      : _values7,
+                                                  _method == 1
+                                                      ? _set3Color
+                                                      : _set7Color,
+                                                ),
+                                              )
+                                              .toList(),
                                     ),
                                   ),
                           ),

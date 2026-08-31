@@ -5,6 +5,7 @@ import 'package:flutter/gestures.dart' show kDoubleTapTimeout;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../domain/log_event.dart' show commandLabel;
 import '../../domain/projector_node.dart';
 import '../../../../core/services/panasonic_protocol_service.dart';
 import 'custom_tooltip.dart';
@@ -284,37 +285,65 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
   }
 
   // ─── Senders ─────────────────────────────────────────────────────────────
-  Future<void> _sendMode(_GeometryMode m) => _service.sendRawCommand(
-    _ip,
-    _port,
-    _login,
-    _password,
-    'VXX:GMMI0=${m.protocolValue}',
-  );
 
-  Future<void> _sendInt(String key, int v) => _service.sendRawCommand(
-    _ip,
-    _port,
-    _login,
-    _password,
-    'VXX:$key=${_fmtInt(v)}',
-  );
+  // Shows a SnackBar when a write command fails — this dialog talks to the
+  // projector through its own PanasonicProtocolService instance rather than
+  // workspace_provider's centralized dispatch (which logs to the Event Log),
+  // so without this a failed send here would otherwise be entirely silent.
+  void _notifyFailure(String cmd) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Failed to send: ${commandLabel(cmd)}')),
+    );
+  }
 
-  Future<void> _sendDeg(String key, double v) => _service.sendRawCommand(
-    _ip,
-    _port,
-    _login,
-    _password,
-    'VXX:$key=${_fmtDeg(v)}',
-  );
+  Future<void> _sendMode(_GeometryMode m) async {
+    final cmd = 'VXX:GMMI0=${m.protocolValue}';
+    final response = await _service.sendRawCommand(
+      _ip,
+      _port,
+      _login,
+      _password,
+      cmd,
+    );
+    if (response == null) _notifyFailure(cmd);
+  }
 
-  Future<void> _sendThrow(String key, double v) => _service.sendRawCommand(
-    _ip,
-    _port,
-    _login,
-    _password,
-    'VXX:$key=${_fmtThrow(v)}',
-  );
+  Future<void> _sendInt(String key, int v) async {
+    final cmd = 'VXX:$key=${_fmtInt(v)}';
+    final response = await _service.sendRawCommand(
+      _ip,
+      _port,
+      _login,
+      _password,
+      cmd,
+    );
+    if (response == null) _notifyFailure(cmd);
+  }
+
+  Future<void> _sendDeg(String key, double v) async {
+    final cmd = 'VXX:$key=${_fmtDeg(v)}';
+    final response = await _service.sendRawCommand(
+      _ip,
+      _port,
+      _login,
+      _password,
+      cmd,
+    );
+    if (response == null) _notifyFailure(cmd);
+  }
+
+  Future<void> _sendThrow(String key, double v) async {
+    final cmd = 'VXX:$key=${_fmtThrow(v)}';
+    final response = await _service.sendRawCommand(
+      _ip,
+      _port,
+      _login,
+      _password,
+      cmd,
+    );
+    if (response == null) _notifyFailure(cmd);
+  }
 
   Future<void> _sendBool(String key, bool on) => _sendInt(key, on ? 1 : 0);
 

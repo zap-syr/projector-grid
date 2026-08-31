@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../domain/log_event.dart' show commandLabel;
 import '../../domain/projector_node.dart';
 import '../../../../core/services/panasonic_protocol_service.dart';
 
@@ -112,34 +113,51 @@ class _BrightnessControlDialogState extends State<BrightnessControlDialog> {
     return int.tryParse(raw.replaceAll('+', '').replaceAll('-', ''));
   }
 
+  // Shows a SnackBar when a write command fails — this dialog talks to the
+  // projector through its own PanasonicProtocolService instance rather than
+  // workspace_provider's centralized dispatch (which logs to the Event Log),
+  // so without this a failed send here would otherwise be entirely silent.
+  void _notifyFailure(String cmd) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Failed to send: ${commandLabel(cmd)}')),
+    );
+  }
+
   Future<void> _sendMode(_OperatingMode mode) async {
-    await _service.sendRawCommand(
+    final cmd = 'VXX:OPEI1=${mode.protocolValue}';
+    final response = await _service.sendRawCommand(
       _ip,
       _port,
       _login,
       _password,
-      'VXX:OPEI1=${mode.protocolValue}',
+      cmd,
     );
+    if (response == null) _notifyFailure(cmd);
   }
 
   Future<void> _sendLightOutput(double pct) async {
-    await _service.sendRawCommand(
+    final cmd = 'VXX:LOPI2=${_fmt(_toProtocol(pct))}';
+    final response = await _service.sendRawCommand(
       _ip,
       _port,
       _login,
       _password,
-      'VXX:LOPI2=${_fmt(_toProtocol(pct))}',
+      cmd,
     );
+    if (response == null) _notifyFailure(cmd);
   }
 
   Future<void> _sendMaxLightOutput(double pct) async {
-    await _service.sendRawCommand(
+    final cmd = 'VXX:LOPI3=${_fmt(_toProtocol(pct))}';
+    final response = await _service.sendRawCommand(
       _ip,
       _port,
       _login,
       _password,
-      'VXX:LOPI3=${_fmt(_toProtocol(pct))}',
+      cmd,
     );
+    if (response == null) _notifyFailure(cmd);
   }
 
   @override
