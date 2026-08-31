@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:convert';
 import 'dart:async';
+
 import 'package:crypto/crypto.dart';
 
 enum ProbeResult { online, unauthorized, offline, unprotected }
@@ -9,12 +10,20 @@ class PanasonicProtocolService {
   /// Scans a given subnet (e.g. "192.168.1") for Panasonic projectors on the specified port.
   /// Yields results as they are found. Addresses are probed in batches of 50 to
   /// avoid opening all 254 sockets simultaneously.
-  Stream<Map<String, dynamic>> scanNetwork(String subnet, int port, {String login = '', String password = ''}) async* {
+  Stream<Map<String, dynamic>> scanNetwork(
+    String subnet,
+    int port, {
+    String login = '',
+    String password = '',
+  }) async* {
     const batchSize = 50;
     final ips = [for (int i = 1; i <= 254; i++) '$subnet.$i'];
 
     for (int start = 0; start < ips.length; start += batchSize) {
-      final batch = ips.sublist(start, (start + batchSize).clamp(0, ips.length));
+      final batch = ips.sublist(
+        start,
+        (start + batchSize).clamp(0, ips.length),
+      );
       final results = await Future.wait(
         batch.map((ip) => _pingProjector(ip, port, login, password)),
       );
@@ -26,9 +35,22 @@ class PanasonicProtocolService {
 
   /// Attempts to connect to a specific IP and port, verify it's a Panasonic projector,
   /// and retrieve its model name (QID). Returns status 'online', 'unprotected', or 'auth_error'.
-  Future<Map<String, dynamic>?> _pingProjector(String ip, int port, String login, String password) async {
-    final (modelResponse, isProtected) = await _sendSingleCommandEx(ip, port, login, password, 'QID');
-    if (modelResponse == 'Timeout' || modelResponse.contains('Error') || modelResponse.isEmpty) {
+  Future<Map<String, dynamic>?> _pingProjector(
+    String ip,
+    int port,
+    String login,
+    String password,
+  ) async {
+    final (modelResponse, isProtected) = await _sendSingleCommandEx(
+      ip,
+      port,
+      login,
+      password,
+      'QID',
+    );
+    if (modelResponse == 'Timeout' ||
+        modelResponse.contains('Error') ||
+        modelResponse.isEmpty) {
       return null;
     }
     if (modelResponse == 'ERRA') {
@@ -44,30 +66,15 @@ class PanasonicProtocolService {
     };
   }
 
-  /// Probes a projector to determine its reachability and auth status without
-  /// fetching full telemetry. Returns [ProbeResult.online] if reachable with valid
-  /// credentials, [ProbeResult.unprotected] if reachable in non-protected mode,
-  /// [ProbeResult.unauthorized] if reachable but auth fails, and [ProbeResult.offline]
-  /// if not reachable at all.
-  Future<ProbeResult> probeProjector(String ip, int port, String login, String password) async {
-    final (response, isProtected) = await _sendSingleCommandEx(ip, port, login, password, 'QID');
-    if (response == 'Timeout' || response.contains('Error') || response.isEmpty) {
-      return ProbeResult.offline;
-    }
-    if (response == 'ERRA') {
-      return ProbeResult.unauthorized;
-    }
-    if (response.startsWith('ER')) {
-      return ProbeResult.offline;
-    }
-    return isProtected ? ProbeResult.online : ProbeResult.unprotected;
-  }
-
   /// A quick ping to just check if an already added projector is online and reachable on the port.
   Future<bool> checkConnection(String ip, int port) async {
     Socket? socket;
     try {
-      socket = await Socket.connect(ip, port, timeout: const Duration(milliseconds: 1500));
+      socket = await Socket.connect(
+        ip,
+        port,
+        timeout: const Duration(milliseconds: 1500),
+      );
       return true;
     } catch (e) {
       return false;
@@ -77,19 +84,41 @@ class PanasonicProtocolService {
   }
 
   /// Helper method to send a single command and return only the response string.
-  Future<String> _sendSingleCommand(String ip, int port, String login, String password, String cmd) async {
-    final (response, _) = await _sendSingleCommandEx(ip, port, login, password, cmd);
+  Future<String> _sendSingleCommand(
+    String ip,
+    int port,
+    String login,
+    String password,
+    String cmd,
+  ) async {
+    final (response, _) = await _sendSingleCommandEx(
+      ip,
+      port,
+      login,
+      password,
+      cmd,
+    );
     return response;
   }
 
   /// Sends a single command and returns both the response and whether the connection
   /// used protected (auth-required) mode. Handles the NTCONTROL handshake, computes
   /// the MD5 hash for protected mode, and strips the response prefix deterministically.
-  Future<(String, bool)> _sendSingleCommandEx(String ip, int port, String login, String password, String cmd) async {
+  Future<(String, bool)> _sendSingleCommandEx(
+    String ip,
+    int port,
+    String login,
+    String password,
+    String cmd,
+  ) async {
     Socket? socket;
     StreamSubscription? subscription;
     try {
-      socket = await Socket.connect(ip, port, timeout: const Duration(seconds: 4));
+      socket = await Socket.connect(
+        ip,
+        port,
+        timeout: const Duration(seconds: 4),
+      );
 
       Completer<String>? currentCompleter = Completer<String>();
       StringBuffer buffer = StringBuffer();
@@ -118,7 +147,9 @@ class PanasonicProtocolService {
         },
       );
 
-      final initResponse = await currentCompleter.future.timeout(const Duration(seconds: 5));
+      final initResponse = await currentCompleter.future.timeout(
+        const Duration(seconds: 5),
+      );
 
       if (!initResponse.startsWith('NTCONTROL')) {
         await subscription.cancel();
@@ -129,7 +160,8 @@ class PanasonicProtocolService {
       final isProtected = initResponse.contains(' 1 ');
       String commandPrefix = '00';
       if (isProtected) {
-        final tokenMatch = RegExp(r'NTCONTROL\s1\s([0-9a-fA-F]{8})').firstMatch(initResponse);
+        final tokenMatch = RegExp(r'NTCONTROL\s1\s([0-9a-fA-F]{8})')
+            .firstMatch(initResponse);
         if (tokenMatch == null) {
           // The projector announced protected mode but its challenge token
           // doesn't match the expected 8-hex-char format — sending the
@@ -151,7 +183,9 @@ class PanasonicProtocolService {
       socket.add(ascii.encode(fullCmd));
       await socket.flush();
 
-      final response = await currentCompleter.future.timeout(const Duration(seconds: 5));
+      final response = await currentCompleter.future.timeout(
+        const Duration(seconds: 5),
+      );
 
       // Responses are always prefixed with '00' regardless of auth mode.
       // Strip exactly 2 chars from the front rather than searching for '00',
@@ -171,7 +205,13 @@ class PanasonicProtocolService {
   }
 
   /// Sends an action command to the projector without expecting complex telemetry back.
-  Future<bool> sendCommand(String ip, int port, String login, String password, String cmd) async {
+  Future<bool> sendCommand(
+    String ip,
+    int port,
+    String login,
+    String password,
+    String cmd,
+  ) async {
     final response = await _sendSingleCommand(ip, port, login, password, cmd);
     if (response == 'Timeout' || response.startsWith('ER')) {
       return false;
@@ -180,7 +220,13 @@ class PanasonicProtocolService {
   }
 
   /// Sends a specific command and returns its raw string response.
-  Future<String?> sendRawCommand(String ip, int port, String login, String password, String cmd) async {
+  Future<String?> sendRawCommand(
+    String ip,
+    int port,
+    String login,
+    String password,
+    String cmd,
+  ) async {
     final response = await _sendSingleCommand(ip, port, login, password, cmd);
     if (response == 'Timeout' || response.startsWith('ER')) {
       return null;
@@ -188,27 +234,74 @@ class PanasonicProtocolService {
     return response;
   }
 
-  /// Polls all essential telemetry points for the Monitoring Table
-  Future<Map<String, dynamic>?> pollProjectorTelemetry(String ip, int port, String login, String password) async {
-    final modelResponse = await _sendSingleCommand(ip, port, login, password, 'QID');
-    if (modelResponse == 'Timeout' || modelResponse.contains('Error') || modelResponse.contains('ERRA')) {
-      return null;
+  /// Polls all essential telemetry points for the Monitoring Table, and
+  /// classifies reachability/auth status from that same initial `QID` query.
+  /// This used to be two separate methods (a dropped `probeProjector` plus
+  /// this one) that each independently sent `QID` to the same projector on
+  /// every poll cycle for overlapping information — merged so `QID` is only
+  /// sent once. Classification order/logic here matches what `probeProjector`
+  /// used to do exactly, so callers see the same [ProbeResult] values as
+  /// before.
+  Future<(ProbeResult, Map<String, dynamic>?)> pollProjectorTelemetry(
+    String ip,
+    int port,
+    String login,
+    String password,
+  ) async {
+    final (modelResponse, isProtected) = await _sendSingleCommandEx(
+      ip,
+      port,
+      login,
+      password,
+      'QID',
+    );
+    if (modelResponse == 'Timeout' ||
+        modelResponse.contains('Error') ||
+        modelResponse.isEmpty) {
+      return (ProbeResult.offline, null);
+    }
+    if (modelResponse == 'ERRA') {
+      return (ProbeResult.unauthorized, null);
+    }
+    if (modelResponse.startsWith('ER')) {
+      return (ProbeResult.offline, null);
     }
 
     final Map<String, dynamic> telemetry = {};
     telemetry['modelName'] = modelResponse;
 
-    telemetry['serialNumber'] = await _sendSingleCommand(ip, port, login, password, 'QSN');
-    telemetry['power'] = await _sendSingleCommand(ip, port, login, password, 'QPW');
-    telemetry['shutter'] = await _sendSingleCommand(ip, port, login, password, 'QSH');
-    telemetry['input'] = await _sendSingleCommand(ip, port, login, password, 'QIN');
-    telemetry['signal'] = await _sendSingleCommand(ip, port, login, password, 'QVX:NSGS1');
-    telemetry['runtime'] = await _sendSingleCommand(ip, port, login, password, 'QVX:RTMS1');
-    telemetry['intakeTemp'] = await _sendSingleCommand(ip, port, login, password, 'QTM:0');
-    telemetry['exhaustTemp'] = await _sendSingleCommand(ip, port, login, password, 'QTM:1');
-    telemetry['acVoltage'] = await _sendSingleCommand(ip, port, login, password, 'QVX:VMOI2');
-    telemetry['errors'] = await _sendSingleCommand(ip, port, login, password, 'QVX:ERRS2');
+    // Fire all 10 remaining telemetry queries concurrently rather than one
+    // at a time — each is its own TCP connect/handshake/command/disconnect
+    // cycle per the protocol's connection-lifetime rule, so awaiting them
+    // sequentially paid every round-trip's latency 10 times over per node,
+    // per poll cycle. Same concurrent-queries-to-one-projector pattern
+    // already used (and verified on real hardware) by
+    // geometry_correction_dialog.dart's _loadCorner().
+    final results = await Future.wait([
+      _sendSingleCommand(ip, port, login, password, 'QSN'),
+      _sendSingleCommand(ip, port, login, password, 'QPW'),
+      _sendSingleCommand(ip, port, login, password, 'QSH'),
+      _sendSingleCommand(ip, port, login, password, 'QIN'),
+      _sendSingleCommand(ip, port, login, password, 'QVX:NSGS1'),
+      _sendSingleCommand(ip, port, login, password, 'QVX:RTMS1'),
+      _sendSingleCommand(ip, port, login, password, 'QTM:0'),
+      _sendSingleCommand(ip, port, login, password, 'QTM:1'),
+      _sendSingleCommand(ip, port, login, password, 'QVX:VMOI2'),
+      _sendSingleCommand(ip, port, login, password, 'QVX:ERRS2'),
+    ]);
 
-    return telemetry;
+    telemetry['serialNumber'] = results[0];
+    telemetry['power'] = results[1];
+    telemetry['shutter'] = results[2];
+    telemetry['input'] = results[3];
+    telemetry['signal'] = results[4];
+    telemetry['runtime'] = results[5];
+    telemetry['intakeTemp'] = results[6];
+    telemetry['exhaustTemp'] = results[7];
+    telemetry['acVoltage'] = results[8];
+    telemetry['errors'] = results[9];
+
+    final status = isProtected ? ProbeResult.online : ProbeResult.unprotected;
+    return (status, telemetry);
   }
 }

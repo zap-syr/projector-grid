@@ -279,7 +279,10 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     final oldStatus = node.connectionStatus;
     final oldErrors = node.errors;
 
-    final probe = await _protocolService.probeProjector(
+    // pollProjectorTelemetry folds in what used to be a separate
+    // probeProjector() call — both started with the same QID query, so this
+    // avoids sending QID to the same projector twice per poll cycle.
+    final (probe, telemetry) = await _protocolService.pollProjectorTelemetry(
       node.ipAddress,
       node.port,
       node.login,
@@ -335,13 +338,6 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     final targetStatus = probe == ProbeResult.unprotected
         ? ConnectionStatus.unprotected
         : ConnectionStatus.connected;
-
-    final telemetry = await _protocolService.pollProjectorTelemetry(
-      node.ipAddress,
-      node.port,
-      node.login,
-      node.password,
-    );
 
     if (telemetry != null) {
       if (oldStatus == ConnectionStatus.offline ||
