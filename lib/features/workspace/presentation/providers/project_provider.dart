@@ -178,7 +178,20 @@ class ProjectStateNotifier extends _$ProjectStateNotifier {
   }
 
   Future<bool> pickAndOpenProject() async {
-    final path = await _showOpenDialog();
+    String? path;
+    try {
+      path = await _showOpenDialog();
+    } catch (e) {
+      // The native picker process itself failed to launch (e.g. PowerShell
+      // blocked by policy, osascript unavailable) — surface it instead of
+      // letting the exception propagate out of a plain onPressed handler.
+      ref.read(eventLogProvider.notifier).log(LogEvent(
+        severity: LogSeverity.error,
+        type: LogEventType.command,
+        message: 'Failed to open the file picker: $e',
+      ));
+      return false;
+    }
     if (path == null) return false;
     await openProject(path);
     return true;
@@ -198,7 +211,19 @@ class ProjectStateNotifier extends _$ProjectStateNotifier {
         ? _fileName(state.currentFilePath!)
         : 'project.pgrid';
 
-    final path = await _showSaveDialog(defaultName);
+    String? path;
+    try {
+      path = await _showSaveDialog(defaultName);
+    } catch (e) {
+      // Same reasoning as pickAndOpenProject: the native picker process
+      // itself failed to launch, not a project-file write failure.
+      ref.read(eventLogProvider.notifier).log(LogEvent(
+        severity: LogSeverity.error,
+        type: LogEventType.command,
+        message: 'Failed to open the file picker: $e',
+      ));
+      return false;
+    }
     if (path == null) return false;
     final filePath = path.endsWith('.pgrid') ? path : '$path.pgrid';
     return _writeToFile(filePath);
