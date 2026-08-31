@@ -393,12 +393,17 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
               ? '-'
               : '${runtimeRaw}H';
 
-          // Parse Temps
+          // Parse Temps. Real projectors always respond with a Celsius/Fahrenheit
+          // pair delimited by '/' (the first segment is Celsius, which we take),
+          // but fall back to appending °C directly to a plain unsplit value on
+          // the off chance a projector/firmware sends just one temperature.
           String intake = telemetry['intakeTemp'] ?? n.intakeTemp;
           if (intake.contains('/')) {
             intake = '${intake.split('/')[0].substring(2)}°C';
           } else if (intake == 'ER401') {
             intake = '-';
+          } else if (intake.isNotEmpty) {
+            intake = '$intake°C';
           }
 
           String exhaust = telemetry['exhaustTemp'] ?? n.exhaustTemp;
@@ -406,6 +411,8 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
             exhaust = '${exhaust.split('/')[0].substring(2)}°C';
           } else if (exhaust == 'ER401') {
             exhaust = '-';
+          } else if (exhaust.isNotEmpty) {
+            exhaust = '$exhaust°C';
           }
 
           // Parse Voltage
