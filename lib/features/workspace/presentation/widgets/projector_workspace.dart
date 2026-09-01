@@ -438,12 +438,8 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
                   ): const SendCommandIntent(
                     'VXX:LNSI2=+00000',
                   ),
-                  const SingleActivator(
-                    LogicalKeyboardKey.arrowUp,
-                    meta: true,
-                  ): const SendCommandIntent(
-                    'VXX:LNSI3=+00000',
-                  ),
+                  const SingleActivator(LogicalKeyboardKey.arrowUp, meta: true):
+                      const SendCommandIntent('VXX:LNSI3=+00000'),
                   const SingleActivator(
                     LogicalKeyboardKey.arrowDown,
                     meta: true,
@@ -508,7 +504,9 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
                     ),
                     DeleteIntent: CallbackAction<DeleteIntent>(
                       onInvoke: (intent) async {
-                        final selectedCount = ref.read(selectionProvider).length;
+                        final selectedCount = ref
+                            .read(selectionProvider)
+                            .length;
                         if (selectedCount == 0) return;
                         final confirm = await showDialog<bool>(
                           context: context,
@@ -679,240 +677,239 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
                                     height: canvasHeight,
                                     color:
                                         Colors.transparent, // Capture gestures
-                                    child: CustomPaint(
-                                      painter: GridPainter(
-                                        Theme.of(context).dividerColor
-                                            .withValues(alpha: 0.1),
-                                        _gridStep * _currentZoom,
-                                      ),
-                                      child: Stack(
-                                        clipBehavior: Clip.none,
-                                        children: [
-                                          // Render projector nodes
-                                          ...nodes.map(
-                                            (node) => ProjectorCard(
-                                              key: ValueKey(node.id),
-                                              node: node,
-                                              group: node.groupId != null
-                                                  ? groupMap[node.groupId]
-                                                  : null,
-                                              isDragging:
-                                                  _panStartPositions
-                                                      ?.containsKey(node.id) ??
-                                                  false,
-                                              zoom: _currentZoom,
-                                              onTap: () {
-                                                notifier.selectNodeOnTap(
+                                    child: Stack(
+                                      clipBehavior: Clip.none,
+                                      children: [
+                                        // Background grid isolated in its own
+                                        // layer (RepaintBoundary) so it
+                                        // rasterizes once and stays cached while
+                                        // cards are dragged on top of it,
+                                        // instead of the whole 3000x3000 grid
+                                        // repainting on every pointer move.
+                                        Positioned.fill(
+                                          child: RepaintBoundary(
+                                            child: CustomPaint(
+                                              painter: GridPainter(
+                                                Theme.of(context).dividerColor
+                                                    .withValues(alpha: 0.1),
+                                                _gridStep * _currentZoom,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        // Render projector nodes
+                                        ...nodes.map(
+                                          (node) => ProjectorCard(
+                                            key: ValueKey(node.id),
+                                            node: node,
+                                            group: node.groupId != null
+                                                ? groupMap[node.groupId]
+                                                : null,
+                                            isDragging:
+                                                _panStartPositions?.containsKey(
                                                   node.id,
-                                                  multiSelect: _isMultiSelect,
-                                                );
-                                              },
-                                              onPanDown: (details) {
-                                                notifier.selectNodeOnDown(
-                                                  node.id,
-                                                  multiSelect: _isMultiSelect,
-                                                );
-                                              },
-                                              onPanUpdate: (details) {
-                                                if (_panStartPositions ==
-                                                    null) {
-                                                  notifier.saveBeforeMove();
-                                                  final selectedIds = ref.read(
-                                                    selectionProvider,
-                                                  );
-                                                  final affected =
-                                                      selectedIds.contains(
-                                                        node.id,
-                                                      )
-                                                      ? nodes.where(
-                                                          (n) => selectedIds
-                                                              .contains(n.id),
-                                                        )
-                                                      : [node];
-                                                  _panStartPositions = {
-                                                    for (final n in affected)
-                                                      n.id: Offset(n.x, n.y),
-                                                  };
-                                                  _panTotalDelta = Offset.zero;
-                                                }
-                                                _panTotalDelta += details.delta;
-                                                notifier
-                                                    .setNodePositionsFromDrag(
-                                                      node.id,
-                                                      _panTotalDelta,
-                                                      _panStartPositions!,
-                                                    );
-                                              },
-                                              onPanEnd: (details) {
-                                                // Clear drag tracking before the
-                                                // snap so the resulting rebuild
-                                                // sees isDragging=false and
-                                                // animates the snap correction
-                                                // instead of jumping instantly.
-                                                _panStartPositions = null;
-                                                _panTotalDelta = Offset.zero;
-                                                notifier.snapNodeToGrid(
-                                                  node.id,
-                                                );
-                                                notifier.endMove();
-                                              },
-                                              onEdit: () {
-                                                showDialog(
-                                                  context: context,
-                                                  builder: (context) =>
-                                                      EditProjectorDialog(
-                                                        node: node,
-                                                        existingIps: nodes
-                                                            .map(
-                                                              (n) =>
-                                                                  n.ipAddress,
-                                                            )
-                                                            .where(
-                                                              (ip) =>
-                                                                  ip !=
-                                                                  node.ipAddress,
-                                                            )
-                                                            .toSet(),
-                                                        onSave:
-                                                            (
-                                                              ip,
-                                                              login,
-                                                              password,
-                                                            ) {
-                                                              notifier
-                                                                  .updateNode(
-                                                                    node.id,
-                                                                    ip,
-                                                                    login,
-                                                                    password,
-                                                                  );
-                                                            },
-                                                      ),
-                                                );
-                                              },
-                                              onDelete: () async {
+                                                ) ??
+                                                false,
+                                            zoom: _currentZoom,
+                                            onTap: () {
+                                              notifier.selectNodeOnTap(
+                                                node.id,
+                                                multiSelect: _isMultiSelect,
+                                              );
+                                            },
+                                            onPanDown: (details) {
+                                              notifier.selectNodeOnDown(
+                                                node.id,
+                                                multiSelect: _isMultiSelect,
+                                              );
+                                            },
+                                            onPanUpdate: (details) {
+                                              if (_panStartPositions == null) {
+                                                notifier.saveBeforeMove();
                                                 final selectedIds = ref.read(
                                                   selectionProvider,
                                                 );
-                                                final selectedCount =
-                                                    selectedIds.length;
-                                                final isMultiDelete =
+                                                final affected =
                                                     selectedIds.contains(
                                                       node.id,
-                                                    ) &&
-                                                    selectedCount > 1;
-                                                final confirm = await showDialog<bool>(
-                                                  context: context,
-                                                  builder: (context) => AlertDialog(
-                                                    title: const Text(
-                                                      'Delete Projector',
+                                                    )
+                                                    ? nodes.where(
+                                                        (n) => selectedIds
+                                                            .contains(n.id),
+                                                      )
+                                                    : [node];
+                                                _panStartPositions = {
+                                                  for (final n in affected)
+                                                    n.id: Offset(n.x, n.y),
+                                                };
+                                                _panTotalDelta = Offset.zero;
+                                              }
+                                              _panTotalDelta += details.delta;
+                                              notifier.setNodePositionsFromDrag(
+                                                node.id,
+                                                _panTotalDelta,
+                                                _panStartPositions!,
+                                              );
+                                            },
+                                            onPanEnd: (details) {
+                                              // Clear drag tracking before the
+                                              // snap so the resulting rebuild
+                                              // sees isDragging=false and
+                                              // animates the snap correction
+                                              // instead of jumping instantly.
+                                              _panStartPositions = null;
+                                              _panTotalDelta = Offset.zero;
+                                              notifier.snapNodeToGrid(node.id);
+                                              notifier.endMove();
+                                            },
+                                            onEdit: () {
+                                              showDialog(
+                                                context: context,
+                                                builder: (context) =>
+                                                    EditProjectorDialog(
+                                                      node: node,
+                                                      existingIps: nodes
+                                                          .map(
+                                                            (n) => n.ipAddress,
+                                                          )
+                                                          .where(
+                                                            (ip) =>
+                                                                ip !=
+                                                                node.ipAddress,
+                                                          )
+                                                          .toSet(),
+                                                      onSave:
+                                                          (
+                                                            ip,
+                                                            login,
+                                                            password,
+                                                          ) {
+                                                            notifier.updateNode(
+                                                              node.id,
+                                                              ip,
+                                                              login,
+                                                              password,
+                                                            );
+                                                          },
                                                     ),
-                                                    content: Text(
-                                                      isMultiDelete
-                                                          ? 'Are you sure you want to delete $selectedCount selected projectors?'
-                                                          : 'Are you sure you want to delete ${node.name}?',
-                                                    ),
-                                                    actions: [
-                                                      TextButton(
-                                                        onPressed: () =>
-                                                            Navigator.of(
-                                                              context,
-                                                            ).pop(false),
-                                                        child: const Text(
-                                                          'Cancel',
-                                                        ),
-                                                      ),
-                                                      FilledButton(
-                                                        onPressed: () =>
-                                                            Navigator.of(
-                                                              context,
-                                                            ).pop(true),
-                                                        child: const Text(
-                                                          'Delete',
-                                                        ),
-                                                      ),
-                                                    ],
+                                              );
+                                            },
+                                            onDelete: () async {
+                                              final selectedIds = ref.read(
+                                                selectionProvider,
+                                              );
+                                              final selectedCount =
+                                                  selectedIds.length;
+                                              final isMultiDelete =
+                                                  selectedIds.contains(
+                                                    node.id,
+                                                  ) &&
+                                                  selectedCount > 1;
+                                              final confirm = await showDialog<bool>(
+                                                context: context,
+                                                builder: (context) => AlertDialog(
+                                                  title: const Text(
+                                                    'Delete Projector',
                                                   ),
-                                                );
-                                                if (confirm == true) {
-                                                  if (isMultiDelete) {
-                                                    notifier.deleteSelected();
-                                                  } else {
-                                                    notifier.deleteNode(
-                                                      node.id,
-                                                    );
-                                                  }
+                                                  content: Text(
+                                                    isMultiDelete
+                                                        ? 'Are you sure you want to delete $selectedCount selected projectors?'
+                                                        : 'Are you sure you want to delete ${node.name}?',
+                                                  ),
+                                                  actions: [
+                                                    TextButton(
+                                                      onPressed: () =>
+                                                          Navigator.of(context)
+                                                              .pop(false),
+                                                      child: const Text(
+                                                        'Cancel',
+                                                      ),
+                                                    ),
+                                                    FilledButton(
+                                                      onPressed: () =>
+                                                          Navigator.of(context)
+                                                              .pop(true),
+                                                      child: const Text(
+                                                        'Delete',
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              );
+                                              if (confirm == true) {
+                                                if (isMultiDelete) {
+                                                  notifier.deleteSelected();
+                                                } else {
+                                                  notifier.deleteNode(node.id);
                                                 }
-                                              },
-                                              onColorCorrection: () {
-                                                showDialog(
-                                                  context: context,
-                                                  builder: (_) =>
-                                                      ColorCorrectionDialog(
-                                                        node: node,
-                                                      ),
-                                                );
-                                              },
-                                              onBrightnessControl: () {
-                                                showDialog(
-                                                  context: context,
-                                                  builder: (_) =>
-                                                      BrightnessControlDialog(
-                                                        node: node,
-                                                      ),
-                                                );
-                                              },
-                                              onGeometryCorrection: () {
-                                                showDialog(
-                                                  context: context,
-                                                  builder: (_) =>
-                                                      GeometryCorrectionDialog(
-                                                        node: node,
-                                                      ),
-                                                );
-                                              },
-                                              onSelectGroup:
-                                                  node.groupId != null
-                                                  ? () => notifier
-                                                        .selectNodesInGroup(
-                                                          node.groupId!,
-                                                        )
-                                                  : null,
-                                              buildGroupMenuItems: () =>
-                                                  _buildGroupMenuItems(
-                                                    node,
-                                                    notifier,
-                                                    groups,
-                                                  ),
-                                            ),
+                                              }
+                                            },
+                                            onColorCorrection: () {
+                                              showDialog(
+                                                context: context,
+                                                builder: (_) =>
+                                                    ColorCorrectionDialog(
+                                                      node: node,
+                                                    ),
+                                              );
+                                            },
+                                            onBrightnessControl: () {
+                                              showDialog(
+                                                context: context,
+                                                builder: (_) =>
+                                                    BrightnessControlDialog(
+                                                      node: node,
+                                                    ),
+                                              );
+                                            },
+                                            onGeometryCorrection: () {
+                                              showDialog(
+                                                context: context,
+                                                builder: (_) =>
+                                                    GeometryCorrectionDialog(
+                                                      node: node,
+                                                    ),
+                                              );
+                                            },
+                                            onSelectGroup: node.groupId != null
+                                                ? () => notifier
+                                                      .selectNodesInGroup(
+                                                        node.groupId!,
+                                                      )
+                                                : null,
+                                            buildGroupMenuItems: () =>
+                                                _buildGroupMenuItems(
+                                                  node,
+                                                  notifier,
+                                                  groups,
+                                                ),
                                           ),
+                                        ),
 
-                                          // Render selection marquee
-                                          if (_selectionStart != null &&
-                                              _selectionCurrent != null)
-                                            Positioned.fromRect(
-                                              rect: Rect.fromPoints(
-                                                _selectionStart! * _currentZoom,
-                                                _selectionCurrent! *
-                                                    _currentZoom,
-                                              ),
-                                              child: Container(
-                                                decoration: BoxDecoration(
+                                        // Render selection marquee
+                                        if (_selectionStart != null &&
+                                            _selectionCurrent != null)
+                                          Positioned.fromRect(
+                                            rect: Rect.fromPoints(
+                                              _selectionStart! * _currentZoom,
+                                              _selectionCurrent! * _currentZoom,
+                                            ),
+                                            child: Container(
+                                              decoration: BoxDecoration(
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .primary
+                                                    .withValues(alpha: 0.2),
+                                                border: Border.all(
                                                   color: Theme.of(context)
                                                       .colorScheme
-                                                      .primary
-                                                      .withValues(alpha: 0.2),
-                                                  border: Border.all(
-                                                    color: Theme.of(context)
-                                                        .colorScheme
-                                                        .primary,
-                                                    width: 1,
-                                                  ),
+                                                      .primary,
+                                                  width: 1,
                                                 ),
                                               ),
                                             ),
-                                        ],
-                                      ),
+                                          ),
+                                      ],
                                     ),
                                   ),
                                 ),
