@@ -56,8 +56,13 @@ class ProjectorWorkspace extends ConsumerStatefulWidget {
 
 class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
     with WidgetsBindingObserver {
-  Offset? _selectionStart;
-  Offset? _selectionCurrent;
+  // Marquee (rubber-band) selection. The anchor is a plain field and the live
+  // rectangle is a ValueNotifier painted by _MarqueePainter, so dragging the
+  // marquee never calls setState — the ~100 ProjectorCard widgets built in
+  // build() are not recreated on every pointer move. Stored in screen (zoomed)
+  // coordinates; divided by _currentZoom only when hit-testing nodes.
+  Offset? _selectionAnchor;
+  final ValueNotifier<Rect?> _marqueeRect = ValueNotifier<Rect?>(null);
 
   final ScrollController _verticalController = ScrollController();
   final ScrollController _horizontalController = ScrollController();
@@ -86,6 +91,7 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
     HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
     _verticalController.dispose();
     _horizontalController.dispose();
+    _marqueeRect.dispose();
     super.dispose();
   }
 
@@ -636,40 +642,33 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
                                   },
                                   onPanStart: (details) {
                                     if (_isPanning) return;
-                                    setState(() {
-                                      _selectionStart =
-                                          details.localPosition / _currentZoom;
-                                      _selectionCurrent =
-                                          details.localPosition / _currentZoom;
-                                    });
+                                    _selectionAnchor = details.localPosition;
+                                    _marqueeRect.value =
+                                        details.localPosition & Size.zero;
                                     notifier.startMarqueeSelection(
                                       append: _isMultiSelect,
                                     );
                                   },
                                   onPanUpdate: (details) {
                                     if (_isPanning) return;
-                                    setState(() {
-                                      _selectionCurrent =
-                                          details.localPosition / _currentZoom;
-                                    });
-                                    if (_selectionStart != null &&
-                                        _selectionCurrent != null) {
-                                      final rect = Rect.fromPoints(
-                                        _selectionStart!,
-                                        _selectionCurrent!,
-                                      );
-                                      notifier.selectNodesInRect(
-                                        rect,
-                                        append: _isMultiSelect,
-                                      );
-                                    }
+                                    final anchor = _selectionAnchor;
+                                    if (anchor == null) return;
+                                    _marqueeRect.value = Rect.fromPoints(
+                                      anchor,
+                                      details.localPosition,
+                                    );
+                                    notifier.selectNodesInRect(
+                                      Rect.fromPoints(
+                                        anchor / _currentZoom,
+                                        details.localPosition / _currentZoom,
+                                      ),
+                                      append: _isMultiSelect,
+                                    );
                                   },
                                   onPanEnd: (details) {
                                     if (_isPanning) return;
-                                    setState(() {
-                                      _selectionStart = null;
-                                      _selectionCurrent = null;
-                                    });
+                                    _selectionAnchor = null;
+                                    _marqueeRect.value = null;
                                     notifier.endMarqueeSelection();
                                   },
                                   child: Container(
@@ -886,29 +885,21 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
                                           ),
                                         ),
 
-                                        // Render selection marquee
-                                        if (_selectionStart != null &&
-                                            _selectionCurrent != null)
-                                          Positioned.fromRect(
-                                            rect: Rect.fromPoints(
-                                              _selectionStart! * _currentZoom,
-                                              _selectionCurrent! * _currentZoom,
-                                            ),
-                                            child: Container(
-                                              decoration: BoxDecoration(
+                                        // Selection marquee — painted from a
+                                        // ValueNotifier so the drag repaints
+                                        // only this overlay, not the card tree.
+                                        Positioned.fill(
+                                          child: IgnorePointer(
+                                            child: CustomPaint(
+                                              painter: _MarqueePainter(
+                                                rect: _marqueeRect,
                                                 color: Theme.of(context)
                                                     .colorScheme
-                                                    .primary
-                                                    .withValues(alpha: 0.2),
-                                                border: Border.all(
-                                                  color: Theme.of(context)
-                                                      .colorScheme
-                                                      .primary,
-                                                  width: 1,
-                                                ),
+                                                    .primary,
                                               ),
                                             ),
                                           ),
+                                        ),
                                       ],
                                     ),
                                   ),
@@ -965,6 +956,36 @@ class GridPainter extends CustomPainter {
   bool shouldRepaint(covariant GridPainter oldDelegate) {
     return oldDelegate.gridColor != gridColor || oldDelegate.step != step;
   }
+}
+
+/// Paints the rubber-band selection rectangle. Driven directly by a
+/// [ValueNotifier] via `super.repaint`, so the marquee drag repaints this
+/// overlay alone — the parent [ProjectorWorkspace] never rebuilds.
+class _MarqueePainter extends CustomPainter {
+  _MarqueePainter({required ValueNotifier<Rect?> rect, required this.color})
+    : _rect = rect,
+      super(repaint: rect);
+
+  final ValueNotifier<Rect?> _rect;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = _rect.value;
+    if (rect == null || rect.isEmpty) return;
+    canvas.drawRect(rect, Paint()..color = color.withValues(alpha: 0.2));
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..color = color
+        ..strokeWidth = 1
+        ..style = PaintingStyle.stroke,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_MarqueePainter oldDelegate) =>
+      oldDelegate.color != color || oldDelegate._rect != _rect;
 }
 
 class _ZoomControl extends StatefulWidget {
