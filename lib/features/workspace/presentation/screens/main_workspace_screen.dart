@@ -120,12 +120,15 @@ class _WorkspaceBodyState extends ConsumerState<_WorkspaceBody> {
           EventLogPanel.defaultHeight,
         );
 
+        // Each major section gets its own RepaintBoundary so a repaint in one
+        // (e.g. the StatusBar poll spinner, or a card being dragged in the
+        // workspace) can't bubble up and force the others to re-rasterize.
         return Column(
           children: [
             // Shared above the Controls/Monitoring switch (rather than
             // nested inside the Controls branch) so it stays visible in
             // both views instead of disappearing in Monitoring.
-            const StatusBar(),
+            const RepaintBoundary(child: StatusBar()),
             Expanded(
               child: IndexedStack(
                 index: isMonitoringView ? 1 : 0,
@@ -134,19 +137,22 @@ class _WorkspaceBodyState extends ConsumerState<_WorkspaceBody> {
                     node: _controlsScopeNode,
                     child: const Row(
                       children: [
-                        Expanded(child: ProjectorWorkspace()),
-                        ControlBar(),
+                        Expanded(
+                          child: RepaintBoundary(child: ProjectorWorkspace()),
+                        ),
+                        RepaintBoundary(child: ControlBar()),
                       ],
                     ),
                   ),
                   FocusScope(
                     node: _monitoringScopeNode,
-                    child: const MonitoringTable(),
+                    child: const RepaintBoundary(child: MonitoringTable()),
                   ),
                 ],
               ),
             ),
-            if (showLogs) EventLogPanel(maxHeight: maxLogHeight),
+            if (showLogs)
+              RepaintBoundary(child: EventLogPanel(maxHeight: maxLogHeight)),
           ],
         );
       },

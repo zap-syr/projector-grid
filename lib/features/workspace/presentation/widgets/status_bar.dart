@@ -82,10 +82,16 @@ class _RefreshStatusItem extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         if (pollStatus.isPolling)
-          const SizedBox(
-            width: 12,
-            height: 12,
-            child: CircularProgressIndicator(strokeWidth: 2),
+          // The indeterminate spinner drives an AnimationController that marks
+          // needs-paint every frame while a poll cycle is in flight. Without
+          // this boundary that repaint bubbles up to the route layer and
+          // re-rasterizes the whole page (toolbar, canvas grid, every card).
+          const RepaintBoundary(
+            child: SizedBox(
+              width: 12,
+              height: 12,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
           )
         else
           Icon(
