@@ -1,7 +1,9 @@
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../providers/app_settings_provider.dart';
 import '../providers/osc_provider.dart';
 import '../providers/workspace_provider.dart';
@@ -31,13 +33,19 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
   void initState() {
     super.initState();
     final settings = ref.read(appSettingsProvider);
-    _intervalController = TextEditingController(text: settings.pollingIntervalSeconds.toString());
+    _intervalController = TextEditingController(
+      text: settings.pollingIntervalSeconds.toString(),
+    );
     _selectedTheme = settings.themeMode;
     _oscActive = settings.oscActive;
     _selectedNetworkDevice = settings.oscNetworkDevice;
-    _oscReceivePortController = TextEditingController(text: settings.oscReceivePort.toString());
+    _oscReceivePortController = TextEditingController(
+      text: settings.oscReceivePort.toString(),
+    );
     _oscSendIpController = TextEditingController(text: settings.oscSendIp);
-    _oscSendPortController = TextEditingController(text: settings.oscSendPort.toString());
+    _oscSendPortController = TextEditingController(
+      text: settings.oscSendPort.toString(),
+    );
     _loadNetworkInterfaces();
   }
 
@@ -66,8 +74,14 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
     final oldSettings = ref.read(appSettingsProvider);
 
     // General
-    final interval = int.tryParse(_intervalController.text);
-    if (interval != null && interval > 0) {
+    final parsed = int.tryParse(_intervalController.text);
+    if (parsed != null) {
+      final interval = parsed.clamp(
+        AppSettings.minPollingIntervalSeconds,
+        AppSettings.maxPollingIntervalSeconds,
+      );
+      // Reflect the clamped value back so the field never shows a rejected entry.
+      _intervalController.text = interval.toString();
       ref.read(appSettingsProvider.notifier).setPollingInterval(interval);
       ref.read(workspaceProvider.notifier).setPollingInterval(interval);
     }
@@ -77,20 +91,28 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
     final settingsNotifier = ref.read(appSettingsProvider.notifier);
     settingsNotifier.setOscNetworkDevice(_selectedNetworkDevice);
     final recvPort = int.tryParse(_oscReceivePortController.text);
-    if (recvPort != null && recvPort > 0) settingsNotifier.setOscReceivePort(recvPort);
+    if (recvPort != null && recvPort > 0) {
+      settingsNotifier.setOscReceivePort(recvPort);
+    }
     final sendIp = _oscSendIpController.text.trim();
     settingsNotifier.setOscSendIp(sendIp);
     final sendPort = int.tryParse(_oscSendPortController.text);
-    if (sendPort != null && sendPort > 0) settingsNotifier.setOscSendPort(sendPort);
+    if (sendPort != null && sendPort > 0) {
+      settingsNotifier.setOscSendPort(sendPort);
+    }
 
     // OSC active toggle — compare against persisted setting, not auto-dispose provider state
     final oscNotifier = ref.read(oscProvider.notifier);
     final wasActive = oldSettings.oscActive;
     final connectionParamsChanged =
         _selectedNetworkDevice != oldSettings.oscNetworkDevice ||
-        (recvPort != null && recvPort > 0 && recvPort != oldSettings.oscReceivePort) ||
+        (recvPort != null &&
+            recvPort > 0 &&
+            recvPort != oldSettings.oscReceivePort) ||
         sendIp != oldSettings.oscSendIp ||
-        (sendPort != null && sendPort > 0 && sendPort != oldSettings.oscSendPort);
+        (sendPort != null &&
+            sendPort > 0 &&
+            sendPort != oldSettings.oscSendPort);
 
     if (_oscActive && !wasActive) {
       oscNotifier.start();
@@ -113,10 +135,12 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
     if (_networkInterfaces != null) {
       for (final iface in _networkInterfaces!) {
         for (final addr in iface.addresses) {
-          entries.add(DropdownMenuEntry(
-            value: addr.address,
-            label: '${iface.name}  ${addr.address}',
-          ));
+          entries.add(
+            DropdownMenuEntry(
+              value: addr.address,
+              label: '${iface.name}  ${addr.address}',
+            ),
+          );
         }
       }
     }
@@ -150,7 +174,9 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
                   Tab(text: 'General'),
                   Tab(text: 'OSC'),
                 ],
-                labelStyle: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                labelStyle: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
 
               // Tab content
@@ -163,20 +189,36 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Update Interval', style: theme.textTheme.titleSmall),
+                          Text(
+                            'Update Interval',
+                            style: theme.textTheme.titleSmall,
+                          ),
                           const SizedBox(height: 8),
                           SizedBox(
                             width: 120,
                             child: TextField(
                               controller: _intervalController,
                               keyboardType: TextInputType.number,
-                              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                              ],
                               decoration: const InputDecoration(
                                 suffixText: 's',
                                 border: OutlineInputBorder(),
                                 isDense: true,
-                                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 10,
+                                ),
                               ),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'How often projectors are polled '
+                            '(${AppSettings.minPollingIntervalSeconds}-${AppSettings.maxPollingIntervalSeconds}s)',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.hintColor,
                             ),
                           ),
                           const SizedBox(height: 24),
@@ -184,8 +226,16 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
                           const SizedBox(height: 8),
                           SegmentedButton<ThemeMode>(
                             segments: const [
-                              ButtonSegment(value: ThemeMode.light, label: Text('Light'), icon: Icon(Icons.light_mode)),
-                              ButtonSegment(value: ThemeMode.dark, label: Text('Dark'), icon: Icon(Icons.dark_mode)),
+                              ButtonSegment(
+                                value: ThemeMode.light,
+                                label: Text('Light'),
+                                icon: Icon(Icons.light_mode),
+                              ),
+                              ButtonSegment(
+                                value: ThemeMode.dark,
+                                label: Text('Dark'),
+                                icon: Icon(Icons.dark_mode),
+                              ),
                             ],
                             selected: {_selectedTheme},
                             showSelectedIcon: false,
@@ -206,7 +256,10 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
                           // Active toggle
                           Row(
                             children: [
-                              Text('OSC Active', style: theme.textTheme.titleSmall),
+                              Text(
+                                'OSC Active',
+                                style: theme.textTheme.titleSmall,
+                              ),
                               const Spacer(),
                               Switch(
                                 value: _oscActive,
@@ -219,7 +272,10 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
                           const SizedBox(height: 16),
 
                           // Network device
-                          Text('Network Device', style: theme.textTheme.titleSmall),
+                          Text(
+                            'Network Device',
+                            style: theme.textTheme.titleSmall,
+                          ),
                           const SizedBox(height: 8),
                           DropdownMenu<String>(
                             initialSelection: _selectedNetworkDevice,
@@ -229,7 +285,10 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
                             inputDecorationTheme: const InputDecorationTheme(
                               border: OutlineInputBorder(),
                               isDense: true,
-                              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
                             ),
                             dropdownMenuEntries: _buildNetworkDeviceEntries(),
                             onSelected: (value) {
@@ -247,16 +306,24 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text('Receive Port', style: theme.textTheme.titleSmall),
+                                    Text(
+                                      'Receive Port',
+                                      style: theme.textTheme.titleSmall,
+                                    ),
                                     const SizedBox(height: 8),
                                     TextField(
                                       controller: _oscReceivePortController,
                                       keyboardType: TextInputType.number,
-                                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                      inputFormatters: [
+                                        FilteringTextInputFormatter.digitsOnly,
+                                      ],
                                       decoration: const InputDecoration(
                                         border: OutlineInputBorder(),
                                         isDense: true,
-                                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                        contentPadding: EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 10,
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -267,14 +334,20 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text('Send IP', style: theme.textTheme.titleSmall),
+                                    Text(
+                                      'Send IP',
+                                      style: theme.textTheme.titleSmall,
+                                    ),
                                     const SizedBox(height: 8),
                                     TextField(
                                       controller: _oscSendIpController,
                                       decoration: const InputDecoration(
                                         border: OutlineInputBorder(),
                                         isDense: true,
-                                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                        contentPadding: EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 10,
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -285,16 +358,24 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text('Send Port', style: theme.textTheme.titleSmall),
+                                    Text(
+                                      'Send Port',
+                                      style: theme.textTheme.titleSmall,
+                                    ),
                                     const SizedBox(height: 8),
                                     TextField(
                                       controller: _oscSendPortController,
                                       keyboardType: TextInputType.number,
-                                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                      inputFormatters: [
+                                        FilteringTextInputFormatter.digitsOnly,
+                                      ],
                                       decoration: const InputDecoration(
                                         border: OutlineInputBorder(),
                                         isDense: true,
-                                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                        contentPadding: EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 10,
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -312,7 +393,10 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
               // Footer
               const Divider(height: 1),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
@@ -321,10 +405,7 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
                       child: const Text('Cancel'),
                     ),
                     const SizedBox(width: 8),
-                    FilledButton(
-                      onPressed: _save,
-                      child: const Text('Save'),
-                    ),
+                    FilledButton(onPressed: _save, child: const Text('Save')),
                   ],
                 ),
               ),

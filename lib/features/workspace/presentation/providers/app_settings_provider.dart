@@ -1,12 +1,21 @@
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+
 import '../../../../core/services/app_config_dir.dart';
 
 part 'app_settings_provider.g.dart';
 
 class AppSettings {
+  /// Bounds for the projector telemetry poll interval. The floor keeps a
+  /// mistyped value (e.g. 1s) from hammering every projector on the network
+  /// and taking the app down with it.
+  static const int minPollingIntervalSeconds = 30;
+  static const int maxPollingIntervalSeconds = 3600;
+  static const int defaultPollingIntervalSeconds = 60;
+
   final int pollingIntervalSeconds;
   final ThemeMode themeMode;
   final bool oscActive;
@@ -18,7 +27,7 @@ class AppSettings {
   final bool isMonitoringView;
 
   const AppSettings({
-    this.pollingIntervalSeconds = 60,
+    this.pollingIntervalSeconds = defaultPollingIntervalSeconds,
     this.themeMode = ThemeMode.dark,
     this.oscActive = false,
     this.oscNetworkDevice = '',
@@ -41,7 +50,8 @@ class AppSettings {
     bool? isMonitoringView,
   }) {
     return AppSettings(
-      pollingIntervalSeconds: pollingIntervalSeconds ?? this.pollingIntervalSeconds,
+      pollingIntervalSeconds:
+          pollingIntervalSeconds ?? this.pollingIntervalSeconds,
       themeMode: themeMode ?? this.themeMode,
       oscActive: oscActive ?? this.oscActive,
       oscNetworkDevice: oscNetworkDevice ?? this.oscNetworkDevice,
@@ -66,7 +76,10 @@ class AppSettings {
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) => AppSettings(
-    pollingIntervalSeconds: (json['pollingIntervalSeconds'] as int?) ?? 60,
+    pollingIntervalSeconds:
+        ((json['pollingIntervalSeconds'] as int?) ??
+                defaultPollingIntervalSeconds)
+            .clamp(minPollingIntervalSeconds, maxPollingIntervalSeconds),
     themeMode: ThemeMode.values.firstWhere(
       (m) => m.name == json['themeMode'],
       orElse: () => ThemeMode.dark,
@@ -108,7 +121,11 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
   }
 
   void setPollingInterval(int seconds) {
-    state = state.copyWith(pollingIntervalSeconds: seconds);
+    final clamped = seconds.clamp(
+      AppSettings.minPollingIntervalSeconds,
+      AppSettings.maxPollingIntervalSeconds,
+    );
+    state = state.copyWith(pollingIntervalSeconds: clamped);
     _save(state);
   }
 

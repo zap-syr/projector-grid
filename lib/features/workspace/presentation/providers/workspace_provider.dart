@@ -8,6 +8,7 @@ import '../../domain/projector_node.dart';
 import '../../domain/projector_group.dart';
 import '../../domain/log_event.dart';
 import '../../../../core/services/panasonic_protocol_service.dart';
+import 'app_settings_provider.dart';
 import 'event_log_provider.dart';
 import 'selection_provider.dart';
 import 'poll_status_provider.dart';
@@ -18,7 +19,7 @@ part 'workspace_provider.g.dart';
 class WorkspaceNotifier extends _$WorkspaceNotifier {
   final _protocolService = PanasonicProtocolService();
   Timer? _pollingTimer;
-  int _pollingIntervalSeconds = 60;
+  int _pollingIntervalSeconds = AppSettings.defaultPollingIntervalSeconds;
   int _pollingGeneration = 0;
   bool _isPollingDisposed = false;
 
@@ -33,8 +34,11 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
 
   @override
   List<ProjectorNode> build() {
-    // Start polling when provider initializes
-    _startPolling();
+    // Start polling when provider initializes, honouring the persisted interval
+    // (build() otherwise defaulted to 60s until the user re-saved Preferences).
+    _startPolling(
+      seconds: ref.read(appSettingsProvider).pollingIntervalSeconds,
+    );
 
     // Make sure to clean up the timer when the provider is destroyed
     ref.onDispose(() {
@@ -191,8 +195,15 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     ref.read(eventLogProvider.notifier).log(event);
   }
 
-  void _startPolling({int seconds = 60}) {
-    _pollingIntervalSeconds = seconds;
+  void _startPolling({
+    int seconds = AppSettings.defaultPollingIntervalSeconds,
+  }) {
+    // Last line of defence against a runaway timer, even if a caller somehow
+    // bypasses the clamp in AppSettingsNotifier.setPollingInterval.
+    _pollingIntervalSeconds = seconds.clamp(
+      AppSettings.minPollingIntervalSeconds,
+      AppSettings.maxPollingIntervalSeconds,
+    );
     _pollingGeneration++; // invalidates any in-flight poll's reschedule
     _pollingTimer?.cancel();
     _pollingTimer = null;
@@ -212,7 +223,15 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     });
   }
 
-  Future<void> refreshAll() => _pollAllProjectors();
+  Future<void> refreshAll() async {
+    await _pollAllProjectors();
+    // A manual refresh (F5 / menu) resets the automatic-poll countdown so the
+    // next scheduled poll is a full interval away, rather than firing on the
+    // timer that was already armed before the manual poll.
+    if (!_isPollingDisposed) {
+      _startPolling(seconds: _pollingIntervalSeconds);
+    }
+  }
 
   void setNodes(List<ProjectorNode> nodes) {
     state = List<ProjectorNode>.from(nodes);
