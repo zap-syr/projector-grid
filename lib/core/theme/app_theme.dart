@@ -6,10 +6,33 @@ class AppTheme {
   static ThemeData get darkTheme => _base(Brightness.dark);
 
   static ThemeData _base(Brightness brightness) {
-    final colorScheme = ColorScheme.fromSeed(
+    final isLight = brightness == Brightness.light;
+
+    var colorScheme = ColorScheme.fromSeed(
       seedColor: const Color(0xFF1A73E8),
       brightness: brightness,
+      // Neutral variant strips most of the coloured undertone so the light
+      // theme's near-whites read as plain grey instead of a cool blue tint.
+      dynamicSchemeVariant:
+          isLight ? DynamicSchemeVariant.neutral : DynamicSchemeVariant.tonalSpot,
     );
+
+    // The default M3 light surfaces sit almost at pure white, which feels
+    // harsh on a large desktop window. Pull the whole surface ramp down into
+    // a soft grey while keeping cards slightly lighter than the canvas so the
+    // layering still reads.
+    if (isLight) {
+      colorScheme = colorScheme.copyWith(
+        surface: const Color(0xFFF6F5F7),
+        surfaceBright: const Color(0xFFF6F5F7),
+        surfaceDim: const Color(0xFFDDDCDE),
+        surfaceContainerLowest: const Color(0xFFFFFFFF),
+        surfaceContainerLow: const Color(0xFFF1F0F2),
+        surfaceContainer: const Color(0xFFEBEAEC),
+        surfaceContainerHigh: const Color(0xFFE5E4E6),
+        surfaceContainerHighest: const Color(0xFFDFDEE0),
+      );
+    }
 
     // Pop-up surfaces (right-click MenuAnchor, DropdownMenu list, submenus,
     // PopupMenuButton) render with no border by default in M3 — just a faint
@@ -34,6 +57,10 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
+      // Canvas behind every screen — a touch darker than the surface ramp so
+      // panels and cards lift off it.
+      scaffoldBackgroundColor:
+          isLight ? const Color(0xFFECECEF) : null,
       visualDensity: VisualDensity.compact,
       // Right-click context menus and DropdownMenu popups both resolve their
       // container style through MenuThemeData.
