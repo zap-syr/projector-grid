@@ -32,9 +32,16 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
   // refresh instead of waiting out the slower cadence, so the UI is never
   // showing stale background-rate data right when you look at it again.
   static const int _backgroundIntervalMultiplier = 3;
+  // How long the window must have stayed backgrounded before a return to the
+  // foreground forces an off-cycle refreshAll(). Ordinary alt-tabbing and
+  // native file dialogs blur/refocus in well under this and are covered by the
+  // already-armed poll timer; only a real absence should pay for a full
+  // immediate re-poll of every projector.
+  static const Duration _foregroundRefreshThreshold = Duration(seconds: 30);
   bool _isWindowMinimized = false;
   bool _isWindowFocused = true;
   bool _isBackgroundPolling = false;
+  DateTime? _backgroundedAt;
 
   static const int _maxHistorySize = 50;
   final List<_WorkspaceSnapshot> _undoStack = [];
@@ -74,18 +81,28 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
     final backgrounded = _isWindowMinimized || !_isWindowFocused;
     if (backgrounded == _isBackgroundPolling) return;
     _isBackgroundPolling = backgrounded;
-    if (!backgrounded) {
-      // Coming back to the foreground: don't wait out the (up to
-      // _backgroundIntervalMultiplier-times-longer) background cadence —
-      // refresh right away, same as a manual F5/Refresh, so the UI isn't
-      // showing stale data from while unattended.
+    if (backgrounded) {
+      _backgroundedAt = DateTime.now();
+      // Going TO the background needs no further action: whatever poll the
+      // already-armed timer was scheduled for still fires once at the
+      // (short) foreground interval, and _scheduleNextPoll picks up
+      // _isBackgroundPolling on its very next call, using the longer
+      // interval from then on.
+      return;
+    }
+    // Coming back to the foreground: don't wait out the (up to
+    // _backgroundIntervalMultiplier-times-longer) background cadence — refresh
+    // right away, same as a manual F5/Refresh, so the UI isn't showing stale
+    // data from while unattended. But skip it for brief switch-aways (alt-tab,
+    // native file dialogs): nothing meaningful changes in a few seconds and the
+    // armed timer polls again shortly.
+    final backgroundedAt = _backgroundedAt;
+    _backgroundedAt = null;
+    final awayLongEnough = backgroundedAt == null ||
+        DateTime.now().difference(backgroundedAt) >= _foregroundRefreshThreshold;
+    if (awayLongEnough) {
       refreshAll();
     }
-    // Going TO the background needs no action here: whatever poll the
-    // already-armed timer was scheduled for still fires once at the
-    // (short) foreground interval, and _scheduleNextPoll picks up
-    // _isBackgroundPolling on its very next call, using the longer
-    // interval from then on.
   }
 
   @override
@@ -202,6 +219,11 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
     if (!_isDragging) {
       _isDragging = true;
       _saveSnapshot();
+      // _saveSnapshot() clears the redo stack but doesn't touch `state`, and a
+      // drag no longer writes `state` until onPanEnd — so force one rebuild
+      // here, otherwise editHistoryStatusProvider reports stale canUndo/canRedo
+      // for the whole drag.
+      state = [...state];
     }
   }
 
