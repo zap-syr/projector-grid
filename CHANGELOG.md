@@ -4,6 +4,49 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.4.1] - 2026-09-05
+
+### For Users
+
+#### Changed
+- Light theme now uses a softer grey surface ramp and a neutral color scheme
+  variant instead of a more saturated one
+- Popup menus and dropdowns now have a visible border and drop shadow, making
+  them easier to distinguish from the content behind them
+- General app optimization and performance improvements: reduced unnecessary
+  UI repaints and rebuilds while dragging projector cards, marquee-selecting,
+  and during telemetry polling; per-projector network concurrency during
+  polling is now capped and scales down automatically for larger projects,
+  avoiding overwhelmed projector hardware or exhausted OS connection limits;
+  polling now automatically slows down while the window is minimized or
+  unfocused, and pulls a fresh update when you return after being away
+
+#### Fixed
+- OSC: changing the receive port, network device, or send IP/port in
+  Preferences while OSC was enabled now takes effect immediately instead of
+  requiring a restart; the "OSC enabled" setting is also now correctly
+  restored on launch
+- Manual refresh (F5 / the Refresh menu item) now correctly resets the
+  automatic polling countdown; the polling interval in Preferences is now
+  clamped to a safe 30-3600 second range
+- A corrupted or malformed custom command entry no longer discards every
+  other saved custom command - only that entry is skipped
+- Protected-mode projectors returning a challenge token in an unexpected
+  format now report an explicit authentication error instead of silently
+  sending a command that gets rejected without explanation
+- Editing a projector on a non-default port now reconnects using that
+  projector's actual port instead of always assuming port 1024
+- Deleting a group now also warns if any scheduled tasks target it, since
+  those tasks would otherwise keep running on schedule but silently match
+  nothing afterward
+- Intake/exhaust temperature now displays correctly for projectors that
+  report a single value instead of the usual Celsius/Fahrenheit pair
+- Opening the Open/Save As dialog now logs a clear error in the Event Log if
+  the native file picker itself fails to launch, instead of failing silently
+- Brightness Control, Color Correction, and Geometry Correction dialogs now
+  show a notification when a command fails to send, instead of failing
+  silently
+
 ## [1.4.0] - 2026-08-25
 
 ### For Users
