@@ -64,6 +64,16 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
   Offset? _selectionAnchor;
   final ValueNotifier<Rect?> _marqueeRect = ValueNotifier<Rect?>(null);
 
+  // Live card position(s) while a drag gesture is in progress, keyed by node
+  // id, in workspace (unzoomed) coordinates. Populated in onPanUpdate and
+  // cleared in onPanEnd; workspaceProvider is only written once, on
+  // onPanEnd, so dragging no longer forces ProjectorWorkspace.build() (and
+  // the ~100 ProjectorCard configs it recreates) to re-run on every pointer
+  // move. ProjectorCard reads this directly to reposition itself without
+  // rebuilding its own heavy subtree — see its ValueListenableBuilder.
+  final ValueNotifier<Map<String, Offset>> _dragOverrides =
+      ValueNotifier<Map<String, Offset>>(const {});
+
   final ScrollController _verticalController = ScrollController();
   final ScrollController _horizontalController = ScrollController();
 
@@ -92,6 +102,7 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
     _verticalController.dispose();
     _horizontalController.dispose();
     _marqueeRect.dispose();
+    _dragOverrides.dispose();
     super.dispose();
   }
 
@@ -187,6 +198,13 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
   static const double _cardWidth = 120.0;
   static const double _cardHeight = 100.0;
   static const double _focusPadding = 60.0;
+
+  // Mirrors WorkspaceNotifier._clampX/_clampY so the live drag preview lands
+  // exactly where onPanEnd's committed position will be — otherwise a card
+  // dragged against the workspace edge would visibly jump when the drag
+  // ends and the real (clamped) position is written to workspaceProvider.
+  double _clampX(double x) => x.clamp(0.0, _workspaceWidth - _cardWidth);
+  double _clampY(double y) => y.clamp(0.0, _workspaceHeight - _cardHeight);
 
   /// Zooms/scrolls so [targets] are centered and fit in the viewport.
   ///
@@ -704,11 +722,7 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
                                             group: node.groupId != null
                                                 ? groupMap[node.groupId]
                                                 : null,
-                                            isDragging:
-                                                _panStartPositions?.containsKey(
-                                                  node.id,
-                                                ) ??
-                                                false,
+                                            dragOverrides: _dragOverrides,
                                             zoom: _currentZoom,
                                             onTap: () {
                                               notifier.selectNodeOnTap(
@@ -744,20 +758,49 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
                                                 _panTotalDelta = Offset.zero;
                                               }
                                               _panTotalDelta += details.delta;
-                                              notifier.setNodePositionsFromDrag(
-                                                node.id,
-                                                _panTotalDelta,
-                                                _panStartPositions!,
-                                              );
+                                              // Ephemeral, local-only update —
+                                              // workspaceProvider isn't
+                                              // written until onPanEnd, so
+                                              // this never rebuilds
+                                              // ProjectorWorkspace or any
+                                              // other card.
+                                              _dragOverrides.value = {
+                                                for (final entry
+                                                    in _panStartPositions!
+                                                        .entries)
+                                                  entry.key: Offset(
+                                                    _clampX(
+                                                      entry.value.dx +
+                                                          _panTotalDelta.dx,
+                                                    ),
+                                                    _clampY(
+                                                      entry.value.dy +
+                                                          _panTotalDelta.dy,
+                                                    ),
+                                                  ),
+                                              };
                                             },
                                             onPanEnd: (details) {
-                                              // Clear drag tracking before the
-                                              // snap so the resulting rebuild
-                                              // sees isDragging=false and
-                                              // animates the snap correction
-                                              // instead of jumping instantly.
+                                              // Commit the accumulated drag to
+                                              // workspaceProvider exactly
+                                              // once, then clear the local
+                                              // preview before the resulting
+                                              // rebuild sees the real
+                                              // (identical) position — no
+                                              // visible jump, since
+                                              // _dragOverrides was already
+                                              // clamped the same way.
+                                              if (_panStartPositions != null) {
+                                                notifier
+                                                    .setNodePositionsFromDrag(
+                                                      node.id,
+                                                      _panTotalDelta,
+                                                      _panStartPositions!,
+                                                    );
+                                              }
                                               _panStartPositions = null;
                                               _panTotalDelta = Offset.zero;
+                                              _dragOverrides.value = const {};
                                               notifier.snapNodeToGrid(node.id);
                                               notifier.endMove();
                                             },

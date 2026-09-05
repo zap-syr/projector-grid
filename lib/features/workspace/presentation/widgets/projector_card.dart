@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -10,7 +11,10 @@ import '../providers/selection_provider.dart';
 class ProjectorCard extends ConsumerStatefulWidget {
   final ProjectorNode node;
   final ProjectorGroup? group;
-  final bool isDragging;
+  // Keyed by node id, in workspace (unzoomed) coordinates. An entry means
+  // this card is being actively dragged and should render at that position
+  // instead of node.x/node.y — see ProjectorWorkspace's onPanUpdate/onPanEnd.
+  final ValueListenable<Map<String, Offset>> dragOverrides;
   final double zoom;
   final VoidCallback onTap;
   final GestureDragDownCallback onPanDown;
@@ -28,7 +32,7 @@ class ProjectorCard extends ConsumerStatefulWidget {
     super.key,
     required this.node,
     this.group,
-    required this.isDragging,
+    required this.dragOverrides,
     required this.zoom,
     required this.onTap,
     required this.onPanDown,
@@ -87,13 +91,25 @@ class _ProjectorCardState extends ConsumerState<ProjectorCard> {
     final zoomChanged = widget.zoom != _lastZoom;
     _lastZoom = widget.zoom;
 
-    return AnimatedPositioned(
-      duration: (widget.isDragging || zoomChanged)
-          ? Duration.zero
-          : const Duration(milliseconds: 130),
-      curve: Curves.easeOut,
-      left: node.x * widget.zoom,
-      top: node.y * widget.zoom,
+    return ValueListenableBuilder<Map<String, Offset>>(
+      valueListenable: widget.dragOverrides,
+      builder: (context, dragOverrides, child) {
+        // A live entry means this card is being actively dragged right now;
+        // it overrides node.x/node.y until workspaceProvider is committed on
+        // onPanEnd. Only this small closure rebuilds per pointer move — the
+        // heavy subtree below is passed through unchanged as `child`.
+        final liveOffset = dragOverrides[node.id];
+        final isDragging = liveOffset != null;
+        return AnimatedPositioned(
+          duration: (isDragging || zoomChanged)
+              ? Duration.zero
+              : const Duration(milliseconds: 130),
+          curve: Curves.easeOut,
+          left: (liveOffset?.dx ?? node.x) * widget.zoom,
+          top: (liveOffset?.dy ?? node.y) * widget.zoom,
+          child: child!,
+        );
+      },
       // Each card gets its own compositing layer so dragging one card only
       // re-composites that layer — the grid and every other card stay cached
       // instead of repainting on every pointer move. The boundary sits below
