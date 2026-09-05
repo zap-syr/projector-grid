@@ -26,6 +26,18 @@ class AppSettings {
   final bool showLogs;
   final bool isMonitoringView;
 
+  /// Monitoring-table layout. `monitoringColumns` is the ordered list of
+  /// *visible* column ids (see `MonitoringTable` for the id set); an empty list
+  /// means "use the table's default set/order". `monitoringColumnWidths` holds
+  /// per-column pixel widths the user set via header auto-fit / drag; ids not
+  /// present fall back to the descriptor default. `monitoringFitToWidth`
+  /// toggles proportional scale-to-viewport vs. honoring pixel widths.
+  final List<String> monitoringColumns;
+  final Map<String, double> monitoringColumnWidths;
+  final String monitoringSortColumnId;
+  final bool monitoringSortAscending;
+  final bool monitoringFitToWidth;
+
   const AppSettings({
     this.pollingIntervalSeconds = defaultPollingIntervalSeconds,
     this.themeMode = ThemeMode.dark,
@@ -36,6 +48,11 @@ class AppSettings {
     this.oscSendPort = 9000,
     this.showLogs = false,
     this.isMonitoringView = false,
+    this.monitoringColumns = const [],
+    this.monitoringColumnWidths = const {},
+    this.monitoringSortColumnId = 'ip',
+    this.monitoringSortAscending = true,
+    this.monitoringFitToWidth = true,
   });
 
   AppSettings copyWith({
@@ -48,6 +65,11 @@ class AppSettings {
     int? oscSendPort,
     bool? showLogs,
     bool? isMonitoringView,
+    List<String>? monitoringColumns,
+    Map<String, double>? monitoringColumnWidths,
+    String? monitoringSortColumnId,
+    bool? monitoringSortAscending,
+    bool? monitoringFitToWidth,
   }) {
     return AppSettings(
       pollingIntervalSeconds:
@@ -60,6 +82,14 @@ class AppSettings {
       oscSendPort: oscSendPort ?? this.oscSendPort,
       showLogs: showLogs ?? this.showLogs,
       isMonitoringView: isMonitoringView ?? this.isMonitoringView,
+      monitoringColumns: monitoringColumns ?? this.monitoringColumns,
+      monitoringColumnWidths:
+          monitoringColumnWidths ?? this.monitoringColumnWidths,
+      monitoringSortColumnId:
+          monitoringSortColumnId ?? this.monitoringSortColumnId,
+      monitoringSortAscending:
+          monitoringSortAscending ?? this.monitoringSortAscending,
+      monitoringFitToWidth: monitoringFitToWidth ?? this.monitoringFitToWidth,
     );
   }
 
@@ -73,6 +103,11 @@ class AppSettings {
     'oscSendPort': oscSendPort,
     'showLogs': showLogs,
     'isMonitoringView': isMonitoringView,
+    'monitoringColumns': monitoringColumns,
+    'monitoringColumnWidths': monitoringColumnWidths,
+    'monitoringSortColumnId': monitoringSortColumnId,
+    'monitoringSortAscending': monitoringSortAscending,
+    'monitoringFitToWidth': monitoringFitToWidth,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) => AppSettings(
@@ -91,6 +126,18 @@ class AppSettings {
     oscSendPort: (json['oscSendPort'] as int?) ?? 9000,
     showLogs: (json['showLogs'] as bool?) ?? false,
     isMonitoringView: (json['isMonitoringView'] as bool?) ?? false,
+    monitoringColumns:
+        (json['monitoringColumns'] as List?)?.cast<String>() ?? const [],
+    monitoringColumnWidths:
+        (json['monitoringColumnWidths'] as Map?)?.map(
+          (k, v) => MapEntry(k as String, (v as num).toDouble()),
+        ) ??
+        const {},
+    monitoringSortColumnId:
+        (json['monitoringSortColumnId'] as String?) ?? 'ip',
+    monitoringSortAscending:
+        (json['monitoringSortAscending'] as bool?) ?? true,
+    monitoringFitToWidth: (json['monitoringFitToWidth'] as bool?) ?? true,
   );
 }
 
@@ -166,6 +213,31 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
 
   void setMonitoringView(bool monitoring) {
     state = state.copyWith(isMonitoringView: monitoring);
+    _save(state);
+  }
+
+  void setMonitoringColumns(List<String> columns) {
+    state = state.copyWith(monitoringColumns: List.unmodifiable(columns));
+    _save(state);
+  }
+
+  void setMonitoringColumnWidth(String id, double width) {
+    final next = Map<String, double>.of(state.monitoringColumnWidths);
+    next[id] = width;
+    state = state.copyWith(monitoringColumnWidths: Map.unmodifiable(next));
+    _save(state);
+  }
+
+  void setMonitoringSort(String columnId, bool ascending) {
+    state = state.copyWith(
+      monitoringSortColumnId: columnId,
+      monitoringSortAscending: ascending,
+    );
+    _save(state);
+  }
+
+  void setMonitoringFitToWidth(bool fit) {
+    state = state.copyWith(monitoringFitToWidth: fit);
     _save(state);
   }
 }

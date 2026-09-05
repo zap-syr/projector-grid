@@ -41,7 +41,7 @@ final class WorkspaceNotifierProvider
   }
 }
 
-String _$workspaceNotifierHash() => r'22e6bcc56a9ae442b4bac4cf46d48af40c9034f7';
+String _$workspaceNotifierHash() => r'00bfcd7425ea6d0e361fb7308a1bd13f4993d5af';
 
 abstract class _$WorkspaceNotifier extends $Notifier<List<ProjectorNode>> {
   List<ProjectorNode> build();

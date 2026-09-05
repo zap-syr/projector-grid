@@ -12,6 +12,7 @@ import 'scheduled_tasks_dialog.dart';
 import 'keyboard_shortcuts_dialog.dart';
 import 'about_dialog.dart';
 import 'add_projector_dialog.dart';
+import 'monitoring_table.dart';
 import '../../../../core/services/docs_service.dart';
 
 class TopMenuBar extends ConsumerWidget {
@@ -133,6 +134,13 @@ class TopMenuBar extends ConsumerWidget {
     final isMonitoringView = ref.watch(
       appSettingsProvider.select((s) => s.isMonitoringView),
     );
+    final monitoringColumns = ref.watch(
+      appSettingsProvider.select((s) => s.monitoringColumns),
+    );
+    final monitoringFitToWidth = ref.watch(
+      appSettingsProvider.select((s) => s.monitoringFitToWidth),
+    );
+    final visibleColumns = MonitoringTable.resolveVisible(monitoringColumns);
     final settingsNotifier = ref.read(appSettingsProvider.notifier);
 
     return Row(
@@ -343,6 +351,49 @@ class TopMenuBar extends ConsumerWidget {
                   ),
                   onPressed: () => settingsNotifier.setShowLogs(!showLogs),
                   child: const Text('Show Logs'),
+                ),
+                const Divider(),
+                SubmenuButton(
+                  menuChildren: [
+                    for (final id in MonitoringTable.allColumnIds)
+                      _viewRadioItem(
+                        context,
+                        label: MonitoringTable.labelFor(id),
+                        checked: visibleColumns.contains(id),
+                        onPressed: () {
+                          final next = MonitoringTable.toggledColumn(
+                            monitoringColumns,
+                            id,
+                          );
+                          if (next != null) {
+                            settingsNotifier.setMonitoringColumns(next);
+                          }
+                        },
+                      ),
+                    const Divider(),
+                    for (final entry in MonitoringTable.presets.entries)
+                      MenuItemButton(
+                        onPressed: () =>
+                            settingsNotifier.setMonitoringColumns(entry.value),
+                        child: Text('${entry.key} preset'),
+                      ),
+                    MenuItemButton(
+                      onPressed: () => settingsNotifier.setMonitoringColumns(
+                        MonitoringTable.showAllColumns,
+                      ),
+                      child: const Text('Show all columns'),
+                    ),
+                    const Divider(),
+                    _viewRadioItem(
+                      context,
+                      label: 'Fit columns to window',
+                      checked: monitoringFitToWidth,
+                      onPressed: () => settingsNotifier.setMonitoringFitToWidth(
+                        !monitoringFitToWidth,
+                      ),
+                    ),
+                  ],
+                  child: const Text('Monitoring Table'),
                 ),
               ],
               child: const Text('View'),

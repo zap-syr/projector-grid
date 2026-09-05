@@ -12,6 +12,7 @@ import 'about_dialog.dart';
 import 'add_projector_dialog.dart';
 import 'keyboard_shortcuts_dialog.dart';
 import 'manage_groups_dialog.dart';
+import 'monitoring_table.dart';
 import 'preferences_dialog.dart';
 import 'scheduled_tasks_dialog.dart';
 import 'top_menu_bar.dart';
@@ -36,6 +37,11 @@ class MacMenuBar extends ConsumerWidget {
     final showLogs = ref.watch(appSettingsProvider.select((s) => s.showLogs));
     final isMonitoringView =
         ref.watch(appSettingsProvider.select((s) => s.isMonitoringView));
+    final monitoringColumns =
+        ref.watch(appSettingsProvider.select((s) => s.monitoringColumns));
+    final monitoringFitToWidth =
+        ref.watch(appSettingsProvider.select((s) => s.monitoringFitToWidth));
+    final visibleColumns = MonitoringTable.resolveVisible(monitoringColumns);
     final settingsNotifier = ref.read(appSettingsProvider.notifier);
 
     return PlatformMenuBar(
@@ -322,6 +328,61 @@ class MacMenuBar extends ConsumerWidget {
                 PlatformMenuItem(
                   label: showLogs ? 'Hide Logs' : 'Show Logs',
                   onSelected: () => settingsNotifier.setShowLogs(!showLogs),
+                ),
+              ],
+            ),
+            PlatformMenuItemGroup(
+              members: <PlatformMenuItem>[
+                PlatformMenu(
+                  label: 'Monitoring Table',
+                  menus: <PlatformMenuItem>[
+                    PlatformMenuItemGroup(
+                      members: <PlatformMenuItem>[
+                        for (final id in MonitoringTable.allColumnIds)
+                          PlatformMenuItem(
+                            label:
+                                '${visibleColumns.contains(id) ? '✓ ' : '   '}'
+                                '${MonitoringTable.labelFor(id)}',
+                            onSelected: () {
+                              final next = MonitoringTable.toggledColumn(
+                                monitoringColumns,
+                                id,
+                              );
+                              if (next != null) {
+                                settingsNotifier.setMonitoringColumns(next);
+                              }
+                            },
+                          ),
+                      ],
+                    ),
+                    PlatformMenuItemGroup(
+                      members: <PlatformMenuItem>[
+                        for (final entry in MonitoringTable.presets.entries)
+                          PlatformMenuItem(
+                            label: '${entry.key} preset',
+                            onSelected: () => settingsNotifier
+                                .setMonitoringColumns(entry.value),
+                          ),
+                        PlatformMenuItem(
+                          label: 'Show all columns',
+                          onSelected: () => settingsNotifier.setMonitoringColumns(
+                            MonitoringTable.showAllColumns,
+                          ),
+                        ),
+                      ],
+                    ),
+                    PlatformMenuItemGroup(
+                      members: <PlatformMenuItem>[
+                        PlatformMenuItem(
+                          label: monitoringFitToWidth
+                              ? '✓ Fit columns to window'
+                              : '   Fit columns to window',
+                          onSelected: () => settingsNotifier
+                              .setMonitoringFitToWidth(!monitoringFitToWidth),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ],
             ),
