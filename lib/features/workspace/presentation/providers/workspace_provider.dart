@@ -3,6 +3,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:window_manager/window_manager.dart';
 
 import '../../domain/projector_node.dart';
 import '../../domain/projector_group.dart';
@@ -16,12 +17,24 @@ import 'poll_status_provider.dart';
 part 'workspace_provider.g.dart';
 
 @riverpod
-class WorkspaceNotifier extends _$WorkspaceNotifier {
+class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
   final _protocolService = PanasonicProtocolService();
   Timer? _pollingTimer;
   int _pollingIntervalSeconds = AppSettings.defaultPollingIntervalSeconds;
   int _pollingGeneration = 0;
   bool _isPollingDisposed = false;
+
+  // Lifecycle-aware polling (OPTIMIZATION_PLAN.md item 3.2): while minimized
+  // or unfocused, poll at a slower cadence instead of either the full rate
+  // (wasted network/CPU when nobody's watching) or not at all (which would
+  // stop the event log from catching a projector going offline/faulting
+  // while unattended). Coming back to the foreground triggers an immediate
+  // refresh instead of waiting out the slower cadence, so the UI is never
+  // showing stale background-rate data right when you look at it again.
+  static const int _backgroundIntervalMultiplier = 3;
+  bool _isWindowMinimized = false;
+  bool _isWindowFocused = true;
+  bool _isBackgroundPolling = false;
 
   static const int _maxHistorySize = 50;
   final List<_WorkspaceSnapshot> _undoStack = [];
@@ -40,16 +53,63 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
       seconds: ref.read(appSettingsProvider).pollingIntervalSeconds,
     );
 
+    windowManager.addListener(this);
+
     // Make sure to clean up the timer when the provider is destroyed
     ref.onDispose(() {
       _isPollingDisposed = true;
       _pollingTimer?.cancel();
+      windowManager.removeListener(this);
       for (final t in _optimisticTimers) {
         t.cancel();
       }
     });
 
     return [];
+  }
+
+  // ── Lifecycle-aware polling ──────────────────────────────────────────────
+
+  void _reconcileWindowFocusState() {
+    final backgrounded = _isWindowMinimized || !_isWindowFocused;
+    if (backgrounded == _isBackgroundPolling) return;
+    _isBackgroundPolling = backgrounded;
+    if (!backgrounded) {
+      // Coming back to the foreground: don't wait out the (up to
+      // _backgroundIntervalMultiplier-times-longer) background cadence —
+      // refresh right away, same as a manual F5/Refresh, so the UI isn't
+      // showing stale data from while unattended.
+      refreshAll();
+    }
+    // Going TO the background needs no action here: whatever poll the
+    // already-armed timer was scheduled for still fires once at the
+    // (short) foreground interval, and _scheduleNextPoll picks up
+    // _isBackgroundPolling on its very next call, using the longer
+    // interval from then on.
+  }
+
+  @override
+  void onWindowMinimize() {
+    _isWindowMinimized = true;
+    _reconcileWindowFocusState();
+  }
+
+  @override
+  void onWindowRestore() {
+    _isWindowMinimized = false;
+    _reconcileWindowFocusState();
+  }
+
+  @override
+  void onWindowFocus() {
+    _isWindowFocused = true;
+    _reconcileWindowFocusState();
+  }
+
+  @override
+  void onWindowBlur() {
+    _isWindowFocused = false;
+    _reconcileWindowFocusState();
   }
 
   // ── Undo / Redo ──────────────────────────────────────────────────────────
@@ -211,7 +271,15 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
   }
 
   void _scheduleNextPoll(int generation) {
-    _pollingTimer = Timer(Duration(seconds: _pollingIntervalSeconds), () async {
+    // _pollingIntervalSeconds always holds the user-configured (foreground)
+    // interval — never overwritten for background mode — so this multiplies
+    // it fresh on every reschedule rather than mutating it, which is what
+    // lets a foreground/background transition take effect on the very next
+    // tick without needing to cancel and re-arm the timer immediately.
+    final effectiveSeconds = _isBackgroundPolling
+        ? _pollingIntervalSeconds * _backgroundIntervalMultiplier
+        : _pollingIntervalSeconds;
+    _pollingTimer = Timer(Duration(seconds: effectiveSeconds), () async {
       await _pollAllProjectors();
       // Only reschedule if this generation is still the active one.
       // If _startPolling was called while we were awaiting, the generation
