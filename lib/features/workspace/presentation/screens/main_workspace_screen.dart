@@ -348,8 +348,13 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
             backgroundColor: Theme.of(context).colorScheme.surface,
             body: Column(
               children: [
-                if (!Platform.isMacOS) const TopMenuBar(),
-                const MainToolbar(),
+                // Isolated as defense-in-depth: editHistoryStatusProvider and
+                // MainToolbar's own .select() watches already stop most
+                // spurious rebuilds, but a boundary here also caps repaint
+                // cost for whatever legitimately does rebuild this strip.
+                if (!Platform.isMacOS)
+                  const RepaintBoundary(child: TopMenuBar()),
+                const RepaintBoundary(child: MainToolbar()),
                 const Expanded(child: _WorkspaceBody()),
               ],
             ),

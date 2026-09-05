@@ -42,7 +42,7 @@ final class CustomCommandsNotifierProvider
 }
 
 String _$customCommandsNotifierHash() =>
-    r'0a0caca4cae7634d93255bf67e5e4d296c873628';
+    r'fe24d9941ea2ed2e0415f0965cf2beaf382e1d27';
 
 abstract class _$CustomCommandsNotifier extends $Notifier<List<CustomCommand>> {
   List<CustomCommand> build();

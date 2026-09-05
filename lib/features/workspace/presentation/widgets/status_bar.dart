@@ -1,31 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../domain/projector_node.dart';
 import '../providers/poll_status_provider.dart';
-import '../providers/workspace_provider.dart';
+import '../providers/status_summary_provider.dart';
 
 class StatusBar extends ConsumerWidget {
   const StatusBar({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final nodes = ref.watch(workspaceProvider);
+    final summary = ref.watch(statusSummaryProvider);
     final pollStatus = ref.watch(pollStatusProvider);
-    final total = nodes.length;
-    final online = nodes
-        .where(
-          (n) =>
-              n.connectionStatus == ConnectionStatus.connected ||
-              n.connectionStatus == ConnectionStatus.unprotected,
-        )
-        .length;
-    final offline = nodes
-        .where((n) => n.connectionStatus == ConnectionStatus.offline)
-        .length;
-    final warnings = nodes
-        .where((n) => n.errors != 'NO ERRORS' && n.errors != '-')
-        .length;
+    final total = summary.total;
+    final online = summary.online;
+    final offline = summary.offline;
+    final warnings = summary.warnings;
 
     return Container(
       height: 36,

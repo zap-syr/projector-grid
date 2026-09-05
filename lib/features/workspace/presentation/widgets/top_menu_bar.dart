@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
+
 import '../providers/workspace_provider.dart';
 import '../providers/project_provider.dart';
 import '../providers/app_settings_provider.dart';
+import '../providers/edit_history_status_provider.dart';
 import 'preferences_dialog.dart';
 import 'manage_groups_dialog.dart';
 import 'scheduled_tasks_dialog.dart';
@@ -35,9 +37,7 @@ class TopMenuBar extends ConsumerWidget {
                     shortcutLabel,
                     style: TextStyle(
                       fontSize: 12,
-                      color: Theme.of(context)
-                          .colorScheme
-                          .onSurface
+                      color: Theme.of(context).colorScheme.onSurface
                           .withValues(alpha: 0.45),
                     ),
                   ),
@@ -72,9 +72,7 @@ class TopMenuBar extends ConsumerWidget {
                     shortcutLabel,
                     style: TextStyle(
                       fontSize: 12,
-                      color: Theme.of(context)
-                          .colorScheme
-                          .onSurface
+                      color: Theme.of(context).colorScheme.onSurface
                           .withValues(alpha: 0.45),
                     ),
                   ),
@@ -129,12 +127,12 @@ class TopMenuBar extends ConsumerWidget {
       projectStateProvider.select((s) => s.recentProjects),
     );
     final notifier = ref.read(projectStateProvider.notifier);
-    // Watch workspace to rebuild when undo/redo availability changes.
-    ref.watch(workspaceProvider);
+    final editHistory = ref.watch(editHistoryStatusProvider);
     final wsNotifier = ref.read(workspaceProvider.notifier);
     final showLogs = ref.watch(appSettingsProvider.select((s) => s.showLogs));
-    final isMonitoringView =
-        ref.watch(appSettingsProvider.select((s) => s.isMonitoringView));
+    final isMonitoringView = ref.watch(
+      appSettingsProvider.select((s) => s.isMonitoringView),
+    );
     final settingsNotifier = ref.read(appSettingsProvider.notifier);
 
     return Row(
@@ -150,7 +148,6 @@ class TopMenuBar extends ConsumerWidget {
           children: [
             // ── File ──────────────────────────────────────────────────────
             SubmenuButton(
-
               menuChildren: [
                 _menuItem(
                   context,
@@ -173,7 +170,6 @@ class TopMenuBar extends ConsumerWidget {
 
                 // Open Recent
                 SubmenuButton(
-    
                   menuChildren: recentProjects.isEmpty
                       ? [
                           const MenuItemButton(
@@ -240,19 +236,22 @@ class TopMenuBar extends ConsumerWidget {
 
             // ── Edit ──────────────────────────────────────────────────────
             SubmenuButton(
-
               menuChildren: [
                 _menuItem(
                   context,
                   label: 'Undo',
                   shortcutLabel: 'Ctrl+Z',
-                  onPressed: wsNotifier.canUndo ? () => wsNotifier.undo() : null,
+                  onPressed: editHistory.canUndo
+                      ? () => wsNotifier.undo()
+                      : null,
                 ),
                 _menuItem(
                   context,
                   label: 'Redo',
                   shortcutLabel: 'Ctrl+Y',
-                  onPressed: wsNotifier.canRedo ? () => wsNotifier.redo() : null,
+                  onPressed: editHistory.canRedo
+                      ? () => wsNotifier.redo()
+                      : null,
                 ),
               ],
               child: const Text('Edit'),
@@ -340,9 +339,7 @@ class TopMenuBar extends ConsumerWidget {
                 MenuItemButton(
                   leadingIcon: SizedBox(
                     width: 16,
-                    child: showLogs
-                        ? const Icon(Icons.check, size: 14)
-                        : null,
+                    child: showLogs ? const Icon(Icons.check, size: 14) : null,
                   ),
                   onPressed: () => settingsNotifier.setShowLogs(!showLogs),
                   child: const Text('Show Logs'),
