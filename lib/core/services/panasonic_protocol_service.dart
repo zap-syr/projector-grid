@@ -7,6 +7,32 @@ import 'package:crypto/crypto.dart';
 enum ProbeResult { online, unauthorized, offline, unprotected }
 
 class PanasonicProtocolService {
+  /// Runs [tasks] with at most [concurrency] of them in flight at once,
+  /// returning results in the same order as [tasks]. A fixed-size pool of
+  /// workers each pull the next unstarted task off the shared queue as soon
+  /// as they finish one — [next] is read-and-incremented synchronously with
+  /// no `await` in between, so this is safe without a lock despite multiple
+  /// workers running interleaved on Dart's single isolate.
+  Future<List<T>> _runBounded<T>(
+    List<Future<T> Function()> tasks,
+    int concurrency,
+  ) async {
+    if (tasks.isEmpty) return const [];
+    final results = List<T?>.filled(tasks.length, null);
+    var next = 0;
+    Future<void> worker() async {
+      while (next < tasks.length) {
+        final i = next++;
+        results[i] = await tasks[i]();
+      }
+    }
+
+    await Future.wait(
+      List.generate(concurrency.clamp(1, tasks.length), (_) => worker()),
+    );
+    return results.cast<T>();
+  }
+
   /// Scans a given subnet (e.g. "192.168.1") for Panasonic projectors on the specified port.
   /// Yields results as they are found. Addresses are probed in batches of 50 to
   /// avoid opening all 254 sockets simultaneously.
@@ -246,8 +272,9 @@ class PanasonicProtocolService {
     String ip,
     int port,
     String login,
-    String password,
-  ) async {
+    String password, {
+    int concurrency = 2,
+  }) async {
     final (modelResponse, isProtected) = await _sendSingleCommandEx(
       ip,
       port,
@@ -270,25 +297,27 @@ class PanasonicProtocolService {
     final Map<String, dynamic> telemetry = {};
     telemetry['modelName'] = modelResponse;
 
-    // Fire all 10 remaining telemetry queries concurrently rather than one
-    // at a time — each is its own TCP connect/handshake/command/disconnect
-    // cycle per the protocol's connection-lifetime rule, so awaiting them
-    // sequentially paid every round-trip's latency 10 times over per node,
-    // per poll cycle. Same concurrent-queries-to-one-projector pattern
-    // already used (and verified on real hardware) by
-    // geometry_correction_dialog.dart's _loadCorner().
-    final results = await Future.wait([
-      _sendSingleCommand(ip, port, login, password, 'QSN'),
-      _sendSingleCommand(ip, port, login, password, 'QPW'),
-      _sendSingleCommand(ip, port, login, password, 'QSH'),
-      _sendSingleCommand(ip, port, login, password, 'QIN'),
-      _sendSingleCommand(ip, port, login, password, 'QVX:NSGS1'),
-      _sendSingleCommand(ip, port, login, password, 'QVX:RTMS1'),
-      _sendSingleCommand(ip, port, login, password, 'QTM:0'),
-      _sendSingleCommand(ip, port, login, password, 'QTM:1'),
-      _sendSingleCommand(ip, port, login, password, 'QVX:VMOI2'),
-      _sendSingleCommand(ip, port, login, password, 'QVX:ERRS2'),
-    ]);
+    // Run the 10 remaining telemetry queries with bounded concurrency rather
+    // than one at a time (which would pay every round-trip's latency 10
+    // times over per node, per poll cycle) or all 10 at once (which used to
+    // open up to 10 simultaneous TCP connections to the same projector —
+    // this device class's embedded TCP/IP stack commonly supports only a
+    // handful of connections total, shared across its web UI, control port,
+    // etc., so a 10-wide burst risked ERR3 ["busy"] and false-offline
+    // classifications; see OPTIMIZATION_PLAN.md item 3.1). [concurrency] is
+    // chosen by the caller based on how many nodes are being polled overall.
+    final results = await _runBounded<String>([
+      () => _sendSingleCommand(ip, port, login, password, 'QSN'),
+      () => _sendSingleCommand(ip, port, login, password, 'QPW'),
+      () => _sendSingleCommand(ip, port, login, password, 'QSH'),
+      () => _sendSingleCommand(ip, port, login, password, 'QIN'),
+      () => _sendSingleCommand(ip, port, login, password, 'QVX:NSGS1'),
+      () => _sendSingleCommand(ip, port, login, password, 'QVX:RTMS1'),
+      () => _sendSingleCommand(ip, port, login, password, 'QTM:0'),
+      () => _sendSingleCommand(ip, port, login, password, 'QTM:1'),
+      () => _sendSingleCommand(ip, port, login, password, 'QVX:VMOI2'),
+      () => _sendSingleCommand(ip, port, login, password, 'QVX:ERRS2'),
+    ], concurrency);
 
     telemetry['serialNumber'] = results[0];
     telemetry['power'] = results[1];

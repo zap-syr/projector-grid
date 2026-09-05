@@ -242,6 +242,20 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     _startPolling(seconds: seconds);
   }
 
+  /// Caps how many of a single node's 10 telemetry queries run concurrently
+  /// (see [PanasonicProtocolService.pollProjectorTelemetry]). Smaller
+  /// projects can afford more parallelism per node — total in-flight sockets
+  /// for one poll cycle is bounded by roughly
+  /// `min(totalNodes, _networkBatchSize) * concurrency`, and at a few dozen
+  /// nodes that stays low even with a wide per-node burst. Larger projects
+  /// need a tighter cap so that product doesn't grow unbounded — see
+  /// OPTIMIZATION_PLAN.md item 3.1.
+  static int _telemetryConcurrencyFor(int totalNodes) {
+    if (totalNodes <= 15) return 5;
+    if (totalNodes <= 40) return 3;
+    return 2;
+  }
+
   /// Polls every node in batches of [_networkBatchSize] concurrently, rather
   /// than awaiting each node's full telemetry chain in sequence. A single
   /// node's own poll (probe + up to 10 telemetry commands) still happens as
@@ -260,6 +274,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
       // Also, we must not take a static copy of state into a loop, because state might change
       // while we are awaiting. We should iterate over the current IDs.
       final currentIds = state.map((n) => n.id).toList();
+      final telemetryConcurrency = _telemetryConcurrencyFor(currentIds.length);
 
       for (
         var start = 0;
@@ -284,7 +299,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
             if (node.connectionStatus == ConnectionStatus.offline) {
               await _checkAndSetNodeStatus(node.id, node.ipAddress, node.port);
             } else {
-              await _pollSingleProjector(node);
+              await _pollSingleProjector(node, telemetryConcurrency);
             }
           }),
         );
@@ -294,7 +309,10 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     }
   }
 
-  Future<void> _pollSingleProjector(ProjectorNode node) async {
+  Future<void> _pollSingleProjector(
+    ProjectorNode node,
+    int telemetryConcurrency,
+  ) async {
     final oldStatus = node.connectionStatus;
     final oldErrors = node.errors;
 
@@ -306,6 +324,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
       node.port,
       node.login,
       node.password,
+      concurrency: telemetryConcurrency,
     );
 
     if (probe == ProbeResult.unauthorized) {
@@ -566,7 +585,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
       if (node.connectionStatus == ConnectionStatus.offline) {
         _checkAndSetNodeStatus(node.id, node.ipAddress, node.port);
       } else if (node.connectionStatus != ConnectionStatus.unauthorized) {
-        _pollSingleProjector(node);
+        _pollSingleProjector(node, _telemetryConcurrencyFor(state.length));
       }
     }
   }
@@ -584,7 +603,10 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
 
       final targetNode = state.where((n) => n.id == id).firstOrNull;
       if (targetNode == null) return;
-      await _pollSingleProjector(targetNode);
+      await _pollSingleProjector(
+        targetNode,
+        _telemetryConcurrencyFor(state.length),
+      );
     }
   }
 
