@@ -171,11 +171,26 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
       'GMFIE',
       'GMFIF',
     ];
-    final results = await Future.wait(
-      keys.map(
-        (k) => _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:$k'),
-      ),
-    );
+    // Cap concurrent connections to the projector. A 15-wide burst completes
+    // on a flagship but ~5% of the queries stall ~1s, and weaker models hit
+    // ERR3 outright (see tool/projector_stress_test.dart). Batches of 8 keep
+    // the load well under 200ms.
+    const maxConcurrent = 8;
+    final results = <String?>[];
+    for (var i = 0; i < keys.length; i += maxConcurrent) {
+      final batch = keys.sublist(
+        i,
+        (i + maxConcurrent).clamp(0, keys.length),
+      );
+      results.addAll(
+        await Future.wait(
+          batch.map(
+            (k) =>
+                _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:$k'),
+          ),
+        ),
+      );
+    }
     if (!mounted) return;
 
     int parseAt(int i, String key) => _parseInt(results[i], key) ?? 0;
