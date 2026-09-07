@@ -137,9 +137,11 @@ Widths persist in `monitoringColumnWidths`.
 **Manual edge drag-resize — done (Phase 2, §12.9).** `_ColumnResizeHandle` is a
 12 px opaque zone `Positioned` on each header cell's right edge
 (`SystemMouseCursors.resizeColumn`). Its own `onHorizontalDrag*` handlers take the
-pointer before the reorder `Draggable`. Drag is transient in
-`_MonitoringTableState` (`_resizeColId` / `_resizeAccumDx`); the final base width
-is written to `monitoringColumnWidths` once on drag end, not per pointer move.
+pointer before the reorder `Draggable`; its `onDoubleTap` runs the column's
+auto-fit (this is where auto-fit lives now — see §2 Implementation). Drag is
+transient in `_MonitoringTableState` (`_resizeColId` / `_resizeAccumDx`); the
+final base width is written to `monitoringColumnWidths` once on drag end, not per
+pointer move.
 When fit-to-window was scaling widths at drag start, `_resizeBaseFor` inverts the
 proportional scale (`b = e·B/(V−e)`) so the edge tracks the cursor, falling back
 to `base == on-screen width` once the columns no longer fit — the two branches
@@ -160,10 +162,13 @@ drag-handles to hunt for.
 ### UX
 
 - **Single click** on a header cell → sort by that column. Clicking the
-  already-sorted column **flips ascending / descending**. (Decided.)
-- **Double click** on a header cell → **auto-fit that column's width only**
-  to its widest currently-rendered value. A double-click does *not* also
-  sort. (Decided.)
+  already-sorted column **flips ascending / descending**. Fires with no delay —
+  the header label has no double-tap handler. (Decided.)
+- **Double click on the column's right edge** (the resize zone, not the label)
+  → **auto-fit that column's width only** to its widest currently-rendered
+  value. Desktop "double-click the separator to fit" idiom; keeps sort and
+  auto-fit on physically separate targets so neither gesture waits on the
+  other. (Decided.)
 - **Drag a header cell left/right → reorder columns.** Drop between two other
   headers to move it there; the body rows follow the new order live.
   (Decided — header drag-and-drop, not menu up/down items.)
@@ -173,18 +178,20 @@ drag-handles to hunt for.
           an auto-fit / manual width then acts as a weight.
   - OFF → widths are honored in pixels, horizontal scroll as needed.
 - `[x]` A 12 px drag zone on the header cell's right edge
-  (`SystemMouseCursors.resizeColumn`) for manual width drag — invisible at rest,
-  hover shows a hairline inset 3 px from the edge. See the "Manual edge
-  drag-resize" and "Resize hairline" notes above.
+  (`SystemMouseCursors.resizeColumn`) — drag to resize, **double-click to
+  auto-fit**. Invisible at rest; hover shows a hairline inset 3 px from the
+  edge. See the "Manual edge drag-resize" and "Resize hairline" notes above.
 
 ### Implementation
 
-- Header cell gets `onTap` (sort) + `onDoubleTap` (auto-fit). Since a
-  double-click must *not* sort, we keep the two handlers separate and accept
-  Flutter's ~300 ms tap-vs-double-tap disambiguation — a sort click resolves
-  after that delay. It's subtle for a header sort; if it turns out to annoy,
-  fall back to a manual click-count timer that fires sort immediately and
-  cancels it only if a second click lands within the window.
+- `[x]` The header label's `GestureDetector` has **only** `onTap` (→
+  `_onHeaderTap`, plain sort). No `onDoubleTap` anywhere on the label — putting
+  both on one detector made every single click wait out Flutter's ~300 ms
+  tap/double-tap disambiguation, which was noticeable on the sort. Auto-fit
+  moved to `_ColumnResizeHandle.onDoubleTap` on the right-edge zone: the two
+  gestures now sit on separate widgets, so the sort click resolves instantly and
+  there is no revert/flash. (An earlier manual-detect-and-revert version was
+  tried and rejected.)
 - Reorder: wrap each header cell as a `Draggable` + `DragTarget` (feedback =
   a faded copy of the header label). On accept, move the id within
   `monitoringColumnOrder` and persist. The body `ListView.builder` rebuilds
@@ -478,9 +485,10 @@ Resolved with the user — folded into the sections above:
 
 1. **Single-click sort** — single click sorts; a repeat click on the same
    column flips ascending / descending. (§2)
-2. **Double-click** — auto-fits that column's width **only**; it does not also
-   sort. Accept Flutter's ~300 ms tap/double-tap disambiguation on the sort
-   click. (§2)
+2. **Double-click auto-fit** — lives on the column's **right-edge resize zone**,
+   not the header label. Auto-fits width only; sort is untouched. Because the
+   two gestures sit on separate widgets, single-click sort fires with **no
+   delay**. (§2)
 3. **Column reordering** — yes, by **dragging header cells** (drag-and-drop),
    not menu up/down items. (§1, §2)
 4. **Fit-to-width default** — keep the current proportional auto-scale as the

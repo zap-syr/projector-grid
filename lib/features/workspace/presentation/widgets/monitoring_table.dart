@@ -404,6 +404,10 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
 
   // ── Sort ────────────────────────────────────────────────────────────────
 
+  // Sort fires on a plain `onTap` — no `onDoubleTap` on the header label, so a
+  // single click never waits out gesture disambiguation. Auto-fit lives on the
+  // right-edge resize handle instead (double-click there), the way desktop
+  // tables handle "double-click the column separator to fit".
   void _onHeaderTap(String columnId) {
     final s = ref.read(appSettingsProvider);
     final asc = s.monitoringSortColumnId == columnId
@@ -685,7 +689,6 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: () => _onHeaderTap(col.id),
-              onDoubleTap: () => onAutoFit(col.id),
               child: Container(
                 width: widths[i],
                 height: _headerHeight,
@@ -747,7 +750,8 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
 
           // Right-edge resize handle sits on top of the cell; its opaque hit
           // area takes the pointer before the reorder Draggable. Its hairline is
-          // hidden at rest and only shown while hovered/dragged.
+          // hidden at rest and only shown while hovered/dragged. Double-clicking
+          // it auto-fits the column (the desktop "double-click the separator").
           return Stack(
             children: [
               cell,
@@ -760,6 +764,7 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
                   onStart: () => onResizeStart(col.id),
                   onUpdate: onResizeUpdate,
                   onEnd: onResizeEnd,
+                  onAutoFit: () => onAutoFit(col.id),
                 ),
               ),
             ],
@@ -1034,17 +1039,21 @@ class _CellText extends StatelessWidget {
 /// cell's reorder `Draggable`. Nothing is drawn at rest — the table keeps its
 /// flat look; on hover a 1 px hairline set [_ruleInset] px inside the column
 /// edge fades in as a resize hint, and while dragging it is 2 px in `primary`.
+/// Double-clicking the zone runs [onAutoFit] — the header label itself has no
+/// double-tap, so a header click sorts with no disambiguation delay.
 class _ColumnResizeHandle extends StatefulWidget {
   final double height;
   final VoidCallback onStart;
   final ValueChanged<double> onUpdate;
   final VoidCallback onEnd;
+  final VoidCallback onAutoFit;
 
   const _ColumnResizeHandle({
     required this.height,
     required this.onStart,
     required this.onUpdate,
     required this.onEnd,
+    required this.onAutoFit,
   });
 
   @override
@@ -1082,6 +1091,7 @@ class _ColumnResizeHandleState extends State<_ColumnResizeHandle> {
       onExit: (_) => setState(() => _hover = false),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
+        onDoubleTap: widget.onAutoFit,
         onHorizontalDragStart: (_) {
           setState(() => _dragging = true);
           widget.onStart();
