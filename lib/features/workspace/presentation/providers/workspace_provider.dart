@@ -314,11 +314,14 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
   }
 
   Future<void> refreshAll() async {
-    await _pollAllProjectors();
+    final polled = await _pollAllProjectors();
     // A manual refresh (F5 / menu) resets the automatic-poll countdown so the
     // next scheduled poll is a full interval away, rather than firing on the
-    // timer that was already armed before the manual poll.
-    if (!_isPollingDisposed) {
+    // timer that was already armed before the manual poll. Skip this when a
+    // poll was already in flight (we polled nothing): stomping the generation
+    // and armed timer there would push the in-flight cycle's fresh results a
+    // full interval out instead of letting it reschedule itself on completion.
+    if (polled && !_isPollingDisposed) {
       _startPolling(seconds: _pollingIntervalSeconds);
     }
   }
@@ -352,11 +355,13 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
   /// one connect-per-command sequence internally — batching only overlaps
   /// *different* nodes' polls with each other, which is what keeps a full
   /// cycle from taking N-times-longer as the projector count grows.
-  Future<void> _pollAllProjectors() async {
+  /// Returns `true` if this call actually ran a poll cycle, `false` if it
+  /// bailed because one was already in flight.
+  Future<bool> _pollAllProjectors() async {
     // Guards against F5/Refresh overlapping the auto-poll timer (or a
     // second auto-poll firing before a slow one finishes) — without this,
     // two full poll cycles could run concurrently over every node.
-    if (ref.read(pollStatusProvider).isPolling) return;
+    if (ref.read(pollStatusProvider).isPolling) return false;
 
     ref.read(pollStatusProvider.notifier).started();
     try {
@@ -397,6 +402,21 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
     } finally {
       ref.read(pollStatusProvider.notifier).completed();
     }
+    return true;
+  }
+
+  /// Formats a raw `QTM` temperature reading for the Monitoring table. The
+  /// usual reply is a `<celsius>/<fahrenheit>` pair whose Celsius half carries
+  /// a 2-char prefix that gets stripped; some non-standard firmware sends a
+  /// single bare value. A transient `Timeout`, an `ERxxx` code, or an empty
+  /// reply renders as `-` rather than e.g. `Timeout°C`, and a Celsius segment
+  /// shorter than the prefix no longer throws a RangeError.
+  static String _formatTemp(String raw) {
+    final celsius = raw.contains('/') ? raw.split('/').first : raw;
+    final value = raw.contains('/') && celsius.length > 2
+        ? celsius.substring(2)
+        : celsius;
+    return RegExp(r'^-?\d+(\.\d+)?$').hasMatch(value) ? '$value°C' : '-';
   }
 
   Future<void> _pollSingleProjector(
@@ -517,27 +537,10 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
               ? '-'
               : '${runtimeRaw}H';
 
-          // Parse Temps. Real projectors always respond with a Celsius/Fahrenheit
-          // pair delimited by '/' (the first segment is Celsius, which we take),
-          // but fall back to appending °C directly to a plain unsplit value on
-          // the off chance a projector/firmware sends just one temperature.
-          String intake = telemetry['intakeTemp'] ?? n.intakeTemp;
-          if (intake.contains('/')) {
-            intake = '${intake.split('/')[0].substring(2)}°C';
-          } else if (intake == 'ER401') {
-            intake = '-';
-          } else if (intake.isNotEmpty) {
-            intake = '$intake°C';
-          }
-
-          String exhaust = telemetry['exhaustTemp'] ?? n.exhaustTemp;
-          if (exhaust.contains('/')) {
-            exhaust = '${exhaust.split('/')[0].substring(2)}°C';
-          } else if (exhaust == 'ER401') {
-            exhaust = '-';
-          } else if (exhaust.isNotEmpty) {
-            exhaust = '$exhaust°C';
-          }
+          final intake = _formatTemp(telemetry['intakeTemp'] ?? n.intakeTemp);
+          final exhaust = _formatTemp(
+            telemetry['exhaustTemp'] ?? n.exhaustTemp,
+          );
 
           // Parse Voltage
           String voltageRaw = (telemetry['acVoltage'] as String)
