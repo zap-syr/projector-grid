@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_settings_provider.dart';
-import '../providers/selection_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../../domain/projector_group.dart';
 import '../../domain/projector_node.dart';
 
 const double _kRowHeight = 40;
-const double _kAccentWidth = 3;
 const EdgeInsets _kCellPadding = EdgeInsets.symmetric(horizontal: 16);
 
 /// One monitoring-table column. The descriptor list (`_allColumns`) is the
@@ -124,7 +121,6 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
   final _verticalController = ScrollController();
   final _horizontalController = ScrollController();
   final _headerHorizontalController = ScrollController();
-  final _focusNode = FocusNode(debugLabel: 'MonitoringTable');
 
   // Sort cache — avoids re-sorting on every build when nothing changed.
   List<ProjectorNode> _cachedSorted = const [];
@@ -134,7 +130,6 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
   int _lastGroupsHash = 0;
 
   String? _dragOverColId;
-  int? _selectionAnchor; // index into the sorted list, for shift-range select
 
   static const double _rowHeight = _kRowHeight;
   static const double _headerHeight = 48;
@@ -394,7 +389,6 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
     _verticalController.dispose();
     _horizontalController.dispose();
     _headerHorizontalController.dispose();
-    _focusNode.dispose();
     super.dispose();
   }
 
@@ -453,10 +447,16 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
   void _reorderColumn(List<_Column> current, String draggedId, String targetId) {
     if (draggedId == targetId) return;
     final ids = [for (final c in current) c.id];
-    ids.remove(draggedId);
-    final targetIdx = ids.indexOf(targetId);
-    if (targetIdx < 0) return;
-    ids.insert(targetIdx, draggedId);
+    final from = ids.indexOf(draggedId);
+    final to = ids.indexOf(targetId);
+    if (from < 0 || to < 0) return;
+    // Take `to` from the *original* list. Removing `draggedId` first and then
+    // re-looking up the target shifts its index left by one whenever the drag
+    // goes left→right, which lands the column right back where it started
+    // (a silent no-op). Using the pre-removal index makes a left→right drop
+    // land after the target and a right→left drop land before it.
+    ids.removeAt(from);
+    ids.insert(to, draggedId);
     ref.read(appSettingsProvider.notifier).setMonitoringColumns(ids);
   }
 
@@ -492,43 +492,6 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
     ref
         .read(appSettingsProvider.notifier)
         .setMonitoringColumnWidth(col.id, target);
-  }
-
-  // ── Selection ──────────────────────────────────────────────────────────
-
-  void _onRowTap(int index, List<ProjectorNode> sorted) {
-    final keys = HardwareKeyboard.instance.logicalKeysPressed;
-    final multi =
-        keys.contains(LogicalKeyboardKey.controlLeft) ||
-        keys.contains(LogicalKeyboardKey.controlRight) ||
-        keys.contains(LogicalKeyboardKey.metaLeft) ||
-        keys.contains(LogicalKeyboardKey.metaRight);
-    final range =
-        keys.contains(LogicalKeyboardKey.shiftLeft) ||
-        keys.contains(LogicalKeyboardKey.shiftRight);
-    final sel = ref.read(selectionProvider.notifier);
-    final id = sorted[index].id;
-
-    if (range && _selectionAnchor != null) {
-      final lo = _selectionAnchor! < index ? _selectionAnchor! : index;
-      final hi = _selectionAnchor! < index ? index : _selectionAnchor!;
-      final next = {
-        ...ref.read(selectionProvider),
-        for (var i = lo; i <= hi; i++) sorted[i].id,
-      };
-      sel.set(next);
-      return;
-    }
-    if (multi) {
-      sel.toggle(id);
-    } else {
-      sel.selectOnly(id);
-    }
-    _selectionAnchor = index;
-  }
-
-  void _selectAllVisible(List<ProjectorNode> sorted) {
-    ref.read(selectionProvider.notifier).set({for (final n in sorted) n.id});
   }
 
   // ── Cell builders ──────────────────────────────────────────────────────
@@ -725,7 +688,6 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
     final nodes = ref.watch(workspaceProvider);
     final groupList = ref.read(workspaceProvider.notifier).groups;
     final groups = {for (final g in groupList) g.id: g};
-    final selection = ref.watch(selectionProvider);
 
     final savedColumns = ref.watch(
       appSettingsProvider.select((s) => s.monitoringColumns),
@@ -758,8 +720,6 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
         theme.textTheme.bodyMedium ?? const TextStyle(fontSize: 14);
     final altRowColor = theme.colorScheme.surfaceContainerLow;
     final hoverColor = theme.colorScheme.surfaceContainerHighest;
-    final selectedColor = theme.colorScheme.primary.withValues(alpha: 0.14);
-    final accentColor = theme.colorScheme.primary;
     final primaryColor = theme.colorScheme.primary;
     final dragTargetColor = theme.colorScheme.primary.withValues(alpha: 0.10);
 
@@ -768,117 +728,95 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
     ];
     final totalWidth = baseWidths.fold<double>(0, (a, b) => a + b);
 
-    return CallbackShortcuts(
-      bindings: {
-        const SingleActivator(LogicalKeyboardKey.escape): () =>
-            ref.read(selectionProvider.notifier).clear(),
-        const SingleActivator(LogicalKeyboardKey.keyA, control: true): () =>
-            _selectAllVisible(sortedNodes),
-        const SingleActivator(LogicalKeyboardKey.keyA, meta: true): () =>
-            _selectAllVisible(sortedNodes),
-      },
-      child: Focus(
-        focusNode: _focusNode,
-        child: ColoredBox(
-          color: theme.colorScheme.surface,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final viewportWidth = constraints.maxWidth.isFinite
-                  ? constraints.maxWidth
-                  : 0.0;
+    return ColoredBox(
+      color: theme.colorScheme.surface,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final viewportWidth = constraints.maxWidth.isFinite
+              ? constraints.maxWidth
+              : 0.0;
 
-              final scaleToFit = fitToWidth && viewportWidth > totalWidth;
-              final tableWidth = scaleToFit ? viewportWidth : totalWidth;
-              final effectiveWidths = scaleToFit
-                  ? [
-                      for (final w in baseWidths)
-                        w * viewportWidth / totalWidth,
-                    ]
-                  : baseWidths;
+          final scaleToFit = fitToWidth && viewportWidth > totalWidth;
+          final tableWidth = scaleToFit ? viewportWidth : totalWidth;
+          final effectiveWidths = scaleToFit
+              ? [
+                  for (final w in baseWidths) w * viewportWidth / totalWidth,
+                ]
+              : baseWidths;
 
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // ── Sticky header ────────────────────────────────────────
-                  SizedBox(
-                    width: viewportWidth,
-                    child: ClipRect(
-                      child: SingleChildScrollView(
-                        controller: _headerHorizontalController,
-                        scrollDirection: Axis.horizontal,
-                        physics: const NeverScrollableScrollPhysics(),
-                        child: _buildHeader(
-                          cols,
-                          effectiveWidths,
-                          tableWidth,
-                          headingStyle,
-                          primaryColor,
-                          sortId,
-                          sortAsc,
-                          dragTargetColor,
-                          (id) => _autoFitColumn(
-                            _columnsById[id]!,
-                            nodes,
-                            groups,
-                            bodyStyle,
-                            headingStyle ?? bodyStyle,
-                          ),
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Sticky header ────────────────────────────────────────
+              SizedBox(
+                width: viewportWidth,
+                child: ClipRect(
+                  child: SingleChildScrollView(
+                    controller: _headerHorizontalController,
+                    scrollDirection: Axis.horizontal,
+                    physics: const NeverScrollableScrollPhysics(),
+                    child: _buildHeader(
+                      cols,
+                      effectiveWidths,
+                      tableWidth,
+                      headingStyle,
+                      primaryColor,
+                      sortId,
+                      sortAsc,
+                      dragTargetColor,
+                      (id) => _autoFitColumn(
+                        _columnsById[id]!,
+                        nodes,
+                        groups,
+                        bodyStyle,
+                        headingStyle ?? bodyStyle,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const Divider(height: 1),
+
+              // ── Virtualized scrollable body ──────────────────────────
+              Expanded(
+                child: Scrollbar(
+                  controller: _verticalController,
+                  thumbVisibility: true,
+                  notificationPredicate: (notif) => notif.depth == 1,
+                  child: Scrollbar(
+                    controller: _horizontalController,
+                    thumbVisibility: true,
+                    child: SingleChildScrollView(
+                      controller: _horizontalController,
+                      scrollDirection: Axis.horizontal,
+                      child: SizedBox(
+                        width: tableWidth,
+                        child: ListView.builder(
+                          controller: _verticalController,
+                          itemExtent: _rowHeight,
+                          itemCount: sortedNodes.length,
+                          itemBuilder: (ctx, i) {
+                            final node = sortedNodes[i];
+                            return _MonitoringRow(
+                              key: ValueKey(node.id),
+                              node: node,
+                              columns: cols,
+                              widths: effectiveWidths,
+                              groups: groups,
+                              stripe: i.isOdd,
+                              altRowColor: altRowColor,
+                              hoverColor: hoverColor,
+                            );
+                          },
                         ),
                       ),
                     ),
                   ),
-                  const Divider(height: 1),
-
-                  // ── Virtualized scrollable body ──────────────────────────
-                  Expanded(
-                    child: Scrollbar(
-                      controller: _verticalController,
-                      thumbVisibility: true,
-                      notificationPredicate: (notif) => notif.depth == 1,
-                      child: Scrollbar(
-                        controller: _horizontalController,
-                        thumbVisibility: true,
-                        child: SingleChildScrollView(
-                          controller: _horizontalController,
-                          scrollDirection: Axis.horizontal,
-                          child: SizedBox(
-                            width: tableWidth,
-                            child: ListView.builder(
-                              controller: _verticalController,
-                              itemExtent: _rowHeight,
-                              itemCount: sortedNodes.length,
-                              itemBuilder: (ctx, i) {
-                                final node = sortedNodes[i];
-                                return _MonitoringRow(
-                                  key: ValueKey(node.id),
-                                  node: node,
-                                  index: i,
-                                  columns: cols,
-                                  widths: effectiveWidths,
-                                  groups: groups,
-                                  stripe: i.isOdd,
-                                  selected: selection.contains(node.id),
-                                  altRowColor: altRowColor,
-                                  hoverColor: hoverColor,
-                                  selectedColor: selectedColor,
-                                  accentColor: accentColor,
-                                  onTap: () {
-                                    _focusNode.requestFocus();
-                                    _onRowTap(i, sortedNodes);
-                                  },
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-        ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -889,32 +827,22 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
 /// (which carries the `LayoutBuilder` + nested `Scrollbar`s).
 class _MonitoringRow extends StatefulWidget {
   final ProjectorNode node;
-  final int index;
   final List<_Column> columns;
   final List<double> widths;
   final Map<String, ProjectorGroup> groups;
   final bool stripe;
-  final bool selected;
   final Color altRowColor;
   final Color hoverColor;
-  final Color selectedColor;
-  final Color accentColor;
-  final VoidCallback onTap;
 
   const _MonitoringRow({
     super.key,
     required this.node,
-    required this.index,
     required this.columns,
     required this.widths,
     required this.groups,
     required this.stripe,
-    required this.selected,
     required this.altRowColor,
     required this.hoverColor,
-    required this.selectedColor,
-    required this.accentColor,
-    required this.onTap,
   });
 
   @override
@@ -927,52 +855,32 @@ class _MonitoringRowState extends State<_MonitoringRow> {
   @override
   Widget build(BuildContext context) {
     final w = widget;
-    final bg = w.selected
-        ? w.selectedColor
-        : _hovered
+    final bg = _hovered
         ? w.hoverColor
         : (w.stripe ? w.altRowColor : Colors.transparent);
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: w.onTap,
-        child: SizedBox(
-          height: _kRowHeight,
-          child: ColoredBox(
-            color: bg,
-            child: Stack(
-              children: [
-                Row(
-                  children: [
-                    for (var i = 0; i < w.columns.length; i++)
-                      SizedBox(
-                        width: w.widths[i],
-                        height: _kRowHeight,
-                        child: Padding(
-                          padding: _kCellPadding,
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: w.columns[i].cell(context, w.node, w.groups),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-                if (w.selected)
-                  Positioned(
-                    left: 0,
-                    top: 0,
-                    bottom: 0,
-                    child: Container(
-                      width: _kAccentWidth,
-                      color: w.accentColor,
+      child: SizedBox(
+        height: _kRowHeight,
+        child: ColoredBox(
+          color: bg,
+          child: Row(
+            children: [
+              for (var i = 0; i < w.columns.length; i++)
+                SizedBox(
+                  width: w.widths[i],
+                  height: _kRowHeight,
+                  child: Padding(
+                    padding: _kCellPadding,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: w.columns[i].cell(context, w.node, w.groups),
                     ),
                   ),
-              ],
-            ),
+                ),
+            ],
           ),
         ),
       ),
