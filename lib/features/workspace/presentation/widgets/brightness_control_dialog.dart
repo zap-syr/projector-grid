@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../domain/log_event.dart' show commandLabel;
 import '../../domain/projector_node.dart';
 import '../../../../core/services/panasonic_protocol_service.dart';
+import 'command_failure_notice.dart';
 
 // Operating mode enum matching Panasonic OPEI1 protocol values.
 enum _OperatingMode {
@@ -113,15 +113,8 @@ class _BrightnessControlDialogState extends State<BrightnessControlDialog> {
     return int.tryParse(raw.replaceAll('+', '').replaceAll('-', ''));
   }
 
-  // Shows a SnackBar when a write command fails — this dialog talks to the
-  // projector through its own PanasonicProtocolService instance rather than
-  // workspace_provider's centralized dispatch (which logs to the Event Log),
-  // so without this a failed send here would otherwise be entirely silent.
   void _notifyFailure(String cmd) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Failed to send: ${commandLabel(cmd)}')),
-    );
+    if (mounted) notifyCommandFailure(context, cmd);
   }
 
   Future<void> _sendMode(_OperatingMode mode) async {

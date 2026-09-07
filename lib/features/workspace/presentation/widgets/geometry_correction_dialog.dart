@@ -5,9 +5,9 @@ import 'package:flutter/gestures.dart' show kDoubleTapTimeout;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../domain/log_event.dart' show commandLabel;
 import '../../domain/projector_node.dart';
 import '../../../../core/services/panasonic_protocol_service.dart';
+import 'command_failure_notice.dart';
 import 'custom_tooltip.dart';
 import 'sleek_stepper_input.dart';
 
@@ -286,15 +286,8 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
 
   // ─── Senders ─────────────────────────────────────────────────────────────
 
-  // Shows a SnackBar when a write command fails — this dialog talks to the
-  // projector through its own PanasonicProtocolService instance rather than
-  // workspace_provider's centralized dispatch (which logs to the Event Log),
-  // so without this a failed send here would otherwise be entirely silent.
   void _notifyFailure(String cmd) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Failed to send: ${commandLabel(cmd)}')),
-    );
+    if (mounted) notifyCommandFailure(context, cmd);
   }
 
   Future<void> _sendMode(_GeometryMode m) async {
