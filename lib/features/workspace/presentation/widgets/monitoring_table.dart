@@ -131,6 +131,16 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
 
   String? _dragOverColId;
 
+  // Manual header-edge resize. Transient while a drag is in flight; the final
+  // base width is persisted to `monitoringColumnWidths` on drag end so we don't
+  // hit the settings file on every pointer move.
+  String? _resizeColId;
+  double _resizeStartEffective = 0; // on-screen width of the column at drag start
+  double _resizeOtherBase = 0; // summed base width of the other columns (fixed)
+  double _resizeViewport = 0;
+  bool _resizeScaling = false; // fit-to-window was scaling widths at drag start
+  double _resizeAccumDx = 0; // accumulated screen delta since drag start
+
   static const double _rowHeight = _kRowHeight;
   static const double _headerHeight = 48;
   static const EdgeInsets _cellPadding = _kCellPadding;
@@ -494,6 +504,61 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
         .setMonitoringColumnWidth(col.id, target);
   }
 
+  // ── Column manual resize (header right-edge drag) ──────────────────────
+
+  /// Maps the accumulated on-screen drag delta to the persisted *base* width
+  /// for the column being resized. When fit-to-window was scaling widths at
+  /// drag start, we invert the proportional scale so the header edge tracks the
+  /// cursor: with the other columns' base total fixed at `B`, a base width `b`
+  /// renders at `b * V / (B + b)`; solving that for the desired on-screen width
+  /// `e` gives `b = e * B / (V - e)`. Past the point where the columns no
+  /// longer fit (`e >= V - B`) scaling is off and base == on-screen width; the
+  /// two branches meet continuously at that boundary.
+  double _resizeBaseFor(double accumDx) {
+    final desired = _resizeStartEffective + accumDx;
+    final scalingLimit = _resizeViewport - _resizeOtherBase;
+    final double base;
+    if (_resizeScaling && _resizeOtherBase > 0 && desired < scalingLimit) {
+      base = desired * _resizeOtherBase / (_resizeViewport - desired);
+    } else {
+      base = desired;
+    }
+    return base.clamp(_minColWidth, 600.0);
+  }
+
+  void _onResizeStart(
+    String id,
+    double startEffective,
+    double otherBase,
+    double viewport,
+    bool scaling,
+  ) {
+    setState(() {
+      _resizeColId = id;
+      _resizeStartEffective = startEffective;
+      _resizeOtherBase = otherBase;
+      _resizeViewport = viewport;
+      _resizeScaling = scaling;
+      _resizeAccumDx = 0;
+    });
+  }
+
+  void _onResizeUpdate(double dx) {
+    if (_resizeColId == null) return;
+    setState(() => _resizeAccumDx += dx);
+  }
+
+  void _onResizeEnd() {
+    final id = _resizeColId;
+    if (id == null) return;
+    final width = _resizeBaseFor(_resizeAccumDx);
+    setState(() {
+      _resizeColId = null;
+      _resizeAccumDx = 0;
+    });
+    ref.read(appSettingsProvider.notifier).setMonitoringColumnWidth(id, width);
+  }
+
   // ── Cell builders ──────────────────────────────────────────────────────
 
   static Widget _connectionCell(ProjectorNode node) {
@@ -602,6 +667,9 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
     bool sortAsc,
     Color dragTargetColor,
     void Function(String columnId) onAutoFit,
+    void Function(String columnId) onResizeStart,
+    ValueChanged<double> onResizeUpdate,
+    VoidCallback onResizeEnd,
   ) {
     return SizedBox(
       height: _headerHeight,
@@ -648,7 +716,7 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
             ),
           );
 
-          return DragTarget<String>(
+          final cell = DragTarget<String>(
             onWillAcceptWithDetails: (d) => d.data != col.id,
             onMove: (_) {
               if (_dragOverColId != col.id) {
@@ -675,6 +743,26 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
               childWhenDragging: Opacity(opacity: 0.35, child: headerContent),
               child: headerContent,
             ),
+          );
+
+          // Right-edge resize handle sits on top of the cell; its opaque hit
+          // area takes the pointer before the reorder Draggable. Its hairline is
+          // hidden at rest and only shown while hovered/dragged.
+          return Stack(
+            children: [
+              cell,
+              Positioned(
+                top: 0,
+                bottom: 0,
+                right: 0,
+                child: _ColumnResizeHandle(
+                  height: _headerHeight,
+                  onStart: () => onResizeStart(col.id),
+                  onUpdate: onResizeUpdate,
+                  onEnd: onResizeEnd,
+                ),
+              ),
+            ],
           );
         }),
       ),
@@ -724,7 +812,10 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
     final dragTargetColor = theme.colorScheme.primary.withValues(alpha: 0.10);
 
     final baseWidths = [
-      for (final c in cols) widthOverrides[c.id] ?? c.defaultWidth,
+      for (final c in cols)
+        c.id == _resizeColId
+            ? _resizeBaseFor(_resizeAccumDx)
+            : (widthOverrides[c.id] ?? c.defaultWidth),
     ];
     final totalWidth = baseWidths.fold<double>(0, (a, b) => a + b);
 
@@ -771,6 +862,19 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
                         bodyStyle,
                         headingStyle ?? bodyStyle,
                       ),
+                      (id) {
+                        final idx = cols.indexWhere((c) => c.id == id);
+                        if (idx < 0) return;
+                        _onResizeStart(
+                          id,
+                          effectiveWidths[idx],
+                          totalWidth - baseWidths[idx],
+                          viewportWidth,
+                          scaleToFit,
+                        );
+                      },
+                      _onResizeUpdate,
+                      _onResizeEnd,
                     ),
                   ),
                 ),
@@ -921,6 +1025,94 @@ class _CellText extends StatelessWidget {
             ? Tooltip(message: text, child: label)
             : label;
       },
+    );
+  }
+}
+
+/// Invisible drag zone on a header cell's right edge for manual column resize.
+/// Opaque hit area so a horizontal drag here resizes rather than triggering the
+/// cell's reorder `Draggable`. Nothing is drawn at rest — the table keeps its
+/// flat look; on hover a 1 px hairline set [_ruleInset] px inside the column
+/// edge fades in as a resize hint, and while dragging it is 2 px in `primary`.
+class _ColumnResizeHandle extends StatefulWidget {
+  final double height;
+  final VoidCallback onStart;
+  final ValueChanged<double> onUpdate;
+  final VoidCallback onEnd;
+
+  const _ColumnResizeHandle({
+    required this.height,
+    required this.onStart,
+    required this.onUpdate,
+    required this.onEnd,
+  });
+
+  @override
+  State<_ColumnResizeHandle> createState() => _ColumnResizeHandleState();
+}
+
+class _ColumnResizeHandleState extends State<_ColumnResizeHandle> {
+  /// Pointer hit-zone width, and the hairline's gap from the column edge.
+  static const double _zoneWidth = 12;
+  static const double _ruleInset = 3;
+
+  bool _hover = false;
+  bool _dragging = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    final Color ruleColor;
+    final double ruleWidth;
+    if (_dragging) {
+      ruleColor = scheme.primary;
+      ruleWidth = 2;
+    } else if (_hover) {
+      ruleColor = scheme.outlineVariant;
+      ruleWidth = 1;
+    } else {
+      ruleColor = Colors.transparent;
+      ruleWidth = 1;
+    }
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.resizeColumn,
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onHorizontalDragStart: (_) {
+          setState(() => _dragging = true);
+          widget.onStart();
+        },
+        onHorizontalDragUpdate: (d) => widget.onUpdate(d.delta.dx),
+        onHorizontalDragEnd: (_) {
+          setState(() => _dragging = false);
+          widget.onEnd();
+        },
+        onHorizontalDragCancel: () {
+          setState(() => _dragging = false);
+          widget.onEnd();
+        },
+        child: SizedBox(
+          width: _zoneWidth,
+          height: widget.height,
+          child: Padding(
+            padding: const EdgeInsets.only(right: _ruleInset),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 120),
+                curve: Curves.easeOut,
+                width: ruleWidth,
+                height: widget.height,
+                color: ruleColor,
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

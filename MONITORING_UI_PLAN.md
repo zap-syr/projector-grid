@@ -3,8 +3,22 @@
 Working doc for improvements to the Monitoring view (`monitoring_table.dart`).
 Status legend: `[ ]` pending · `[~]` in progress · `[x]` done · `[dropped]` not applicable
 
-Scope: this is a **proposal**. Nothing here is implemented yet. Sections are
-ordered roughly by value-for-effort; a suggested phasing is at the end.
+Scope: Sections are ordered roughly by value-for-effort; a suggested phasing is
+at the end.
+
+**Implementation status (2026-09-07):** Phase 1 landed in commit `c921579`
+("feat: configurable monitoring table columns, sort, hover and selection") on
+`features/monitoring`. Done: column-descriptor refactor, the View ▸ Monitoring
+Table submenu, header single-click sort / double-click auto-fit / drag-reorder,
+row hover highlight, the errors-cell green/red + truncation tooltips, the Group
+column, and a numeric-aware sort fix. Row selection wired to `selectionProvider`
+(§4) was implemented and then **removed** at the user's request — the Monitoring
+table is view-only.
+
+Since then: the left→right column-reorder no-op bug was fixed (commit `2556b8d`),
+and **Phase 2 item 9** — manual header-edge column drag-resize (`_ColumnResizeHandle`)
+— has been implemented (uncommitted at time of writing). Rest of Phase 2 and all
+of Phase 3 not started.
 
 ---
 
@@ -12,41 +26,60 @@ ordered roughly by value-for-effort; a suggested phasing is at the end.
 
 `MonitoringTable` (`lib/features/workspace/presentation/widgets/monitoring_table.dart`)
 
-- `ConsumerStatefulWidget`, **13 hard-coded columns** with fixed pixel widths
-  (`_columnLabels` / `_columnWidths`).
+*Post-c921579 — this section originally described the pre-Phase-1 state; updated
+to match what shipped.*
+
+- `ConsumerStatefulWidget`. **14 columns defined as `_Column` descriptors**
+  (`_allColumns`); the visible/ordered subset comes from
+  `AppSettings.monitoringColumns` (empty ⇒ `_defaultVisibleIds`, all but Group).
+- Per-column width = `monitoringColumnWidths[id]` (set by header double-click
+  auto-fit) or the descriptor default.
 - Manual sticky header, three synced `ScrollController`s, `ListView.builder`
   with `itemExtent: 40` — virtualized, so row count scales fine.
-- Sort: click a header → single-column asc/desc, with a sort cache to avoid
-  re-sorting on no-op rebuilds.
-- Alt-row striping via `index.isOdd`.
-- When the viewport is wider than the column total, every column is scaled up
-  proportionally to fill the width; otherwise it scrolls horizontally.
+- Sort: single-click a header → asc, repeat → flip; keyed off column id, with a
+  sort cache. Numeric columns use a `_leadingNum` key; IP uses a padded quad.
+- Header cells are `Draggable`/`DragTarget` → drag to reorder columns.
+- Each row is a `_MonitoringRow` `StatefulWidget` with a local hover highlight;
+  alt-row striping via `index.isOdd`. No row selection.
+- `monitoringFitToWidth` (default ON): when the viewport is wider than the
+  column total, columns scale up proportionally; otherwise horizontal scroll.
 
 ### Limitations
 
-| Area | Gap |
-|---|---|
-| Column choice | User can't hide/show/reorder columns; all 13 always shown |
-| Column width | Not user-adjustable |
-| Row feedback | No hover highlight, no row selection, no keyboard nav |
-| Cross-view link | Table ignores `selectionProvider` — selecting here doesn't select cards, and vice versa |
-| Grouping | No "Group" column and no group sections, despite groups existing |
-| Errors cell | Dumps the raw 12-char `ERRS2` bitmask (e.g. `100000000000`) — not human-readable |
-| Thermals | Plain text; no warm/hot color cue |
-| Filtering | No search / no "errors only" / "online only" |
-| Freshness | No "last updated" indication; stale data looks identical to fresh |
-| Export | No copy / CSV |
+| Area | Gap | Status |
+|---|---|---|
+| Column choice | User can't hide/show/reorder columns | `[x]` menu show/hide + presets + header drag-reorder (c921579) |
+| Column width | Not user-adjustable | `[x]` double-click auto-fit, header-edge drag-resize, fit-to-window toggle |
+| Row feedback | No hover highlight, no row selection, no keyboard nav | `[~]` hover highlight done; selection deliberately removed; keyboard nav still Phase 2 |
+| Cross-view link | Table ignores `selectionProvider` | `[dropped]` Monitoring table is view-only by decision |
+| Grouping | No "Group" column and no group sections | `[~]` sortable Group column added; sections still Phase 3 |
+| Errors cell | Dumps the raw 12-char `ERRS2` bitmask — not human-readable | `[~]` green `NO ERRORS` / red raw string; full chip decode still Phase 3 |
+| Thermals | Plain text; no warm/hot color cue | `[ ]` Phase 2 |
+| Filtering | No search / no "errors only" / "online only" | `[ ]` Phase 2 |
+| Freshness | No "last updated" indication; stale data looks identical to fresh | `[ ]` Phase 2 |
+| Export | No copy / CSV | `[ ]` Phase 2 |
 
 ### Known bug to fix along the way
 
-Numeric-looking columns **sort lexically**, because the values are stored as
-display strings (`"25°C"`, `"999H"`, `"120V"`). So `"25°C" < "7°C"` and
-`"1000H" < "999H"`. Fixing this properly means carrying numeric telemetry on
-the model (see §11) so sorting and color scales both key off real numbers.
+`[x]` **Fixed (c921579)** — but via parse-on-sort, not model fields. Numeric-
+looking columns used to **sort lexically** (`"25°C" < "7°C"`, `"1000H" < "999H"`)
+because values are stored as display strings. Now the affected columns use a
+`_leadingNum` sort key (regex-extract the leading number) and IP uses a
+zero-padded dotted-quad key. Carrying real numeric telemetry on the model (§11)
+is still the "proper" fix and stays needed for the §6 color scales — deferred.
 
 ---
 
-## 1. `[ ]` User-selectable telemetry columns — via the View menu
+## 1. `[x]` User-selectable telemetry columns — via the View menu
+
+**Done (c921579).** `_Column` descriptor list is the single source of truth;
+`MonitoringTable` exposes `allColumnIds` / `labelFor` / `resolveVisible` /
+`toggledColumn` / `presets` / `showAllColumns` for the menu. `top_menu_bar.dart`
+and `mac_menu_bar.dart` both render a "Monitoring Table" submenu under View with
+per-field checkboxes, the Essentials / Thermal / Signal presets, "Show all
+columns", and the "Fit columns to window" toggle. Persisted via
+`monitoringColumns` (ordered visible id list — order and visibility are one list,
+not the separate `monitoringColumnOrder` this section first proposed).
 
 **Goal:** let the operator pick which telemetry fields the table shows, from
 the top menu bar rather than an in-table popup.
@@ -92,7 +125,34 @@ the top menu bar rather than an in-table popup.
 
 ---
 
-## 2. `[ ]` Header interactions — sort, auto-fit, reorder
+## 2. `[x]` Header interactions — sort, auto-fit, reorder
+
+**Done (c921579).** Header cell = `GestureDetector` (`onTap` sort with asc/desc
+flip on repeat, `onDoubleTap` `_autoFitColumn` via `TextPainter` measure, clamped
+60–600 px) wrapped in `Draggable`/`DragTarget` for drag-to-reorder (faded
+`_HeaderDragFeedback` chip, drop-target tint). "Fit columns to window" toggle
+(`monitoringFitToWidth`, default ON) does the proportional scale-to-viewport.
+Widths persist in `monitoringColumnWidths`.
+
+**Manual edge drag-resize — done (Phase 2, §12.9).** `_ColumnResizeHandle` is a
+12 px opaque zone `Positioned` on each header cell's right edge
+(`SystemMouseCursors.resizeColumn`). Its own `onHorizontalDrag*` handlers take the
+pointer before the reorder `Draggable`. Drag is transient in
+`_MonitoringTableState` (`_resizeColId` / `_resizeAccumDx`); the final base width
+is written to `monitoringColumnWidths` once on drag end, not per pointer move.
+When fit-to-window was scaling widths at drag start, `_resizeBaseFor` inverts the
+proportional scale (`b = e·B/(V−e)`) so the edge tracks the cursor, falling back
+to `base == on-screen width` once the columns no longer fit — the two branches
+meet continuously at that boundary.
+
+**Resize hairline — finalised look (mockup-approved).** The table keeps its
+original flat appearance: **no line between column headers at rest**, and **no
+vertical lines in the body** (zebra + row hover only). The single horizontal
+`Divider` under the header row stays. The resize affordance is invisible until
+the pointer is over the 12 px zone, where a **1 px `outlineVariant` hairline set
+3 px inside the column edge** fades in (~120 ms); while dragging it is **2 px in
+`primary`**. Earlier full-height grid-line / per-column-border versions were
+tried and rejected.
 
 All three gestures live on the header cell itself — no context menus, no thin
 drag-handles to hunt for.
@@ -112,9 +172,10 @@ drag-handles to hunt for.
   - ON  → columns scale proportionally to fill the width (today's behavior);
           an auto-fit / manual width then acts as a weight.
   - OFF → widths are honored in pixels, horizontal scroll as needed.
-- Optional, later: a 6 px drag zone on the header cell's right edge
-  (`SystemMouseCursors.resizeColumn`) for manual width drag. Auto-fit covers
-  the common case, so this isn't required for the first pass.
+- `[x]` A 12 px drag zone on the header cell's right edge
+  (`SystemMouseCursors.resizeColumn`) for manual width drag — invisible at rest,
+  hover shows a hairline inset 3 px from the edge. See the "Manual edge
+  drag-resize" and "Resize hairline" notes above.
 
 ### Implementation
 
@@ -141,27 +202,30 @@ drag-handles to hunt for.
 
 ---
 
-## 3. `[ ]` Row hover highlight
+## 3. `[x]` Row hover highlight
 
-**Goal:** make it obvious which row the cursor is on across 13 columns.
+**Done (c921579).** Each row is its own `_MonitoringRow` `StatefulWidget` so
+hover repaints stay local (not a shared `_hoveredRow` on the table). `MouseRegion`
+`onEnter`/`onExit` → local `_hovered` bool; background resolves hover
+(`surfaceContainerHighest`) > stripe > transparent. No hover animation added; no
+column hover.
 
-### Implementation
-
-- Wrap each row in `MouseRegion` (`onEnter`/`onExit`), keep a single
-  `int? _hoveredRow` in `State`, `setState` on change.
-- Row background resolves as: selected tint > hover tint > stripe > transparent.
-  Hover = `colorScheme.surfaceContainerHighest` (or a ~6% `primary` overlay).
-- Wrap in a short `AnimatedContainer` (120 ms) per the desktop-UI skill's
-  hover-state guidance. Cheap — only the hovered/previous rows rebuild, and
-  the list is virtualized to ~20 rows.
-- Optional: also highlight the hovered **column** (header + cells) faintly.
+**Goal:** make it obvious which row the cursor is on across the visible columns.
 
 ---
 
-## 4. `[ ]` Row selection wired to `selectionProvider`
+## 4. `[dropped]` Row selection wired to `selectionProvider`
 
-**Goal:** the Monitoring view becomes interactive and stays fully in sync with
-the Controls view — one shared selection, both directions. (Decided.)
+**Implemented in c921579, then removed at the user's request.** The Monitoring
+table is view-only: no row click / Ctrl / Shift selection, no `selectionProvider`
+wiring, no `Esc` / `Ctrl+A`, no left accent bar, no selected-command actions. The
+removal took out `_onRowTap`, `_selectAllVisible`, the `CallbackShortcuts` +
+`FocusNode`, and the `selected`/accent params on `_MonitoringRow`. Hover
+highlight (§3), sort, and column reorder/auto-fit stay.
+
+**Original goal (not pursued):** the Monitoring view becomes interactive and
+stays fully in sync with the Controls view — one shared selection, both
+directions.
 
 ### UX
 
@@ -201,17 +265,21 @@ Per the desktop-UI skill (keyboard nav is mandatory):
 
 ---
 
-## 6. `[ ]` Cell rendering upgrades
+## 6. `[~]` Cell rendering upgrades
+
+**Partly done (c921579):** the Errors "green `NO ERRORS` vs red any-fault" fallback
+and the truncation `Tooltip` (via `_CellText`, shown only when actually
+ellipsized) rows below are shipped. Everything else in this section is pending.
 
 | Cell | Proposal |
 |---|---|
 | **Intake / Exhaust temp** | Parse to a number; color the text/`chip` on a green→amber→red scale with **hard-coded** thresholds — no Preferences UI (decided). Defaults: amber ≥ 35 °C intake / ≥ 45 °C exhaust, red ≥ 45 / ≥ 60 (tune against model specs before shipping). Optional 2 px severity bar under the value. |
 | **Runtime** | Show `1,234 h` (grouped thousands). If a light-source max is known (needs a command, §10), add a thin wear bar + remaining %. |
 | **AC Voltage** | Flag out-of-range (e.g. < 100 V or > 130 V on a 120 V nominal) amber. |
-| **Errors** | Decode the `ERRS2` 12-char bitmask into labeled chips — Temperature / Fan / Air filter / Light source / Shutter / Cover / Other — colored by severity, with a tooltip listing the full breakdown. Needs the per-position bit meaning table from the model's RS-232C spec (§10). Until then, at least render `NO ERRORS` green vs any-nonzero red instead of the raw string. |
+| **Errors** | `[x]` green `NO ERRORS` vs red raw string is shipped (`_errorsCell`, `-` passthrough). `[ ]` still to do: decode the `ERRS2` 12-char bitmask into labeled severity chips — Temperature / Fan / Air filter / Light source / Shutter / Cover / Other — with a breakdown tooltip. Needs the per-position bit meaning table from the model's RS-232C spec (§10). |
 | **Connection** | Add a relative "updated 8 s ago" in the cell or as a subtle trailing label; turn the dot grey/hollow when the last poll is older than ~2× the poll interval (data is stale, not necessarily offline). Needs `lastPolledAt` on the model (§11). |
 | **Power** | If the projector reports warming/cooling sub-states, show them distinctly (amber, animated) rather than collapsing to ON/STANDBY. Needs confirmation of the extended `QPW` values (§10). |
-| **Truncated text** | Any ellipsized cell gets a hover `Tooltip` (reuse `custom_tooltip.dart`) with the full value. |
+| **Truncated text** | `[x]` Done — `_CellText` measures with `TextPainter` and wraps in a `Tooltip` (full value) only when the text is actually ellipsized. |
 | **Value change** | On a poll that changes a cell's value, flash the cell background from `tertiary` and fade out over ~600 ms (`TweenAnimationBuilder`) so operators catch changes without staring. Especially: went offline, new error, shutter/power flip. |
 
 ---
@@ -228,10 +296,12 @@ Per the desktop-UI skill (keyboard nav is mandatory):
 
 ---
 
-## 8. `[ ]` Group awareness
+## 8. `[~]` Group awareness
 
-- **"Group" column**: colored dot from `ProjectorGroup.color` + group name;
-  "—" for ungrouped. Sortable.
+- `[x]` **"Group" column** (c921579): colored dot from `ProjectorGroup.color` +
+  group name; "—" for ungrouped; sortable (ungrouped sorts last). Off by default
+  in the column menu. Group map resolved once per build from
+  `workspaceProvider.notifier.groups`.
 - **Optional group sections**: when sorted by Group, render sticky
   sub-headers ("Stage Left — 6 projectors, 1 error") with collapse/expand.
   Bigger lift against the current flat `ListView.builder`; defer to a later
@@ -331,55 +401,59 @@ Everything from category "yes" above can ship without any protocol work.
 ### `AppSettings` (`app_settings_provider.dart`) — same JSON-file pattern
 
 ```text
-Set<String>         monitoringColumns        // visible column ids
-List<String>        monitoringColumnOrder    // display order (all known ids)
-Map<String,double>  monitoringColumnWidths   // id -> px width (from auto-fit / drag)
-String              monitoringSortColumnId
-bool                monitoringSortAscending
-bool                monitoringFitToWidth     // default true
-double              monitoringRowHeight      // or an enum: compact/standard/comfortable
+[x] List<String>        monitoringColumns        // ordered visible column ids ("" => table default set/order)
+[x] Map<String,double>  monitoringColumnWidths   // id -> px width (from auto-fit)
+[x] String              monitoringSortColumnId    // default 'ip'
+[x] bool                monitoringSortAscending   // default true
+[x] bool                monitoringFitToWidth      // default true
+[ ] double              monitoringRowHeight       // density toggle — Phase 2 (§12.15)
 ```
 
-Add matching `copyWith` / `toJson` / `fromJson` entries and `set…` methods
-(per-column toggle, order, presets), mirroring the existing ones. Both
-`monitoringColumns` and `monitoringColumnOrder` serialize as JSON lists.
-Session-only (not persisted): quick-search text, filter chips,
-hovered / focused row.
+`[x]` **Done (c921579):** the five fields above, with `copyWith` / `toJson` /
+`fromJson` entries and `setMonitoringColumns` / `setMonitoringColumnWidth` /
+`setMonitoringSort` / `setMonitoringFitToWidth` methods. `monitoringColumns` is a
+**single ordered visible list** — the separate `monitoringColumnOrder` /
+`Set<String>` split this section first proposed was not used; an empty list means
+"table default". No preset method on the notifier — the menu just calls
+`setMonitoringColumns` with the preset's list. Session-only (not persisted):
+hovered row, drag-over column.
 
-### New: `MonitoringColumn` descriptor + a small controller
+### `[x]` `_Column` descriptor + resolution (c921579)
 
-- A `const` list of column descriptors (id, label, default/min width,
-  `String Function(ProjectorNode, groups)` value, `Comparable Function(...)`
-  sort key, `Widget Function(...)` cell).
-- Resolve the render list = `monitoringColumnOrder` filtered to
-  `monitoringColumns`, then intersected with the descriptor set — drop unknown
-  ids gracefully, and **append any new built-in column** the user's saved
-  order/visibility hasn't seen yet (so a future added column shows up rather
-  than silently staying hidden).
+- `_Column` (id, label, `defaultWidth`, `iconPad`, `text`, `sortKey`, `cell`);
+  `_allColumns` is the 14-entry `static final` list in canonical order,
+  `_columnsById` the lookup, `_defaultVisibleIds` the pre-customisation subset
+  (all except `group`). `_minColWidth = 60`.
+- `_resolveColumns(saved)` = saved ids (or `_defaultVisibleIds` when empty),
+  mapped through `_columnsById`, unknown ids dropped, falls back to defaults if
+  nothing resolves. A newly-added built-in only appears automatically for users
+  whose saved list is empty; otherwise it stays hidden until re-picked (the
+  "append unseen built-ins" idea was not implemented).
 
 ---
 
 ## 12. Suggested phasing
 
-### Phase 1 — quick wins, no protocol work
+### Phase 1 — quick wins, no protocol work — **DONE (c921579), except item 5**
 
-1. `MonitoringColumn` descriptor refactor (§1 / §11) — prerequisite for the
-   rest of Phase 1.
-2. **"Monitoring Table" submenu under View** — per-field show/hide + presets
-   + "Fit columns to window" toggle (§1 / §2).
-3. Header interactions (§2): **single-click sort** (flip asc/desc on repeat),
-   **double-click auto-fit width**, **drag to reorder columns**.
-4. Row hover highlight (§3).
-5. Row selection wired to `selectionProvider`, two-way sync with Controls +
-   selected-command actions + left accent bar (§4).
-6. Fix numeric sort (add numeric fields, §11) — small but removes a real bug.
-7. Errors cell: at least green `NO ERRORS` vs red any-fault; truncation
-   tooltips everywhere (§6).
-8. Group column (§8, plain sortable column only).
+1. `[x]` `_Column` descriptor refactor (§1 / §11).
+2. `[x]` **"Monitoring Table" submenu under View** — per-field show/hide +
+   presets + "Fit columns to window" toggle (§1 / §2).
+3. `[x]` Header interactions (§2): single-click sort (flip asc/desc on repeat),
+   double-click auto-fit width, drag to reorder columns.
+4. `[x]` Row hover highlight (§3).
+5. `[dropped]` Row selection wired to `selectionProvider` — implemented, then
+   removed at the user's request; Monitoring table is view-only (§4).
+6. `[x]` Numeric sort fixed — via parse-on-sort keys, not model fields (§11 /
+   "Known bug"). Real numeric telemetry fields still deferred.
+7. `[x]` Errors cell green `NO ERRORS` vs red; truncation tooltips everywhere
+   (§6). (Full `ERRS2` chip decode still Phase 3.)
+8. `[x]` Group column (§8, plain sortable column only).
 
 ### Phase 2
 
-9. Manual column drag-resize on the header edge (§2).
+9. `[x]` Manual column drag-resize on the header edge (§2) — `_ColumnResizeHandle`,
+   scale-aware, persists to `monitoringColumnWidths` on drag end.
 10. Search field + filter chips + "showing X of Y" (§7).
 11. Thermal color scale + AC-voltage flag + value-change flash (§6).
 12. `lastPolledAt` + stale indicator (§6).
@@ -411,9 +485,10 @@ Resolved with the user — folded into the sections above:
    not menu up/down items. (§1, §2)
 4. **Fit-to-width default** — keep the current proportional auto-scale as the
    default (ON). (§2)
-5. **Selection** — Monitoring is interactive and shares one selection with the
-   Controls view, both directions; it also surfaces the selected-command
-   actions. No canvas auto-scroll from Monitoring for now. (§4)
+5. **Selection** — *superseded.* Originally: Monitoring shares one selection with
+   Controls, both directions, plus selected-command actions. Built in c921579,
+   then the user asked to remove row selection entirely — the Monitoring table
+   is now **view-only** (hover highlight, sort, column config only). (§4)
 6. **Thermal thresholds** — hard-coded defaults, no Preferences UI. (§6)
 7. *(Point 7 was the "collapsible group sections vs. plain Group column"
    question.)* — Ship the **plain sortable Group column** now (§8); collapsible
