@@ -97,7 +97,19 @@ class OscNotifier extends _$OscNotifier {
       sendPort: settings.oscSendPort,
     );
     state = _service.isActive;
-    ref.read(appSettingsProvider.notifier).setOscActive(true);
+    // Persist what actually happened, not the request. A failed bind (receive
+    // port in use, bad network device) leaves the service inactive; recording
+    // it as enabled would show the Preferences switch on with nothing
+    // listening and re-attempt the same doomed bind on every launch.
+    ref.read(appSettingsProvider.notifier).setOscActive(_service.isActive);
+    if (!_service.isActive) {
+      ref.read(eventLogProvider.notifier).log(LogEvent(
+        severity: LogSeverity.error,
+        type: LogEventType.osc,
+        message: 'OSC failed to start — could not bind receive port '
+            '${settings.oscReceivePort}',
+      ));
+    }
 
     // Push status on every state change
     ref.read(workspaceProvider.notifier).onStateChanged = () {

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../providers/app_settings_provider.dart';
+import '../providers/osc_provider.dart';
 import '../providers/project_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../widgets/control_bar.dart';
@@ -241,6 +242,11 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
 
     final projectNotifier = ref.read(projectStateProvider.notifier);
     final workspaceNotifier = ref.read(workspaceProvider.notifier);
+
+    // Force the keepAlive OSC provider to build on launch so it can restore a
+    // persisted "OSC enabled" setting. Nothing else reads it until the user
+    // opens Preferences, and a lazy keepAlive provider doesn't self-instantiate.
+    ref.read(oscProvider.notifier);
 
     return MacMenuBar(
       child: Shortcuts(

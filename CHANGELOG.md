@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [1.4.1] - 2026-09-05
+## [1.4.1] - 2026-09-07
 
 ### For Users
 
@@ -25,7 +25,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - OSC: changing the receive port, network device, or send IP/port in
   Preferences while OSC was enabled now takes effect immediately instead of
   requiring a restart; the "OSC enabled" setting is also now correctly
-  restored on launch
+  restored on launch; if OSC can't bind its receive port (e.g. it's already
+  in use) the failure is now logged instead of silently showing as enabled
+- Action commands (power, shutter, input, etc.) sent to a device that fails
+  the NTCONTROL handshake are no longer reported as successful
 - Manual refresh (F5 / the Refresh menu item) now correctly resets the
   automatic polling countdown; the polling interval in Preferences is now
   clamped to a safe 30-3600 second range

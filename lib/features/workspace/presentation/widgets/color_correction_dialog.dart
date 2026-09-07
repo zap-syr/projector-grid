@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../domain/log_event.dart' show commandLabel;
 import '../../domain/projector_node.dart';
 import '../../../../core/services/panasonic_protocol_service.dart';
+import 'command_failure_notice.dart';
 import 'sleek_stepper_input.dart';
 
 enum _TempMode { defaultTemp, user1, user2, custom }
@@ -217,15 +217,8 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
   static String _fmt(int v) => v.toString().padLeft(4, '0');
   static String _fmt3(int v) => v.toString().padLeft(3, '0');
 
-  // Shows a SnackBar when a write command fails — this dialog talks to the
-  // projector through its own PanasonicProtocolService instance rather than
-  // workspace_provider's centralized dispatch (which logs to the Event Log),
-  // so without this a failed send here would otherwise be entirely silent.
   void _notifyFailure(String cmd) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Failed to send: ${commandLabel(cmd)}')),
-    );
+    if (mounted) notifyCommandFailure(context, cmd);
   }
 
   // ── Color Matching sends ──────────────────────────────────────────────────

@@ -181,8 +181,11 @@ class OscService {
     required String sendIp,
     required int sendPort,
   }) async {
-    final generation = ++_startGeneration;
+    // Claim the generation *after* stop() — stop() also bumps _startGeneration,
+    // so capturing it earlier would leave `generation` permanently stale and
+    // make the post-bind check below abort every successful bind.
     await stop();
+    final generation = ++_startGeneration;
     _sendIp = sendIp;
     _sendPort = sendPort;
     _lastOnline = null;

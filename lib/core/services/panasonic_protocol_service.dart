@@ -74,13 +74,14 @@ class PanasonicProtocolService {
       password,
       'QID',
     );
+    if (modelResponse == 'Error: Unrecognized Auth Token' ||
+        modelResponse == 'ERRA') {
+      return {'ip': ip, 'name': ip, 'status': 'auth_error'};
+    }
     if (modelResponse == 'Timeout' ||
         modelResponse.contains('Error') ||
         modelResponse.isEmpty) {
       return null;
-    }
-    if (modelResponse == 'ERRA') {
-      return {'ip': ip, 'name': ip, 'status': 'auth_error'};
     }
     if (modelResponse.startsWith('ER')) {
       return null;
@@ -230,6 +231,16 @@ class PanasonicProtocolService {
     }
   }
 
+  /// True when [response] is a failure sentinel from [_sendSingleCommandEx]
+  /// rather than a projector reply: a transport `'Timeout'`, an `'Error: …'`
+  /// handshake/auth sentinel, or a projector `ERxxx` code. The `'Error:'`
+  /// sentinels start with a lowercase `r`, so `startsWith('ER')` alone never
+  /// catches them — both prefixes must be checked.
+  static bool _isFailureResponse(String response) =>
+      response == 'Timeout' ||
+      response.startsWith('Error:') ||
+      response.startsWith('ER');
+
   /// Sends an action command to the projector without expecting complex telemetry back.
   Future<bool> sendCommand(
     String ip,
@@ -239,10 +250,7 @@ class PanasonicProtocolService {
     String cmd,
   ) async {
     final response = await _sendSingleCommand(ip, port, login, password, cmd);
-    if (response == 'Timeout' || response.startsWith('ER')) {
-      return false;
-    }
-    return true;
+    return !_isFailureResponse(response);
   }
 
   /// Sends a specific command and returns its raw string response.
@@ -254,7 +262,7 @@ class PanasonicProtocolService {
     String cmd,
   ) async {
     final response = await _sendSingleCommand(ip, port, login, password, cmd);
-    if (response == 'Timeout' || response.startsWith('ER')) {
+    if (_isFailureResponse(response)) {
       return null;
     }
     return response;
@@ -282,13 +290,17 @@ class PanasonicProtocolService {
       password,
       'QID',
     );
+    // A protected projector whose challenge token we couldn't parse is
+    // reachable but unusable without auth — surface it like an ERRA reject
+    // (amber lock, "Authentication failed"), not as offline.
+    if (modelResponse == 'Error: Unrecognized Auth Token' ||
+        modelResponse == 'ERRA') {
+      return (ProbeResult.unauthorized, null);
+    }
     if (modelResponse == 'Timeout' ||
         modelResponse.contains('Error') ||
         modelResponse.isEmpty) {
       return (ProbeResult.offline, null);
-    }
-    if (modelResponse == 'ERRA') {
-      return (ProbeResult.unauthorized, null);
     }
     if (modelResponse.startsWith('ER')) {
       return (ProbeResult.offline, null);
@@ -318,6 +330,16 @@ class PanasonicProtocolService {
       () => _sendSingleCommand(ip, port, login, password, 'QVX:VMOI2'),
       () => _sendSingleCommand(ip, port, login, password, 'QVX:ERRS2'),
     ], concurrency);
+
+    // QID succeeding while every follow-up query fails means the projector
+    // answered one probe by fluke but isn't usefully reachable (overwhelmed
+    // TCP stack, dropping mid-cycle). Report it offline — folding the old
+    // standalone probeProjector() into this method otherwise lost the "probe
+    // ok but telemetry failed" path, leaving such a node shown as connected
+    // with a row full of Timeout placeholders.
+    if (results.every(_isFailureResponse)) {
+      return (ProbeResult.offline, null);
+    }
 
     telemetry['serialNumber'] = results[0];
     telemetry['power'] = results[1];
