@@ -114,10 +114,22 @@ class _ProjectorCardState extends ConsumerState<ProjectorCard> {
       // re-composites that layer — the grid and every other card stay cached
       // instead of repainting on every pointer move. The boundary sits below
       // AnimatedPositioned (which must stay a direct child of the Stack).
-      child: RepaintBoundary(
-        child: Transform.scale(
-          scale: widget.zoom,
-          alignment: Alignment.topLeft,
+      //
+      // Transform.scale wraps the RepaintBoundary (not the other way round) so
+      // hit-testing stays correct at zoom > 1. Transform.scale only changes
+      // paint, never layout, so the card's RenderBox keeps its unscaled
+      // 120x100 size. RepaintBoundary (a RenderProxyBox) bounds-checks pointer
+      // events against its own size before forwarding them, so if it sat above
+      // the Transform every pointer past x=120 / y=100 — i.e. the right/bottom
+      // of a zoomed-in card, since scaling grows from topLeft — would be
+      // rejected and hover/cursor/drag would never fire there. RenderTransform
+      // deliberately skips that self bounds-check and maps the pointer through
+      // its inverse matrix, so keeping it outermost makes the whole visible
+      // (scaled) card area hittable.
+      child: Transform.scale(
+        scale: widget.zoom,
+        alignment: Alignment.topLeft,
+        child: RepaintBoundary(
           child: MenuAnchor(
             controller: _menuController,
             consumeOutsideTap: true,
