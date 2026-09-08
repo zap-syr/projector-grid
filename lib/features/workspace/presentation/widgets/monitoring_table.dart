@@ -168,9 +168,33 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
   bool _resizeScaling = false; // fit-to-window was scaling widths at drag start
   double _resizeAccumDx = 0; // accumulated screen delta since drag start
 
-  static const double _rowHeight = _kRowHeight;
-  static const double _headerHeight = 48;
-  static const EdgeInsets _cellPadding = _kCellPadding;
+  // Layout metrics, refreshed from the density preset at the top of every
+  // build so `_buildHeader` / `_autoFitColumn` (instance methods) and the row
+  // widgets all read one consistent set.
+  double _rowHeight = _kRowHeight;
+  double _headerHeight = 48;
+  EdgeInsets _cellPadding = _kCellPadding;
+  double? _bodyFontSize;
+
+  /// Row / header height, horizontal cell padding and body font size for each
+  /// density. `standard` keeps the pre-density values so nothing shifts for
+  /// users who never touch the setting.
+  static ({double row, double header, double hpad, double? font})
+  _densityMetrics(MonitoringDensity d) => switch (d) {
+    MonitoringDensity.compact => (row: 32, header: 40, hpad: 10, font: 12.5),
+    MonitoringDensity.standard => (
+      row: _kRowHeight,
+      header: 48,
+      hpad: 16,
+      font: null,
+    ),
+    MonitoringDensity.comfortable => (
+      row: 52,
+      header: 56,
+      hpad: 20,
+      font: null,
+    ),
+  };
 
   // ── Const icon widgets — allocated once, reused across all rows ───────────
 
@@ -442,6 +466,77 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
       .split('.')
       .map((o) => (int.tryParse(o) ?? 0).toString().padLeft(3, '0'))
       .join('.');
+
+  /// Flattens the sorted node list into a display list: with [groupBy] on, each
+  /// group's nodes (still in the current sort order) are preceded by a
+  /// `_HeaderEntry`; groups are ordered by name, ungrouped and orphaned nodes
+  /// last. Stripe parity resets per cluster so every group starts light.
+  static List<_Entry> _buildEntries(
+    List<ProjectorNode> sorted,
+    List<ProjectorGroup> groupList,
+    bool groupBy,
+  ) {
+    if (!groupBy) {
+      return [
+        for (var i = 0; i < sorted.length; i++) _NodeEntry(sorted[i], i.isOdd),
+      ];
+    }
+    final byGroup = <String?, List<ProjectorNode>>{};
+    for (final n in sorted) {
+      (byGroup[n.groupId] ??= []).add(n);
+    }
+    final named = [
+      for (final g in groupList)
+        if (byGroup.containsKey(g.id)) g,
+    ]..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+    final entries = <_Entry>[];
+    void addCluster(ProjectorGroup? group, List<ProjectorNode> members) {
+      entries.add(_HeaderEntry(group, members));
+      for (var i = 0; i < members.length; i++) {
+        entries.add(_NodeEntry(members[i], i.isOdd));
+      }
+    }
+
+    for (final g in named) {
+      addCluster(g, byGroup[g.id]!);
+    }
+    final trailing = [
+      ...?byGroup[null],
+      for (final e in byGroup.entries)
+        if (e.key != null && !groupList.any((g) => g.id == e.key)) ...e.value,
+    ];
+    if (trailing.isNotEmpty) addCluster(null, trailing);
+    return entries;
+  }
+
+  /// Worst-status roll-up for a group header: errors beat auth errors beat
+  /// offline; healthy groups get no pill.
+  static ({String text, Color color})? _worstStatus(List<ProjectorNode> m) {
+    final errors = m
+        .where((n) => n.errors != '-' && !_errorsOk(n.errors))
+        .length;
+    if (errors > 0) {
+      return (
+        text: '$errors error${errors == 1 ? '' : 's'}',
+        color: Colors.red,
+      );
+    }
+    final auth = m
+        .where((n) => n.connectionStatus == ConnectionStatus.unauthorized)
+        .length;
+    if (auth > 0) {
+      return (
+        text: '$auth auth error${auth == 1 ? '' : 's'}',
+        color: _warnText,
+      );
+    }
+    final offline = m
+        .where((n) => n.connectionStatus == ConnectionStatus.offline)
+        .length;
+    if (offline > 0) return (text: '$offline offline', color: Colors.red);
+    return null;
+  }
 
   /// Text tint for an Intake/Exhaust cell from its display string: `null`
   /// (default colour) when normal or unreadable (`-`, `Timeout`), amber past
@@ -889,14 +984,35 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
     final fitToWidth = ref.watch(
       appSettingsProvider.select((s) => s.monitoringFitToWidth),
     );
+    final density = ref.watch(
+      appSettingsProvider.select((s) => s.monitoringDensity),
+    );
+    final groupBy = ref.watch(
+      appSettingsProvider.select((s) => s.monitoringGroupBy),
+    );
+
+    final dm = _densityMetrics(density);
+    _rowHeight = dm.row;
+    _headerHeight = dm.header;
+    _cellPadding = EdgeInsets.symmetric(horizontal: dm.hpad);
+    _bodyFontSize = dm.font;
 
     final theme = Theme.of(context);
-    final cols = _resolveColumns(savedColumns);
+    var cols = _resolveColumns(savedColumns);
+    if (groupBy) {
+      // The Group column is redundant once rows sit under group headers.
+      final withoutGroup = [
+        for (final c in cols)
+          if (c.id != 'group') c,
+      ];
+      if (withoutGroup.isNotEmpty) cols = withoutGroup;
+    }
     final sortCol = cols.firstWhere(
       (c) => c.id == sortId,
       orElse: () => cols.first,
     );
     final sortedNodes = _getOrSortNodes(nodes, sortCol, sortAsc, groups);
+    final entries = _buildEntries(sortedNodes, groupList, groupBy);
 
     final headingStyle = theme.textTheme.titleSmall?.copyWith(
       fontWeight: FontWeight.bold,
@@ -990,23 +1106,40 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
                       scrollDirection: Axis.horizontal,
                       child: SizedBox(
                         width: tableWidth,
-                        child: ListView.builder(
-                          controller: _verticalController,
-                          itemExtent: _rowHeight,
-                          itemCount: sortedNodes.length,
-                          itemBuilder: (ctx, i) {
-                            final node = sortedNodes[i];
-                            return _MonitoringRow(
-                              key: ValueKey(node.id),
-                              node: node,
-                              columns: cols,
-                              widths: effectiveWidths,
-                              groups: groups,
-                              stripe: i.isOdd,
-                              altRowColor: altRowColor,
-                              hoverColor: hoverColor,
-                            );
-                          },
+                        child: DefaultTextStyle.merge(
+                          style: _bodyFontSize == null
+                              ? const TextStyle()
+                              : TextStyle(fontSize: _bodyFontSize),
+                          child: ListView.builder(
+                            controller: _verticalController,
+                            itemExtent: _rowHeight,
+                            itemCount: entries.length,
+                            itemBuilder: (ctx, i) {
+                              final entry = entries[i];
+                              if (entry is _HeaderEntry) {
+                                return _GroupHeaderRow(
+                                  group: entry.group,
+                                  members: entry.members,
+                                  width: tableWidth,
+                                  height: _rowHeight,
+                                  padding: _cellPadding,
+                                );
+                              }
+                              final ne = entry as _NodeEntry;
+                              return _MonitoringRow(
+                                key: ValueKey(ne.node.id),
+                                node: ne.node,
+                                columns: cols,
+                                widths: effectiveWidths,
+                                groups: groups,
+                                stripe: ne.stripe,
+                                rowHeight: _rowHeight,
+                                cellPadding: _cellPadding,
+                                altRowColor: altRowColor,
+                                hoverColor: hoverColor,
+                              );
+                            },
+                          ),
                         ),
                       ),
                     ),
@@ -1030,6 +1163,8 @@ class _MonitoringRow extends StatefulWidget {
   final List<double> widths;
   final Map<String, ProjectorGroup> groups;
   final bool stripe;
+  final double rowHeight;
+  final EdgeInsets cellPadding;
   final Color altRowColor;
   final Color hoverColor;
 
@@ -1040,6 +1175,8 @@ class _MonitoringRow extends StatefulWidget {
     required this.widths,
     required this.groups,
     required this.stripe,
+    required this.rowHeight,
+    required this.cellPadding,
     required this.altRowColor,
     required this.hoverColor,
   });
@@ -1062,7 +1199,7 @@ class _MonitoringRowState extends State<_MonitoringRow> {
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: SizedBox(
-        height: _kRowHeight,
+        height: w.rowHeight,
         child: ColoredBox(
           color: bg,
           child: Row(
@@ -1070,9 +1207,9 @@ class _MonitoringRowState extends State<_MonitoringRow> {
               for (var i = 0; i < w.columns.length; i++)
                 SizedBox(
                   width: w.widths[i],
-                  height: _kRowHeight,
+                  height: w.rowHeight,
                   child: Padding(
-                    padding: _kCellPadding,
+                    padding: w.cellPadding,
                     child: Align(
                       alignment: Alignment.centerLeft,
                       child: w.columns[i].cell(context, w.node, w.groups),
@@ -1081,6 +1218,128 @@ class _MonitoringRowState extends State<_MonitoringRow> {
                 ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One line in the virtualized body list — either a node row or a group
+/// header (only when "Merge into groups" is on).
+sealed class _Entry {
+  const _Entry();
+}
+
+final class _NodeEntry extends _Entry {
+  final ProjectorNode node;
+
+  /// Alt-row parity, reset per cluster so every group starts light.
+  final bool stripe;
+
+  const _NodeEntry(this.node, this.stripe);
+}
+
+final class _HeaderEntry extends _Entry {
+  /// `null` for the trailing "Ungrouped" cluster.
+  final ProjectorGroup? group;
+  final List<ProjectorNode> members;
+
+  const _HeaderEntry(this.group, this.members);
+}
+
+/// Non-collapsing cluster header shown above each group's rows when "Merge
+/// into groups" is on. Same height as a data row so the list keeps a single
+/// `itemExtent`.
+class _GroupHeaderRow extends StatelessWidget {
+  final ProjectorGroup? group;
+  final List<ProjectorNode> members;
+  final double width;
+  final double height;
+  final EdgeInsets padding;
+
+  const _GroupHeaderRow({
+    required this.group,
+    required this.members,
+    required this.width,
+    required this.height,
+    required this.padding,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final g = group;
+    final accent = g == null ? scheme.outline : Color(g.color);
+    final worst = _MonitoringTableState._worstStatus(members);
+
+    return SizedBox(
+      width: width,
+      height: height,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainer,
+          border: Border(left: BorderSide(color: accent, width: 3)),
+        ),
+        child: Padding(
+          padding: padding,
+          child: Row(
+            children: [
+              Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: g == null ? Colors.transparent : accent,
+                  shape: BoxShape.circle,
+                  border: g == null
+                      ? Border.all(color: scheme.outline, width: 1.5)
+                      : null,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  g?.name ?? 'Ungrouped',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '${members.length} projector${members.length == 1 ? '' : 's'}',
+                style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
+              ),
+              if (worst != null) ...[
+                const SizedBox(width: 8),
+                _StatusPill(text: worst.text, color: worst.color),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusPill extends StatelessWidget {
+  final String text;
+  final Color color;
+
+  const _StatusPill({required this.text, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color,
+          fontSize: 11.5,
+          fontWeight: FontWeight.w500,
         ),
       ),
     );

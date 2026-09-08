@@ -8,6 +8,18 @@ import '../../../../core/services/app_config_dir.dart';
 
 part 'app_settings_provider.g.dart';
 
+/// Monitoring-table row density preset — drives row height, cell padding and
+/// body font size together. See `MonitoringTable`.
+enum MonitoringDensity { compact, standard, comfortable }
+
+extension MonitoringDensityLabel on MonitoringDensity {
+  String get label => switch (this) {
+    MonitoringDensity.compact => 'Compact',
+    MonitoringDensity.standard => 'Standard',
+    MonitoringDensity.comfortable => 'Comfortable',
+  };
+}
+
 class AppSettings {
   /// Bounds for the projector telemetry poll interval. The floor keeps a
   /// mistyped value (e.g. 1s) from hammering every projector on the network
@@ -38,6 +50,11 @@ class AppSettings {
   final bool monitoringSortAscending;
   final bool monitoringFitToWidth;
 
+  /// Row density preset, and whether rows are clustered under non-collapsing
+  /// group headers (the standalone Group column is hidden while this is on).
+  final MonitoringDensity monitoringDensity;
+  final bool monitoringGroupBy;
+
   const AppSettings({
     this.pollingIntervalSeconds = defaultPollingIntervalSeconds,
     this.themeMode = ThemeMode.dark,
@@ -53,6 +70,8 @@ class AppSettings {
     this.monitoringSortColumnId = 'ip',
     this.monitoringSortAscending = true,
     this.monitoringFitToWidth = true,
+    this.monitoringDensity = MonitoringDensity.standard,
+    this.monitoringGroupBy = false,
   });
 
   AppSettings copyWith({
@@ -70,6 +89,8 @@ class AppSettings {
     String? monitoringSortColumnId,
     bool? monitoringSortAscending,
     bool? monitoringFitToWidth,
+    MonitoringDensity? monitoringDensity,
+    bool? monitoringGroupBy,
   }) {
     return AppSettings(
       pollingIntervalSeconds:
@@ -90,6 +111,8 @@ class AppSettings {
       monitoringSortAscending:
           monitoringSortAscending ?? this.monitoringSortAscending,
       monitoringFitToWidth: monitoringFitToWidth ?? this.monitoringFitToWidth,
+      monitoringDensity: monitoringDensity ?? this.monitoringDensity,
+      monitoringGroupBy: monitoringGroupBy ?? this.monitoringGroupBy,
     );
   }
 
@@ -108,6 +131,8 @@ class AppSettings {
     'monitoringSortColumnId': monitoringSortColumnId,
     'monitoringSortAscending': monitoringSortAscending,
     'monitoringFitToWidth': monitoringFitToWidth,
+    'monitoringDensity': monitoringDensity.name,
+    'monitoringGroupBy': monitoringGroupBy,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) => AppSettings(
@@ -133,11 +158,14 @@ class AppSettings {
           (k, v) => MapEntry(k as String, (v as num).toDouble()),
         ) ??
         const {},
-    monitoringSortColumnId:
-        (json['monitoringSortColumnId'] as String?) ?? 'ip',
-    monitoringSortAscending:
-        (json['monitoringSortAscending'] as bool?) ?? true,
+    monitoringSortColumnId: (json['monitoringSortColumnId'] as String?) ?? 'ip',
+    monitoringSortAscending: (json['monitoringSortAscending'] as bool?) ?? true,
     monitoringFitToWidth: (json['monitoringFitToWidth'] as bool?) ?? true,
+    monitoringDensity: MonitoringDensity.values.firstWhere(
+      (d) => d.name == json['monitoringDensity'],
+      orElse: () => MonitoringDensity.standard,
+    ),
+    monitoringGroupBy: (json['monitoringGroupBy'] as bool?) ?? false,
   );
 }
 
@@ -238,6 +266,16 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
 
   void setMonitoringFitToWidth(bool fit) {
     state = state.copyWith(monitoringFitToWidth: fit);
+    _save(state);
+  }
+
+  void setMonitoringDensity(MonitoringDensity density) {
+    state = state.copyWith(monitoringDensity: density);
+    _save(state);
+  }
+
+  void setMonitoringGroupBy(bool groupBy) {
+    state = state.copyWith(monitoringGroupBy: groupBy);
     _save(state);
   }
 }
