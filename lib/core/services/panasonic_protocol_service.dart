@@ -309,10 +309,10 @@ class PanasonicProtocolService {
     final Map<String, dynamic> telemetry = {};
     telemetry['modelName'] = modelResponse;
 
-    // Run the 10 remaining telemetry queries with bounded concurrency rather
-    // than one at a time (which would pay every round-trip's latency 10
-    // times over per node, per poll cycle) or all 10 at once (which used to
-    // open up to 10 simultaneous TCP connections to the same projector —
+    // Run the 11 remaining telemetry queries with bounded concurrency rather
+    // than one at a time (which would pay every round-trip's latency 11
+    // times over per node, per poll cycle) or all 11 at once (which used to
+    // open up to 11 simultaneous TCP connections to the same projector —
     // this device class's embedded TCP/IP stack commonly supports only a
     // handful of connections total, shared across its web UI, control port,
     // etc., so a 10-wide burst risked ERR3 ["busy"] and false-offline
@@ -325,6 +325,7 @@ class PanasonicProtocolService {
       () => _sendSingleCommand(ip, port, login, password, 'QIN'),
       () => _sendSingleCommand(ip, port, login, password, 'QVX:NSGS1'),
       () => _sendSingleCommand(ip, port, login, password, 'QVX:RTMS1'),
+      () => _sendSingleCommand(ip, port, login, password, 'QVX:LRTS3=00'),
       () => _sendSingleCommand(ip, port, login, password, 'QTM:0'),
       () => _sendSingleCommand(ip, port, login, password, 'QTM:1'),
       () => _sendSingleCommand(ip, port, login, password, 'QVX:VMOI2'),
@@ -347,10 +348,11 @@ class PanasonicProtocolService {
     telemetry['input'] = results[3];
     telemetry['signal'] = results[4];
     telemetry['runtime'] = results[5];
-    telemetry['intakeTemp'] = results[6];
-    telemetry['exhaustTemp'] = results[7];
-    telemetry['acVoltage'] = results[8];
-    telemetry['errors'] = results[9];
+    telemetry['lightRuntime'] = results[6];
+    telemetry['intakeTemp'] = results[7];
+    telemetry['exhaustTemp'] = results[8];
+    telemetry['acVoltage'] = results[9];
+    telemetry['errors'] = results[10];
 
     final status = isProtected ? ProbeResult.online : ProbeResult.unprotected;
     return (status, telemetry);

@@ -98,8 +98,10 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
     // armed timer polls again shortly.
     final backgroundedAt = _backgroundedAt;
     _backgroundedAt = null;
-    final awayLongEnough = backgroundedAt == null ||
-        DateTime.now().difference(backgroundedAt) >= _foregroundRefreshThreshold;
+    final awayLongEnough =
+        backgroundedAt == null ||
+        DateTime.now().difference(backgroundedAt) >=
+            _foregroundRefreshThreshold;
     if (awayLongEnough) {
       refreshAll();
     }
@@ -144,6 +146,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
             shutterStatus: ShutterStatus.closed,
             serialNumber: '-',
             runtime: '-',
+            lightRuntime: '-',
             intakeTemp: '-',
             exhaustTemp: '-',
             acVoltage: '-',
@@ -183,6 +186,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
           shutterStatus: live.shutterStatus,
           serialNumber: live.serialNumber,
           runtime: live.runtime,
+          lightRuntime: live.lightRuntime,
           intakeTemp: live.intakeTemp,
           exhaustTemp: live.exhaustTemp,
           acVoltage: live.acVoltage,
@@ -419,6 +423,13 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
     return RegExp(r'^-?\d+(\.\d+)?$').hasMatch(value) ? '$value°C' : '-';
   }
 
+  /// Inserts thousands separators: `2185` → `2,185`. No `intl` dependency for
+  /// one call site.
+  static String _groupThousands(int n) => n.toString().replaceAllMapped(
+    RegExp(r'\B(?=(\d{3})+(?!\d))'),
+    (_) => ',',
+  );
+
   Future<void> _pollSingleProjector(
     ProjectorNode node,
     int telemetryConcurrency,
@@ -529,13 +540,29 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
             signal = 'NO SIGNAL';
           }
 
-          // Parse Runtime
-          String runtimeRaw = (telemetry['runtime'] as String)
+          // Parse Projector Runtime — QVX:RTMS1 replies "RTMS1=<hours>".
+          final runtimeRaw = (telemetry['runtime'] as String)
               .replaceAll('RTMS1=', '')
               .trim();
-          String runtime = runtimeRaw.isEmpty || runtimeRaw == 'ER401'
+          final runtimeHours = int.tryParse(runtimeRaw);
+          final runtime = runtimeHours != null
+              ? '${_groupThousands(runtimeHours)}H'
+              : (runtimeRaw.isEmpty || runtimeRaw == 'ER401'
+                    ? '-'
+                    : '${runtimeRaw}H');
+
+          // Parse Light Runtime — the QVX:LRTS3=00 reply carries the
+          // light-source on-time in hours after the last ':', same unit as
+          // RTMS1 (e.g. "LRTS3=00:1577"). Lamp models answer ER401 (no ':')
+          // and timeouts have no digits → "-".
+          final lightRaw = (telemetry['lightRuntime'] as String).trim();
+          final lightColon = lightRaw.lastIndexOf(':');
+          final lightHours = lightColon < 0
+              ? null
+              : int.tryParse(lightRaw.substring(lightColon + 1).trim());
+          final lightRuntime = lightHours == null
               ? '-'
-              : '${runtimeRaw}H';
+              : '${_groupThousands(lightHours)}H';
 
           final intake = _formatTemp(telemetry['intakeTemp'] ?? n.intakeTemp);
           final exhaust = _formatTemp(
@@ -571,6 +598,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
             input: input,
             signal: signal,
             runtime: runtime,
+            lightRuntime: lightRuntime,
             intakeTemp: intake,
             exhaustTemp: exhaust,
             acVoltage: voltage,

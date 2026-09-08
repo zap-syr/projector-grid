@@ -3,7 +3,9 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 part 'projector_node.freezed.dart';
 
 enum PowerStatus { on, standby }
+
 enum ShutterStatus { open, closed }
+
 enum ConnectionStatus { connected, offline, unauthorized, unprotected }
 
 @freezed
@@ -22,6 +24,7 @@ abstract class ProjectorNode with _$ProjectorNode {
     @Default(ConnectionStatus.offline) ConnectionStatus connectionStatus,
     @Default('-') String serialNumber,
     @Default('-') String runtime,
+    @Default('-') String lightRuntime,
     @Default('-') String intakeTemp,
     @Default('-') String exhaustTemp,
     @Default('-') String acVoltage,

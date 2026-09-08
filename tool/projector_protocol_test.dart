@@ -76,11 +76,16 @@ void main() async {
     }
   }
 
+  // Raw replies are printed quoted so trailing whitespace / empty responses
+  // are visible. The '00' response prefix is NOT stripped here (the app does
+  // that in _sendSingleCommandEx) — expect it on every line.
   print('--- Testing Telemetry ---');
-  print('QID: ${await sendSingleCommand('QID')}');
-  print('QSN: ${await sendSingleCommand('QSN')}');
-  print('QPW: ${await sendSingleCommand('QPW')}');
-  print('QSH: ${await sendSingleCommand('QSH')}');
-  print('QVX:ERRS2: ${await sendSingleCommand('QVX:ERRS2')}');
+  print('QID       -> "${await sendSingleCommand('QID')}"');
+  print('QSN       -> "${await sendSingleCommand('QSN')}"');
+  print('QPW       -> "${await sendSingleCommand('QPW')}"');
+  print('QSH       -> "${await sendSingleCommand('QSH')}"');
+  print('QVX:RTMS1 -> "${await sendSingleCommand('QVX:RTMS1')}"');
+  print('QVX:LRTS3=00 -> "${await sendSingleCommand('QVX:LRTS3=00')}"');
+  print('QVX:ERRS2 -> "${await sendSingleCommand('QVX:ERRS2')}"');
   print('Done.');
 }
