@@ -17,8 +17,34 @@ table is view-only.
 
 Since then: the left→right column-reorder no-op bug was fixed (commit `2556b8d`),
 and **Phase 2 item 9** — manual header-edge column drag-resize (`_ColumnResizeHandle`)
-— has been implemented (uncommitted at time of writing). Rest of Phase 2 and all
-of Phase 3 not started.
+— landed in `dfd8b88` / `ef9522b`.
+
+**Phase 2 item 11 — partial (2026-09-08, commits `2d75be4` + `b0ab12a`):**
+
+- `[x]` **Thermal colour scale** (§6). Intake/Exhaust cell *text* turns amber
+  (`_warnText` `#FFB26A00`, a readable amber — the pale `Colors.amber` fails
+  contrast as text) past a warm threshold, red past a hot one. Normal and
+  unreadable (`-`, `Timeout`) stay the default colour; no severity bar. Hard-
+  coded consts in `monitoring_table.dart`: intake amber ≥ 40 °C / red ≥ 45 °C
+  (matches the 0–45 °C operating spec — fault ~45, shutdown ~50); exhaust amber
+  ≥ 55 °C / red ≥ 65 °C — **Panasonic publishes no numeric limit for `QTM:1`**
+  (only the qualitative TEMP indicator), so this is a deliberately high anti-
+  false-alarm heuristic, tune once there is field data. Parse-on-render via
+  `_leadingNum`, no new model fields.
+- `[x]` **Status label colours** (not in the original plan). Power / Shutter /
+  Connection labels now carry their icon's colour — green on / open / online,
+  red standby / closed / offline, amber auth-error.
+- `[x]` **Light Runtime column** (§10 light-source runtime + §6 grouped
+  thousands). New `QVX:LRTS3=00` telemetry query (`String lightRuntime` on
+  `ProjectorNode`); reply is `LRTS3=00:<hours>`, same unit as `RTMS1`. The old
+  "Runtime" column is renamed **"Projector Runtime"** and the new **"Light
+  Runtime"** column follows it; both now render with thousands separators
+  (`1,644H`).
+- `[ ]` **AC-voltage out-of-range flag** — deferred at the user's request
+  (needs an auto-band or per-node nominal; see the working notes).
+- `[ ]` **Value-change flash** — deferred at the user's request.
+
+Rest of Phase 2 and all of Phase 3 not started.
 
 ---
 
@@ -29,9 +55,10 @@ of Phase 3 not started.
 *Post-c921579 — this section originally described the pre-Phase-1 state; updated
 to match what shipped.*
 
-- `ConsumerStatefulWidget`. **14 columns defined as `_Column` descriptors**
-  (`_allColumns`); the visible/ordered subset comes from
-  `AppSettings.monitoringColumns` (empty ⇒ `_defaultVisibleIds`, all but Group).
+- `ConsumerStatefulWidget`. **15 columns defined as `_Column` descriptors**
+  (`_allColumns` — Light Runtime added in `2d75be4`); the visible/ordered subset
+  comes from `AppSettings.monitoringColumns` (empty ⇒ `_defaultVisibleIds`, all
+  but Group).
 - Per-column width = `monitoringColumnWidths[id]` (set by header double-click
   auto-fit) or the descriptor default.
 - Manual sticky header, three synced `ScrollController`s, `ListView.builder`
@@ -54,7 +81,7 @@ to match what shipped.*
 | Cross-view link | Table ignores `selectionProvider` | `[dropped]` Monitoring table is view-only by decision |
 | Grouping | No "Group" column and no group sections | `[~]` sortable Group column added; sections still Phase 3 |
 | Errors cell | Dumps the raw 12-char `ERRS2` bitmask — not human-readable | `[~]` green `NO ERRORS` / red raw string; full chip decode still Phase 3 |
-| Thermals | Plain text; no warm/hot color cue | `[ ]` Phase 2 |
+| Thermals | Plain text; no warm/hot color cue | `[x]` amber/red text tint past hard-coded thresholds (`b0ab12a`) |
 | Filtering | No search / no "errors only" / "online only" | `[ ]` Phase 2 |
 | Freshness | No "last updated" indication; stale data looks identical to fresh | `[ ]` Phase 2 |
 | Export | No copy / CSV | `[ ]` Phase 2 |
@@ -276,18 +303,20 @@ Per the desktop-UI skill (keyboard nav is mandatory):
 
 **Partly done (c921579):** the Errors "green `NO ERRORS` vs red any-fault" fallback
 and the truncation `Tooltip` (via `_CellText`, shown only when actually
-ellipsized) rows below are shipped. Everything else in this section is pending.
+ellipsized) rows below are shipped. The thermal colour scale and grouped-thousands
+runtime shipped in `2d75be4` + `b0ab12a`. Everything else in this section is pending.
 
 | Cell | Proposal |
 |---|---|
-| **Intake / Exhaust temp** | Parse to a number; color the text/`chip` on a green→amber→red scale with **hard-coded** thresholds — no Preferences UI (decided). Defaults: amber ≥ 35 °C intake / ≥ 45 °C exhaust, red ≥ 45 / ≥ 60 (tune against model specs before shipping). Optional 2 px severity bar under the value. |
-| **Runtime** | Show `1,234 h` (grouped thousands). If a light-source max is known (needs a command, §10), add a thin wear bar + remaining %. |
-| **AC Voltage** | Flag out-of-range (e.g. < 100 V or > 130 V on a 120 V nominal) amber. |
+| **Intake / Exhaust temp** | `[x]` Shipped (`b0ab12a`). `_tempTint` parses the leading number (`_leadingNum`) and tints the cell *text* amber (`_warnText`) / red past **hard-coded** thresholds in `monitoring_table.dart` — no Preferences UI (decided). Intake amber ≥ 40 °C / red ≥ 45 °C; exhaust amber ≥ 55 °C / red ≥ 65 °C (Panasonic gives no numeric `QTM:1` limit — heuristic, tune with field data). Normal / `-` uncoloured. No severity bar (dropped — keeps the flat look). |
+| **Runtime** | `[x]` Grouped thousands shipped (`2d75be4` — `int.tryParse` + `_groupThousands`, non-numeric passthrough). "Runtime" split into **Projector Runtime** (`RTMS1`) and **Light Runtime** (`LRTS3=00`) columns. `[ ]` Wear bar + remaining % still needs a light-source-max command (§10). |
+| **AC Voltage** | `[ ]` Deferred. Flag out-of-range amber — but a fixed `< 100 / > 130` window is wrong for the 200–240 V gear this app mostly talks to; needs an auto-band (≈100–120 vs ≈200–240) or a per-node nominal. Not started at the user's request. |
 | **Errors** | `[x]` green `NO ERRORS` vs red raw string is shipped (`_errorsCell`, `-` passthrough). `[ ]` still to do: decode the `ERRS2` 12-char bitmask into labeled severity chips — Temperature / Fan / Air filter / Light source / Shutter / Cover / Other — with a breakdown tooltip. Needs the per-position bit meaning table from the model's RS-232C spec (§10). |
 | **Connection** | Add a relative "updated 8 s ago" in the cell or as a subtle trailing label; turn the dot grey/hollow when the last poll is older than ~2× the poll interval (data is stale, not necessarily offline). Needs `lastPolledAt` on the model (§11). |
 | **Power** | If the projector reports warming/cooling sub-states, show them distinctly (amber, animated) rather than collapsing to ON/STANDBY. Needs confirmation of the extended `QPW` values (§10). |
 | **Truncated text** | `[x]` Done — `_CellText` measures with `TextPainter` and wraps in a `Tooltip` (full value) only when the text is actually ellipsized. |
-| **Value change** | On a poll that changes a cell's value, flash the cell background from `tertiary` and fade out over ~600 ms (`TweenAnimationBuilder`) so operators catch changes without staring. Especially: went offline, new error, shutter/power flip. |
+| **Value change** | `[ ]` Deferred at the user's request. On a poll that changes a cell's value, flash the cell background from `tertiary` and fade out over ~600 ms (`TweenAnimationBuilder`) so operators catch changes without staring. Especially: went offline, new error, shutter/power flip. |
+| **Power / Shutter / Connection label** | `[x]` Shipped (`b0ab12a`, not in the original plan). The label text now carries its icon colour — green on / open / online, red standby / closed / offline, amber (`_warnText`) auth-error. |
 
 ---
 
@@ -343,10 +372,11 @@ vs. this app. "Cmd?" = we already have the NTCONTROL command in
 | Input terminal | ✅ (`QIN`) | yes | — |
 | Signal present | ✅ (`QVX:NSGS1`) | yes | — |
 | **Signal format** (resolution / Hz) | ❌ | no | Column showing `1920×1080 @ 60`; **need command** (likely another `QVX:` key) |
-| Intake air temp | ✅ (`QTM:0`) | yes | Color scale — §6 |
-| Exhaust / optics temp | ✅ (`QTM:1`) | yes | Color scale — §6 |
+| Intake air temp | ✅ (`QTM:0`) | yes | `[x]` Colour scale shipped — §6 |
+| Exhaust / optics temp | ✅ (`QTM:1`) | yes | `[x]` Colour scale shipped — §6 |
 | **Internal / around-lamp temp** | ❌ | no | **Need command** |
-| Light-source runtime | ✅ (`QVX:RTMS1`) | yes | Grouped thousands — §6 |
+| Projector runtime | ✅ (`QVX:RTMS1`) | yes | `[x]` "Projector Runtime" column, grouped thousands — §6 |
+| Light-source runtime | ✅ (`QVX:LRTS3=00`) | yes | `[x]` "Light Runtime" column shipped (`2d75be4`) — reply `LRTS3=00:<hours>`, same unit as `RTMS1` |
 | **Light-source remaining %** | ❌ | no | Wear bar; **need command** |
 | **Per-lamp / per-module status** (multi-light) | ❌ | no | **Need command**; only relevant on multi-light models |
 | **Filter runtime / remaining** | ❌ | no | Column + remaining bar; **need command** |
@@ -389,9 +419,13 @@ Everything from category "yes" above can ship without any protocol work.
 
 ### `ProjectorNode` (`projector_node.dart`, Freezed — regen after)
 
+- `[x]` `String lightRuntime` added (`2d75be4`) — display string from
+  `QVX:LRTS3=00`, parsed/formatted in the provider like `runtime`.
 - Add numeric telemetry so sort & color scales key off real numbers, keep the
   display strings or derive them in the cell:
   - `int? intakeTempC`, `int? exhaustTempC`, `int? acVolts`, `int? runtimeHours`
+  - *Not done* — the thermal scale (§6) currently parses the display string
+    on render (`_leadingNum`), consistent with how sort already works.
 - `DateTime? lastPolledAt` — "updated Xs ago" + stale detection.
 - `String errorBits` (raw `ERRS2` payload) kept separate from a decoded
   `List<ProjectorFault>` (or keep decoding in the cell).
@@ -461,8 +495,13 @@ hovered row, drag-over column.
 
 9. `[x]` Manual column drag-resize on the header edge (§2) — `_ColumnResizeHandle`,
    scale-aware, persists to `monitoringColumnWidths` on drag end.
-10. Search field + filter chips + "showing X of Y" (§7).
-11. Thermal color scale + AC-voltage flag + value-change flash (§6).
+10. Search field + filter chips + "showing X of Y" (§7). — *deferred; user
+    still weighing whether it's worth it.*
+11. `[~]` Thermal color scale + AC-voltage flag + value-change flash (§6).
+    `[x]` Thermal colour scale (intake 40/45 °C, exhaust 55/65 °C) + status
+    label colours + Light Runtime column (`2d75be4` + `b0ab12a`).
+    `[ ]` AC-voltage flag and value-change flash — deferred at the user's
+    request.
 12. `lastPolledAt` + stale indicator (§6).
 13. Keyboard navigation (§5).
 14. Copy row / Export CSV (§9).
@@ -497,11 +536,17 @@ Resolved with the user — folded into the sections above:
    Controls, both directions, plus selected-command actions. Built in c921579,
    then the user asked to remove row selection entirely — the Monitoring table
    is now **view-only** (hover highlight, sort, column config only). (§4)
-6. **Thermal thresholds** — hard-coded defaults, no Preferences UI. (§6)
+6. **Thermal thresholds** — hard-coded consts, no Preferences UI. Shipped
+   values: intake amber ≥ 40 °C / red ≥ 45 °C (from the 0–45 °C operating
+   spec); exhaust amber ≥ 55 °C / red ≥ 65 °C (no published `QTM:1` limit —
+   heuristic, tune later). Tint is text-colour only; no severity bar. (§6)
 7. *(Point 7 was the "collapsible group sections vs. plain Group column"
    question.)* — Ship the **plain sortable Group column** now (§8); collapsible
    group sections stay deferred to Phase 3 and may be dropped entirely.
 8. **View format** — table view only. No separate "wall view" / status-tile
    grid.
-</content>
-</invoke>
+9. **Light Runtime** — separate column from Projector Runtime, added on the
+   user's request. `QVX:LRTS3=00` → `LRTS3=00:<hours>` (same unit as `RTMS1`),
+   shown grouped. (§6 / §10)
+10. **AC-voltage flag & value-change flash** — deferred; the user is not yet
+    convinced of their value. (§6)
