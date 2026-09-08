@@ -44,7 +44,14 @@ and **Phase 2 item 9** — manual header-edge column drag-resize (`_ColumnResize
   (needs an auto-band or per-node nominal; see the working notes).
 - `[ ]` **Value-change flash** — deferred at the user's request.
 
-Rest of Phase 2 and all of Phase 3 not started.
+**Phase 2 item 15 — done (2026-09-08, commits `7af1eba` + `37da5d1`):** row
+density presets (`MonitoringDensity` enum), a non-collapsing **Merge into
+groups** toggle (`_GroupHeaderRow`), and the View ▸ Monitoring Table submenu
+reorganised into sub-submenus (Columns / Presets / Row density) plus the
+Fit-to-window and Merge toggles.
+
+Remaining Phase 2 (items 10, 12–14, and the AC-flag / flash half of 11) and all
+of Phase 3 not started.
 
 ---
 
@@ -79,12 +86,13 @@ to match what shipped.*
 | Column width | Not user-adjustable | `[x]` double-click auto-fit, header-edge drag-resize, fit-to-window toggle |
 | Row feedback | No hover highlight, no row selection, no keyboard nav | `[~]` hover highlight done; selection deliberately removed; keyboard nav still Phase 2 |
 | Cross-view link | Table ignores `selectionProvider` | `[dropped]` Monitoring table is view-only by decision |
-| Grouping | No "Group" column and no group sections | `[~]` sortable Group column added; sections still Phase 3 |
+| Grouping | No "Group" column and no group sections | `[x]` sortable Group column + non-collapsing "Merge into groups" toggle; only collapsible sections remain (Phase 3) |
 | Errors cell | Dumps the raw 12-char `ERRS2` bitmask — not human-readable | `[~]` green `NO ERRORS` / red raw string; full chip decode still Phase 3 |
 | Thermals | Plain text; no warm/hot color cue | `[x]` amber/red text tint past hard-coded thresholds (`b0ab12a`) |
 | Filtering | No search / no "errors only" / "online only" | `[ ]` Phase 2 |
 | Freshness | No "last updated" indication; stale data looks identical to fresh | `[ ]` Phase 2 |
 | Export | No copy / CSV | `[ ]` Phase 2 |
+| Density | Fixed 40 px rows | `[x]` compact / standard / comfortable presets (`7af1eba`) |
 
 ### Known bug to fix along the way
 
@@ -338,12 +346,18 @@ runtime shipped in `2d75be4` + `b0ab12a`. Everything else in this section is pen
   group name; "—" for ungrouped; sortable (ungrouped sorts last). Off by default
   in the column menu. Group map resolved once per build from
   `workspaceProvider.notifier.groups`.
-- **Optional group sections**: when sorted by Group, render sticky
-  sub-headers ("Stage Left — 6 projectors, 1 error") with collapse/expand.
-  Bigger lift against the current flat `ListView.builder`; defer to a later
-  phase.
-- Group-level roll-up in the section header: worst status wins (error > warn >
-  ok), count online / total.
+- `[x]` **"Merge into groups"** (`7af1eba`): a plain View-menu checkbox
+  (`monitoringGroupBy`, off by default). Rows are clustered under a
+  **non-collapsing** `_GroupHeaderRow` (colour swatch / hollow dot for
+  Ungrouped, name, `N projectors`, worst-status `_StatusPill`). Clusters
+  ordered by group name; ungrouped and orphaned-groupId nodes trail last. The
+  sort still applies inside each cluster; zebra parity resets per cluster. The
+  standalone Group column auto-hides while merged. Implemented as a flattened
+  `List<_Entry>` (`_HeaderEntry` / `_NodeEntry`) so the header is one row tall
+  and the body keeps a single `itemExtent` — no `ListView` rework. **No
+  collapse/expand** (decided — §13.7).
+- Group-header roll-up: worst status wins (error > auth error > offline);
+  healthy groups get no pill. Online/total counts not shown (kept minimal).
 
 ---
 
@@ -447,8 +461,17 @@ Everything from category "yes" above can ship without any protocol work.
 [x] String              monitoringSortColumnId    // default 'ip'
 [x] bool                monitoringSortAscending   // default true
 [x] bool                monitoringFitToWidth      // default true
-[ ] double              monitoringRowHeight       // density toggle — Phase 2 (§12.15)
+[x] MonitoringDensity   monitoringDensity         // compact|standard|comfortable, default standard (§12.15)
+[x] bool                monitoringGroupBy         // "Merge into groups", default false (§8)
 ```
+
+`[x]` **Density + group merge (`7af1eba`):** `monitoringDensity` is an enum
+(compact / standard / comfortable) rather than the raw `double
+monitoringRowHeight` this section first proposed — one preset drives row
+height, header height and horizontal padding together (compact also shrinks the
+body font). `standard` keeps the pre-density metrics so nothing shifts for
+users who never open the setting. `setMonitoringDensity` / `setMonitoringGroupBy`
+on the notifier; both persisted.
 
 `[x]` **Done (c921579):** the five fields above, with `copyWith` / `toJson` /
 `fromJson` entries and `setMonitoringColumns` / `setMonitoringColumnWidth` /
@@ -505,14 +528,25 @@ hovered row, drag-over column.
 12. `lastPolledAt` + stale indicator (§6).
 13. Keyboard navigation (§5).
 14. Copy row / Export CSV (§9).
-15. Density toggle (compact/standard/comfortable row height).
+15. `[x]` Density toggle + group merge + menu reorg (`7af1eba` + `37da5d1`):
+    - **Density** — `MonitoringDensity` enum (compact/standard/comfortable)
+      driving row + header height, padding and (compact) font, via a **Row
+      density** sub-submenu.
+    - **Merge into groups** — non-collapsing group clusters + `_GroupHeaderRow`
+      (§8), a View-menu checkbox.
+    - **Submenu reorg** — View ▸ Monitoring Table is now all sub-submenus /
+      toggles: **Columns** ▸ (checkboxes — divider — Show all columns),
+      **Presets** ▸, divider, **Row density** ▸, divider, Fit columns to window,
+      Merge into groups.
 
 ### Phase 3 — needs command strings from the user
 
 16. `ERRS2` bitmask → severity chips with breakdown.
 17. Filter runtime, light-source remaining %, signal format, brightness %,
     firmware, cooling time, self-test — as columns / row actions.
-18. Group sections with sticky sub-headers + roll-up (§8).
+18. `[~]` Group sections (§8). The non-collapsing **Merge into groups** variant
+    shipped in Phase 2 item 15; only *collapsible* sticky sections remain here,
+    and per §13.7 may be dropped.
 19. Per-row error-history popover from `eventLogProvider`.
 20. User metadata (note / location) field + column.
 
@@ -541,8 +575,10 @@ Resolved with the user — folded into the sections above:
    spec); exhaust amber ≥ 55 °C / red ≥ 65 °C (no published `QTM:1` limit —
    heuristic, tune later). Tint is text-colour only; no severity bar. (§6)
 7. *(Point 7 was the "collapsible group sections vs. plain Group column"
-   question.)* — Ship the **plain sortable Group column** now (§8); collapsible
-   group sections stay deferred to Phase 3 and may be dropped entirely.
+   question.)* — Shipped the **plain sortable Group column**, then a
+   **non-collapsing "Merge into groups"** toggle (§8, Phase 2 item 15) at the
+   user's request: rows just cluster under a group header, nothing hides.
+   *Collapsible* sections stay deferred and may be dropped entirely.
 8. **View format** — table view only. No separate "wall view" / status-tile
    grid.
 9. **Light Runtime** — separate column from Projector Runtime, added on the
@@ -550,3 +586,9 @@ Resolved with the user — folded into the sections above:
    shown grouped. (§6 / §10)
 10. **AC-voltage flag & value-change flash** — deferred; the user is not yet
     convinced of their value. (§6)
+11. **Row density** — a 3-way enum (`MonitoringDensity`: compact / standard /
+    comfortable), not a free `double` row height. `standard` == the old
+    metrics. Persisted. (§11 / §12.15)
+12. **Monitoring Table submenu** — everything moved into sub-submenus /
+    toggles; final order Columns ▸ · Presets ▸ · — · Row density ▸ · — · Fit
+    columns to window · Merge into groups. (§12.15)
