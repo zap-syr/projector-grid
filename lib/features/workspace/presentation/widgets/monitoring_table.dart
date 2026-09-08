@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../providers/app_settings_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../../domain/projector_group.dart';
@@ -33,7 +34,11 @@ class _Column {
 
   /// Builds the cell body (may include icons); receives the already-resolved
   /// group map so it doesn't re-look-up per row.
-  final Widget Function(BuildContext, ProjectorNode, Map<String, ProjectorGroup>)
+  final Widget Function(
+    BuildContext,
+    ProjectorNode,
+    Map<String, ProjectorGroup>,
+  )
   cell;
 
   const _Column({
@@ -106,12 +111,33 @@ class MonitoringTable extends ConsumerStatefulWidget {
 
   /// Named column presets for the menu.
   static const Map<String, List<String>> presets = {
-    'Essentials': ['connection', 'model', 'ip', 'power', 'shutter', 'input',
-        'errors'],
-    'Thermal': ['connection', 'model', 'ip', 'intake', 'exhaust', 'runtime',
-        'voltage'],
-    'Signal': ['connection', 'model', 'ip', 'input', 'signal', 'power',
-        'shutter'],
+    'Essentials': [
+      'connection',
+      'model',
+      'ip',
+      'power',
+      'shutter',
+      'input',
+      'errors',
+    ],
+    'Thermal': [
+      'connection',
+      'model',
+      'ip',
+      'intake',
+      'exhaust',
+      'runtime',
+      'voltage',
+    ],
+    'Signal': [
+      'connection',
+      'model',
+      'ip',
+      'input',
+      'signal',
+      'power',
+      'shutter',
+    ],
   };
 
   static List<String> get showAllColumns => allColumnIds;
@@ -135,7 +161,8 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
   // base width is persisted to `monitoringColumnWidths` on drag end so we don't
   // hit the settings file on every pointer move.
   String? _resizeColId;
-  double _resizeStartEffective = 0; // on-screen width of the column at drag start
+  double _resizeStartEffective =
+      0; // on-screen width of the column at drag start
   double _resizeOtherBase = 0; // summed base width of the other columns (fixed)
   double _resizeViewport = 0;
   bool _resizeScaling = false; // fit-to-window was scaling widths at drag start
@@ -150,8 +177,16 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
   static const _iconOnline = Icon(Icons.circle, size: 12, color: Colors.green);
   static const _iconOffline = Icon(Icons.circle, size: 12, color: Colors.red);
   static const _iconWarning = Icon(Icons.circle, size: 12, color: Colors.amber);
-  static const _iconLock = Icon(Icons.lock_outline, size: 12, color: Colors.amber);
-  static const _iconLockOpen = Icon(Icons.lock_open, size: 12, color: Colors.blue);
+  static const _iconLock = Icon(
+    Icons.lock_outline,
+    size: 12,
+    color: Colors.amber,
+  );
+  static const _iconLockOpen = Icon(
+    Icons.lock_open,
+    size: 12,
+    color: Colors.blue,
+  );
   static const _iconPowerOn = Icon(
     Icons.power_settings_new,
     size: 16,
@@ -180,6 +215,21 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
   static const _iconErrors = Icon(Icons.error, size: 13, color: Colors.red);
   static const _gap4 = SizedBox(width: 4);
   static const _gap6 = SizedBox(width: 6);
+
+  /// Readable amber for warning *text* — the pale `Colors.amber` used for the
+  /// status dots/icons fails contrast when it carries a word on the light
+  /// surface. Used for "Auth Error" and the warm-temperature tint.
+  static const _warnText = Color(0xFFB26A00);
+
+  // Hard-coded thermal severity thresholds (°C) for the Intake/Exhaust tint.
+  // Intake tracks the projectors' 0–45 °C operating spec — units raise a
+  // temperature fault around 45 °C and shut down near 50 °C. Exhaust is
+  // `QTM:1`, the internal optics / around-lamp sensor, which Panasonic never
+  // gives a numeric limit for (only the qualitative TEMP indicator), so these
+  // are a deliberately high heuristic to avoid false alarms — tune once there
+  // is field data.
+  static const double _intakeWarmC = 40, _intakeHotC = 45;
+  static const double _exhaustWarmC = 55, _exhaustHotC = 65;
 
   // ── Column descriptors ──────────────────────────────────────────────────
 
@@ -228,8 +278,7 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
       iconPad: 18,
       text: (n, groups) => _groupOf(n, groups)?.name ?? '—',
       // Ungrouped sorts last (ascending) via a high sentinel.
-      sortKey: (n, groups) =>
-          (_groupOf(n, groups)?.name ?? '￿').toLowerCase(),
+      sortKey: (n, groups) => (_groupOf(n, groups)?.name ?? '￿').toLowerCase(),
       cell: (_, n, groups) => _groupCell(_groupOf(n, groups)),
     ),
     _Column(
@@ -276,11 +325,19 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
     ),
     _Column(
       id: 'runtime',
-      label: 'Runtime',
-      defaultWidth: 110,
+      label: 'Projector Runtime',
+      defaultWidth: 150,
       text: (n, _) => n.runtime,
       sortKey: (n, _) => _leadingNum(n.runtime),
       cell: (_, n, _) => _CellText(n.runtime),
+    ),
+    _Column(
+      id: 'lightRuntime',
+      label: 'Light Runtime',
+      defaultWidth: 130,
+      text: (n, _) => n.lightRuntime,
+      sortKey: (n, _) => _leadingNum(n.lightRuntime),
+      cell: (_, n, _) => _CellText(n.lightRuntime),
     ),
     _Column(
       id: 'intake',
@@ -288,7 +345,10 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
       defaultWidth: 130,
       text: (n, _) => n.intakeTemp,
       sortKey: (n, _) => _leadingNum(n.intakeTemp),
-      cell: (_, n, _) => _CellText(n.intakeTemp),
+      cell: (_, n, _) => _CellText(
+        n.intakeTemp,
+        color: _tempTint(n.intakeTemp, exhaust: false),
+      ),
     ),
     _Column(
       id: 'exhaust',
@@ -296,7 +356,10 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
       defaultWidth: 150,
       text: (n, _) => n.exhaustTemp,
       sortKey: (n, _) => _leadingNum(n.exhaustTemp),
-      cell: (_, n, _) => _CellText(n.exhaustTemp),
+      cell: (_, n, _) => _CellText(
+        n.exhaustTemp,
+        color: _tempTint(n.exhaustTemp, exhaust: true),
+      ),
     ),
     _Column(
       id: 'voltage',
@@ -328,6 +391,7 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
     'input',
     'signal',
     'runtime',
+    'lightRuntime',
     'intake',
     'exhaust',
     'voltage',
@@ -378,6 +442,19 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
       .split('.')
       .map((o) => (int.tryParse(o) ?? 0).toString().padLeft(3, '0'))
       .join('.');
+
+  /// Text tint for an Intake/Exhaust cell from its display string: `null`
+  /// (default colour) when normal or unreadable (`-`, `Timeout`), amber past
+  /// the warm threshold, red past the hot one. See `_intakeWarmC` etc.
+  static Color? _tempTint(String display, {required bool exhaust}) {
+    final n = _leadingNum(display);
+    if (n == double.negativeInfinity) return null;
+    final warm = exhaust ? _exhaustWarmC : _intakeWarmC;
+    final hot = exhaust ? _exhaustHotC : _intakeHotC;
+    if (n >= hot) return Colors.red;
+    if (n >= warm) return _warnText;
+    return null;
+  }
 
   // ── Scroll sync ─────────────────────────────────────────────────────────
 
@@ -458,7 +535,11 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
 
   // ── Column reorder ──────────────────────────────────────────────────────
 
-  void _reorderColumn(List<_Column> current, String draggedId, String targetId) {
+  void _reorderColumn(
+    List<_Column> current,
+    String draggedId,
+    String targetId,
+  ) {
     if (draggedId == targetId) return;
     final ids = [for (final c in current) c.id];
     final from = ids.indexOf(draggedId);
@@ -565,10 +646,18 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
 
   // ── Cell builders ──────────────────────────────────────────────────────
 
+  // Power / Shutter / Connection carry the icon's colour on the label too:
+  // green = on / open / online, red = standby / closed / offline, amber =
+  // auth error.
   static Widget _connectionCell(ProjectorNode node) {
     final isOnline = node.connectionStatus == ConnectionStatus.connected;
     final isUnprotected = node.connectionStatus == ConnectionStatus.unprotected;
     final isUnauth = node.connectionStatus == ConnectionStatus.unauthorized;
+    final (label, color) = isOnline || isUnprotected
+        ? ('Online', Colors.green)
+        : isUnauth
+        ? ('Auth Error', _warnText)
+        : ('Offline', Colors.red);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -578,14 +667,9 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
         _gap6,
         Flexible(
           child: Text(
-            isOnline
-                ? 'Online'
-                : isUnprotected
-                ? 'Online'
-                : isUnauth
-                ? 'Auth Error'
-                : 'Offline',
+            label,
             overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: color),
           ),
         ),
         if (isUnauth) ...[_gap4, _iconLock],
@@ -602,7 +686,11 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
         on ? _iconPowerOn : _iconPowerOff,
         _gap4,
         Flexible(
-          child: Text(on ? 'ON' : 'STANDBY', overflow: TextOverflow.ellipsis),
+          child: Text(
+            on ? 'ON' : 'STANDBY',
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: on ? Colors.green : Colors.red),
+          ),
         ),
       ],
     );
@@ -616,7 +704,11 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
         open ? _iconShutterOpen : _iconShutterClosed,
         _gap4,
         Flexible(
-          child: Text(open ? 'OPEN' : 'CLOSED', overflow: TextOverflow.ellipsis),
+          child: Text(
+            open ? 'OPEN' : 'CLOSED',
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: open ? Colors.green : Colors.red),
+          ),
         ),
       ],
     );
@@ -835,9 +927,7 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
           final scaleToFit = fitToWidth && viewportWidth > totalWidth;
           final tableWidth = scaleToFit ? viewportWidth : totalWidth;
           final effectiveWidths = scaleToFit
-              ? [
-                  for (final w in baseWidths) w * viewportWidth / totalWidth,
-                ]
+              ? [for (final w in baseWidths) w * viewportWidth / totalWidth]
               : baseWidths;
 
           return Column(
@@ -1007,9 +1097,8 @@ class _CellText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final style = DefaultTextStyle.of(
-      context,
-    ).style.merge(TextStyle(color: color));
+    final style = DefaultTextStyle.of(context).style
+        .merge(TextStyle(color: color));
     return LayoutBuilder(
       builder: (context, constraints) {
         final tp = TextPainter(
@@ -1026,9 +1115,7 @@ class _CellText extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: color == null ? null : TextStyle(color: color),
         );
-        return overflowing
-            ? Tooltip(message: text, child: label)
-            : label;
+        return overflowing ? Tooltip(message: text, child: label) : label;
       },
     );
   }
