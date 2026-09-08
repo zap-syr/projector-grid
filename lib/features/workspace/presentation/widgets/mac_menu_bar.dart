@@ -35,12 +35,21 @@ class MacMenuBar extends ConsumerWidget {
     final projectNotifier = ref.read(projectStateProvider.notifier);
     final wsNotifier = ref.read(workspaceProvider.notifier);
     final showLogs = ref.watch(appSettingsProvider.select((s) => s.showLogs));
-    final isMonitoringView =
-        ref.watch(appSettingsProvider.select((s) => s.isMonitoringView));
-    final monitoringColumns =
-        ref.watch(appSettingsProvider.select((s) => s.monitoringColumns));
-    final monitoringFitToWidth =
-        ref.watch(appSettingsProvider.select((s) => s.monitoringFitToWidth));
+    final isMonitoringView = ref.watch(
+      appSettingsProvider.select((s) => s.isMonitoringView),
+    );
+    final monitoringColumns = ref.watch(
+      appSettingsProvider.select((s) => s.monitoringColumns),
+    );
+    final monitoringFitToWidth = ref.watch(
+      appSettingsProvider.select((s) => s.monitoringFitToWidth),
+    );
+    final monitoringDensity = ref.watch(
+      appSettingsProvider.select((s) => s.monitoringDensity),
+    );
+    final monitoringGroupBy = ref.watch(
+      appSettingsProvider.select((s) => s.monitoringGroupBy),
+    );
     final visibleColumns = MonitoringTable.resolveVisible(monitoringColumns);
     final settingsNotifier = ref.read(appSettingsProvider.notifier);
 
@@ -220,8 +229,9 @@ class MacMenuBar extends ConsumerWidget {
                     LogicalKeyboardKey.keyZ,
                     meta: true,
                   ),
-                  onSelected:
-                      wsNotifier.canUndo ? () => wsNotifier.undo() : null,
+                  onSelected: wsNotifier.canUndo
+                      ? () => wsNotifier.undo()
+                      : null,
                 ),
                 PlatformMenuItem(
                   label: 'Redo',
@@ -230,8 +240,9 @@ class MacMenuBar extends ConsumerWidget {
                     meta: true,
                     shift: true,
                   ),
-                  onSelected:
-                      wsNotifier.canRedo ? () => wsNotifier.redo() : null,
+                  onSelected: wsNotifier.canRedo
+                      ? () => wsNotifier.redo()
+                      : null,
                 ),
               ],
             ),
@@ -338,36 +349,71 @@ class MacMenuBar extends ConsumerWidget {
                   menus: <PlatformMenuItem>[
                     PlatformMenuItemGroup(
                       members: <PlatformMenuItem>[
-                        for (final id in MonitoringTable.allColumnIds)
-                          PlatformMenuItem(
-                            label:
-                                '${visibleColumns.contains(id) ? '✓ ' : '   '}'
-                                '${MonitoringTable.labelFor(id)}',
-                            onSelected: () {
-                              final next = MonitoringTable.toggledColumn(
-                                monitoringColumns,
-                                id,
-                              );
-                              if (next != null) {
-                                settingsNotifier.setMonitoringColumns(next);
-                              }
-                            },
-                          ),
+                        PlatformMenu(
+                          label: 'Columns',
+                          menus: <PlatformMenuItem>[
+                            PlatformMenuItemGroup(
+                              members: <PlatformMenuItem>[
+                                for (final id in MonitoringTable.allColumnIds)
+                                  PlatformMenuItem(
+                                    label:
+                                        '${visibleColumns.contains(id) ? '✓ ' : '   '}'
+                                        '${MonitoringTable.labelFor(id)}',
+                                    onSelected: () {
+                                      final next =
+                                          MonitoringTable.toggledColumn(
+                                            monitoringColumns,
+                                            id,
+                                          );
+                                      if (next != null) {
+                                        settingsNotifier.setMonitoringColumns(
+                                          next,
+                                        );
+                                      }
+                                    },
+                                  ),
+                              ],
+                            ),
+                            PlatformMenuItemGroup(
+                              members: <PlatformMenuItem>[
+                                PlatformMenuItem(
+                                  label: 'Show all columns',
+                                  onSelected: () =>
+                                      settingsNotifier.setMonitoringColumns(
+                                        MonitoringTable.showAllColumns,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        PlatformMenu(
+                          label: 'Presets',
+                          menus: <PlatformMenuItem>[
+                            for (final entry in MonitoringTable.presets.entries)
+                              PlatformMenuItem(
+                                label: entry.key,
+                                onSelected: () => settingsNotifier
+                                    .setMonitoringColumns(entry.value),
+                              ),
+                          ],
+                        ),
                       ],
                     ),
                     PlatformMenuItemGroup(
                       members: <PlatformMenuItem>[
-                        for (final entry in MonitoringTable.presets.entries)
-                          PlatformMenuItem(
-                            label: '${entry.key} preset',
-                            onSelected: () => settingsNotifier
-                                .setMonitoringColumns(entry.value),
-                          ),
-                        PlatformMenuItem(
-                          label: 'Show all columns',
-                          onSelected: () => settingsNotifier.setMonitoringColumns(
-                            MonitoringTable.showAllColumns,
-                          ),
+                        PlatformMenu(
+                          label: 'Row density',
+                          menus: <PlatformMenuItem>[
+                            for (final d in MonitoringDensity.values)
+                              PlatformMenuItem(
+                                label:
+                                    '${monitoringDensity == d ? '✓ ' : '   '}'
+                                    '${d.label}',
+                                onSelected: () =>
+                                    settingsNotifier.setMonitoringDensity(d),
+                              ),
+                          ],
                         ),
                       ],
                     ),
@@ -379,6 +425,13 @@ class MacMenuBar extends ConsumerWidget {
                               : '   Fit columns to window',
                           onSelected: () => settingsNotifier
                               .setMonitoringFitToWidth(!monitoringFitToWidth),
+                        ),
+                        PlatformMenuItem(
+                          label: monitoringGroupBy
+                              ? '✓ Merge into groups'
+                              : '   Merge into groups',
+                          onSelected: () => settingsNotifier
+                              .setMonitoringGroupBy(!monitoringGroupBy),
                         ),
                       ],
                     ),

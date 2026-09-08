@@ -54,6 +54,7 @@ class TopMenuBar extends ConsumerWidget {
     required bool checked,
     required VoidCallback onPressed,
     String? shortcutLabel,
+    double? width,
   }) {
     return MenuItemButton(
       leadingIcon: SizedBox(
@@ -62,9 +63,11 @@ class TopMenuBar extends ConsumerWidget {
       ),
       onPressed: onPressed,
       child: shortcutLabel == null
-          ? Text(label)
+          ? (width == null
+                ? Text(label)
+                : SizedBox(width: width, child: Text(label)))
           : SizedBox(
-              width: 220,
+              width: width ?? 220,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -139,6 +142,12 @@ class TopMenuBar extends ConsumerWidget {
     );
     final monitoringFitToWidth = ref.watch(
       appSettingsProvider.select((s) => s.monitoringFitToWidth),
+    );
+    final monitoringDensity = ref.watch(
+      appSettingsProvider.select((s) => s.monitoringDensity),
+    );
+    final monitoringGroupBy = ref.watch(
+      appSettingsProvider.select((s) => s.monitoringGroupBy),
     );
     final visibleColumns = MonitoringTable.resolveVisible(monitoringColumns);
     final settingsNotifier = ref.read(appSettingsProvider.notifier);
@@ -355,41 +364,87 @@ class TopMenuBar extends ConsumerWidget {
                 const Divider(),
                 SubmenuButton(
                   menuChildren: [
-                    for (final id in MonitoringTable.allColumnIds)
-                      _viewRadioItem(
-                        context,
-                        label: MonitoringTable.labelFor(id),
-                        checked: visibleColumns.contains(id),
-                        onPressed: () {
-                          final next = MonitoringTable.toggledColumn(
-                            monitoringColumns,
-                            id,
-                          );
-                          if (next != null) {
-                            settingsNotifier.setMonitoringColumns(next);
-                          }
-                        },
-                      ),
+                    // ── Columns ──────────────────────────────────────────
+                    SubmenuButton(
+                      menuChildren: [
+                        for (final id in MonitoringTable.allColumnIds)
+                          _viewRadioItem(
+                            context,
+                            label: MonitoringTable.labelFor(id),
+                            checked: visibleColumns.contains(id),
+                            width: 220,
+                            onPressed: () {
+                              final next = MonitoringTable.toggledColumn(
+                                monitoringColumns,
+                                id,
+                              );
+                              if (next != null) {
+                                settingsNotifier.setMonitoringColumns(next);
+                              }
+                            },
+                          ),
+                        const Divider(),
+                        MenuItemButton(
+                          onPressed: () =>
+                              settingsNotifier.setMonitoringColumns(
+                                MonitoringTable.showAllColumns,
+                              ),
+                          child: const SizedBox(
+                            width: 220,
+                            child: Text('Show all columns'),
+                          ),
+                        ),
+                      ],
+                      child: const SizedBox(width: 252, child: Text('Columns')),
+                    ),
+                    // ── Presets ──────────────────────────────────────────
+                    SubmenuButton(
+                      menuChildren: [
+                        for (final entry in MonitoringTable.presets.entries)
+                          MenuItemButton(
+                            onPressed: () => settingsNotifier
+                                .setMonitoringColumns(entry.value),
+                            child: SizedBox(width: 180, child: Text(entry.key)),
+                          ),
+                      ],
+                      child: const SizedBox(width: 252, child: Text('Presets')),
+                    ),
                     const Divider(),
-                    for (final entry in MonitoringTable.presets.entries)
-                      MenuItemButton(
-                        onPressed: () =>
-                            settingsNotifier.setMonitoringColumns(entry.value),
-                        child: Text('${entry.key} preset'),
+                    // ── Row density ──────────────────────────────────────
+                    SubmenuButton(
+                      menuChildren: [
+                        for (final d in MonitoringDensity.values)
+                          _viewRadioItem(
+                            context,
+                            label: d.label,
+                            checked: monitoringDensity == d,
+                            width: 160,
+                            onPressed: () =>
+                                settingsNotifier.setMonitoringDensity(d),
+                          ),
+                      ],
+                      child: const SizedBox(
+                        width: 252,
+                        child: Text('Row density'),
                       ),
-                    MenuItemButton(
-                      onPressed: () => settingsNotifier.setMonitoringColumns(
-                        MonitoringTable.showAllColumns,
-                      ),
-                      child: const Text('Show all columns'),
                     ),
                     const Divider(),
                     _viewRadioItem(
                       context,
                       label: 'Fit columns to window',
                       checked: monitoringFitToWidth,
+                      width: 252,
                       onPressed: () => settingsNotifier.setMonitoringFitToWidth(
                         !monitoringFitToWidth,
+                      ),
+                    ),
+                    _viewRadioItem(
+                      context,
+                      label: 'Merge into groups',
+                      checked: monitoringGroupBy,
+                      width: 252,
+                      onPressed: () => settingsNotifier.setMonitoringGroupBy(
+                        !monitoringGroupBy,
                       ),
                     ),
                   ],
