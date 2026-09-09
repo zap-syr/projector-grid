@@ -1,20 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import 'dart:async';
 import 'dart:io';
+
 import '../../../../core/services/panasonic_protocol_service.dart';
 
 class AddProjectorDialog extends StatefulWidget {
   final Function(List<Map<String, dynamic>>) onAddProjectors;
   final List<String> existingIps;
 
-  const AddProjectorDialog({super.key, required this.onAddProjectors, required this.existingIps});
+  const AddProjectorDialog({
+    super.key,
+    required this.onAddProjectors,
+    required this.existingIps,
+  });
 
   @override
   State<AddProjectorDialog> createState() => _AddProjectorDialogState();
 }
 
-class _AddProjectorDialogState extends State<AddProjectorDialog> with SingleTickerProviderStateMixin {
+class _AddProjectorDialogState extends State<AddProjectorDialog>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
   @override
@@ -90,7 +97,11 @@ class _ManualAddTab extends StatefulWidget {
   final Function(List<Map<String, dynamic>>) onAddMultiple;
   final List<String> existingIps;
 
-  const _ManualAddTab({required this.onAdd, required this.onAddMultiple, required this.existingIps});
+  const _ManualAddTab({
+    required this.onAdd,
+    required this.onAddMultiple,
+    required this.existingIps,
+  });
 
   @override
   State<_ManualAddTab> createState() => _ManualAddTabState();
@@ -107,7 +118,9 @@ class _ManualAddTabState extends State<_ManualAddTab> {
   final _loginController = TextEditingController();
   final _passwordController = TextEditingController();
 
-  final _ipRegex = RegExp(r"^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$");
+  final _ipRegex = RegExp(
+    r"^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$",
+  );
 
   @override
   void dispose() {
@@ -135,7 +148,11 @@ class _ManualAddTabState extends State<_ManualAddTab> {
 
         if (startPrefix != endPrefix) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Start and End IP must be in the same subnet (first 3 octets)')),
+            const SnackBar(
+              content: Text(
+                'Start and End IP must be in the same subnet (first 3 octets)',
+              ),
+            ),
           );
           return;
         }
@@ -145,7 +162,9 @@ class _ManualAddTabState extends State<_ManualAddTab> {
 
         if (startLast > endLast) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Start IP must be lower or equal to End IP')),
+            const SnackBar(
+              content: Text('Start IP must be lower or equal to End IP'),
+            ),
           );
           return;
         }
@@ -169,7 +188,9 @@ class _ManualAddTabState extends State<_ManualAddTab> {
 
         if (duplicates.isNotEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Skipped ${duplicates.length} duplicate IP(s)')),
+            SnackBar(
+              content: Text('Skipped ${duplicates.length} duplicate IP(s)'),
+            ),
           );
         }
         if (results.isNotEmpty) {
@@ -179,7 +200,9 @@ class _ManualAddTabState extends State<_ManualAddTab> {
         final ip = _ipController.text;
         if (widget.existingIps.contains(ip)) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('IP Address already exists in project')),
+            const SnackBar(
+              content: Text('IP Address already exists in project'),
+            ),
           );
           return;
         }
@@ -266,15 +289,14 @@ class _ManualAddTabState extends State<_ManualAddTab> {
             validator: (val) {
               if (val == null || val.isEmpty) return 'Port required';
               final p = int.tryParse(val);
-              if (p == null || p < 1 || p > 65535) return 'Invalid port (1-65535)';
+              if (p == null || p < 1 || p > 65535) {
+                return 'Invalid port (1-65535)';
+              }
               return null;
             },
           ),
           const SizedBox(height: 16),
-          TextFormField(
-            controller: _loginController,
-            decoration: dec('Login'),
-          ),
+          TextFormField(controller: _loginController, decoration: dec('Login')),
           const SizedBox(height: 16),
           TextFormField(
             controller: _passwordController,
@@ -283,7 +305,11 @@ class _ManualAddTabState extends State<_ManualAddTab> {
           const SizedBox(height: 10),
           Row(
             children: [
-              Icon(Icons.info_outline, size: 14, color: theme.colorScheme.onSurfaceVariant),
+              Icon(
+                Icons.info_outline,
+                size: 14,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
               const SizedBox(width: 6),
               Flexible(
                 child: Text(
@@ -304,10 +330,7 @@ class _ManualAddTabState extends State<_ManualAddTab> {
                 child: const Text('Cancel'),
               ),
               const SizedBox(width: 16),
-              FilledButton(
-                onPressed: _submit,
-                child: const Text('Add'),
-              ),
+              FilledButton(onPressed: _submit, child: const Text('Add')),
             ],
           ),
         ],
@@ -320,7 +343,10 @@ class _AutoDiscoveryTab extends StatefulWidget {
   final Function(List<Map<String, dynamic>>) onAddSelected;
   final List<String> existingIps;
 
-  const _AutoDiscoveryTab({required this.onAddSelected, required this.existingIps});
+  const _AutoDiscoveryTab({
+    required this.onAddSelected,
+    required this.existingIps,
+  });
 
   @override
   State<_AutoDiscoveryTab> createState() => _AutoDiscoveryTabState();
@@ -385,7 +411,9 @@ class _AutoDiscoveryTabState extends State<_AutoDiscoveryTab> {
   }
 
   Future<void> _startScan() async {
-    if (_selectedInterface == null || _selectedInterface!.addresses.isEmpty) return;
+    if (_selectedInterface == null || _selectedInterface!.addresses.isEmpty) {
+      return;
+    }
 
     setState(() {
       _isScanning = true;
@@ -407,26 +435,34 @@ class _AutoDiscoveryTabState extends State<_AutoDiscoveryTab> {
     final login = _loginController.text;
     final password = _passwordController.text;
 
-    final stream = _protocolService.scanNetwork(subnet, port, login: login, password: password);
+    final stream = _protocolService.scanNetwork(
+      subnet,
+      port,
+      login: login,
+      password: password,
+    );
 
-    _scanSubscription = stream.listen((result) {
-      if (mounted) {
-        setState(() {
-          final ip = result['ip'] as String;
-          if (!widget.existingIps.contains(ip)) {
-            _foundProjectors.add(result);
-            _selectedIps.add(ip);
-          }
-        });
-      }
-    }, onDone: () {
-      if (mounted) {
-        setState(() {
-          _isScanning = false;
-          _scanSubscription = null;
-        });
-      }
-    });
+    _scanSubscription = stream.listen(
+      (result) {
+        if (mounted) {
+          setState(() {
+            final ip = result['ip'] as String;
+            if (!widget.existingIps.contains(ip)) {
+              _foundProjectors.add(result);
+              _selectedIps.add(ip);
+            }
+          });
+        }
+      },
+      onDone: () {
+        if (mounted) {
+          setState(() {
+            _isScanning = false;
+            _scanSubscription = null;
+          });
+        }
+      },
+    );
   }
 
   @override
@@ -447,11 +483,17 @@ class _AutoDiscoveryTabState extends State<_AutoDiscoveryTab> {
           if (_interfaces.isEmpty)
             Row(
               children: [
-                Icon(Icons.warning_amber_rounded, color: theme.colorScheme.error, size: 18),
+                Icon(
+                  Icons.warning_amber_rounded,
+                  color: theme.colorScheme.error,
+                  size: 18,
+                ),
                 const SizedBox(width: 8),
                 Text(
                   'No active network interfaces found',
-                  style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.error),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.error,
+                  ),
                 ),
               ],
             )
@@ -469,11 +511,17 @@ class _AutoDiscoveryTabState extends State<_AutoDiscoveryTab> {
                     inputDecorationTheme: const InputDecorationTheme(
                       border: OutlineInputBorder(),
                       isDense: true,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
                     ),
                     dropdownMenuEntries: _interfaces.map((i) {
                       final ip = i.addresses.first.address;
-                      return DropdownMenuEntry(value: ip, label: '${i.name}  $ip');
+                      return DropdownMenuEntry(
+                        value: ip,
+                        label: '${i.name}  $ip',
+                      );
                     }).toList(),
                     onSelected: (ip) {
                       if (ip == null) return;
@@ -519,7 +567,11 @@ class _AutoDiscoveryTabState extends State<_AutoDiscoveryTab> {
           const SizedBox(height: 10),
           Row(
             children: [
-              Icon(Icons.info_outline, size: 14, color: theme.colorScheme.onSurfaceVariant),
+              Icon(
+                Icons.info_outline,
+                size: 14,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
               const SizedBox(width: 6),
               Flexible(
                 child: Text(
@@ -537,7 +589,14 @@ class _AutoDiscoveryTabState extends State<_AutoDiscoveryTab> {
             child: FilledButton.icon(
               onPressed: _isScanning ? _stopScan : _startScan,
               icon: _isScanning
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
                   : const Icon(Icons.search),
               label: Text(_isScanning ? 'Cancel Scanning' : 'Scan Network'),
             ),
@@ -551,60 +610,77 @@ class _AutoDiscoveryTabState extends State<_AutoDiscoveryTab> {
                 border: Border.all(color: theme.dividerColor),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: _foundProjectors.isEmpty && !_isScanning
-                  ? const Center(child: Text('No projectors found. Click scan to search.'))
-                  : ListView.builder(
-                      itemCount: _foundProjectors.length,
-                      itemBuilder: (context, index) {
-                        final p = _foundProjectors[index];
-                        final isSelected = _selectedIps.contains(p['ip']);
-                        final isAuthError = p['status'] == 'auth_error';
-                        final isUnprotected = p['status'] == 'unprotected';
-                        return CheckboxListTile(
-                          title: Row(
-                            children: [
-                              Expanded(child: Text(p['name'])),
-                              if (isAuthError) ...[
-                                const SizedBox(width: 6),
-                                const Tooltip(
-                                  message: 'Projector found but credentials are incorrect',
-                                  child: Icon(Icons.lock_outline, size: 14, color: Colors.amber),
-                                ),
+              // Own Material so CheckboxListTile ink/selection paints above the
+              // dialog's coloured background Container instead of behind it.
+              child: Material(
+                type: MaterialType.transparency,
+                child: _foundProjectors.isEmpty && !_isScanning
+                    ? const Center(
+                        child: Text(
+                          'No projectors found. Click scan to search.',
+                        ),
+                      )
+                    : ListView.builder(
+                        itemCount: _foundProjectors.length,
+                        itemBuilder: (context, index) {
+                          final p = _foundProjectors[index];
+                          final isSelected = _selectedIps.contains(p['ip']);
+                          final isAuthError = p['status'] == 'auth_error';
+                          final isUnprotected = p['status'] == 'unprotected';
+                          return CheckboxListTile(
+                            title: Row(
+                              children: [
+                                Expanded(child: Text(p['name'])),
+                                if (isAuthError) ...[
+                                  const SizedBox(width: 6),
+                                  const Tooltip(
+                                    message: 'Projector found but credentials are incorrect',
+                                    child: Icon(
+                                      Icons.lock_outline,
+                                      size: 14,
+                                      color: Colors.amber,
+                                    ),
+                                  ),
+                                ],
+                                if (isUnprotected) ...[
+                                  const SizedBox(width: 6),
+                                  const Tooltip(
+                                    message: 'Projector is in non-protected mode — no credentials required',
+                                    child: Icon(
+                                      Icons.lock_open,
+                                      size: 14,
+                                      color: Colors.blue,
+                                    ),
+                                  ),
+                                ],
                               ],
-                              if (isUnprotected) ...[
-                                const SizedBox(width: 6),
-                                const Tooltip(
-                                  message: 'Projector is in non-protected mode — no credentials required',
-                                  child: Icon(Icons.lock_open, size: 14, color: Colors.blue),
-                                ),
-                              ],
-                            ],
-                          ),
-                          subtitle: Text(
-                            isAuthError
-                                ? '${p['ip']} • Auth Error — check login/password'
-                                : isUnprotected
-                                    ? '${p['ip']} • Non-protected mode'
-                                    : '${p['ip']} • Online',
-                            style: isAuthError
-                                ? TextStyle(color: Colors.amber.shade700)
-                                : isUnprotected
-                                    ? TextStyle(color: Colors.blue.shade600)
-                                    : null,
-                          ),
-                          value: isSelected,
-                          onChanged: (val) {
-                            setState(() {
-                              if (val == true) {
-                                _selectedIps.add(p['ip']);
-                              } else {
-                                _selectedIps.remove(p['ip']);
-                              }
-                            });
-                          },
-                        );
-                      },
-                    ),
+                            ),
+                            subtitle: Text(
+                              isAuthError
+                                  ? '${p['ip']} • Auth Error — check login/password'
+                                  : isUnprotected
+                                  ? '${p['ip']} • Non-protected mode'
+                                  : '${p['ip']} • Online',
+                              style: isAuthError
+                                  ? TextStyle(color: Colors.amber.shade700)
+                                  : isUnprotected
+                                  ? TextStyle(color: Colors.blue.shade600)
+                                  : null,
+                            ),
+                            value: isSelected,
+                            onChanged: (val) {
+                              setState(() {
+                                if (val == true) {
+                                  _selectedIps.add(p['ip']);
+                                } else {
+                                  _selectedIps.remove(p['ip']);
+                                }
+                              });
+                            },
+                          );
+                        },
+                      ),
+              ),
             ),
           ),
           const SizedBox(height: 16),
@@ -627,25 +703,31 @@ class _AutoDiscoveryTabState extends State<_AutoDiscoveryTab> {
                         final results = _foundProjectors
                             .where((p) => _selectedIps.contains(p['ip']))
                             .where((p) => !widget.existingIps.contains(p['ip']))
-                            .map((p) => {
-                                  'ip': p['ip'],
-                                  'name': p['name'],
-                                  'port': port,
-                                  'login': login,
-                                  'password': password,
-                                  'status': switch (p['status']) {
-                                    'online' => 'online',
-                                    'unprotected' => 'unprotected',
-                                    _ => 'auth_error',
-                                  },
-                                })
+                            .map(
+                              (p) => {
+                                'ip': p['ip'],
+                                'name': p['name'],
+                                'port': port,
+                                'login': login,
+                                'password': password,
+                                'status': switch (p['status']) {
+                                  'online' => 'online',
+                                  'unprotected' => 'unprotected',
+                                  _ => 'auth_error',
+                                },
+                              },
+                            )
                             .toList();
 
                         final originalCount = _selectedIps.length;
                         if (results.length < originalCount) {
                           final duplicates = originalCount - results.length;
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Skipped $duplicates duplicate IP(s) already in project')),
+                            SnackBar(
+                              content: Text(
+                                'Skipped $duplicates duplicate IP(s) already in project',
+                              ),
+                            ),
                           );
                         }
 
