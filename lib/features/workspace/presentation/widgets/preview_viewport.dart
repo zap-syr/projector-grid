@@ -5,6 +5,7 @@ import '../../../../core/services/remote_preview_service.dart';
 import '../../domain/projector_group.dart';
 import '../../domain/projector_node.dart';
 import '../providers/remote_preview_provider.dart';
+import '../providers/workspace_provider.dart';
 
 /// One 16:9 preview surface: black plane, a 2 px frame coloured by the
 /// projector's shutter, and the live JPEG or a status line. Used on its own in
@@ -35,36 +36,48 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
   // (matters when a multiview holds several). Retry forces an attempt anyway.
   bool _forced = false;
 
-  bool get _knownOffline =>
-      widget.node.connectionStatus == ConnectionStatus.offline && !_forced;
+  // The live node from workspaceProvider (power/shutter/connection change as
+  // polling runs); falls back to the passed-in snapshot if it's gone.
+  ProjectorNode get _node => ref
+      .read(workspaceProvider)
+      .firstWhere((n) => n.id == widget.node.id, orElse: () => widget.node);
 
-  Color _frameColor(ColorScheme scheme) {
-    if (widget.node.powerStatus != PowerStatus.on) return scheme.outline;
-    return widget.node.shutterStatus == ShutterStatus.open
-        ? _frameOpen
-        : _frameClosed;
+  bool _isOffline(ProjectorNode node) =>
+      node.connectionStatus == ConnectionStatus.offline && !_forced;
+
+  Color _frameColor(ProjectorNode node, ColorScheme scheme) {
+    if (node.powerStatus != PowerStatus.on) return scheme.outline;
+    return node.shutterStatus == ShutterStatus.open ? _frameOpen : _frameClosed;
   }
 
   void _retry() {
-    if (_knownOffline) {
+    if (_isOffline(_node)) {
       setState(() => _forced = true);
       return;
     }
-    ref.read(remotePreviewProvider(widget.node.ipAddress).notifier).retry();
+    ref.read(remotePreviewProvider(_node.ipAddress).notifier).retry();
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final state = _knownOffline
+    // Track the live node so the shutter-coloured frame updates when a poll
+    // reports the shutter opened/closed while the dialog is open.
+    final node = ref
+        .watch(workspaceProvider)
+        .firstWhere((n) => n.id == widget.node.id, orElse: () => widget.node);
+    final state = _isOffline(node)
         ? const RemotePreviewUnavailable()
-        : ref.watch(remotePreviewProvider(widget.node.ipAddress));
+        : ref.watch(remotePreviewProvider(node.ipAddress));
 
     final plane = Container(
       clipBehavior: Clip.hardEdge,
       decoration: BoxDecoration(
         color: Colors.black,
-        border: Border.all(color: _frameColor(theme.colorScheme), width: 2),
+        border: Border.all(
+          color: _frameColor(node, theme.colorScheme),
+          width: 2,
+        ),
       ),
       child: _content(state, theme),
     );
@@ -75,7 +88,7 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
       return Column(
         children: [
           Expanded(child: plane),
-          _caption(theme),
+          _caption(node, theme),
         ],
       );
     }
@@ -164,8 +177,7 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
     ),
   );
 
-  Widget _caption(ThemeData theme) {
-    final node = widget.node;
+  Widget _caption(ProjectorNode node, ThemeData theme) {
     final group = widget.group;
     final left = group != null ? '${node.name} · ${group.name}' : node.name;
     return Padding(
