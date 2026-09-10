@@ -25,6 +25,7 @@ class ProjectorCard extends ConsumerStatefulWidget {
   final VoidCallback onColorCorrection;
   final VoidCallback onBrightnessControl;
   final VoidCallback onGeometryCorrection;
+  final VoidCallback onRemotePreview;
   final VoidCallback? onSelectGroup;
   final List<Widget> Function() buildGroupMenuItems;
 
@@ -43,6 +44,7 @@ class ProjectorCard extends ConsumerStatefulWidget {
     required this.onColorCorrection,
     required this.onBrightnessControl,
     required this.onGeometryCorrection,
+    required this.onRemotePreview,
     required this.onSelectGroup,
     required this.buildGroupMenuItems,
   });
@@ -153,6 +155,11 @@ class _ProjectorCardState extends ConsumerState<ProjectorCard> {
                 onPressed: () => _closeAndRun(widget.onGeometryCorrection),
                 leadingIcon: const Icon(Icons.grid_4x4_outlined),
                 child: const Text('Geometry Correction'),
+              ),
+              MenuItemButton(
+                onPressed: () => _closeAndRun(widget.onRemotePreview),
+                leadingIcon: const Icon(Icons.cast),
+                child: const Text('Remote Preview'),
               ),
               MenuItemButton(
                 onPressed: () => _closeAndRun(() {

@@ -16,6 +16,7 @@ import 'color_correction_dialog.dart';
 import 'brightness_control_dialog.dart';
 import 'geometry_correction_dialog.dart';
 import 'manage_groups_dialog.dart';
+import 'remote_preview_dialog.dart';
 
 class SelectAllIntent extends Intent {
   const SelectAllIntent();
@@ -911,6 +912,28 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
                                                     GeometryCorrectionDialog(
                                                       node: node,
                                                     ),
+                                              );
+                                            },
+                                            onRemotePreview: () {
+                                              final selectedIds = ref.read(
+                                                selectionProvider,
+                                              );
+                                              final targets =
+                                                  selectedIds.contains(
+                                                        node.id,
+                                                      ) &&
+                                                      selectedIds.length > 1
+                                                  ? nodes
+                                                        .where(
+                                                          (n) => selectedIds
+                                                              .contains(n.id),
+                                                        )
+                                                        .toList()
+                                                  : [node];
+                                              showRemotePreviewDialog(
+                                                context,
+                                                targets,
+                                                groups: groupMap,
                                               );
                                             },
                                             onSelectGroup: node.groupId != null
