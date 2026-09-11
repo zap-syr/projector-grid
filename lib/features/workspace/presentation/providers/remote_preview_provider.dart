@@ -34,4 +34,12 @@ class RemotePreview extends _$RemotePreview {
 
   /// Re-open the socket after a failure.
   void retry() => _controller?.retry();
+
+  /// Enter / leave pre-show (`preshow:1` / `preshow:0`) over the socket.
+  void setPreshow(bool on) => _controller?.setPreshow(on);
+
+  /// Fires on every WebSocket `SIGNAL` message — see
+  /// [RemotePreviewController.signalEvents].
+  Stream<void> get signalEvents =>
+      _controller?.signalEvents ?? const Stream<void>.empty();
 }

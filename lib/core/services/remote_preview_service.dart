@@ -29,6 +29,12 @@ class RemotePreviewController {
   final _states = StreamController<RemotePreviewState>.broadcast();
   Stream<RemotePreviewState> get states => _states.stream;
 
+  // Fires (no payload) on every WebSocket `SIGNAL` message — the projector's
+  // own cue that its detected input signal just changed, in any power state.
+  // Consumers use this to re-check signal/input without polling.
+  final _signalEvents = StreamController<void>.broadcast();
+  Stream<void> get signalEvents => _signalEvents.stream;
+
   WebSocket? _ws;
   StreamSubscription<dynamic>? _wsSub;
   Timer? _aliveTimer;
@@ -51,6 +57,11 @@ class RemotePreviewController {
     _connect();
   }
 
+  /// Enter / leave pre-show over this socket. The projector reports the actual
+  /// state only over NTCONTROL (`QVX:PSMI1`), never here, so the caller tracks
+  /// it separately.
+  void setPreshow(bool on) => _send(on ? 'preshow:1' : 'preshow:0');
+
   /// Drops the current socket and connects again (the "Retry" button).
   void retry() {
     if (_disposed) return;
@@ -66,6 +77,7 @@ class RemotePreviewController {
     _disposed = true;
     _teardownSocket();
     unawaited(_states.close());
+    unawaited(_signalEvents.close());
   }
 
   Future<void> _connect() async {
@@ -151,8 +163,13 @@ class RemotePreviewController {
         _teardownSocket();
         _emit(const RemotePreviewUnavailable());
         return;
-      case 'REFRESH':
       case 'SIGNAL':
+        // The projector's own detected-signal state just changed — this is
+        // the cue its web UI uses to re-fetch simple_status_hidden.cgi. We
+        // don't fetch it ourselves (that's an HTTP concern, not transport),
+        // just relay the event; see signalEvents.
+        _signalEvents.add(null);
+      case 'REFRESH':
       case 'CHANGING_PRE':
         // Refresh hints meant for the projector's own multi-frame page.
         break;

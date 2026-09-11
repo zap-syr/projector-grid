@@ -85,7 +85,7 @@ final class RemotePreviewProvider
   }
 }
 
-String _$remotePreviewHash() => r'232e9318b0c45080bb2bfcf5ccd4a3d56dbf33df';
+String _$remotePreviewHash() => r'e8835a45a054a16df2ca6cc9b2a0332d3d2c91b4';
 
 /// Live "RemoView" preview feed for one projector, keyed by its host (IP).
 ///
