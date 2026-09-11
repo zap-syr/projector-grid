@@ -269,11 +269,18 @@ same socket: `preshow:1` / `preshow:0`.
   and closing a window with pre-show still on shows a one-line hint that it stays
   active. We never save it to the project file.
 - **Initial toggle state** — read it over NTCONTROL when the window opens:
-  `QVX:PSMI1` → reply `PSMI1=+00000` (off) / `PSMI1=+00001` (on), through the
-  existing `panasonic_protocol_service.dart` TCP link (the app already talks
-  NTCONTROL to every projector). Re-query after sending `preshow:1` / `preshow:0`
-  to confirm the change landed; optionally re-poll while the window is open. The
-  preview WebSocket itself never reports this.
+  `QVX:PSMI1` → reply `00PSMI1=+00000` (off) / `00PSMI1=+00001` (on), through the
+  existing `panasonic_protocol_service.dart` TCP link (`sendRawCommand` strips the
+  `00`). The preview WebSocket itself never reports this.
+- **Confirmation is slow** (measured on PT-RQ35): after `preshow:1` the projector
+  keeps reporting `+00000` for **≈12 s** before flipping to `+00001`; after
+  `preshow:0` it returns `ER401` for ~1.5 s then `+00000` within ~2 s. So the
+  toggle flips **optimistically** on tap (the WS command has no reply), then a
+  background loop polls `QVX:PSMI1` every 2 s (up to ~25 s), ignores `ER401`, and
+  only *corrects* the switch if the projector settles on a value; a failed /
+  timed-out read keeps the optimistic value. An "applying…" hint + spinner shows
+  while confirming. A superseded toggle bumps a generation counter so the old
+  loop bails.
 
 ---
 
@@ -318,7 +325,64 @@ Body:
   Note (measured): a **built-in** colour-bars pattern arrives as plain frames
   with only `NONE`, so it shows untagged — the `TESTPATTERN` word is reserved for
   a different (pushed / pre-show) pattern source.
-- the **pre-show control strip** (§4.3).
+  While a frame is showing, a small **input · signal** tag sits in the
+  bottom-right corner. Source: the node's polled `input` / `signal` — but the
+  poll lags reality (a signal/power-on shows in the preview within ~1 s, the poll
+  cycle is seconds away), so **the first frame after a gap triggers
+  `WorkspaceNotifier.refreshNode(id)`** — an immediate one-node re-poll (guarded:
+  skipped while a full cycle runs, deduped, 8 s cooldown) — so the tag is current
+  without shortening the global poll.
+
+  **NTCONTROL can't cover this at all, in any power state — the tag doesn't
+  depend on it.** `QIN` / `QVX:NSGS1` return `ER401` whenever the projector
+  isn't fully on: Standby, mid pre-show, *and* the brief STARTINGUP window
+  right after power-on — exactly when watching the signal tag matters most, so
+  a poll-driven tag (even re-polled on frame-start) goes stale precisely then.
+  `/cgi-bin/simple_status_hidden.cgi` (the page the projector's own
+  `preview.cgi` re-fetches on a WebSocket `SIGNAL` message) reports the real
+  values in every state — measured on a PT-RQ35 in Standby+pre-show with a real
+  4K60 source: `INPUT=HDMI1`, `SIGNAL NAME=3840x2160/60p`,
+  `SIGNAL FREQUENCY=134.99kHz/59.99Hz`, reverting to empty once pre-show turned
+  back off. `ProjectorWebStatusService` (`core/services/`) fetches and parses
+  it over HTTP digest — port 80 like the preview WebSocket, reusing the node's
+  NTCONTROL login/password (this projector's admin account serves both
+  interfaces; a unit with different web creds just fails the fetch, handled as
+  "unknown").
+
+  **`SIGNAL` is the right trigger, not frame-start.** Correlated it directly:
+  toggling pre-show on fired `CHANGING_PRE` immediately, then **`SIGNAL` at
+  ≈10.3 s** (matching the ≈11.5 s `QVX:PSMI1` confirmation from the pre-show
+  timing test), two more `SIGNAL`s ~1–3 s apart while the link settled, then
+  `NONE`. Toggling back off fired `CHANGING_PRE` **and `SIGNAL` within 6 ms**.
+  So `SIGNAL` fires exactly when the projector's own signal-detection state
+  changes, in every power state, over the socket we already hold open — a far
+  more precise cue than "a frame just started arriving", and it also covers the
+  power-on → STARTINGUP → live-picture transition that frame-start alone
+  missed (the projector wasn't Standby by then, so the old fallback never
+  fired).
+
+  **Implementation** — `RemotePreviewController.signalEvents` (new
+  broadcast stream) fires on every WS `SIGNAL`; `RemotePreview.signalEvents`
+  exposes it through the provider. `previewSignalStatusProvider` (new,
+  family by `(host, login, password)`) owns one `WebSignalStatus?` per
+  previewed projector: refetches on `signalEvents`, on build (dialog may open
+  onto an already-live signal), and on any transition into a live frame
+  (belt-and-braces). Coalesces a burst into at most one extra fetch after the
+  in-flight one finishes — never more than one request in the air per node.
+  `PreviewViewport`'s tag now reads this **first**, falling back to the polled
+  `node.input`/`node.signal` only while the first fetch hasn't landed yet (or
+  if it fails) so the tag is never blank. Cost is bounded by *real* signal
+  changes on the one projector each tile is showing — independent of frame
+  rate and of how many other tiles a multiview has open; a grid of N shows at
+  most N requests in flight, one per tile that just changed.
+
+  `_pollSingleProjector`'s `webSignalFallback` (the previous, NTCONTROL-poll-
+  driven fallback, still triggered from `refreshNode` on frame-start) stays —
+  it keeps the *canonical* `node.input`/`node.signal` (Monitoring table,
+  shutter colour) fresher too, a separate, complementary concern from the
+  preview tag's own live source.
+- the **pre-show control strip** (§4.3) — a plain row (label + subtitle +
+  Switch), no border.
 
 Sizing: a sensible fixed size (e.g. viewport ~640×360 for single), the grid sizes
 to its tile count; no live resize handle in the modal form.
