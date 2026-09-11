@@ -6,6 +6,13 @@ Status legend: `[ ]` pending · `[~]` in progress · `[x]` done · `[dropped]` n
 
 Branch: `features/remote-preview`.
 
+**Implementation status (2026-09-11):** Phase 1 (protocol, dialog, context-menu
+entry point) and most of Phase 2 — pre-show toggle, the live input/signal tag,
+and a responsive-layout fix — landed across 12 commits (`68ff0fa`…`70075fd`,
+after the plan itself in `439b0c3`). Remaining from Phase 2: the Monitoring
+table's "Preview" column and a toolbar/View-menu "Preview selection" action.
+Phase 3 and the windowing-API migration (§5.3) not started.
+
 ---
 
 ## 1. Research — how the projector's web UI does it
@@ -81,12 +88,21 @@ the WebSocket feed underneath it**, and that we can consume directly.
   design around. `CLOSE` is a graceful end-of-stream from the projector (reboot,
   input switch) — handle it as a soft state, not a crash.
 
-### Reference capture script
+### Reference capture / probe scripts
 
-`tool/remote_preview_test.dart` (to be added, per the `tool/*_test.dart`
-convention): hard-coded IP near the top, opens the socket, prints text messages,
-writes the first few JPEG frames to disk. Mirrors the throwaway Python probe used
-during research.
+Standalone, `dart run tool/<name>.dart`, hard-coded connection details near the
+top (per the `tool/*_test.dart` convention):
+
+- `tool/remote_preview_test.dart` — opens the preview socket, prints text
+  messages, writes the first few JPEG frames to disk.
+- `tool/preshow_test.dart` — toggles `preshow:1`/`preshow:0` and polls
+  NTCONTROL `QVX:PSMI1` on an interval, timestamped, to see exactly when the
+  projector's own state catches up (used to measure the ≈12 s / ≈2 s figures
+  in §4.3).
+- `tool/signal_status_test.dart` — opens the preview socket and, on every WS
+  `SIGNAL` message, re-fetches and parses `/cgi-bin/simple_status_hidden.cgi`
+  (digest auth via `curl --digest`, proven against this server) — used to find
+  and verify the §5.1 signal-tag mechanism.
 
 ---
 
@@ -151,21 +167,27 @@ Responsibilities: connect with `protocols: ['pj-cast-protocol']`, send `start`,
 broadcast stream. No Riverpod inside the service.
 
 Pre-show (§4.3) rides two channels: the toggle command goes over this WebSocket
-(`preshow:1` / `preshow:0`), but the **current** pre-show state is read over
-NTCONTROL via the existing `panasonic_protocol_service.dart` (`QVX:PSMI1`). So
-the preview provider (§3.2), not this service, wires the two together — the
-service stays preview-only.
+(`RemotePreviewController.setPreshow(bool)` → `preshow:1` / `preshow:0`), but
+the **current** pre-show state is read over NTCONTROL via the existing
+`panasonic_protocol_service.dart` (`QVX:PSMI1`). So the preview provider
+(§3.2), not this service, wires the two together — the service stays
+preview-only.
+
+Also exposes `signalEvents` (a `Stream<void>`, one event per WS `SIGNAL`
+message) — the trigger `previewSignalStatusProvider` (§3.6) uses to refresh the
+signal tag; see §5.1 for why `SIGNAL` and not frame-start.
 
 ### 3.2 Provider — `remotePreviewProvider`
 
 `lib/features/workspace/presentation/providers/remote_preview_provider.dart`
 
-- `@riverpod`, **family by `nodeId`**, **not** `keepAlive` — wraps one
-  `RemotePreviewController`, exposes an `AsyncValue`/sealed snapshot the UI
+- `@riverpod`, **family by `nodeId`** (the host/IP), **not** `keepAlive` — wraps
+  one `RemotePreviewController`, exposes an `AsyncValue`/sealed snapshot the UI
   watches. The socket dies when the last widget stops listening
   (`ref.onDispose(controller.dispose)`); two viewports on the same node (e.g. the
   menu-opened dialog and the table button hit in quick succession) share one
-  socket while either is mounted, and nothing leaks.
+  socket while either is mounted, and nothing leaks. Also forwards `retry()`,
+  `setPreshow(bool)`, and `signalEvents` from the controller (§3.1).
 - Does **not** touch `workspaceProvider` polling — preview is transient
   telemetry, never persisted, never part of the poll cycle or undo snapshots.
 - Deliberately shell-agnostic: no `Navigator` / `showDialog` / window assumptions
@@ -175,6 +197,47 @@ service stays preview-only.
 ### 3.3 No model change
 
 `ProjectorNode` gets no new field. Preview is live-only.
+
+### 3.4 Service — `ProjectorWebStatusService` (new)
+
+`lib/core/services/projector_web_status_service.dart`. HTTP digest fetch +
+parse of the projector's own `/cgi-bin/simple_status_hidden.cgi`, port 80 like
+the preview WebSocket. Exists because NTCONTROL (`QIN` / `QVX:NSGS1`) returns
+`ER401` whenever the projector isn't fully powered on — this page is the only
+source that reports the real input/signal in Standby, mid pre-show, and
+STARTINGUP. Full write-up, including the measured values and the `SIGNAL`
+correlation, in §5.1. Two independent consumers:
+
+- `WorkspaceNotifier._pollSingleProjector`'s `webSignalFallback` flag (§3.5) —
+  keeps the canonical, polled `node.input`/`node.signal` accurate.
+- `previewSignalStatusProvider` (§3.6) — the preview dialog's own live tag.
+
+### 3.5 `WorkspaceNotifier.refreshNode` / `webSignalFallback`
+
+`lib/features/workspace/presentation/providers/workspace_provider.dart`.
+`refreshNode(id)` re-polls one projector immediately, outside the normal
+interval (guarded: no-op while a full cycle is running, deduped per node, 8 s
+cooldown) — `PreviewViewport` calls it the moment its socket's frame stream
+starts, so the rest of the app (Monitoring table, shutter colour) doesn't wait
+out the poll interval to reflect a projector a preview just revealed is live.
+`_pollSingleProjector` takes a `webSignalFallback` flag (only ever passed from
+`refreshNode`, never the regular `_pollAllProjectors` cycle — see §3.4): when
+the node is in Standby and NTCONTROL's own signal read is empty/`ER401`, it
+calls `ProjectorWebStatusService` and prefers its `input`/`signal` in the node
+update.
+
+### 3.6 Provider — `previewSignalStatusProvider` (new)
+
+`lib/features/workspace/presentation/providers/preview_signal_status_provider.dart`.
+Family by `(host, login, password)`, autoDispose. Owns one `WebSignalStatus?`
+per previewed projector, refetched via `ProjectorWebStatusService` on: build
+(dialog may open onto an already-live signal), every
+`RemotePreview.signalEvents` (the WS `SIGNAL` message — §5.1), and any
+transition into a live frame (belt-and-braces). Coalesces a burst of triggers
+into at most one extra fetch after the in-flight one finishes, so a node never
+has more than one HTTP request in the air. This is the primary source for
+`PreviewViewport`'s input/signal tag — decoupled from NTCONTROL entirely, so
+it's correct in every power state, not just once a projector is fully on.
 
 ---
 
@@ -384,8 +447,28 @@ Body:
 - the **pre-show control strip** (§4.3) — a plain row (label + subtitle +
   Switch), no border.
 
-Sizing: a sensible fixed size (e.g. viewport ~640×360 for single), the grid sizes
-to its tile count; no live resize handle in the modal form.
+Sizing: **responsive, not fixed** — a fixed pixel budget (the original ~640×360)
+overflowed (`RenderFlex` error) once the app's own window got resized smaller
+than that. `RemotePreviewDialog.build` reads `MediaQuery.sizeOf(context)` and
+derives `maxContentWidth`/`maxContentHeight` (window size minus an estimate of
+the dialog's own chrome — title bar, padding, pre-show row, actions), recomputed
+on every window resize while the dialog is open:
+
+- single: viewport width = `min(640, maxWidth, maxHeight × 16/9)` — the
+  `AspectRatio(16/9)` inside `PreviewViewport` derives height from that, so it's
+  bounded on both axes from one number.
+- grid: per-tile size solved from both budgets (width ÷ columns, height ÷ visible
+  rows, accounting for the ~28 px caption strip), clamped to a 120–340 px usable
+  range.
+- `content` is wrapped in a `SingleChildScrollView` regardless, as a safety net
+  for any shortfall in the chrome estimate — scrolls instead of hard-overflowing.
+- grid only: the container reserves a 14 px right-hand gutter (`Padding` around
+  the `GridView`, outside its own width) so the desktop auto-scrollbar — which
+  only appears once tile count exceeds what's visible — has somewhere to draw
+  that isn't on top of the rightmost column's tiles.
+
+No live resize handle in the modal form (still a §5.3 item once it's a real
+window).
 
 Lifecycle: each `PreviewViewport` `ref.watch`es `remotePreviewProvider(nodeId)`;
 dismissing the dialog unmounts them, which drops the listeners and closes the
@@ -471,11 +554,24 @@ service or provider) is what makes this a wrapper swap.
     Correction) + selection-aware wiring in `projector_workspace.dart` (§4.1).
   - `[x]` "Preview not available" + Retry per viewport; offline projectors don't
     open a socket until Retry forces it.
-- **Phase 2 — table entry point + pre-show**
+- **Phase 2 — pre-show, live signal tag, table entry point**
+  (analyzer + `flutter build windows` clean at every step)
+  - `[x]` Pre-show toggle — single (Standby-gated, **hard-disabled** otherwise,
+    per the user) + grid (eligible subset: Standby + live WebSocket); init +
+    confirm from `QVX:PSMI1`; optimistic flip on tap with a background
+    confirm-loop (measured ≈12 s to confirm on / ≈2 s off, §4.3); `PRE-SHOW`
+    corner tag; sticky across teardown with a close-time hint; no border on the
+    control row (user request).
+  - `[x]` Live input/signal tag (§5.1, §3.4–3.6) — `ProjectorWebStatusService`
+    + `previewSignalStatusProvider`, event-driven off the WS `SIGNAL` message,
+    decoupled from NTCONTROL so it's correct in every power state (Standby,
+    pre-show, STARTINGUP), not just once a projector is fully on.
+    `WorkspaceNotifier.refreshNode` / `webSignalFallback` as a complementary
+    fix for the canonical polled node state.
+  - `[x]` Responsive dialog layout (§5.1) — fixed the `RenderFlex` overflow at
+    small window sizes; scrollbar gutter in the grid so it doesn't draw over
+    the rightmost tiles.
   - `[ ]` Monitoring-table "Preview" column (opt-in, single projector).
-  - `[ ]` Pre-show toggle — single (Standby-gated, hard-disabled otherwise) +
-    grid (eligible subset); init from `QVX:PSMI1`, `PRE-SHOW` plane badge,
-    sticky across teardown.
   - `[ ]` Toolbar / View-menu "Preview selection" action.
 - **Phase 3 — polish (all optional)**
   - `[ ]` Draggable-within-barrier dialog; a preset "large" size.
@@ -512,3 +608,9 @@ None blocking. All the protocol unknowns from earlier drafts are resolved below.
 - **Pre-show state readback** — `QVX:PSMI1` over NTCONTROL returns
   `PSMI1=+00000` (off) / `PSMI1=+00001` (on). The toggle initialises from this
   on window open; no indeterminate state needed. (§3.1, §4.3)
+- **Standby signal source** — NTCONTROL (`QIN` / `QVX:NSGS1`) can't report
+  signal/input outside fully-on; `/cgi-bin/simple_status_hidden.cgi` can, in
+  every power state — measured and verified reverting correctly on/off.
+  (§3.4, §5.1)
+- **Live-tag refresh trigger** — the WS `SIGNAL` message, not frame-start;
+  correlated directly against real pre-show on/off transitions. (§3.6, §5.1)
