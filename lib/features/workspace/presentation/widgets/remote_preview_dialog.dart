@@ -7,6 +7,7 @@ import '../../../../core/services/panasonic_protocol_service.dart';
 import '../../../../core/services/remote_preview_service.dart';
 import '../../domain/projector_group.dart';
 import '../../domain/projector_node.dart';
+import '../providers/poll_status_provider.dart';
 import '../providers/remote_preview_provider.dart';
 import '../providers/workspace_provider.dart';
 import 'dialog_title_bar.dart';
@@ -88,9 +89,27 @@ class _RemotePreviewDialogState extends ConsumerState<RemotePreviewDialog> {
     return null;
   }
 
+  // This dialog's own PanasonicProtocolService probes run independently of
+  // workspaceProvider's poll cycle and its concurrency throttling (added
+  // specifically because unthrottled NTCONTROL bursts risk ERR3/busy and
+  // false-offline misreads — see panasonic_protocol_service.dart). Waiting
+  // out an in-flight cycle here keeps this dialog's QVX:PSMI1 traffic from
+  // landing on a projector's NTCONTROL socket at the same moment the regular
+  // poll is also talking to it.
+  Future<void> _waitForPollSlot() async {
+    final deadline = DateTime.now().add(const Duration(seconds: 5));
+    while (mounted &&
+        ref.read(pollStatusProvider).isPolling &&
+        DateTime.now().isBefore(deadline)) {
+      await Future.delayed(const Duration(milliseconds: 200));
+    }
+  }
+
   Future<void> _loadPreShow(Iterable<ProjectorNode> nodes) async {
     for (final n in nodes) {
       if (n.powerStatus != PowerStatus.standby) continue;
+      await _waitForPollSlot();
+      if (!mounted) return;
       final resp = await _service.sendRawCommand(
         n.ipAddress,
         n.port,
@@ -144,6 +163,8 @@ class _RemotePreviewDialogState extends ConsumerState<RemotePreviewDialog> {
       if (!mounted || _psGen != gen) return;
       for (final entry in pending.entries.toList()) {
         final n = entry.value;
+        await _waitForPollSlot();
+        if (!mounted || _psGen != gen) return;
         final back = _parsePsmi(
           await _service.sendRawCommand(
             n.ipAddress,
@@ -347,12 +368,19 @@ class _RemotePreviewDialogState extends ConsumerState<RemotePreviewDialog> {
     } else {
       final n = nodes.first;
       final standby = n.powerStatus == PowerStatus.standby;
-      enabled = standby;
+      // Same requirement as multi's _eligible: without a connected preview
+      // socket, setPreshow() sends over a WebSocket that isn't open — a
+      // silent no-op the projector never confirms, leaving the switch stuck
+      // showing ON with nothing actually applied.
+      final live = standby && _wsConnected(n);
+      enabled = live;
       applying = _applying.contains(n.ipAddress);
       value = _preShow[n.ipAddress] ?? false;
-      subtitle = standby
-          ? 'Keeps the input alive for preview; projector stays off'
-          : 'Enabled only in Standby — this projector is on';
+      subtitle = !standby
+          ? 'Enabled only in Standby — this projector is on'
+          : (live
+                ? 'Keeps the input alive for preview; projector stays off'
+                : 'Waiting for the preview feed to connect…');
       onChanged = (on) => _setPreShow([n], on);
     }
 
