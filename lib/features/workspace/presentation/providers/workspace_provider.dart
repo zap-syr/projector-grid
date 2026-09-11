@@ -9,6 +9,7 @@ import '../../domain/projector_node.dart';
 import '../../domain/projector_group.dart';
 import '../../domain/log_event.dart';
 import '../../../../core/services/panasonic_protocol_service.dart';
+import '../../../../core/services/projector_web_status_service.dart';
 import 'app_settings_provider.dart';
 import 'event_log_provider.dart';
 import 'selection_provider.dart';
@@ -19,6 +20,7 @@ part 'workspace_provider.g.dart';
 @riverpod
 class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
   final _protocolService = PanasonicProtocolService();
+  final _webStatusService = ProjectorWebStatusService();
   Timer? _pollingTimer;
   int _pollingIntervalSeconds = AppSettings.defaultPollingIntervalSeconds;
   int _pollingGeneration = 0;
@@ -317,6 +319,35 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
     });
   }
 
+  final Set<String> _refreshingNodes = {};
+  final Map<String, DateTime> _lastNodeRefresh = {};
+
+  /// Re-poll a single projector now, off the normal cycle — used when the
+  /// Remote Preview dialog starts receiving frames (proof the input is live)
+  /// so its input/signal/shutter reflect reality without waiting for the next
+  /// full poll. No-ops if a full cycle is already running (it will cover this
+  /// node), if the same node is already refreshing, or within a short cooldown.
+  Future<void> refreshNode(String id) async {
+    if (_isPollingDisposed || _refreshingNodes.contains(id)) return;
+    final last = _lastNodeRefresh[id];
+    if (last != null &&
+        DateTime.now().difference(last) < const Duration(seconds: 8)) {
+      return;
+    }
+    if (ref.read(pollStatusProvider).isPolling) return;
+    final idx = state.indexWhere((n) => n.id == id);
+    if (idx == -1) return;
+    _refreshingNodes.add(id);
+    _lastNodeRefresh[id] = DateTime.now();
+    try {
+      await _pollSingleProjector(state[idx], 2, webSignalFallback: true);
+    } catch (_) {
+      // best-effort; the regular poll will retry
+    } finally {
+      _refreshingNodes.remove(id);
+    }
+  }
+
   Future<void> refreshAll() async {
     final polled = await _pollAllProjectors();
     // A manual refresh (F5 / menu) resets the automatic-poll countdown so the
@@ -432,8 +463,16 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
 
   Future<void> _pollSingleProjector(
     ProjectorNode node,
-    int telemetryConcurrency,
-  ) async {
+    int telemetryConcurrency, {
+    // Only set from refreshNode (§ Remote Preview signal tag): NTCONTROL's
+    // QIN/QVX:NSGS1 return ER401 while the projector is in Standby, even mid
+    // pre-show with a real picture streaming. The web UI's own status page
+    // reflects the real signal in every power state (verified), but costs an
+    // extra HTTP digest round-trip — deliberately not turned on for every
+    // standby node on every regular poll cycle, only for the one node a
+    // preview dialog just started receiving frames from.
+    bool webSignalFallback = false,
+  }) async {
     final oldStatus = node.connectionStatus;
     final oldErrors = node.errors;
 
@@ -512,10 +551,30 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
         );
       }
 
+      // NTCONTROL's own signal read is unusable while in Standby — go to the
+      // web UI's status page instead, but only when actually asked to (see
+      // the param doc) and only once it's clear NTCONTROL came back empty.
+      final rawSignal = (telemetry['signal'] as String)
+          .replaceAll('NSGS1=', '')
+          .trim();
+      final ntSignalUnusable =
+          rawSignal == 'ER401' || rawSignal == 'NO SIGNAL' || rawSignal.isEmpty;
+      final isStandby = telemetry['power'] != '001';
+      WebSignalStatus? webSignal;
+      if (webSignalFallback && isStandby && ntSignalUnusable) {
+        webSignal = await _webStatusService.fetchSignalStatus(
+          node.ipAddress,
+          node.login,
+          node.password,
+        );
+      }
+
       state = state.map((n) {
         if (n.id == node.id) {
           // Parse Input
-          String input = telemetry['input'] ?? n.input;
+          String input = (webSignal != null && webSignal.input.isNotEmpty)
+              ? webSignal.input
+              : telemetry['input'] ?? n.input;
           if (input == 'HD1') {
             input = 'HDMI 1';
           } else if (input == 'HD2') {
@@ -532,12 +591,16 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
             input = 'DISPLAY PORT';
           }
 
-          // Parse Signal
-          String signal = (telemetry['signal'] as String)
-              .replaceAll('NSGS1=', '')
-              .trim();
-          if (signal == 'ER401' || signal == 'NO SIGNAL' || signal.isEmpty) {
-            signal = 'NO SIGNAL';
+          // Parse Signal — prefer the web fallback (real, even in Standby)
+          // over NTCONTROL's ER401/empty when both were attempted.
+          String signal;
+          if (webSignal != null && webSignal.signalName.isNotEmpty) {
+            signal = webSignal.signalFrequency.isNotEmpty
+                ? '${webSignal.signalName} (${webSignal.signalFrequency})'
+                : webSignal.signalName;
+          } else {
+            signal = rawSignal.isEmpty ? 'NO SIGNAL' : rawSignal;
+            if (signal == 'ER401') signal = 'NO SIGNAL';
           }
 
           // Parse Projector Runtime — QVX:RTMS1 replies "RTMS1=<hours>".
