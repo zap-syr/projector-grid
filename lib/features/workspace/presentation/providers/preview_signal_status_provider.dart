@@ -68,7 +68,12 @@ class PreviewSignalStatus extends _$PreviewSignalStatus {
         );
         // The provider may have been torn down (dialog closed) mid-request.
         if (!ref.mounted) return;
-        state = result;
+        // A transient fetch failure (result == null) keeps the last known
+        // value instead of clearing it — otherwise a single dropped request
+        // sends every consumer back to their NTCONTROL fallback (stale/ER401
+        // in the exact power states this provider exists to cover) with no
+        // time bound, until the next SIGNAL event happens to succeed.
+        if (result != null) state = result;
       } while (_refreshQueued);
     } finally {
       _fetching = false;
