@@ -43,6 +43,15 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
   // (matters when a multiview holds several). Retry forces an attempt anyway.
   bool _forced = false;
 
+  // Once the preview socket has actually produced a frame/notice, a later
+  // connectionStatus flip to offline is treated as telemetry noise, not proof
+  // the socket should close — NTCONTROL polling is known to misclassify a
+  // busy projector as offline under load (see workspace_provider.dart), and
+  // that channel is independent of this one. Without this, _isOffline below
+  // would stop watching remotePreviewProvider on a false blip, and losing its
+  // last watcher (the provider isn't keepAlive) tears down a working stream.
+  bool _everConnected = false;
+
   // The live node from workspaceProvider (power/shutter/connection change as
   // polling runs); falls back to the passed-in snapshot if it's gone.
   ProjectorNode get _node => ref
@@ -75,10 +84,13 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
         .firstWhere((n) => n.id == widget.node.id, orElse: () => widget.node);
     final RemotePreviewState state;
     WebSignalStatus? webSignal;
-    if (_isOffline(node)) {
+    if (_isOffline(node) && !_everConnected) {
       state = const RemotePreviewUnavailable();
     } else {
       state = ref.watch(remotePreviewProvider(node.ipAddress));
+      if (state is RemotePreviewFrame || state is RemotePreviewNotice) {
+        _everConnected = true;
+      }
       // The projector's own web UI, not NTCONTROL, for the signal tag: QIN /
       // QVX:NSGS1 return ER401 whenever the projector isn't fully on, so a
       // poll-driven tag goes stale exactly when it matters (Standby +
@@ -240,12 +252,15 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
   // Bottom-right tag for the live frame. Primary source is [webSignal] — the
   // projector's own web UI, event-driven off the preview socket's SIGNAL
   // message (see previewSignalStatusProvider); it works in every power state,
-  // unlike NTCONTROL. Falls back to the polled node fields only until that
-  // first fetch lands (or if it ever fails), so the tag isn't blank meanwhile.
+  // unlike NTCONTROL. previewSignalStatusProvider keeps its last known-good
+  // value across a transient fetch failure, so the polled node fields below
+  // are only a fallback until the very first fetch lands, not on every
+  // failure — that would mean displaying NTCONTROL's own stale/ER401 reading
+  // with no time bound, the exact staleness this tag exists to avoid.
   //  - web says a real signal  -> "HDMI1 · 3840x2160/60p (134.99kHz/59.99Hz)"
   //  - web says no signal      -> "No signal" (authoritative — built-in test
   //    pattern / no external input, in any power state)
-  //  - web fetch pending/failed, polled value real -> that, same format
+  //  - no fetch has ever landed, polled value real -> that, same format
   //  - polled value also unusable  -> "No signal" if that's what NTCONTROL
   //    said, else no tag (nothing known yet)
   String? _signalTag(ProjectorNode node, WebSignalStatus? webSignal) {
