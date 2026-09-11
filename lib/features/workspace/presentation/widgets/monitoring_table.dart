@@ -398,9 +398,15 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
       label: 'Errors',
       defaultWidth: 140,
       iconPad: 20,
-      text: (n, _) => _errorsOk(n.errors) ? 'NO ERRORS' : n.errors,
-      // Faulted rows sort before healthy ones (ascending).
-      sortKey: (n, _) => '${_errorsOk(n.errors) ? 1 : 0}${n.errors}',
+      text: (n, _) => n.errors == '-'
+          ? '-'
+          : (_errorsOk(n.errors) ? 'NO ERRORS' : n.errors),
+      // Faulted rows sort before healthy ones (ascending); unpolled ('-')
+      // sorts with healthy — matches statusSummaryProvider's own '-'
+      // exclusion from warnings, instead of grouping unpolled rows with
+      // genuinely faulted ones.
+      sortKey: (n, _) =>
+          n.errors == '-' ? '1-' : '${_errorsOk(n.errors) ? 1 : 0}${n.errors}',
       cell: (_, n, _) => _errorsCell(n),
     ),
   ];
