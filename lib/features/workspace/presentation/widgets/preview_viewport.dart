@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/services/projector_web_status_service.dart';
 import '../../../../core/services/remote_preview_service.dart';
 import '../../domain/projector_group.dart';
 import '../../domain/projector_node.dart';
+import '../providers/preview_signal_status_provider.dart';
 import '../providers/remote_preview_provider.dart';
 import '../providers/workspace_provider.dart';
 
@@ -16,11 +18,16 @@ class PreviewViewport extends ConsumerStatefulWidget {
     required this.node,
     this.group,
     this.showCaption = false,
+    this.preShowActive = false,
   });
 
   final ProjectorNode node;
   final ProjectorGroup? group;
   final bool showCaption;
+
+  /// Draw a `PRE-SHOW` tag over the frame — the dialog owns the actual state
+  /// (read via NTCONTROL `QVX:PSMI1`).
+  final bool preShowActive;
 
   @override
   ConsumerState<PreviewViewport> createState() => _PreviewViewportState();
@@ -66,9 +73,29 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
     final node = ref
         .watch(workspaceProvider)
         .firstWhere((n) => n.id == widget.node.id, orElse: () => widget.node);
-    final state = _isOffline(node)
-        ? const RemotePreviewUnavailable()
-        : ref.watch(remotePreviewProvider(node.ipAddress));
+    final RemotePreviewState state;
+    WebSignalStatus? webSignal;
+    if (_isOffline(node)) {
+      state = const RemotePreviewUnavailable();
+    } else {
+      state = ref.watch(remotePreviewProvider(node.ipAddress));
+      // The projector's own web UI, not NTCONTROL, for the signal tag: QIN /
+      // QVX:NSGS1 return ER401 whenever the projector isn't fully on, so a
+      // poll-driven tag goes stale exactly when it matters (Standby +
+      // pre-show, or mid power-on). This provider is event-driven off the
+      // preview socket's own SIGNAL message — see its doc comment.
+      webSignal = ref.watch(
+        previewSignalStatusProvider(node.ipAddress, node.login, node.password),
+      );
+      // The first frame after a gap proves the input is live — pull fresh
+      // telemetry for this node now instead of waiting for the next poll, so
+      // the rest of the app (Monitoring table, shutter colour) is current too.
+      ref.listen(remotePreviewProvider(node.ipAddress), (prev, next) {
+        if (next is RemotePreviewFrame && prev is! RemotePreviewFrame) {
+          ref.read(workspaceProvider.notifier).refreshNode(widget.node.id);
+        }
+      });
+    }
 
     final plane = Container(
       clipBehavior: Clip.hardEdge,
@@ -79,7 +106,7 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
           width: 2,
         ),
       ),
-      child: _content(state, theme),
+      child: _content(state, node, webSignal, theme),
     );
 
     // Grid cell: the cell's aspect ratio fixes the height, so the plane fills
@@ -95,7 +122,12 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
     return AspectRatio(aspectRatio: 16 / 9, child: plane);
   }
 
-  Widget _content(RemotePreviewState state, ThemeData theme) {
+  Widget _content(
+    RemotePreviewState state,
+    ProjectorNode node,
+    WebSignalStatus? webSignal,
+    ThemeData theme,
+  ) {
     switch (state) {
       case RemotePreviewConnecting():
         return const Center(
@@ -106,16 +138,18 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
           ),
         );
       case RemotePreviewFrame(:final jpeg, :final overlay):
+        // Pre-show wins the tag slot — it's the more actionable state.
+        final tag = widget.preShowActive
+            ? 'PRE-SHOW'
+            : overlay?.label.toUpperCase();
+        final signal = _signalTag(node, webSignal);
         return Stack(
           fit: StackFit.expand,
           children: [
             Image.memory(jpeg, gaplessPlayback: true, fit: BoxFit.contain),
-            if (overlay != null)
-              Positioned(
-                left: 6,
-                top: 6,
-                child: _tag(overlay.label.toUpperCase()),
-              ),
+            if (tag != null) Positioned(left: 6, top: 6, child: _tag(tag)),
+            if (signal != null)
+              Positioned(right: 6, bottom: 6, child: _tag(signal)),
           ],
         );
       case RemotePreviewNotice(:final kind):
@@ -158,6 +192,42 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
         textAlign: center ? TextAlign.center : null,
         style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
       );
+
+  static bool _isRealSignal(String s) =>
+      s.isNotEmpty &&
+      s != '-' &&
+      s != 'Timeout' &&
+      s != 'ER401' &&
+      s.toUpperCase() != 'NO SIGNAL';
+
+  // Bottom-right tag for the live frame. Primary source is [webSignal] — the
+  // projector's own web UI, event-driven off the preview socket's SIGNAL
+  // message (see previewSignalStatusProvider); it works in every power state,
+  // unlike NTCONTROL. Falls back to the polled node fields only until that
+  // first fetch lands (or if it ever fails), so the tag isn't blank meanwhile.
+  //  - web says a real signal  -> "HDMI1 · 3840x2160/60p (134.99kHz/59.99Hz)"
+  //  - web says no signal      -> "No signal" (authoritative — built-in test
+  //    pattern / no external input, in any power state)
+  //  - web fetch pending/failed, polled value real -> that, same format
+  //  - polled value also unusable  -> "No signal" if that's what NTCONTROL
+  //    said, else no tag (nothing known yet)
+  String? _signalTag(ProjectorNode node, WebSignalStatus? webSignal) {
+    if (webSignal != null) {
+      if (webSignal.signalName.isEmpty) return 'No signal';
+      final input = webSignal.input.isNotEmpty ? webSignal.input : node.input;
+      final freq = webSignal.signalFrequency;
+      final detail = freq.isNotEmpty
+          ? '${webSignal.signalName} ($freq)'
+          : webSignal.signalName;
+      return _isRealSignal(input) ? '$input · $detail' : detail;
+    }
+    final hasInput = _isRealSignal(node.input);
+    if (_isRealSignal(node.signal)) {
+      return hasInput ? '${node.input} · ${node.signal}' : node.signal;
+    }
+    if (node.signal.toUpperCase() == 'NO SIGNAL') return 'No signal';
+    return null;
+  }
 
   Widget _tag(String text) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
