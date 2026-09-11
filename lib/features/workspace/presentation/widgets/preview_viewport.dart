@@ -153,10 +153,22 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
           ],
         );
       case RemotePreviewNotice(:final kind):
-        if (kind == RemotePreviewNoticeKind.blank) {
+        // Pre-show is a projector-level mode, not a property of any one
+        // signal reading — show it no matter what the current status is
+        // (including NOSIGNAL), not just while a frame happens to be on
+        // screen.
+        final showText = kind != RemotePreviewNoticeKind.blank;
+        if (!showText && !widget.preShowActive) {
           return const SizedBox.shrink();
         }
-        return _planeText(kind.label, theme);
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            if (showText) _planeText(kind.label, theme),
+            if (widget.preShowActive)
+              Positioned(left: 6, top: 6, child: _tag('PRE-SHOW')),
+          ],
+        );
       case RemotePreviewUnavailable():
         return Center(
           child: Column(

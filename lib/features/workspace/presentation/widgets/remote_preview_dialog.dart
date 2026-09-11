@@ -9,6 +9,7 @@ import '../../domain/projector_group.dart';
 import '../../domain/projector_node.dart';
 import '../providers/remote_preview_provider.dart';
 import '../providers/workspace_provider.dart';
+import 'dialog_title_bar.dart';
 import 'preview_viewport.dart';
 
 /// Opens the Remote Preview dialog for [nodes] — one projector shows a single
@@ -55,10 +56,21 @@ class _RemotePreviewDialogState extends ConsumerState<RemotePreviewDialog> {
   // Bumped on every toggle so a superseded confirmation loop bails out.
   int _psGen = 0;
 
+  // The grid's own Scrollbar needs an explicit controller shared with its
+  // GridView — without one it falls back to PrimaryScrollController, which
+  // has no ScrollPosition here and throws on every scroll.
+  final _gridScrollController = ScrollController();
+
   @override
   void initState() {
     super.initState();
     _loadPreShow(widget.nodes);
+  }
+
+  @override
+  void dispose() {
+    _gridScrollController.dispose();
+    super.dispose();
   }
 
   ProjectorGroup? _groupOf(ProjectorNode n) =>
@@ -181,32 +193,37 @@ class _RemotePreviewDialogState extends ConsumerState<RemotePreviewDialog> {
       clipBehavior: Clip.antiAlias,
       titlePadding: EdgeInsets.zero,
       contentPadding: const EdgeInsets.all(16),
-      title: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
-            color: theme.colorScheme.surfaceContainerHigh,
-            padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
-            child: Text(_title(nodes), style: theme.textTheme.titleMedium),
+      title: DialogTitleBar(title: _title(nodes), onClose: _close),
+      content: ScrollConfiguration(
+        // One deliberate Scrollbar, inside _grid's own gutter — not the
+        // ambient auto-scrollbar this and the nested GridView would each
+        // otherwise get, which is what was drawing over the rightmost tiles.
+        behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Align, not a bare child: under crossAxisAlignment.stretch a
+              // Column forces every direct child to its own (wider)
+              // cross-axis size, silently overriding the width _grid/_single
+              // computed. Align gives its child loose constraints so it keeps
+              // exactly the size it asked for.
+              Align(
+                child: _isMulti
+                    ? _grid(nodes, maxContentWidth, maxContentHeight)
+                    : _single(nodes, maxContentWidth, maxContentHeight),
+              ),
+              if (_isMulti) ...[
+                const SizedBox(height: 8),
+                const Divider(height: 1),
+              ],
+              const SizedBox(height: 12),
+              _preShowStrip(nodes, theme),
+            ],
           ),
-          const Divider(height: 1),
-        ],
-      ),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _isMulti
-                ? _grid(nodes, maxContentWidth, maxContentHeight)
-                : _single(nodes, maxContentWidth, maxContentHeight),
-            const SizedBox(height: 12),
-            _preShowStrip(nodes, theme),
-          ],
         ),
       ),
-      actions: [TextButton(onPressed: _close, child: const Text('Close'))],
     );
   }
 
@@ -221,11 +238,11 @@ class _RemotePreviewDialogState extends ConsumerState<RemotePreviewDialog> {
   }
 
   String _title(List<ProjectorNode> nodes) {
-    if (_isMulti) return 'Remote Preview — ${nodes.length} projectors';
+    if (_isMulti) return 'Remote Preview - ${nodes.length} projectors';
     final n = nodes.first;
     final group = _groupOf(n);
     final tail = group != null ? ' · ${group.name}' : '';
-    return 'Remote Preview — ${n.name} · ${n.ipAddress}$tail';
+    return 'Remote Preview - ${n.name} ${n.ipAddress}$tail';
   }
 
   // Width bounded by [maxWidth] and by [maxHeight] via the 16:9 ratio, so the
@@ -247,9 +264,15 @@ class _RemotePreviewDialogState extends ConsumerState<RemotePreviewDialog> {
     // 2 up to four projectors, 3 beyond; more than two visible rows scrolls.
     final cols = nodes.length <= 4 ? 2 : 3;
     const spacing = 8.0;
-    // Reserved on the right so the (desktop, auto-shown) scrollbar has its
-    // own gutter instead of drawing over the rightmost column's tiles.
-    const scrollbarGutter = 14.0;
+    // A Scrollbar paints its thumb at the edge of its OWN render box, not
+    // relative to whatever sits outside it — narrowing the Scrollbar/GridView
+    // and leaving empty space beside them (padding or a sibling SizedBox,
+    // both tried) does nothing, the thumb still draws flush against the last
+    // tile because that's the edge of its box. The fix has to live on the
+    // *inside*: keep the Scrollbar/GridView at the full width and give the
+    // GridView itself right padding, so its own content (the tiles) stops
+    // short of the edge the thumb draws at.
+    const scrollbarGutter = 16.0;
     final visRows = (nodes.length / cols).ceil().clamp(1, 2);
 
     // Solve the per-tile width from both budgets (16:9 plane + ~28px caption
@@ -259,13 +282,29 @@ class _RemotePreviewDialogState extends ConsumerState<RemotePreviewDialog> {
         ((maxHeight - (visRows - 1) * spacing) / visRows - 28) * 16 / 9;
     final cell = [byWidth, byHeight, 300.0].reduce(min).clamp(120.0, 340.0);
     final cellHeight = cell * 9 / 16 + 28;
+    // Full width the Scrollbar/GridView occupy — tiles' share plus the
+    // gutter, which the GridView's own padding carves out of this same box.
+    final gridWidth = cols * cell + (cols - 1) * spacing + scrollbarGutter;
+    final gridHeight = visRows * cellHeight + (visRows - 1) * spacing;
 
     return SizedBox(
-      width: cols * cell + (cols - 1) * spacing + scrollbarGutter,
-      height: visRows * cellHeight + (visRows - 1) * spacing,
-      child: Padding(
-        padding: const EdgeInsets.only(right: scrollbarGutter),
+      width: gridWidth,
+      height: gridHeight,
+      // The dialog's ScrollConfiguration turns off the ambient
+      // auto-scrollbar (see build()); this is the one deliberate scrollbar.
+      // Always on (not just while scrolling) — with more projectors than
+      // fit, a thumb that only appears mid-scroll gives no advance warning
+      // there's more below; harmless when nothing overflows (no thumb to
+      // show).
+      child: Scrollbar(
+        controller: _gridScrollController,
+        thumbVisibility: true,
+        thickness: 8,
         child: GridView.builder(
+          controller: _gridScrollController,
+          // The actual gutter: inset the grid's own content from the right
+          // edge of this (full-width) box, where the Scrollbar draws.
+          padding: const EdgeInsets.only(right: scrollbarGutter),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: cols,
             crossAxisSpacing: spacing,
