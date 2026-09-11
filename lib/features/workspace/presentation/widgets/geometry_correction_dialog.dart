@@ -9,6 +9,7 @@ import '../../domain/projector_node.dart';
 import '../../../../core/services/panasonic_protocol_service.dart';
 import 'command_failure_notice.dart';
 import 'custom_tooltip.dart';
+import 'dialog_title_bar.dart';
 import 'sleek_stepper_input.dart';
 
 // ─── Mode enum ─────────────────────────────────────────────────────────────
@@ -178,15 +179,17 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
     const maxConcurrent = 8;
     final results = <String?>[];
     for (var i = 0; i < keys.length; i += maxConcurrent) {
-      final batch = keys.sublist(
-        i,
-        (i + maxConcurrent).clamp(0, keys.length),
-      );
+      final batch = keys.sublist(i, (i + maxConcurrent).clamp(0, keys.length));
       results.addAll(
         await Future.wait(
           batch.map(
-            (k) =>
-                _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:$k'),
+            (k) => _service.sendRawCommand(
+              _ip,
+              _port,
+              _login,
+              _password,
+              'QVX:$k',
+            ),
           ),
         ),
       );
@@ -358,7 +361,6 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
   // ─── Build ───────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final screenHeight = MediaQuery.of(context).size.height;
 
     return Dialog(
@@ -373,53 +375,26 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
           mainAxisSize: MainAxisSize.max,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Title bar
-            Container(
-              color: theme.colorScheme.surfaceContainerHigh,
-              padding: const EdgeInsets.fromLTRB(24, 12, 8, 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Geometry Correction - ${widget.node.ipAddress}',
-                      style: theme.textTheme.titleMedium,
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    iconSize: 20,
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ],
-              ),
+            DialogTitleBar(
+              title: 'Geometry Correction - ${widget.node.ipAddress}',
             ),
-            const Divider(height: 1),
 
             if (_loading)
               const Expanded(child: Center(child: CircularProgressIndicator()))
             else ...[
-              // Mode dropdown — full width across both columns
+              // Mode switch — a SegmentedButton, like the other mode/kind
+              // toggles in the app (e.g. Add Projector's Single/Range).
               Padding(
                 padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
-                child: DropdownMenu<_GeometryMode>(
-                  requestFocusOnTap: false,
-                  enableFilter: false,
-                  initialSelection: _mode,
-                  expandedInsets: EdgeInsets.zero,
-                  label: const Text('Correction Mode'),
-                  inputDecorationTheme: const InputDecorationTheme(
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                  ),
-                  dropdownMenuEntries: _GeometryMode.values
-                      .map((m) => DropdownMenuEntry(value: m, label: m.label))
+                child: SegmentedButton<_GeometryMode>(
+                  segments: _GeometryMode.values
+                      .map((m) => ButtonSegment(value: m, label: Text(m.label)))
                       .toList(),
-                  onSelected: (m) {
-                    if (m == null || m == _mode) return;
+                  selected: {_mode},
+                  showSelectedIcon: false,
+                  onSelectionChanged: (set) {
+                    final m = set.first;
+                    if (m == _mode) return;
                     setState(() => _mode = m);
                     _sendMode(m);
                     _ensureModeLoaded(m);

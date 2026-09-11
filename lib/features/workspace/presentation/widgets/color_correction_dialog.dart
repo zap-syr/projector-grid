@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../domain/projector_node.dart';
 import '../../../../core/services/panasonic_protocol_service.dart';
 import 'command_failure_notice.dart';
+import 'dialog_title_bar.dart';
 import 'sleek_stepper_input.dart';
 
 enum _TempMode { defaultTemp, user1, user2, custom }
@@ -750,25 +751,8 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Title bar
-              Container(
-                color: theme.colorScheme.surfaceContainerHigh,
-                padding: const EdgeInsets.fromLTRB(24, 12, 8, 0),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Color Correction - ${widget.node.ipAddress}',
-                        style: theme.textTheme.titleMedium,
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      iconSize: 20,
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
-                  ],
-                ),
+              DialogTitleBar(
+                title: 'Color Correction - ${widget.node.ipAddress}',
               ),
               TabBar(
                 tabs: const [

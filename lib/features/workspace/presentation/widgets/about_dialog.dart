@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import 'dialog_title_bar.dart';
+
 class AppAboutDialog extends StatefulWidget {
   const AppAboutDialog({super.key});
 
@@ -38,24 +40,7 @@ class _AppAboutDialogState extends State<AppAboutDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Title bar
-            Container(
-              color: colorScheme.surfaceContainerHigh,
-              padding: const EdgeInsets.only(left: 20, right: 8, top: 4, bottom: 4),
-              child: Row(
-                children: [
-                  Text('About', style: textTheme.titleMedium),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    iconSize: 18,
-                    visualDensity: VisualDensity.compact,
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
+            const DialogTitleBar(title: 'About'),
 
             // Body
             Padding(
@@ -131,7 +116,9 @@ class _AppAboutDialogState extends State<AppAboutDialog> {
                           showLicensePage(
                             context: context,
                             applicationName: 'Projector Grid',
-                            applicationVersion: _version.isEmpty ? '' : _version,
+                            applicationVersion: _version.isEmpty
+                                ? ''
+                                : _version,
                           );
                         },
                         child: const Text('View Licenses'),

@@ -1,9 +1,12 @@
 import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../domain/projector_group.dart';
 import '../providers/scheduled_tasks_provider.dart';
 import '../providers/workspace_provider.dart';
+import 'dialog_title_bar.dart';
 
 const List<Color> _presetColors = [
   Colors.red,
@@ -32,7 +35,9 @@ Future<ProjectorGroup?> showGroupEditorDialog(
   ProjectorGroup? existing,
 }) {
   final nameController = TextEditingController(text: existing?.name ?? '');
-  var selectedColor = existing != null ? Color(existing.color) : _presetColors[0];
+  var selectedColor = existing != null
+      ? Color(existing.color)
+      : _presetColors[0];
   String? nameError;
 
   return showDialog<ProjectorGroup>(
@@ -43,23 +48,18 @@ Future<ProjectorGroup?> showGroupEditorDialog(
         final cs = theme.colorScheme;
         return Dialog(
           clipBehavior: Clip.antiAlias,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           child: SizedBox(
             width: 380,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Title bar
-                Container(
-                  color: theme.colorScheme.surfaceContainerHigh,
-                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
-                  child: Text(
-                    existing != null ? 'Edit Group' : 'New Group',
-                    style: theme.textTheme.titleMedium,
-                  ),
+                DialogTitleBar(
+                  title: existing != null ? 'Edit Group' : 'New Group',
                 ),
-                const Divider(height: 1),
                 // Content
                 Padding(
                   padding: const EdgeInsets.all(24),
@@ -73,9 +73,15 @@ Future<ProjectorGroup?> showGroupEditorDialog(
                           labelText: 'Group Name',
                           border: const OutlineInputBorder(),
                           errorText: nameError,
-                          labelStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
-                          floatingLabelStyle: WidgetStateTextStyle.resolveWith((states) {
-                            if (states.contains(WidgetState.error)) return TextStyle(color: cs.error);
+                          labelStyle: TextStyle(
+                            color: cs.onSurfaceVariant.withValues(alpha: 0.5),
+                          ),
+                          floatingLabelStyle: WidgetStateTextStyle.resolveWith((
+                            states,
+                          ) {
+                            if (states.contains(WidgetState.error)) {
+                              return TextStyle(color: cs.error);
+                            }
                             return TextStyle(color: cs.primary);
                           }),
                         ),
@@ -93,9 +99,11 @@ Future<ProjectorGroup?> showGroupEditorDialog(
                         spacing: 6,
                         runSpacing: 6,
                         children: _presetColors.map((color) {
-                          final isSelected = color.toARGB32() == selectedColor.toARGB32();
+                          final isSelected =
+                              color.toARGB32() == selectedColor.toARGB32();
                           return GestureDetector(
-                            onTap: () => setDialogState(() => selectedColor = color),
+                            onTap: () =>
+                                setDialogState(() => selectedColor = color),
                             child: Container(
                               width: 28,
                               height: 28,
@@ -103,11 +111,18 @@ Future<ProjectorGroup?> showGroupEditorDialog(
                                 color: color,
                                 shape: BoxShape.circle,
                                 border: isSelected
-                                    ? Border.all(color: theme.colorScheme.onSurface, width: 2.5)
+                                    ? Border.all(
+                                        color: theme.colorScheme.onSurface,
+                                        width: 2.5,
+                                      )
                                     : null,
                               ),
                               child: isSelected
-                                  ? const Icon(Icons.check, size: 16, color: Colors.white)
+                                  ? const Icon(
+                                      Icons.check,
+                                      size: 16,
+                                      color: Colors.white,
+                                    )
                                   : null,
                             ),
                           );
@@ -126,20 +141,31 @@ Future<ProjectorGroup?> showGroupEditorDialog(
                             onPressed: () {
                               final name = nameController.text.trim();
                               if (name.isEmpty) {
-                                setDialogState(() => nameError = 'Group name is required');
+                                setDialogState(
+                                  () => nameError = 'Group name is required',
+                                );
                                 return;
                               }
 
                               // Check for duplicate name or OSC address collision
-                              final notifier = ref.read(workspaceProvider.notifier);
+                              final notifier = ref.read(
+                                workspaceProvider.notifier,
+                              );
                               final existingGroups = notifier.groups;
-                              final oscAddress = '/group/${name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-')}';
-                              final isDuplicate = existingGroups.any((g) =>
-                                  g.id != existing?.id &&
-                                  (g.name.toLowerCase() == name.toLowerCase() ||
-                                   g.oscAddress == oscAddress));
+                              final oscAddress =
+                                  '/group/${name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-')}';
+                              final isDuplicate = existingGroups.any(
+                                (g) =>
+                                    g.id != existing?.id &&
+                                    (g.name.toLowerCase() ==
+                                            name.toLowerCase() ||
+                                        g.oscAddress == oscAddress),
+                              );
                               if (isDuplicate) {
-                                setDialogState(() => nameError = 'A group with this name already exists');
+                                setDialogState(
+                                  () => nameError =
+                                      'A group with this name already exists',
+                                );
                                 return;
                               }
                               ProjectorGroup result;
@@ -151,7 +177,8 @@ Future<ProjectorGroup?> showGroupEditorDialog(
                                 );
                                 notifier.updateGroup(result);
                               } else {
-                                final id = '${DateTime.now().microsecondsSinceEpoch}_${Random().nextInt(99999)}';
+                                final id =
+                                    '${DateTime.now().microsecondsSinceEpoch}_${Random().nextInt(99999)}';
                                 result = ProjectorGroup(
                                   id: id,
                                   name: name,
@@ -247,26 +274,7 @@ class _ManageGroupsDialogState extends ConsumerState<ManageGroupsDialog> {
           mainAxisSize: MainAxisSize.max,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Title bar
-            Container(
-              color: theme.colorScheme.surfaceContainerHigh,
-              padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
-              child: Row(
-                children: [
-                  Text('Manage Groups', style: theme.textTheme.titleMedium),
-                  const Spacer(),
-                  FilledButton.icon(
-                    onPressed: () async {
-                      await showGroupEditorDialog(context, ref);
-                      setState(() {});
-                    },
-                    icon: const Icon(Icons.add, size: 18),
-                    label: const Text('New Group'),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
+            const DialogTitleBar(title: 'Manage Groups'),
             // Content
             Expanded(
               child: groups.isEmpty
@@ -274,17 +282,22 @@ class _ManageGroupsDialogState extends ConsumerState<ManageGroupsDialog> {
                       child: Text(
                         'No groups created yet',
                         style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.5,
+                          ),
                         ),
                       ),
                     )
                   : ListView.separated(
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       itemCount: groups.length,
-                      separatorBuilder: (_, _) => const Divider(height: 1, indent: 16, endIndent: 16),
+                      separatorBuilder: (_, _) =>
+                          const Divider(height: 1, indent: 16, endIndent: 16),
                       itemBuilder: (context, index) {
                         final group = groups[index];
-                        final memberCount = nodes.where((n) => n.groupId == group.id).length;
+                        final memberCount = nodes
+                            .where((n) => n.groupId == group.id)
+                            .length;
                         return ListTile(
                           leading: Container(
                             width: 16,
@@ -308,13 +321,20 @@ class _ManageGroupsDialogState extends ConsumerState<ManageGroupsDialog> {
                               IconButton(
                                 icon: const Icon(Icons.edit_outlined, size: 18),
                                 onPressed: () async {
-                                  await showGroupEditorDialog(context, ref, existing: group);
+                                  await showGroupEditorDialog(
+                                    context,
+                                    ref,
+                                    existing: group,
+                                  );
                                   setState(() {});
                                 },
                                 tooltip: 'Edit',
                               ),
                               IconButton(
-                                icon: const Icon(Icons.delete_outline, size: 18),
+                                icon: const Icon(
+                                  Icons.delete_outline,
+                                  size: 18,
+                                ),
                                 onPressed: () => _confirmDeleteGroup(group),
                                 tooltip: 'Delete',
                               ),
@@ -324,15 +344,19 @@ class _ManageGroupsDialogState extends ConsumerState<ManageGroupsDialog> {
                       },
                     ),
             ),
-            // Close button
+            const Divider(height: 1),
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Close'),
+                  FilledButton.icon(
+                    onPressed: () async {
+                      await showGroupEditorDialog(context, ref);
+                      setState(() {});
+                    },
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('New Group'),
                   ),
                 ],
               ),

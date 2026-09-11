@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../domain/custom_command.dart';
 import '../providers/custom_commands_provider.dart';
+import 'dialog_title_bar.dart';
 
 class CustomCommandDialog extends ConsumerStatefulWidget {
   final CustomCommand? existing; // null = add mode
@@ -40,9 +42,11 @@ class _CustomCommandDialogState extends ConsumerState<CustomCommandDialog> {
   bool get _isDuplicate {
     if (_nameCtrl.text.trim().isEmpty) return false;
     final commands = ref.read(customCommandsProvider);
-    return commands.any((c) =>
-        c.oscSlug == _slug &&
-        (widget.existing == null || c.id != widget.existing!.id));
+    return commands.any(
+      (c) =>
+          c.oscSlug == _slug &&
+          (widget.existing == null || c.id != widget.existing!.id),
+    );
   }
 
   bool get _isValid =>
@@ -74,14 +78,7 @@ class _CustomCommandDialogState extends ConsumerState<CustomCommandDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Title bar ─────────────────────────────────────────────────
-            Container(
-              width: double.infinity,
-              color: theme.colorScheme.surfaceContainerHigh,
-              padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
-              child: Text(title, style: theme.textTheme.titleMedium),
-            ),
-            const Divider(height: 1),
+            DialogTitleBar(title: title),
             // ── Content ───────────────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.all(24),
@@ -95,9 +92,15 @@ class _CustomCommandDialogState extends ConsumerState<CustomCommandDialog> {
                       labelText: 'Name',
                       border: const OutlineInputBorder(),
                       errorText: _isDuplicate ? 'Name already used' : null,
-                      labelStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
-                      floatingLabelStyle: WidgetStateTextStyle.resolveWith((states) {
-                        if (states.contains(WidgetState.error)) return TextStyle(color: cs.error);
+                      labelStyle: TextStyle(
+                        color: cs.onSurfaceVariant.withValues(alpha: 0.5),
+                      ),
+                      floatingLabelStyle: WidgetStateTextStyle.resolveWith((
+                        states,
+                      ) {
+                        if (states.contains(WidgetState.error)) {
+                          return TextStyle(color: cs.error);
+                        }
                         return TextStyle(color: cs.primary);
                       }),
                     ),
@@ -111,7 +114,9 @@ class _CustomCommandDialogState extends ConsumerState<CustomCommandDialog> {
                     decoration: InputDecoration(
                       labelText: 'Command',
                       border: const OutlineInputBorder(),
-                      labelStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
+                      labelStyle: TextStyle(
+                        color: cs.onSurfaceVariant.withValues(alpha: 0.5),
+                      ),
                       floatingLabelStyle: TextStyle(color: cs.primary),
                     ),
                     onChanged: (_) => setState(() {}),
@@ -148,7 +153,7 @@ class _CustomCommandDialogState extends ConsumerState<CustomCommandDialog> {
                               color: slug.isNotEmpty
                                   ? theme.colorScheme.onSurfaceVariant
                                   : theme.colorScheme.onSurfaceVariant
-                                      .withValues(alpha: 0.4),
+                                        .withValues(alpha: 0.4),
                               fontFamily: 'monospace',
                             ),
                             overflow: TextOverflow.ellipsis,
@@ -168,9 +173,7 @@ class _CustomCommandDialogState extends ConsumerState<CustomCommandDialog> {
                       const SizedBox(width: 16),
                       FilledButton(
                         onPressed: _isValid ? _submit : null,
-                        child: Text(
-                          widget.existing == null ? 'Add' : 'Save',
-                        ),
+                        child: Text(widget.existing == null ? 'Add' : 'Save'),
                       ),
                     ],
                   ),

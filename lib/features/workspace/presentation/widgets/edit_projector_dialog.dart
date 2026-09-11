@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+
 import '../../domain/projector_node.dart';
+import 'dialog_title_bar.dart';
 
 class EditProjectorDialog extends StatefulWidget {
   final ProjectorNode node;
@@ -23,7 +25,9 @@ class _EditProjectorDialogState extends State<EditProjectorDialog> {
   late TextEditingController _loginController;
   late TextEditingController _passwordController;
 
-  final _ipRegex = RegExp(r"^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$");
+  final _ipRegex = RegExp(
+    r"^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$",
+  );
 
   @override
   void initState() {
@@ -43,7 +47,11 @@ class _EditProjectorDialogState extends State<EditProjectorDialog> {
 
   void _submit() {
     if (_formKey.currentState!.validate()) {
-      widget.onSave(_ipController.text, _loginController.text, _passwordController.text);
+      widget.onSave(
+        _ipController.text,
+        _loginController.text,
+        _passwordController.text,
+      );
       Navigator.of(context).pop();
     }
   }
@@ -57,7 +65,9 @@ class _EditProjectorDialogState extends State<EditProjectorDialog> {
       border: const OutlineInputBorder(),
       labelStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
       floatingLabelStyle: WidgetStateTextStyle.resolveWith((states) {
-        if (states.contains(WidgetState.error)) return TextStyle(color: cs.error);
+        if (states.contains(WidgetState.error)) {
+          return TextStyle(color: cs.error);
+        }
         return TextStyle(color: cs.primary);
       }),
     );
@@ -72,59 +82,57 @@ class _EditProjectorDialogState extends State<EditProjectorDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Title bar ───────────────────────────────────────────────
-              Container(
-                width: double.infinity,
-                color: theme.colorScheme.surfaceContainerHigh,
-                padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
-                child: Text('Edit Projector',
-                    style: theme.textTheme.titleMedium),
-              ),
-              const Divider(height: 1),
+              const DialogTitleBar(title: 'Edit Projector'),
               // ── Content ─────────────────────────────────────────────────
               Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextFormField(
-                controller: _ipController,
-                decoration: dec('IP Address'),
-                validator: (val) {
-                  if (val == null || val.isEmpty) return 'IP Address is required';
-                  if (!_ipRegex.hasMatch(val)) return 'Invalid IP Address format';
-                  if (widget.existingIps.contains(val)) return 'This IP address is already in use';
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _loginController,
-                decoration: dec('Login'),
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _passwordController,
-                decoration: dec('Password'),
-              ),
-              const SizedBox(height: 32),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('Cancel'),
-                  ),
-                  const SizedBox(width: 16),
-                  FilledButton(
-                    onPressed: _submit,
-                    child: const Text('Save'),
-                  ),
-                ],
-              ),
-            ],
-          ),
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextFormField(
+                      controller: _ipController,
+                      decoration: dec('IP Address'),
+                      validator: (val) {
+                        if (val == null || val.isEmpty) {
+                          return 'IP Address is required';
+                        }
+                        if (!_ipRegex.hasMatch(val)) {
+                          return 'Invalid IP Address format';
+                        }
+                        if (widget.existingIps.contains(val)) {
+                          return 'This IP address is already in use';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _loginController,
+                      decoration: dec('Login'),
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _passwordController,
+                      decoration: dec('Password'),
+                    ),
+                    const SizedBox(height: 32),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('Cancel'),
+                        ),
+                        const SizedBox(width: 16),
+                        FilledButton(
+                          onPressed: _submit,
+                          child: const Text('Save'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ],
           ),

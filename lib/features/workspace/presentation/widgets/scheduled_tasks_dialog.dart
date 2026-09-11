@@ -7,6 +7,7 @@ import '../../domain/scheduled_task.dart';
 import '../providers/custom_commands_provider.dart';
 import '../providers/scheduled_tasks_provider.dart';
 import '../providers/workspace_provider.dart';
+import 'dialog_title_bar.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Command catalog
@@ -59,8 +60,18 @@ const _weekdayAbbr = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 String _fmtDate(DateTime dt) {
   const months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
   return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
 }
@@ -88,25 +99,7 @@ class ScheduledTasksDialog extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Container(
-              color: theme.colorScheme.surfaceContainerHigh,
-              padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
-              child: Row(
-                children: [
-                  Text('Scheduled Tasks', style: theme.textTheme.titleMedium),
-                  const Spacer(),
-                  FilledButton.icon(
-                    onPressed: () => showDialog<void>(
-                      context: context,
-                      builder: (_) => const _ScheduledTaskEditorDialog(),
-                    ),
-                    icon: const Icon(Icons.add, size: 18),
-                    label: const Text('Add Task'),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
+            const DialogTitleBar(title: 'Scheduled Tasks'),
             Expanded(
               child: tasks.isEmpty
                   ? Center(
@@ -116,23 +109,26 @@ class ScheduledTasksDialog extends ConsumerWidget {
                           Icon(
                             Icons.schedule,
                             size: 48,
-                            color: theme.colorScheme.onSurface
-                                .withValues(alpha: 0.18),
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.18,
+                            ),
                           ),
                           const SizedBox(height: 12),
                           Text(
                             'No scheduled tasks yet',
                             style: theme.textTheme.bodyMedium?.copyWith(
-                              color: theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.5),
+                              color: theme.colorScheme.onSurface.withValues(
+                                alpha: 0.5,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 4),
                           Text(
                             'Click Add Task to create one',
                             style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.35),
+                              color: theme.colorScheme.onSurface.withValues(
+                                alpha: 0.35,
+                              ),
                             ),
                           ),
                         ],
@@ -141,13 +137,9 @@ class ScheduledTasksDialog extends ConsumerWidget {
                   : ListView.separated(
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       itemCount: tasks.length,
-                      separatorBuilder: (_, _) => const Divider(
-                        height: 1,
-                        indent: 16,
-                        endIndent: 16,
-                      ),
-                      itemBuilder: (ctx, i) =>
-                          _TaskRow(task: tasks[i]),
+                      separatorBuilder: (_, _) =>
+                          const Divider(height: 1, indent: 16, endIndent: 16),
+                      itemBuilder: (ctx, i) => _TaskRow(task: tasks[i]),
                     ),
             ),
             const Divider(height: 1),
@@ -158,21 +150,25 @@ class ScheduledTasksDialog extends ConsumerWidget {
                   Icon(
                     Icons.info_outline,
                     size: 14,
-                    color:
-                        theme.colorScheme.onSurface.withValues(alpha: 0.38),
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.38),
                   ),
                   const SizedBox(width: 6),
                   Text(
                     'Tasks only run while the app is open',
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurface
-                          .withValues(alpha: 0.38),
+                      color: theme.colorScheme.onSurface.withValues(
+                        alpha: 0.38,
+                      ),
                     ),
                   ),
                   const Spacer(),
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Close'),
+                  FilledButton.icon(
+                    onPressed: () => showDialog<void>(
+                      context: context,
+                      builder: (_) => const _ScheduledTaskEditorDialog(),
+                    ),
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('Add Task'),
                   ),
                 ],
               ),
@@ -321,8 +317,9 @@ class _ScheduledTaskEditorDialogState
     _customCommandController = TextEditingController();
 
     if (t != null) {
-      final allBuiltin =
-          _builtInGroups.expand((g) => g.entries).map((e) => e.command);
+      final allBuiltin = _builtInGroups
+          .expand((g) => g.entries)
+          .map((e) => e.command);
       final customCmds = ref.read(customCommandsProvider);
       final allCustom = customCmds.map((c) => c.command);
       final allKnown = {...allBuiltin, ...allCustom};
@@ -371,13 +368,15 @@ class _ScheduledTaskEditorDialogState
         : _resolveGroupName(_targetGroupId);
 
     final schedPart = switch (_scheduleType) {
-      ScheduleType.once => _selectedDate != null
-          ? 'Once ${_fmtDate(_selectedDate!)} ${_fmtHM(_hour, _minute)}'
-          : 'Once',
+      ScheduleType.once =>
+        _selectedDate != null
+            ? 'Once ${_fmtDate(_selectedDate!)} ${_fmtHM(_hour, _minute)}'
+            : 'Once',
       ScheduleType.daily => 'Daily ${_fmtHM(_hour, _minute)}',
-      ScheduleType.weekly => _selectedWeekdays.isEmpty
-          ? 'Weekly ${_fmtHM(_hour, _minute)}'
-          : '${(List<int>.from(_selectedWeekdays)..sort()).map((d) => _weekdayAbbr[d - 1]).join(', ')} ${_fmtHM(_hour, _minute)}',
+      ScheduleType.weekly =>
+        _selectedWeekdays.isEmpty
+            ? 'Weekly ${_fmtHM(_hour, _minute)}'
+            : '${(List<int>.from(_selectedWeekdays)..sort()).map((d) => _weekdayAbbr[d - 1]).join(', ')} ${_fmtHM(_hour, _minute)}',
     };
 
     return '$cmdLabel - $targetLabel - $schedPart';
@@ -414,8 +413,7 @@ class _ScheduledTaskEditorDialogState
     }
 
     setState(() {
-      _groupMissing =
-          _target == ScheduleTarget.group && _targetGroupId == null;
+      _groupMissing = _target == ScheduleTarget.group && _targetGroupId == null;
       _dateMissing =
           _scheduleType == ScheduleType.once && _selectedDate == null;
       _noWeekdaysError =
@@ -432,8 +430,9 @@ class _ScheduledTaskEditorDialogState
         ? _customCommandController.text.trim()
         : _selectedCommand!.command;
 
-    final timeOfDay =
-        _scheduleType != ScheduleType.once ? _fmtHM(_hour, _minute) : null;
+    final timeOfDay = _scheduleType != ScheduleType.once
+        ? _fmtHM(_hour, _minute)
+        : null;
 
     final oneTimeAt = _scheduleType == ScheduleType.once
         ? DateTime(
@@ -446,7 +445,8 @@ class _ScheduledTaskEditorDialogState
         : null;
 
     final task = ScheduledTask(
-      id: widget.existing?.id ??
+      id:
+          widget.existing?.id ??
           DateTime.now().microsecondsSinceEpoch.toString(),
       name: _autoName(),
       command: cmdString,
@@ -460,7 +460,9 @@ class _ScheduledTaskEditorDialogState
           ? (List<int>.from(_selectedWeekdays)..sort())
           : null,
       enabled: _scheduleType == ScheduleType.once
-          ? (widget.existing?.lastRunAt != null ? true : (widget.existing?.enabled ?? true))
+          ? (widget.existing?.lastRunAt != null
+                ? true
+                : (widget.existing?.enabled ?? true))
           : (widget.existing?.enabled ?? true),
       lastRunAt: _scheduleType == ScheduleType.once
           ? null
@@ -496,9 +498,31 @@ class _ScheduledTaskEditorDialogState
 
     final entries = <DropdownMenuEntry<String>>[];
     for (final group in groups) {
-      entries.add(DropdownMenuEntry<String>(
-        value: '__grp_${group.label}',
-        label: group.label.toUpperCase(),
+      entries.add(
+        DropdownMenuEntry<String>(
+          value: '__grp_${group.label}',
+          label: group.label.toUpperCase(),
+          enabled: false,
+          style: MenuItemButton.styleFrom(
+            disabledForegroundColor: theme.colorScheme.primary,
+            textStyle: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.0,
+            ),
+          ),
+        ),
+      );
+      for (final entry in group.entries) {
+        entries.add(
+          DropdownMenuEntry<String>(value: entry.command, label: entry.label),
+        );
+      }
+    }
+    entries.add(
+      DropdownMenuEntry<String>(
+        value: '__grp_custom_header__',
+        label: 'CUSTOM',
         enabled: false,
         style: MenuItemButton.styleFrom(
           disabledForegroundColor: theme.colorScheme.primary,
@@ -508,43 +532,28 @@ class _ScheduledTaskEditorDialogState
             letterSpacing: 1.0,
           ),
         ),
-      ));
-      for (final entry in group.entries) {
-        entries.add(DropdownMenuEntry<String>(
-          value: entry.command,
-          label: entry.label,
-        ));
-      }
-    }
-    entries.add(DropdownMenuEntry<String>(
-      value: '__grp_custom_header__',
-      label: 'CUSTOM',
-      enabled: false,
-      style: MenuItemButton.styleFrom(
-        disabledForegroundColor: theme.colorScheme.primary,
-        textStyle: const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 1.0,
-        ),
       ),
-    ));
-    entries.add(DropdownMenuEntry<String>(
-      value: '__custom_inline__',
-      label: 'Custom Command...',
-    ));
+    );
+    entries.add(
+      DropdownMenuEntry<String>(
+        value: '__custom_inline__',
+        label: 'Custom Command...',
+      ),
+    );
 
     final allCommands = groups.expand((g) => g.entries).map((e) => e.command);
     final safeValue = _isCustomCommand
         ? '__custom_inline__'
         : (allCommands.contains(_selectedCommand?.command)
-            ? _selectedCommand!.command
-            : null);
+              ? _selectedCommand!.command
+              : null);
 
-    final borderColor =
-        _commandMissing ? theme.colorScheme.error : theme.colorScheme.outline;
-    final focusBorderColor =
-        _commandMissing ? theme.colorScheme.error : theme.colorScheme.primary;
+    final borderColor = _commandMissing
+        ? theme.colorScheme.error
+        : theme.colorScheme.outline;
+    final focusBorderColor = _commandMissing
+        ? theme.colorScheme.error
+        : theme.colorScheme.primary;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -559,8 +568,10 @@ class _ScheduledTaskEditorDialogState
           initialSelection: safeValue,
           inputDecorationTheme: InputDecorationTheme(
             isDense: true,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 12,
+            ),
             border: const OutlineInputBorder(),
             enabledBorder: OutlineInputBorder(
               borderSide: BorderSide(color: borderColor),
@@ -615,10 +626,12 @@ class _ScheduledTaskEditorDialogState
   Widget _groupDropdown(List<ProjectorGroup> wsGroups) {
     final theme = Theme.of(context);
 
-    final borderColor =
-        _groupMissing ? theme.colorScheme.error : theme.colorScheme.outline;
-    final focusBorderColor =
-        _groupMissing ? theme.colorScheme.error : theme.colorScheme.primary;
+    final borderColor = _groupMissing
+        ? theme.colorScheme.error
+        : theme.colorScheme.outline;
+    final focusBorderColor = _groupMissing
+        ? theme.colorScheme.error
+        : theme.colorScheme.primary;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -633,8 +646,10 @@ class _ScheduledTaskEditorDialogState
           initialSelection: _targetGroupId,
           inputDecorationTheme: InputDecorationTheme(
             isDense: true,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 12,
+            ),
             border: const OutlineInputBorder(),
             enabledBorder: OutlineInputBorder(
               borderSide: BorderSide(color: borderColor),
@@ -686,8 +701,9 @@ class _ScheduledTaskEditorDialogState
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: Row(
-        crossAxisAlignment:
-            alignTop ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+        crossAxisAlignment: alignTop
+            ? CrossAxisAlignment.start
+            : CrossAxisAlignment.center,
         children: [
           SizedBox(
             width: _labelWidth,
@@ -709,15 +725,15 @@ class _ScheduledTaskEditorDialogState
   }
 
   Widget _errorText(String msg) => Padding(
-        padding: const EdgeInsets.only(top: 4, left: 2),
-        child: Text(
-          msg,
-          style: TextStyle(
-            fontSize: 11,
-            color: Theme.of(context).colorScheme.error,
-          ),
-        ),
-      );
+    padding: const EdgeInsets.only(top: 4, left: 2),
+    child: Text(
+      msg,
+      style: TextStyle(
+        fontSize: 11,
+        color: Theme.of(context).colorScheme.error,
+      ),
+    ),
+  );
 
   // ── Build ──────────────────────────────────────────────────────────────────
 
@@ -735,22 +751,14 @@ class _ScheduledTaskEditorDialogState
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ConstrainedBox(
-        constraints:
-            BoxConstraints(maxWidth: 520, maxHeight: maxDialogHeight),
+        constraints: BoxConstraints(maxWidth: 520, maxHeight: maxDialogHeight),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Title bar
-            Container(
-              color: theme.colorScheme.surfaceContainerHigh,
-              padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
-              child: Text(
-                isEditing ? 'Edit Task' : 'New Scheduled Task',
-                style: theme.textTheme.titleMedium,
-              ),
+            DialogTitleBar(
+              title: isEditing ? 'Edit Task' : 'New Scheduled Task',
             ),
-            const Divider(height: 1),
 
             // Form
             Flexible(
@@ -789,7 +797,9 @@ class _ScheduledTaskEditorDialogState
                                       isDense: true,
                                       contentPadding:
                                           const EdgeInsets.symmetric(
-                                              horizontal: 12, vertical: 12),
+                                            horizontal: 12,
+                                            vertical: 12,
+                                          ),
                                       errorText: _customLabelError
                                           ? 'Name is required'
                                           : null,
@@ -801,7 +811,8 @@ class _ScheduledTaskEditorDialogState
                                     onChanged: (_) {
                                       if (_customLabelError) {
                                         setState(
-                                            () => _customLabelError = false);
+                                          () => _customLabelError = false,
+                                        );
                                       }
                                     },
                                   ),
@@ -821,7 +832,9 @@ class _ScheduledTaskEditorDialogState
                                       isDense: true,
                                       contentPadding:
                                           const EdgeInsets.symmetric(
-                                              horizontal: 12, vertical: 12),
+                                            horizontal: 12,
+                                            vertical: 12,
+                                          ),
                                       errorText: _customCommandError
                                           ? 'Command is required'
                                           : null,
@@ -833,7 +846,8 @@ class _ScheduledTaskEditorDialogState
                                     onChanged: (_) {
                                       if (_customCommandError) {
                                         setState(
-                                            () => _customCommandError = false);
+                                          () => _customCommandError = false,
+                                        );
                                       }
                                     },
                                   ),
@@ -870,9 +884,9 @@ class _ScheduledTaskEditorDialogState
                                     : null,
                                 onTap: hasGroups
                                     ? () => setState(() {
-                                          _target = ScheduleTarget.group;
-                                          _groupMissing = false;
-                                        })
+                                        _target = ScheduleTarget.group;
+                                        _groupMissing = false;
+                                      })
                                     : null,
                               ),
                             ],
@@ -934,15 +948,15 @@ class _ScheduledTaskEditorDialogState
                             onChanged: (v) => setState(() => _hour = v),
                           ),
                           Padding(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 10),
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
                             child: Text(
                               ':',
                               style: TextStyle(
                                 fontSize: 20,
                                 fontWeight: FontWeight.w300,
-                                color: theme.colorScheme.onSurface
-                                    .withValues(alpha: 0.7),
+                                color: theme.colorScheme.onSurface.withValues(
+                                  alpha: 0.7,
+                                ),
                               ),
                             ),
                           ),
@@ -990,14 +1004,17 @@ class _ScheduledTaskEditorDialogState
                                       final day = i + 1;
                                       return Padding(
                                         padding: EdgeInsets.only(
-                                            right: i < 6 ? 5 : 0),
+                                          right: i < 6 ? 5 : 0,
+                                        ),
                                         child: _DayButton(
                                           label: _weekdayAbbr[i],
-                                          selected: _selectedWeekdays
-                                              .contains(day),
+                                          selected: _selectedWeekdays.contains(
+                                            day,
+                                          ),
                                           onTap: () => setState(() {
-                                            if (_selectedWeekdays
-                                                .contains(day)) {
+                                            if (_selectedWeekdays.contains(
+                                              day,
+                                            )) {
                                               _selectedWeekdays.remove(day);
                                             } else {
                                               _selectedWeekdays.add(day);
@@ -1108,7 +1125,11 @@ class _HybridDateFieldState extends State<_HybridDateField> {
   }
 
   DateTime _clampedInitial() {
-    final first = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+    final first = DateTime(
+      DateTime.now().year,
+      DateTime.now().month,
+      DateTime.now().day,
+    );
     final last = DateTime.now().add(const Duration(days: 365 * 5));
     final date = widget.value ?? DateTime.now();
     if (date.isBefore(first)) return first;
@@ -1152,8 +1173,7 @@ class _HybridDateFieldState extends State<_HybridDateField> {
       final ro = context.findRenderObject();
       if (ro is RenderBox && ro.hasSize) {
         final bottom = ro.localToGlobal(Offset(0, ro.size.height));
-        _openUpward =
-            (MediaQuery.of(context).size.height - bottom.dy) < 340.0;
+        _openUpward = (MediaQuery.of(context).size.height - bottom.dy) < 340.0;
       }
       _portalController.show();
     }
@@ -1191,8 +1211,7 @@ class _HybridDateFieldState extends State<_HybridDateField> {
               followerAnchor: _openUpward
                   ? Alignment.bottomLeft
                   : Alignment.topLeft,
-              offset:
-                  _openUpward ? const Offset(0, -4) : const Offset(0, 4),
+              offset: _openUpward ? const Offset(0, -4) : const Offset(0, 4),
               showWhenUnlinked: false,
               child: RepaintBoundary(
                 child: Material(
@@ -1210,9 +1229,14 @@ class _HybridDateFieldState extends State<_HybridDateField> {
                       visible: false,
                       child: CalendarDatePicker(
                         initialDate: _clampedInitial(),
-                        firstDate: DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day),
-                        lastDate:
-                            DateTime.now().add(const Duration(days: 365 * 5)),
+                        firstDate: DateTime(
+                          DateTime.now().year,
+                          DateTime.now().month,
+                          DateTime.now().day,
+                        ),
+                        lastDate: DateTime.now().add(
+                          const Duration(days: 365 * 5),
+                        ),
                         onDateChanged: (dt) {
                           widget.onPicked(dt);
                           _ctrl.text = _toDisplay(dt);
@@ -1236,13 +1260,14 @@ class _HybridDateFieldState extends State<_HybridDateField> {
             hintText: 'DD/MM/YYYY',
             border: const OutlineInputBorder(),
             isDense: true,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            errorText: _pastDateError ?? (widget.hasError ? 'Please enter a date' : null),
-            errorStyle: TextStyle(
-              fontSize: 11,
-              color: theme.colorScheme.error,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 12,
             ),
+            errorText:
+                _pastDateError ??
+                (widget.hasError ? 'Please enter a date' : null),
+            errorStyle: TextStyle(fontSize: 11, color: theme.colorScheme.error),
             suffixIcon: MouseRegion(
               cursor: SystemMouseCursors.click,
               child: IconButton(
@@ -1396,8 +1421,9 @@ class _ChoicePill extends StatelessWidget {
         border: Border.all(
           color: selected && active
               ? primary
-              : theme.colorScheme.outline
-                  .withValues(alpha: active ? 0.55 : 0.25),
+              : theme.colorScheme.outline.withValues(
+                  alpha: active ? 0.55 : 0.25,
+                ),
           width: selected ? 1.5 : 1.0,
         ),
       ),
@@ -1407,8 +1433,8 @@ class _ChoicePill extends StatelessWidget {
           color: !active
               ? theme.colorScheme.onSurface.withValues(alpha: 0.35)
               : selected
-                  ? primary
-                  : theme.colorScheme.onSurface.withValues(alpha: 0.8),
+              ? primary
+              : theme.colorScheme.onSurface.withValues(alpha: 0.8),
           fontWeight: selected ? FontWeight.w500 : FontWeight.w400,
         ),
       ),
@@ -1420,10 +1446,7 @@ class _ChoicePill extends StatelessWidget {
 
     return MouseRegion(
       cursor: active ? SystemMouseCursors.click : MouseCursor.defer,
-      child: GestureDetector(
-        onTap: active ? onTap : null,
-        child: pill,
-      ),
+      child: GestureDetector(onTap: active ? onTap : null, child: pill),
     );
   }
 }
@@ -1504,10 +1527,14 @@ class _TimeFieldState extends State<_TimeField> {
           labelText: widget.label,
           border: const OutlineInputBorder(),
           isDense: true,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 8,
+            vertical: 12,
+          ),
           counterText: '',
-          labelStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
+          labelStyle: TextStyle(
+            color: cs.onSurfaceVariant.withValues(alpha: 0.5),
+          ),
           floatingLabelStyle: TextStyle(color: cs.primary),
         ),
         onSubmitted: (_) => _commit(),

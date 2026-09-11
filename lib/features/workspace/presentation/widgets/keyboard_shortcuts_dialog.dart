@@ -2,13 +2,13 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 
+import 'dialog_title_bar.dart';
+
 class KeyboardShortcutsDialog extends StatelessWidget {
   const KeyboardShortcutsDialog({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     return Dialog(
       clipBehavior: Clip.antiAlias,
       shape: const RoundedRectangleBorder(
@@ -19,32 +19,7 @@ class KeyboardShortcutsDialog extends StatelessWidget {
         height: 620,
         child: Column(
           children: [
-            // Title bar
-            Container(
-              color: colorScheme.surfaceContainerHigh,
-              padding: const EdgeInsets.only(
-                left: 20,
-                right: 8,
-                top: 4,
-                bottom: 4,
-              ),
-              child: Row(
-                children: [
-                  Text(
-                    'Keyboard Shortcuts',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    iconSize: 18,
-                    visualDensity: VisualDensity.compact,
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
+            const DialogTitleBar(title: 'Keyboard Shortcuts'),
             // Content
             Expanded(
               child: SingleChildScrollView(

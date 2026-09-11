@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../domain/projector_node.dart';
 import '../../../../core/services/panasonic_protocol_service.dart';
 import 'command_failure_notice.dart';
+import 'dialog_title_bar.dart';
 
 // Operating mode enum matching Panasonic OPEI1 protocol values.
 enum _OperatingMode {
@@ -163,21 +164,8 @@ class _BrightnessControlDialogState extends State<BrightnessControlDialog> {
     return AlertDialog(
       clipBehavior: Clip.antiAlias,
       titlePadding: EdgeInsets.zero,
-      title: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // ── Title bar ───────────────────────────────────────────────
-          Container(
-            color: theme.colorScheme.surfaceContainerHigh,
-            padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
-            child: Text(
-              'Brightness Control - ${widget.node.ipAddress}',
-              style: theme.textTheme.titleMedium,
-            ),
-          ),
-          const Divider(height: 1),
-        ],
+      title: DialogTitleBar(
+        title: 'Brightness Control - ${widget.node.ipAddress}',
       ),
       content: SizedBox(
         width: 460,
@@ -269,12 +257,6 @@ class _BrightnessControlDialogState extends State<BrightnessControlDialog> {
                 ],
               ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Close'),
-        ),
-      ],
     );
   }
 }

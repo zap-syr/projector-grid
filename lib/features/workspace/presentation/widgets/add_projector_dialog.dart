@@ -5,6 +5,7 @@ import 'dart:async';
 import 'dart:io';
 
 import '../../../../core/services/panasonic_protocol_service.dart';
+import 'dialog_title_bar.dart';
 
 class AddProjectorDialog extends StatefulWidget {
   final Function(List<Map<String, dynamic>>) onAddProjectors;
@@ -50,16 +51,15 @@ class _AddProjectorDialogState extends State<AddProjectorDialog>
         ),
         child: Column(
           children: [
-            Container(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              child: TabBar(
-                controller: _tabController,
-                tabs: const [
-                  Tab(text: 'Manual Add'),
-                  Tab(text: 'Auto Discovery'),
-                ],
-              ),
+            const DialogTitleBar(title: 'Add Projectors'),
+            TabBar(
+              controller: _tabController,
+              tabs: const [
+                Tab(text: 'Manual Add'),
+                Tab(text: 'Auto Discovery'),
+              ],
             ),
+            const Divider(height: 1),
             Expanded(
               child: TabBarView(
                 controller: _tabController,
