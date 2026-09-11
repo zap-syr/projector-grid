@@ -72,8 +72,10 @@ class ProjectorWebStatusService {
   }
 }
 
-/// A row from the web UI's status page. Empty [signalName] means the page
-/// itself reports no detected signal (not a fetch failure — that's `null`).
+/// A row from the web UI's status page. No detected signal (not a fetch
+/// failure — that's `null`) shows as either an empty [signalName] or a
+/// dash-run placeholder (`---`, likewise `---kHz/---Hz` for [signalFrequency])
+/// — check [hasSignal] rather than `signalName.isEmpty`.
 class WebSignalStatus {
   const WebSignalStatus({
     required this.input,
@@ -84,4 +86,9 @@ class WebSignalStatus {
   final String input;
   final String signalName;
   final String signalFrequency;
+
+  bool get hasSignal {
+    final s = signalName.trim();
+    return s.isNotEmpty && !RegExp(r'^-+$').hasMatch(s);
+  }
 }

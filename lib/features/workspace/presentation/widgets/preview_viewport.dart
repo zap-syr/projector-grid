@@ -87,14 +87,39 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
       webSignal = ref.watch(
         previewSignalStatusProvider(node.ipAddress, node.login, node.password),
       );
-      // The first frame after a gap proves the input is live — pull fresh
-      // telemetry for this node now instead of waiting for the next poll, so
-      // the rest of the app (Monitoring table, shutter colour) is current too.
-      ref.listen(remotePreviewProvider(node.ipAddress), (prev, next) {
-        if (next is RemotePreviewFrame && prev is! RemotePreviewFrame) {
-          ref.read(workspaceProvider.notifier).refreshNode(widget.node.id);
-        }
-      });
+      // Mirror the preview's signal tag into the rest of the app (Monitoring
+      // table) while powered on, so closing the dialog leaves current data
+      // behind instead of whatever the last regular poll saw.
+      // previewSignalStatusProvider already re-fetches on open, on every
+      // SIGNAL event and on the first frame, so listening to it (rather than
+      // to frame transitions alone) also catches a signal change mid-stream
+      // that never leaves RemotePreviewFrame. Applied via applyWebSignal, not
+      // refreshNode alone: NTCONTROL's own QVX:NSGS1 was found to lag the web
+      // status by a noticeable margin even while fully on, so a poll right
+      // after a SIGNAL event could still read the old value — applyWebSignal
+      // writes the already-trusted value with no round trip. refreshNode
+      // still runs too (cooldown-gated) for the rest of the telemetry
+      // (shutter colour etc.); passing it the same value keeps it from ever
+      // regressing what applyWebSignal just wrote. Skipped in Standby:
+      // NTCONTROL can't report anything there anyway (see
+      // previewSignalStatusProvider's doc comment) — the web-status tag alone
+      // is authoritative in that case.
+      ref.listen(
+        previewSignalStatusProvider(node.ipAddress, node.login, node.password),
+        (_, next) {
+          if (next == null) return;
+          final live = ref
+              .read(workspaceProvider)
+              .firstWhere(
+                (n) => n.id == widget.node.id,
+                orElse: () => widget.node,
+              );
+          if (live.powerStatus != PowerStatus.on) return;
+          final notifier = ref.read(workspaceProvider.notifier);
+          notifier.applyWebSignal(widget.node.id, next);
+          notifier.refreshNode(widget.node.id, webSignal: next);
+        },
+      );
     }
 
     final plane = Container(
@@ -225,7 +250,7 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
   //    said, else no tag (nothing known yet)
   String? _signalTag(ProjectorNode node, WebSignalStatus? webSignal) {
     if (webSignal != null) {
-      if (webSignal.signalName.isEmpty) return 'No signal';
+      if (!webSignal.hasSignal) return 'No signal';
       final input = webSignal.input.isNotEmpty ? webSignal.input : node.input;
       final freq = webSignal.signalFrequency;
       final detail = freq.isNotEmpty

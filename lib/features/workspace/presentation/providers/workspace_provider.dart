@@ -327,7 +327,12 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
   /// so its input/signal/shutter reflect reality without waiting for the next
   /// full poll. No-ops if a full cycle is already running (it will cover this
   /// node), if the same node is already refreshing, or within a short cooldown.
-  Future<void> refreshNode(String id) async {
+  ///
+  /// [webSignal], when given, is used for the input/signal fields instead of
+  /// NTCONTROL's own reading — see [applyWebSignal]; a caller that already
+  /// has a just-fetched value (the preview dialog does) should pass it so
+  /// this poll can't regress it with NTCONTROL's laggier one.
+  Future<void> refreshNode(String id, {WebSignalStatus? webSignal}) async {
     if (_isPollingDisposed || _refreshingNodes.contains(id)) return;
     final last = _lastNodeRefresh[id];
     if (last != null &&
@@ -340,12 +345,39 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
     _refreshingNodes.add(id);
     _lastNodeRefresh[id] = DateTime.now();
     try {
-      await _pollSingleProjector(state[idx], 2, webSignalFallback: true);
+      await _pollSingleProjector(
+        state[idx],
+        2,
+        webSignalFallback: true,
+        webSignalOverride: webSignal,
+      );
     } catch (_) {
       // best-effort; the regular poll will retry
     } finally {
       _refreshingNodes.remove(id);
     }
+  }
+
+  /// Patches [id]'s input/signal straight from an already-fetched web status
+  /// — no NTCONTROL round trip, no cooldown. Remote Preview's signal tag is
+  /// driven by the projector's web UI and updates the instant a `SIGNAL`
+  /// WebSocket event fires; NTCONTROL's own `QVX:NSGS1` register was found to
+  /// lag that by a noticeable margin even while fully powered on, so routing
+  /// this through [refreshNode]'s NTCONTROL poll left Monitoring showing the
+  /// old value until the next regular cycle caught up. This applies the
+  /// already-trusted value immediately instead.
+  void applyWebSignal(String id, WebSignalStatus webSignal) {
+    final idx = state.indexWhere((n) => n.id == id);
+    if (idx == -1) return;
+    final node = state[idx];
+    final input = _formatWebInput(webSignal, node.input);
+    final signal = _formatWebSignal(webSignal);
+    if (node.input == input && node.signal == signal) return;
+    state = [
+      for (final n in state)
+        if (n.id == id) n.copyWith(input: input, signal: signal) else n,
+    ];
+    _notifyStateChanged();
   }
 
   Future<void> refreshAll() async {
@@ -461,6 +493,26 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
     (_) => ',',
   );
 
+  static String _mapInputCode(String input) => switch (input) {
+    'HD1' => 'HDMI 1',
+    'HD2' => 'HDMI 2',
+    'SD1' => 'SDI 1',
+    'SD2' => 'SDI 2',
+    'DL1' => 'DIGITAL LINK',
+    'DVI' => 'DVI-D',
+    'DP1' => 'DISPLAY PORT',
+    _ => input,
+  };
+
+  static String _formatWebInput(WebSignalStatus webSignal, String fallback) =>
+      webSignal.input.isNotEmpty ? _mapInputCode(webSignal.input) : fallback;
+
+  // Resolution/frame-rate only, no frequency — matches NTCONTROL's own
+  // format so Monitoring shows one consistent style regardless of source.
+  // The frequency detail stays in the preview dialog's tag (_signalTag).
+  static String _formatWebSignal(WebSignalStatus webSignal) =>
+      webSignal.hasSignal ? webSignal.signalName : 'NO SIGNAL';
+
   Future<void> _pollSingleProjector(
     ProjectorNode node,
     int telemetryConcurrency, {
@@ -470,8 +522,13 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
     // reflects the real signal in every power state (verified), but costs an
     // extra HTTP digest round-trip — deliberately not turned on for every
     // standby node on every regular poll cycle, only for the one node a
-    // preview dialog just started receiving frames from.
+    // preview dialog just started receiving frames from. Ignored when
+    // [webSignalOverride] is already given.
     bool webSignalFallback = false,
+    // A value the caller already fetched (Remote Preview's signal tag) — used
+    // as-is instead of NTCONTROL's own reading and instead of triggering the
+    // Standby fallback fetch above. See [applyWebSignal]'s doc comment for why.
+    WebSignalStatus? webSignalOverride,
   }) async {
     final oldStatus = node.connectionStatus;
     final oldErrors = node.errors;
@@ -560,8 +617,11 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
       final ntSignalUnusable =
           rawSignal == 'ER401' || rawSignal == 'NO SIGNAL' || rawSignal.isEmpty;
       final isStandby = telemetry['power'] != '001';
-      WebSignalStatus? webSignal;
-      if (webSignalFallback && isStandby && ntSignalUnusable) {
+      WebSignalStatus? webSignal = webSignalOverride;
+      if (webSignal == null &&
+          webSignalFallback &&
+          isStandby &&
+          ntSignalUnusable) {
         webSignal = await _webStatusService.fetchSignalStatus(
           node.ipAddress,
           node.login,
@@ -571,37 +631,19 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
 
       state = state.map((n) {
         if (n.id == node.id) {
-          // Parse Input
-          String input = (webSignal != null && webSignal.input.isNotEmpty)
-              ? webSignal.input
-              : telemetry['input'] ?? n.input;
-          if (input == 'HD1') {
-            input = 'HDMI 1';
-          } else if (input == 'HD2') {
-            input = 'HDMI 2';
-          } else if (input == 'SD1') {
-            input = 'SDI 1';
-          } else if (input == 'SD2') {
-            input = 'SDI 2';
-          } else if (input == 'DL1') {
-            input = 'DIGITAL LINK';
-          } else if (input == 'DVI') {
-            input = 'DVI-D';
-          } else if (input == 'DP1') {
-            input = 'DISPLAY PORT';
-          }
-
-          // Parse Signal — prefer the web fallback (real, even in Standby)
-          // over NTCONTROL's ER401/empty when both were attempted.
-          String signal;
-          if (webSignal != null && webSignal.signalName.isNotEmpty) {
-            signal = webSignal.signalFrequency.isNotEmpty
-                ? '${webSignal.signalName} (${webSignal.signalFrequency})'
-                : webSignal.signalName;
-          } else {
-            signal = rawSignal.isEmpty ? 'NO SIGNAL' : rawSignal;
-            if (signal == 'ER401') signal = 'NO SIGNAL';
-          }
+          // Parse Input / Signal — prefer the web status (real in every power
+          // state) over NTCONTROL's reading whenever one was fetched/given.
+          final input = webSignal != null
+              ? _formatWebInput(
+                  webSignal,
+                  _mapInputCode(telemetry['input'] ?? n.input),
+                )
+              : _mapInputCode(telemetry['input'] ?? n.input);
+          final signal = webSignal != null
+              ? _formatWebSignal(webSignal)
+              : (rawSignal.isEmpty || rawSignal == 'ER401'
+                    ? 'NO SIGNAL'
+                    : rawSignal);
 
           // Parse Projector Runtime — QVX:RTMS1 replies "RTMS1=<hours>".
           final runtimeRaw = (telemetry['runtime'] as String)
