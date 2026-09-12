@@ -501,6 +501,10 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
     'DL1' => 'DIGITAL LINK',
     'DVI' => 'DVI-D',
     'DP1' => 'DISPLAY PORT',
+    'RG1' => 'COMPUTER 1',
+    'RG2' => 'COMPUTER 2',
+    'VID' => 'VIDEO',
+    'SVD' => 'Y/C',
     _ => input,
   };
 

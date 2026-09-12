@@ -49,6 +49,10 @@ const _builtInGroups = <_CommandGroup>[
     _CommandEntry('Digital Link', 'IIS:DL1'),
     _CommandEntry('DVI-D', 'IIS:DVI'),
     _CommandEntry('DisplayPort', 'IIS:DP1'),
+    _CommandEntry('Computer 1', 'IIS:RG1'),
+    _CommandEntry('Computer 2', 'IIS:RG2'),
+    _CommandEntry('Video', 'IIS:VID'),
+    _CommandEntry('Y/C', 'IIS:SVD'),
   ]),
 ];
 

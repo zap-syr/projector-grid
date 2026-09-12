@@ -32,6 +32,7 @@ class _ControlBarState extends ConsumerState<ControlBar> {
   // ── State ─────────────────────────────────────────────────────────────────
   String _selectedLens = 'VXX:LNEI1=+00001';
   String _selectedLensCalibration = 'VXX:LNSI0=+00001';
+  String _selectedInput = 'IIS:HD1';
   String _selectedTestPattern = 'OTS:01';
   bool _isSending = false;
   String _selectedPictureMode = 'VPM:STD';
@@ -118,12 +119,19 @@ class _ControlBarState extends ConsumerState<ControlBar> {
     'OTS:87': 'Circle',
   };
 
-  static const List<(String, String)> _inputOptions = [
-    ('DVI', 'IIS:DVI'),
-    ('HDMI', 'IIS:HD1'),
-    ('SDI', 'IIS:SD1'),
-    ('DLINK', 'IIS:DL1'),
-  ];
+  static const Map<String, String> _inputOptions = {
+    'IIS:HD1': 'HDMI 1',
+    'IIS:HD2': 'HDMI 2',
+    'IIS:DP1': 'DisplayPort',
+    'IIS:DVI': 'DVI-D',
+    'IIS:SD1': 'SDI 1',
+    'IIS:SD2': 'SDI 2',
+    'IIS:DL1': 'Digital Link',
+    'IIS:RG1': 'Computer 1',
+    'IIS:RG2': 'Computer 2',
+    'IIS:VID': 'Video',
+    'IIS:SVD': 'Y/C',
+  };
 
   static const Map<String, String> _pictureModeOptions = {
     'VPM:DYN': 'Dynamic',
@@ -448,28 +456,18 @@ class _ControlBarState extends ConsumerState<ControlBar> {
 
                       // Inputs
                       _buildGroupHeader(context, 'Inputs'),
-                      Row(
-                        children: [
-                          for (final (label, cmd) in _inputOptions) ...[
-                            Expanded(
-                              child: OutlinedButton(
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: _spacingXs,
-                                  ),
-                                ),
-                                onPressed: hasSelection
-                                    ? () => ref
-                                          .read(workspaceProvider.notifier)
-                                          .sendCommandToSelected(cmd)
-                                    : null,
-                                child: FittedBox(child: Text(label)),
-                              ),
-                            ),
-                            if (label != _inputOptions.last.$1)
-                              const SizedBox(width: _spacingXs),
-                          ],
-                        ],
+                      // No `title:` here — the group header above already
+                      // says "Inputs", a second label would be redundant.
+                      _DropdownRow(
+                        options: _inputOptions,
+                        selectedValue: _selectedInput,
+                        onChanged: (val) =>
+                            setState(() => _selectedInput = val),
+                        onSet: hasSelection
+                            ? () => ref
+                                  .read(workspaceProvider.notifier)
+                                  .sendCommandToSelected(_selectedInput)
+                            : null,
                       ),
                       const SizedBox(height: _spacingMd),
                       // const Divider(),

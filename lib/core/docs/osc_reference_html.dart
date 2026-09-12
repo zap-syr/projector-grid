@@ -279,6 +279,10 @@ const String oscReferenceHtml = '''<!DOCTYPE html>
       <tr><td><code>input/digital-link</code></td><td>Select Digital Link</td></tr>
       <tr><td><code>input/dvi-d</code></td><td>Select DVI-D</td></tr>
       <tr><td><code>input/displayport</code></td><td>Select DisplayPort</td></tr>
+      <tr><td><code>input/computer1</code></td><td>Select Computer 1</td></tr>
+      <tr><td><code>input/computer2</code></td><td>Select Computer 2</td></tr>
+      <tr><td><code>input/video</code></td><td>Select Video</td></tr>
+      <tr><td><code>input/yc</code></td><td>Select Y/C</td></tr>
     </tbody>
   </table>
 

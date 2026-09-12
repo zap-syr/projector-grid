@@ -22,6 +22,10 @@ const Map<String, String> _oscCommandMap = {
   'input/digital-link': 'IIS:DL1',
   'input/dvi-d': 'IIS:DVI',
   'input/displayport': 'IIS:DP1',
+  'input/computer1': 'IIS:RG1',
+  'input/computer2': 'IIS:RG2',
+  'input/video': 'IIS:VID',
+  'input/yc': 'IIS:SVD',
   // Lens shift vertical (LNSI3): +SSSSSD — SSS=speed(200/100/000), D=direction(0=up,1=down)
   'lens/shift/up/slow': 'VXX:LNSI3=+00000',
   'lens/shift/up/normal': 'VXX:LNSI3=+00100',
