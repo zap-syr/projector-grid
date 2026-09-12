@@ -31,6 +31,7 @@ class _ControlBarState extends ConsumerState<ControlBar> {
 
   // ── State ─────────────────────────────────────────────────────────────────
   String _selectedLens = 'VXX:LNEI1=+00001';
+  String _selectedLensCalibration = 'VXX:LNSI0=+00001';
   String _selectedTestPattern = 'OTS:01';
   bool _isSending = false;
   String _selectedPictureMode = 'VPM:STD';
@@ -52,6 +53,16 @@ class _ControlBarState extends ConsumerState<ControlBar> {
     'VXX:LNEI1=+00006': 'ET-D75LE8',
     'VXX:LNEI1=+00007': 'ET-D75LE95',
     'VXX:LNEI1=+00008': 'ET-D75LE90',
+  };
+
+  static const Map<String, String> _lensCalibrationOptions = {
+    'VXX:LNSI0=+00001': 'All',
+    'VXX:LNSI0=+00011': 'Shift',
+    'VXX:LNSI0=+00012': 'Focus',
+    'VXX:LNSI0=+00013': 'Zoom',
+    'VXX:LNSI0=+00021': 'Shift/Focus',
+    'VXX:LNSI0=+00022': 'Shift/Zoom',
+    'VXX:LNSI0=+00023': 'Focus/Zoom',
   };
 
   static const Map<String, String> _testPatternIcons = {
@@ -570,42 +581,42 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                       ),
                       const SizedBox(height: _spacingLg),
 
-                      // Lens Home / Calibration
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: hasSelection
-                                  ? () => ref
-                                        .read(workspaceProvider.notifier)
-                                        .sendCommandToSelected(
-                                          'VXX:LNSI1=+00001',
-                                        )
-                                  : null,
-                              child: const FittedBox(child: Text('Home Pos.')),
-                            ),
-                          ),
-                          const SizedBox(width: _spacingSm),
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: hasSelection
-                                  ? () => ref
-                                        .read(workspaceProvider.notifier)
-                                        .sendCommandToSelected(
-                                          'VXX:LNSI0=+00001',
-                                        )
-                                  : null,
-                              child: const FittedBox(
-                                child: Text('Calibration'),
-                              ),
-                            ),
-                          ),
-                        ],
+                      // Lens Home Position
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton(
+                          onPressed: hasSelection
+                              ? () => ref
+                                    .read(workspaceProvider.notifier)
+                                    .sendCommandToSelected(
+                                      'VXX:LNSI1=+00001',
+                                    )
+                              : null,
+                          child: const FittedBox(child: Text('Home Position')),
+                        ),
+                      ),
+                      const SizedBox(height: _spacingSm),
+
+                      // Lens calibration selector
+                      _DropdownRow(
+                        title: 'Calibration',
+                        options: _lensCalibrationOptions,
+                        selectedValue: _selectedLensCalibration,
+                        onChanged: (val) =>
+                            setState(() => _selectedLensCalibration = val),
+                        onSet: hasSelection
+                            ? () => ref
+                                  .read(workspaceProvider.notifier)
+                                  .sendCommandToSelected(
+                                    _selectedLensCalibration,
+                                  )
+                            : null,
                       ),
                       const SizedBox(height: _spacingSm),
 
                       // Lens type selector
                       _DropdownRow(
+                        title: 'Lens Type',
                         options: _lensOptions,
                         selectedValue: _selectedLens,
                         onChanged: (val) => setState(() => _selectedLens = val),
