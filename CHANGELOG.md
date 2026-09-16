@@ -4,6 +4,101 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.4.2] - 2026-09-16
+
+### For Users
+
+#### Added
+- Remote Preview — see a projector's live input signal without
+  opening its web UI: right-click a projector, a group, or a multi-selection
+  and choose Remote Preview. A single projector opens as one large preview;
+  more than one opens as a scrollable grid, each tile showing its own
+  shutter-coloured frame border, name/IP caption, and a live signal tag
+  (input, resolution/frame rate). Test pattern and aspect-mismatch are called
+  out with a corner tag; a "No signal" / "HDCP-protected content" /
+  "Starting up" / "Image rotating" message shows in place of the frame when
+  there's nothing to preview yet
+- Pre-show mode — a switch in the Remote Preview dialog that keeps a Standby
+  projector's input signal alive for preview without powering the projector
+  on; toggle it for one projector, or for every eligible (Standby, connected)
+  projector in a group/multiview at once. Only available once that
+  projector's preview feed has actually connected
+- Monitoring table: drag a column header to reorder it, drag its edge to
+  resize it, or double-click that edge to auto-fit it to its content; row
+  density presets (Compact/Standard/Comfortable); a "Merge into groups" view
+  that groups rows under their assigned group; a new Light Runtime column and
+  coloured temperature/status cells. Column visibility, presets
+  (Essentials/Thermal/Signal), and a "show all columns" option are available
+  from View ▸ Monitoring Table
+- Control bar: the Input selector is now a dropdown covering every known
+  projector input instead of a fixed set of buttons, and a new labeled
+  dropdown was added for lens calibration presets
+
+#### Changed
+- Every dialog now shares the same title bar — a title and a close button
+  (✕) in the top-right corner — instead of the mix of "Close" buttons and
+  stray X icons different dialogs used before, Preferences included; the
+  Add Projectors, Manage Groups, and Scheduled Tasks dialogs also moved their
+  primary action button out of the title bar into a right-aligned footer
+  button. The dialog body now sits one tone apart from that header band
+  instead of matching it exactly, so the two read as separate layers instead
+  of blending together
+- Geometry Correction's Correction Mode selector is now a segmented button
+  instead of a dropdown, matching the rest of the app's mode toggles
+
+#### Fixed
+- A single projector telemetry query timing out during a poll (e.g. the
+  errors query) no longer shows the raw failure text in the Monitoring table
+  or logs a false hardware-error event — that field now keeps its last known
+  value until the next successful poll instead
+- A zoomed/selected projector card's hover area no longer stops short of its
+  actual (scaled-up) visual bounds
+- macOS menu bar no longer rebuilds on every telemetry poll tick
+- The New/Edit Group dialog no longer leaks a text field controller each
+  time it's opened
+- Light theme's accent colour (Save/primary buttons, the active tab,
+  selected segmented options) is a real blue again instead of a muted grey —
+  a side effect of 1.4.1's softer, less-saturated surface colours that ended
+  up desaturating the accent along with them
+
+### For Developers
+
+#### Added
+- `RemotePreviewController` (`core/services/remote_preview_service.dart`) — a
+  `dart:io` `WebSocket` client for the projector's `ws://<ip>/remotepreview`
+  RemoView endpoint (subprotocol `pj-cast-protocol`), reduced to a
+  `RemotePreviewState` stream (`RemotePreviewConnecting` /
+  `RemotePreviewFrame` / `RemotePreviewNotice` / `RemotePreviewUnavailable`)
+  plus a `signalEvents` stream fired on the socket's `SIGNAL` message
+- `ProjectorWebStatusService` (`core/services/projector_web_status_service.dart`)
+  — HTTP digest-auth client for the projector's own
+  `/cgi-bin/simple_status_hidden.cgi` status page, used as the Standby-safe
+  signal source NTCONTROL's `QIN`/`QVX:NSGS1` can't provide (they return
+  `ER401` outside full power)
+- `remotePreviewProvider` and `previewSignalStatusProvider` (family providers
+  per projector) drive `RemotePreviewDialog`/`PreviewViewport`;
+  `WorkspaceNotifier.refreshNode`/`applyWebSignal`/`claimNodeForExternalPoll`
+  let the preview feed refresh a single node's telemetry without racing the
+  regular poll cycle
+- Shared `DialogTitleBar` widget (`presentation/widgets/dialog_title_bar.dart`)
+  used by every dialog
+
+#### Fixed
+- Discovered-projector list in Add Projectors no longer logs a `ListTile`
+  "no Material ancestor" ink warning to the debug console
+- Light theme's `primary`/`onPrimary`/`secondaryContainer`/
+  `onSecondaryContainer` are re-derived from the seed colour through
+  `DynamicSchemeVariant.tonalSpot` (the variant dark mode already uses) and
+  layered onto the neutral scheme via `.copyWith(...)`, instead of inheriting
+  the neutral variant's desaturated values along with the surface tones
+
+#### Changed
+- `tool/projector_polling_test.dart` updated for `pollProjectorTelemetry`'s
+  `(ProbeResult, Map?)` tuple return
+- `app_theme.dart`: `ThemeData.dialogTheme.backgroundColor` now set to
+  `colorScheme.surfaceContainerLow`, one step off `DialogTitleBar`'s
+  `surfaceContainerHigh` on the same container ramp
+
 ## [1.4.1] - 2026-09-07
 
 ### For Users
