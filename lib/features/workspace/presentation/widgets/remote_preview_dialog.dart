@@ -7,7 +7,6 @@ import '../../../../core/services/panasonic_protocol_service.dart';
 import '../../../../core/services/remote_preview_service.dart';
 import '../../domain/projector_group.dart';
 import '../../domain/projector_node.dart';
-import '../providers/poll_status_provider.dart';
 import '../providers/remote_preview_provider.dart';
 import '../providers/workspace_provider.dart';
 import 'dialog_title_bar.dart';
@@ -92,31 +91,41 @@ class _RemotePreviewDialogState extends ConsumerState<RemotePreviewDialog> {
   // This dialog's own PanasonicProtocolService probes run independently of
   // workspaceProvider's poll cycle and its concurrency throttling (added
   // specifically because unthrottled NTCONTROL bursts risk ERR3/busy and
-  // false-offline misreads — see panasonic_protocol_service.dart). Waiting
-  // out an in-flight cycle here keeps this dialog's QVX:PSMI1 traffic from
-  // landing on a projector's NTCONTROL socket at the same moment the regular
-  // poll is also talking to it.
-  Future<void> _waitForPollSlot() async {
+  // false-offline misreads — see panasonic_protocol_service.dart). Claiming
+  // the node first (rather than just checking isPolling) keeps this dialog's
+  // QVX:PSMI1 traffic from landing on a projector's NTCONTROL socket at the
+  // same moment the regular poll cycle starts on it: isPolling only says a
+  // cycle is running right now, not that one is about to claim this specific
+  // node next, which left a real gap between checking and sending.
+  Future<String?> _sendPsmi(ProjectorNode n) async {
+    final notifier = ref.read(workspaceProvider.notifier);
     final deadline = DateTime.now().add(const Duration(seconds: 5));
-    while (mounted &&
-        ref.read(pollStatusProvider).isPolling &&
-        DateTime.now().isBefore(deadline)) {
+    var claimed = notifier.claimNodeForExternalPoll(n.id);
+    while (mounted && !claimed && DateTime.now().isBefore(deadline)) {
       await Future.delayed(const Duration(milliseconds: 200));
+      claimed = notifier.claimNodeForExternalPoll(n.id);
     }
-  }
-
-  Future<void> _loadPreShow(Iterable<ProjectorNode> nodes) async {
-    for (final n in nodes) {
-      if (n.powerStatus != PowerStatus.standby) continue;
-      await _waitForPollSlot();
-      if (!mounted) return;
-      final resp = await _service.sendRawCommand(
+    if (!mounted) return null;
+    try {
+      // Best-effort: if the deadline passed without ever claiming the node,
+      // send anyway rather than block this dialog indefinitely.
+      return await _service.sendRawCommand(
         n.ipAddress,
         n.port,
         n.login,
         n.password,
         'QVX:PSMI1',
       );
+    } finally {
+      if (claimed) notifier.releaseNodeFromExternalPoll(n.id);
+    }
+  }
+
+  Future<void> _loadPreShow(Iterable<ProjectorNode> nodes) async {
+    for (final n in nodes) {
+      if (n.powerStatus != PowerStatus.standby) continue;
+      final resp = await _sendPsmi(n);
+      if (!mounted) return;
       final on = _parsePsmi(resp);
       if (!mounted) return;
       if (on != null) setState(() => _preShow[n.ipAddress] = on);
@@ -137,6 +146,16 @@ class _RemotePreviewDialogState extends ConsumerState<RemotePreviewDialog> {
   Future<void> _setPreShow(List<ProjectorNode> targets, bool on) async {
     if (targets.isEmpty) return;
     final gen = ++_psGen;
+    // Bumping _psGen makes the previous generation's confirmation loop below
+    // bail out (both its while condition and its own cleanup are gated on
+    // `_psGen == gen`) without ever clearing 'applying' for a node that isn't
+    // part of THIS call's targets — e.g. one that dropped out of _eligible
+    // between two toggles. Clear those orphans now instead of leaving their
+    // spinner stuck for the rest of the dialog's life.
+    final targetIps = {for (final n in targets) n.ipAddress};
+    if (_applying.any((ip) => !targetIps.contains(ip))) {
+      setState(() => _applying.removeWhere((ip) => !targetIps.contains(ip)));
+    }
     for (final n in targets) {
       ref.read(remotePreviewProvider(n.ipAddress).notifier).setPreshow(on);
     }
@@ -163,17 +182,7 @@ class _RemotePreviewDialogState extends ConsumerState<RemotePreviewDialog> {
       if (!mounted || _psGen != gen) return;
       for (final entry in pending.entries.toList()) {
         final n = entry.value;
-        await _waitForPollSlot();
-        if (!mounted || _psGen != gen) return;
-        final back = _parsePsmi(
-          await _service.sendRawCommand(
-            n.ipAddress,
-            n.port,
-            n.login,
-            n.password,
-            'QVX:PSMI1',
-          ),
-        );
+        final back = _parsePsmi(await _sendPsmi(n));
         if (!mounted || _psGen != gen) return;
         if (back == on) {
           pending.remove(entry.key);
