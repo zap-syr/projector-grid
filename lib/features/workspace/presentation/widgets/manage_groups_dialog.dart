@@ -34,175 +34,197 @@ Future<ProjectorGroup?> showGroupEditorDialog(
   WidgetRef ref, {
   ProjectorGroup? existing,
 }) {
-  final nameController = TextEditingController(text: existing?.name ?? '');
-  var selectedColor = existing != null
-      ? Color(existing.color)
-      : _presetColors[0];
-  String? nameError;
-
   return showDialog<ProjectorGroup>(
     context: context,
-    builder: (ctx) => StatefulBuilder(
-      builder: (ctx, setDialogState) {
-        final theme = Theme.of(ctx);
-        final cs = theme.colorScheme;
-        return Dialog(
-          clipBehavior: Clip.antiAlias,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: SizedBox(
-            width: 380,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                DialogTitleBar(
-                  title: existing != null ? 'Edit Group' : 'New Group',
-                ),
-                // Content
-                Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      TextField(
-                        controller: nameController,
-                        decoration: InputDecoration(
-                          labelText: 'Group Name',
-                          border: const OutlineInputBorder(),
-                          errorText: nameError,
-                          labelStyle: TextStyle(
-                            color: cs.onSurfaceVariant.withValues(alpha: 0.5),
-                          ),
-                          floatingLabelStyle: WidgetStateTextStyle.resolveWith((
-                            states,
-                          ) {
-                            if (states.contains(WidgetState.error)) {
-                              return TextStyle(color: cs.error);
-                            }
-                            return TextStyle(color: cs.primary);
-                          }),
-                        ),
-                        autofocus: true,
-                        onChanged: (_) {
-                          if (nameError != null) {
-                            setDialogState(() => nameError = null);
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      Text('Color', style: theme.textTheme.bodySmall),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: _presetColors.map((color) {
-                          final isSelected =
-                              color.toARGB32() == selectedColor.toARGB32();
-                          return GestureDetector(
-                            onTap: () =>
-                                setDialogState(() => selectedColor = color),
-                            child: Container(
-                              width: 28,
-                              height: 28,
-                              decoration: BoxDecoration(
-                                color: color,
-                                shape: BoxShape.circle,
-                                border: isSelected
-                                    ? Border.all(
-                                        color: theme.colorScheme.onSurface,
-                                        width: 2.5,
-                                      )
-                                    : null,
-                              ),
-                              child: isSelected
-                                  ? const Icon(
-                                      Icons.check,
-                                      size: 16,
-                                      color: Colors.white,
-                                    )
-                                  : null,
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                      const SizedBox(height: 24),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx),
-                            child: const Text('Cancel'),
-                          ),
-                          const SizedBox(width: 12),
-                          FilledButton(
-                            onPressed: () {
-                              final name = nameController.text.trim();
-                              if (name.isEmpty) {
-                                setDialogState(
-                                  () => nameError = 'Group name is required',
-                                );
-                                return;
-                              }
+    builder: (_) => _GroupEditorDialog(ref: ref, existing: existing),
+  );
+}
 
-                              // Check for duplicate name or OSC address collision
-                              final notifier = ref.read(
-                                workspaceProvider.notifier,
-                              );
-                              final existingGroups = notifier.groups;
-                              final oscAddress =
-                                  '/group/${name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-')}';
-                              final isDuplicate = existingGroups.any(
-                                (g) =>
-                                    g.id != existing?.id &&
-                                    (g.name.toLowerCase() ==
-                                            name.toLowerCase() ||
-                                        g.oscAddress == oscAddress),
-                              );
-                              if (isDuplicate) {
-                                setDialogState(
-                                  () => nameError =
-                                      'A group with this name already exists',
-                                );
-                                return;
-                              }
-                              ProjectorGroup result;
-                              if (existing != null) {
-                                result = existing.copyWith(
-                                  name: name,
-                                  color: selectedColor.toARGB32(),
-                                  oscAddress: oscAddress,
-                                );
-                                notifier.updateGroup(result);
-                              } else {
-                                final id =
-                                    '${DateTime.now().microsecondsSinceEpoch}_${Random().nextInt(99999)}';
-                                result = ProjectorGroup(
-                                  id: id,
-                                  name: name,
-                                  color: selectedColor.toARGB32(),
-                                  oscAddress: oscAddress,
-                                );
-                                notifier.addGroup(result);
-                              }
-                              Navigator.pop(ctx, result);
-                            },
-                            child: Text(existing != null ? 'Save' : 'Create'),
+// A real State (rather than the StatefulBuilder this used to be built with)
+// so its TextEditingController has a dispose() to actually get called —
+// StatefulBuilder has no lifecycle hook to free one, leaking a controller
+// and its listeners on every New/Edit Group open.
+class _GroupEditorDialog extends StatefulWidget {
+  const _GroupEditorDialog({required this.ref, this.existing});
+
+  final WidgetRef ref;
+  final ProjectorGroup? existing;
+
+  @override
+  State<_GroupEditorDialog> createState() => _GroupEditorDialogState();
+}
+
+class _GroupEditorDialogState extends State<_GroupEditorDialog> {
+  late final _nameController = TextEditingController(
+    text: widget.existing?.name ?? '',
+  );
+  late Color _selectedColor = widget.existing != null
+      ? Color(widget.existing!.color)
+      : _presetColors[0];
+  String? _nameError;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final existing = widget.existing;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return Dialog(
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: SizedBox(
+        width: 380,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            DialogTitleBar(
+              title: existing != null ? 'Edit Group' : 'New Group',
+            ),
+            // Content
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: _nameController,
+                    decoration: InputDecoration(
+                      labelText: 'Group Name',
+                      border: const OutlineInputBorder(),
+                      errorText: _nameError,
+                      labelStyle: TextStyle(
+                        color: cs.onSurfaceVariant.withValues(alpha: 0.5),
+                      ),
+                      floatingLabelStyle: WidgetStateTextStyle.resolveWith((
+                        states,
+                      ) {
+                        if (states.contains(WidgetState.error)) {
+                          return TextStyle(color: cs.error);
+                        }
+                        return TextStyle(color: cs.primary);
+                      }),
+                    ),
+                    autofocus: true,
+                    onChanged: (_) {
+                      if (_nameError != null) {
+                        setState(() => _nameError = null);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  Text('Color', style: theme.textTheme.bodySmall),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: _presetColors.map((color) {
+                      final isSelected =
+                          color.toARGB32() == _selectedColor.toARGB32();
+                      return GestureDetector(
+                        onTap: () => setState(() => _selectedColor = color),
+                        child: Container(
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            color: color,
+                            shape: BoxShape.circle,
+                            border: isSelected
+                                ? Border.all(
+                                    color: theme.colorScheme.onSurface,
+                                    width: 2.5,
+                                  )
+                                : null,
                           ),
-                        ],
+                          child: isSelected
+                              ? const Icon(
+                                  Icons.check,
+                                  size: 16,
+                                  color: Colors.white,
+                                )
+                              : null,
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Cancel'),
+                      ),
+                      const SizedBox(width: 12),
+                      FilledButton(
+                        onPressed: () {
+                          final name = _nameController.text.trim();
+                          if (name.isEmpty) {
+                            setState(
+                              () => _nameError = 'Group name is required',
+                            );
+                            return;
+                          }
+
+                          // Check for duplicate name or OSC address collision
+                          final notifier = widget.ref.read(
+                            workspaceProvider.notifier,
+                          );
+                          final existingGroups = notifier.groups;
+                          final oscAddress =
+                              '/group/${name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-')}';
+                          final isDuplicate = existingGroups.any(
+                            (g) =>
+                                g.id != existing?.id &&
+                                (g.name.toLowerCase() == name.toLowerCase() ||
+                                    g.oscAddress == oscAddress),
+                          );
+                          if (isDuplicate) {
+                            setState(
+                              () => _nameError =
+                                  'A group with this name already exists',
+                            );
+                            return;
+                          }
+                          ProjectorGroup result;
+                          if (existing != null) {
+                            result = existing.copyWith(
+                              name: name,
+                              color: _selectedColor.toARGB32(),
+                              oscAddress: oscAddress,
+                            );
+                            notifier.updateGroup(result);
+                          } else {
+                            final id =
+                                '${DateTime.now().microsecondsSinceEpoch}_${Random().nextInt(99999)}';
+                            result = ProjectorGroup(
+                              id: id,
+                              name: name,
+                              color: _selectedColor.toARGB32(),
+                              oscAddress: oscAddress,
+                            );
+                            notifier.addGroup(result);
+                          }
+                          Navigator.pop(context, result);
+                        },
+                        child: Text(existing != null ? 'Save' : 'Create'),
                       ),
                     ],
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        );
-      },
-    ),
-  );
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class ManageGroupsDialog extends ConsumerStatefulWidget {
