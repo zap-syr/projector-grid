@@ -13,8 +13,9 @@ class AppTheme {
       brightness: brightness,
       // Neutral variant strips most of the coloured undertone so the light
       // theme's near-whites read as plain grey instead of a cool blue tint.
-      dynamicSchemeVariant:
-          isLight ? DynamicSchemeVariant.neutral : DynamicSchemeVariant.tonalSpot,
+      dynamicSchemeVariant: isLight
+          ? DynamicSchemeVariant.neutral
+          : DynamicSchemeVariant.tonalSpot,
     );
 
     // The default M3 light surfaces sit almost at pure white, which feels
@@ -31,6 +32,26 @@ class AppTheme {
         surfaceContainer: const Color(0xFFEBEAEC),
         surfaceContainerHigh: const Color(0xFFE5E4E6),
         surfaceContainerHighest: const Color(0xFFDFDEE0),
+      );
+
+      // The neutral variant above desaturates the *entire* scheme it
+      // derives to get those plain-grey surfaces — primary included, which
+      // otherwise leaves buttons/tabs/segmented-selection a muted slate
+      // (#595E6C) instead of a real accent. Re-derive just the accent roles
+      // from the same seed through tonalSpot (the variant dark mode already
+      // uses) and layer them back on, so the accent reads as intentional
+      // colour again without reintroducing the blue tint the neutral
+      // surfaces above exist to avoid.
+      final accentScheme = ColorScheme.fromSeed(
+        seedColor: const Color(0xFF1A73E8),
+        brightness: Brightness.light,
+        dynamicSchemeVariant: DynamicSchemeVariant.tonalSpot,
+      );
+      colorScheme = colorScheme.copyWith(
+        primary: accentScheme.primary,
+        onPrimary: accentScheme.onPrimary,
+        secondaryContainer: accentScheme.secondaryContainer,
+        onSecondaryContainer: accentScheme.onSecondaryContainer,
       );
     }
 
@@ -59,9 +80,16 @@ class AppTheme {
       colorScheme: colorScheme,
       // Canvas behind every screen — a touch darker than the surface ramp so
       // panels and cards lift off it.
-      scaffoldBackgroundColor:
-          isLight ? const Color(0xFFECECEF) : null,
+      scaffoldBackgroundColor: isLight ? const Color(0xFFECECEF) : null,
       visualDensity: VisualDensity.compact,
+      // One step below the DialogTitleBar header band's
+      // surfaceContainerHigh, on the same container ramp — not the base
+      // `surface` tone, which in dark mode is also scaffoldBackgroundColor's
+      // fallback and would make every dialog read as sunk into the window
+      // instead of floating above it.
+      dialogTheme: DialogThemeData(
+        backgroundColor: colorScheme.surfaceContainerLow,
+      ),
       // Right-click context menus and DropdownMenu popups both resolve their
       // container style through MenuThemeData.
       menuTheme: MenuThemeData(style: menuStyle),
