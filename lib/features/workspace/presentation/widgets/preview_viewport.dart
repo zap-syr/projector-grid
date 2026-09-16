@@ -242,12 +242,7 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
         style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
       );
 
-  static bool _isRealSignal(String s) =>
-      s.isNotEmpty &&
-      s != '-' &&
-      s != 'Timeout' &&
-      s != 'ER401' &&
-      s.toUpperCase() != 'NO SIGNAL';
+  static bool _isRealSignal(String s) => !isUnusableSignalValue(s);
 
   // Bottom-right tag for the live frame. Primary source is [webSignal] — the
   // projector's own web UI, event-driven off the preview socket's SIGNAL

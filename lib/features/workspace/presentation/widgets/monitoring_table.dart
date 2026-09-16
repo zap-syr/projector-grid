@@ -1082,7 +1082,7 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
                       tableWidth,
                       headingStyle,
                       primaryColor,
-                      sortId,
+                      sortCol.id,
                       sortAsc,
                       dragTargetColor,
                       (id) => _autoFitColumn(

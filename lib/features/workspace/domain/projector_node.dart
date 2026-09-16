@@ -8,6 +8,18 @@ enum ShutterStatus { open, closed }
 
 enum ConnectionStatus { connected, offline, unauthorized, unprotected }
 
+/// True when [raw] — either NTCONTROL's raw signal register or one of the
+/// app's own formatted display fields — represents "no usable signal" rather
+/// than a real reading. Shared by the poll cycle (deciding whether to fall
+/// back to the web status page) and the preview overlay (deciding whether to
+/// show a live-signal tag) so the two can't silently diverge on what counts
+/// as unusable.
+bool isUnusableSignalValue(String? raw) {
+  if (raw == null || raw.isEmpty) return true;
+  if (raw == '-' || raw == 'Timeout' || raw == 'ER401') return true;
+  return raw.toUpperCase() == 'NO SIGNAL';
+}
+
 @freezed
 abstract class ProjectorNode with _$ProjectorNode {
   const factory ProjectorNode({

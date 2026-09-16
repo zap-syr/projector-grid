@@ -105,7 +105,12 @@ class _RemotePreviewDialogState extends ConsumerState<RemotePreviewDialog> {
       await Future.delayed(const Duration(milliseconds: 200));
       claimed = notifier.claimNodeForExternalPoll(n.id);
     }
-    if (!mounted) return null;
+    if (!mounted) {
+      // The claim can succeed on the very iteration that races past
+      // dispose() — release it now since the try/finally below never runs.
+      if (claimed) notifier.releaseNodeFromExternalPoll(n.id);
+      return null;
+    }
     try {
       // Best-effort: if the deadline passed without ever claiming the node,
       // send anyway rather than block this dialog indefinitely.

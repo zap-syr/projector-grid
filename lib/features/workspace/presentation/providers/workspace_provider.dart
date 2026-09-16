@@ -387,6 +387,13 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
   // masked for long.
   static const _webSignalGrace = Duration(seconds: 15);
   final Map<String, DateTime> _lastWebSignalWrite = {};
+  // What input/signal NTCONTROL was showing right before the write above —
+  // lets a plain poll tell "NTCONTROL hasn't caught up to my write yet"
+  // (still reads as this baseline; keep deferring) apart from "something
+  // changed the projector's input by other means during the grace window"
+  // (reads as anything else; trust it immediately instead of masking it).
+  final Map<String, ({String signal, String input})> _lastWebSignalBaseline =
+      {};
 
   /// Patches [id]'s input/signal straight from an already-fetched web status
   /// — no NTCONTROL round trip, no cooldown. Remote Preview's signal tag is
@@ -405,6 +412,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
     final input = _formatWebInput(webSignal, node.input);
     final signal = _formatWebSignal(webSignal);
     _lastWebSignalWrite[id] = DateTime.now();
+    _lastWebSignalBaseline[id] = (signal: node.signal, input: node.input);
     if (node.input == input && node.signal == signal) return;
     state = [
       for (final n in state)
@@ -696,11 +704,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
       final rawSignal = (telemetry['signal'] as String?)
           ?.replaceAll('NSGS1=', '')
           .trim();
-      final ntSignalUnusable =
-          rawSignal == null ||
-          rawSignal == 'ER401' ||
-          rawSignal == 'NO SIGNAL' ||
-          rawSignal.isEmpty;
+      final ntSignalUnusable = isUnusableSignalValue(rawSignal);
       // Likewise, a failed QPW query can't tell us the power state — assume
       // whatever was last known rather than defaulting to Standby.
       final powerRaw = telemetry['power'] as String?;
@@ -714,11 +718,17 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
           : shutterRaw == '1';
       // A plain poll with no override of its own defers to a very recent
       // applyWebSignal write instead of overwriting it — see _webSignalGrace.
+      // Only while NTCONTROL still reads exactly what it read *before* that
+      // write, though: once it reads anything else, it has either caught up
+      // to the applied value (fine to adopt) or observed a real independent
+      // change (must adopt) — either way there's nothing left to protect.
       final lastWebWrite = _lastWebSignalWrite[node.id];
-      final deferToWebSignal =
+      final webSignalBaseline = _lastWebSignalBaseline[node.id];
+      final withinWebSignalGrace =
           webSignalOverride == null &&
           lastWebWrite != null &&
-          DateTime.now().difference(lastWebWrite) < _webSignalGrace;
+          DateTime.now().difference(lastWebWrite) < _webSignalGrace &&
+          webSignalBaseline != null;
       WebSignalStatus? webSignal = webSignalOverride;
       if (webSignal == null &&
           webSignalFallback &&
@@ -734,24 +744,26 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
       state = state.map((n) {
         if (n.id == node.id) {
           // Parse Input / Signal — prefer the web status (real in every power
-          // state) over NTCONTROL's reading whenever one was fetched/given,
-          // and defer to a just-applied web value (deferToWebSignal) rather
-          // than overwrite it with NTCONTROL's laggier one this cycle.
+          // state) over NTCONTROL's reading whenever one was fetched/given.
+          // Otherwise, defer to a just-applied web value per-field only while
+          // NTCONTROL's own reading still matches what it read before that
+          // write (see withinWebSignalGrace / webSignalBaseline above).
+          final ntInput = _mapInputCode(telemetry['input'] ?? n.input);
+          final ntSignal = rawSignal == null
+              ? n.signal
+              : (rawSignal.isEmpty || rawSignal == 'ER401'
+                    ? 'NO SIGNAL'
+                    : rawSignal);
+          final deferInput =
+              withinWebSignalGrace && ntInput == webSignalBaseline.input;
+          final deferSignal =
+              withinWebSignalGrace && ntSignal == webSignalBaseline.signal;
           final input = webSignal != null
-              ? _formatWebInput(
-                  webSignal,
-                  _mapInputCode(telemetry['input'] ?? n.input),
-                )
-              : (deferToWebSignal
-                    ? n.input
-                    : _mapInputCode(telemetry['input'] ?? n.input));
+              ? _formatWebInput(webSignal, ntInput)
+              : (deferInput ? n.input : ntInput);
           final signal = webSignal != null
               ? _formatWebSignal(webSignal)
-              : (deferToWebSignal || rawSignal == null
-                    ? n.signal
-                    : (rawSignal.isEmpty || rawSignal == 'ER401'
-                          ? 'NO SIGNAL'
-                          : rawSignal));
+              : (deferSignal ? n.signal : ntSignal);
 
           // Parse Projector Runtime — QVX:RTMS1 replies "RTMS1=<hours>".
           final runtimeRaw = (telemetry['runtime'] as String?)
@@ -787,10 +799,14 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
                 : '${_groupThousands(lightHours)}H';
           }
 
-          final intake = _formatTemp(telemetry['intakeTemp'] ?? n.intakeTemp);
-          final exhaust = _formatTemp(
-            telemetry['exhaustTemp'] ?? n.exhaustTemp,
-          );
+          final intakeRaw = telemetry['intakeTemp'] as String?;
+          final intake = intakeRaw == null
+              ? n.intakeTemp
+              : _formatTemp(intakeRaw);
+          final exhaustRaw = telemetry['exhaustTemp'] as String?;
+          final exhaust = exhaustRaw == null
+              ? n.exhaustTemp
+              : _formatTemp(exhaustRaw);
 
           // Parse Voltage
           final voltageRaw = (telemetry['acVoltage'] as String?)
