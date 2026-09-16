@@ -1,6 +1,7 @@
 // Panasonic protocol service polling test — dart run tool/projector_polling_test.dart
 // Tests the PanasonicProtocolService with 4 consecutive polling cycles.
 import 'dart:async';
+
 import 'package:projector_grid/core/services/panasonic_protocol_service.dart';
 
 void main() async {
@@ -9,7 +10,13 @@ void main() async {
 
   for (int i = 0; i < 4; i++) {
     print('\n[Poll ${i + 1}] Ping...');
-    final telemetry = await service.pollProjectorTelemetry('192.168.0.8', 1024, 'admin1', 'panasonic');
+    final (probe, telemetry) = await service.pollProjectorTelemetry(
+      '192.168.0.8',
+      1024,
+      'admin1',
+      'panasonic',
+    );
+    print('Probe: $probe');
     print('Telemetry: $telemetry');
     if (i < 3) {
       print('Waiting 60 seconds...');
