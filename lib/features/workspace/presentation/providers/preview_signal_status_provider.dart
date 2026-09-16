@@ -26,6 +26,15 @@ class PreviewSignalStatus extends _$PreviewSignalStatus {
   late String _password;
   bool _fetching = false;
   bool _refreshQueued = false;
+  DateTime? _lastSuccessAt;
+
+  // How long a stale value keeps being shown once fetches start failing. A
+  // one-off blip (network hiccup) should keep the last good read — see
+  // _refresh's comment — but a genuinely dead endpoint (web credentials
+  // changed, firmware update) should eventually surface as "unknown" so
+  // consumers fall back to their NTCONTROL path instead of freezing on a
+  // reading that may no longer be true, with nothing to tell them apart.
+  static const _maxStaleness = Duration(minutes: 2);
 
   @override
   WebSignalStatus? build(String host, String login, String password) {
@@ -72,8 +81,17 @@ class PreviewSignalStatus extends _$PreviewSignalStatus {
         // value instead of clearing it — otherwise a single dropped request
         // sends every consumer back to their NTCONTROL fallback (stale/ER401
         // in the exact power states this provider exists to cover) with no
-        // time bound, until the next SIGNAL event happens to succeed.
-        if (result != null) state = result;
+        // time bound, until the next SIGNAL event happens to succeed. But
+        // that grace has a limit (_maxStaleness): once it's been too long
+        // since the last successful fetch, drop back to null rather than
+        // keep asserting a value that's had no chance to be re-confirmed.
+        if (result != null) {
+          _lastSuccessAt = DateTime.now();
+          state = result;
+        } else if (_lastSuccessAt == null ||
+            DateTime.now().difference(_lastSuccessAt!) > _maxStaleness) {
+          state = null;
+        }
       } while (_refreshQueued);
     } finally {
       _fetching = false;
