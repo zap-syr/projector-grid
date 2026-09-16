@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_settings_provider.dart';
 import '../providers/osc_provider.dart';
 import '../providers/workspace_provider.dart';
+import 'dialog_title_bar.dart';
 
 class PreferencesDialog extends ConsumerStatefulWidget {
   const PreferencesDialog({super.key});
@@ -161,12 +162,7 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Title
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
-                child: Text('Preferences', style: theme.textTheme.titleLarge),
-              ),
-              const SizedBox(height: 12),
+              const DialogTitleBar(title: 'Preferences'),
 
               // Tabs
               TabBar(
@@ -178,6 +174,7 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
+              const Divider(height: 1),
 
               // Tab content
               Expanded(

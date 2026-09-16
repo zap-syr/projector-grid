@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-/// The title bar every dialog in the app uses (except Preferences, which
-/// keeps its own chrome): a title and a close (✕) button, nothing else — the
-/// one dismiss affordance across the app, replacing the mix of a bottom
-/// "Close" text button some dialogs used and a corner ✕ others did.
+/// The title bar every dialog in the app uses: a title and a close (✕)
+/// button, nothing else — the one dismiss affordance across the app,
+/// replacing the mix of a bottom "Close" text button some dialogs used and a
+/// corner ✕ others did.
 ///
 /// Deliberately carries no other controls: an "Add"/action button here would
 /// sit right next to ✕, inviting mis-clicks between "do something" and
