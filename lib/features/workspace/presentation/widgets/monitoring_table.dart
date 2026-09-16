@@ -264,7 +264,10 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
       id: 'connection',
       label: 'Connection',
       defaultWidth: 130,
-      iconPad: 22,
+      // 22 for the status dot + gap6, plus 16 more for the trailing lock
+      // icon (gap4 + 12px) shown on Auth Error / unprotected rows — see
+      // _connectionCell.
+      iconPad: 38,
       text: (n, _) => switch (n.connectionStatus) {
         ConnectionStatus.connected => 'Online',
         ConnectionStatus.unprotected => 'Online',
@@ -1035,8 +1038,13 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
     final headingStyle = theme.textTheme.titleSmall?.copyWith(
       fontWeight: FontWeight.bold,
     );
+    // Auto-fit measures with this style, so it must reflect the density's
+    // actual render size (_bodyFontSize), not just the theme default —
+    // otherwise Compact density auto-fits columns wider than it renders them.
     final bodyStyle =
-        theme.textTheme.bodyMedium ?? const TextStyle(fontSize: 14);
+        (theme.textTheme.bodyMedium ?? const TextStyle(fontSize: 14)).copyWith(
+          fontSize: _bodyFontSize,
+        );
     final altRowColor = theme.colorScheme.surfaceContainerLow;
     final hoverColor = theme.colorScheme.surfaceContainerHighest;
     final primaryColor = theme.colorScheme.primary;

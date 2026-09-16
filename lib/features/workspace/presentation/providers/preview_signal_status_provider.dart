@@ -45,6 +45,7 @@ class PreviewSignalStatus extends _$PreviewSignalStatus {
     final notifier = ref.watch(remotePreviewProvider(host).notifier);
     final sub = notifier.signalEvents.listen((_) => _refresh());
     ref.onDispose(sub.cancel);
+    ref.onDispose(_webStatus.dispose);
 
     var wasFrame = ref.read(remotePreviewProvider(host)) is RemotePreviewFrame;
     ref.listen(remotePreviewProvider(host), (previous, next) {

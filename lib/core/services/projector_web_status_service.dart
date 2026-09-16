@@ -19,12 +19,14 @@ import 'dart:io';
 class ProjectorWebStatusService {
   static const _timeout = Duration(seconds: 4);
 
-  Future<WebSignalStatus?> fetchSignalStatus(
-    String ip,
-    String login,
-    String password,
-  ) async {
-    final client = HttpClient()..connectionTimeout = _timeout;
+  // Reused across calls so Digest auth's credential/nonce cache actually
+  // helps — a fresh HttpClient per call paid the 401-challenge round trip
+  // every single time, doubling latency on the SIGNAL-event-driven fetch
+  // path this service exists to keep fast.
+  HttpClient? _client;
+
+  HttpClient _clientFor(String login, String password) {
+    final client = _client ??= (HttpClient()..connectionTimeout = _timeout);
     client.authenticate = (Uri url, String scheme, String? realm) async {
       client.addCredentials(
         url,
@@ -33,6 +35,20 @@ class ProjectorWebStatusService {
       );
       return true;
     };
+    return client;
+  }
+
+  void dispose() {
+    _client?.close(force: true);
+    _client = null;
+  }
+
+  Future<WebSignalStatus?> fetchSignalStatus(
+    String ip,
+    String login,
+    String password,
+  ) async {
+    final client = _clientFor(login, password);
     try {
       final uri = Uri.http(ip, '/cgi-bin/simple_status_hidden.cgi', {
         'lang': 'e',
@@ -47,17 +63,17 @@ class ProjectorWebStatusService {
       return _parse(body);
     } catch (_) {
       return null;
-    } finally {
-      client.close(force: true);
     }
   }
 
   // The page's empty-value cells omit the <span> entirely (just a stray
-  // </span>), so the value group is optional, not just its content.
+  // </span>), so the value group is optional, not just its content. Tags are
+  // usually byte-adjacent but tolerate whitespace between them in case a
+  // firmware revision pretty-prints the page.
   static WebSignalStatus? _parse(String html) {
     final rows = <String, String>{};
     for (final m in RegExp(
-      r'<td class="td_left"><span[^>]*>([^<]*)</span></td>'
+      r'<td class="td_left"><span[^>]*>([^<]*)</span></td>\s*'
       r'<td class="td_right">(?:<span[^>]*>)?([^<]*)</span>',
       dotAll: true,
     ).allMatches(html)) {

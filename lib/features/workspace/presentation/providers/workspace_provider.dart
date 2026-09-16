@@ -1199,10 +1199,21 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
     _checkAndSetNodeStatus(id, ip, port);
   }
 
+  // Drops every id-keyed tracking entry a deleted node leaves behind —
+  // otherwise _refreshingNodes/_lastNodeRefresh/_lastWebSignalWrite/
+  // _lastWebSignalBaseline only ever grow for the life of the app process.
+  void _forgetNode(String id) {
+    _refreshingNodes.remove(id);
+    _lastNodeRefresh.remove(id);
+    _lastWebSignalWrite.remove(id);
+    _lastWebSignalBaseline.remove(id);
+  }
+
   void deleteSelected() {
     _saveSnapshot();
     final selected = ref.read(selectionProvider);
     state = state.where((node) => !selected.contains(node.id)).toList();
+    selected.forEach(_forgetNode);
     ref.read(selectionProvider.notifier).clear();
     _notifyStateChanged();
   }
@@ -1210,6 +1221,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
   void deleteNode(String id) {
     _saveSnapshot();
     state = state.where((node) => node.id != id).toList();
+    _forgetNode(id);
     ref.read(selectionProvider.notifier).removeIds([id]);
     _notifyStateChanged();
   }
