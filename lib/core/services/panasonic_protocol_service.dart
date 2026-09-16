@@ -241,6 +241,15 @@ class PanasonicProtocolService {
       response.startsWith('Error:') ||
       response.startsWith('ER');
 
+  /// Narrower than [_isFailureResponse]: true only when the transport itself
+  /// failed to get a reply (socket timeout/handshake error), not when the
+  /// projector answered with a real `ERxxx` application code. `ER401` in
+  /// particular is meaningful data several telemetry parsers in
+  /// workspace_provider.dart branch on (e.g. "no signal right now") — only a
+  /// transport failure means "we don't actually know this field's value".
+  static bool _isTransportFailure(String response) =>
+      response == 'Timeout' || response.startsWith('Error:');
+
   /// Sends an action command to the projector without expecting complex telemetry back.
   Future<bool> sendCommand(
     String ip,
@@ -342,17 +351,27 @@ class PanasonicProtocolService {
       return (ProbeResult.offline, null);
     }
 
-    telemetry['serialNumber'] = results[0];
-    telemetry['power'] = results[1];
-    telemetry['shutter'] = results[2];
-    telemetry['input'] = results[3];
-    telemetry['signal'] = results[4];
-    telemetry['runtime'] = results[5];
-    telemetry['lightRuntime'] = results[6];
-    telemetry['intakeTemp'] = results[7];
-    telemetry['exhaustTemp'] = results[8];
-    telemetry['acVoltage'] = results[9];
-    telemetry['errors'] = results[10];
+    // A field whose own query merely failed at the transport level (one
+    // dropped connection in the batch, the rest fine) becomes null here
+    // rather than storing the raw 'Timeout'/'Error: …' sentinel — otherwise
+    // it flows straight into the Monitoring table (e.g. an Errors cell
+    // literally reading "Timeout") and can fire a false hardware-error log
+    // event. workspace_provider.dart falls back to the node's last known
+    // value for each null field instead of parsing a string that was never
+    // real telemetry.
+    String? valueOrNull(String r) => _isTransportFailure(r) ? null : r;
+
+    telemetry['serialNumber'] = valueOrNull(results[0]);
+    telemetry['power'] = valueOrNull(results[1]);
+    telemetry['shutter'] = valueOrNull(results[2]);
+    telemetry['input'] = valueOrNull(results[3]);
+    telemetry['signal'] = valueOrNull(results[4]);
+    telemetry['runtime'] = valueOrNull(results[5]);
+    telemetry['lightRuntime'] = valueOrNull(results[6]);
+    telemetry['intakeTemp'] = valueOrNull(results[7]);
+    telemetry['exhaustTemp'] = valueOrNull(results[8]);
+    telemetry['acVoltage'] = valueOrNull(results[9]);
+    telemetry['errors'] = valueOrNull(results[10]);
 
     final status = isProtected ? ProbeResult.online : ProbeResult.unprotected;
     return (status, telemetry);

@@ -322,6 +322,23 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
   final Set<String> _refreshingNodes = {};
   final Map<String, DateTime> _lastNodeRefresh = {};
 
+  /// Reserves [id] so the regular poll cycle (and refreshNode) skip it,
+  /// for short-lived external NTCONTROL traffic against a specific
+  /// projector — e.g. Remote Preview's pre-show probes — that would
+  /// otherwise be free to race a poll cycle hitting the same node between
+  /// checking [poll_status_provider.dart]'s `isPolling` and actually sending.
+  /// Checking `isPolling` alone leaves a real gap: it says whether a cycle
+  /// is running right now, not whether one is about to claim this specific
+  /// node next. Returns false (nothing reserved) if [id] is already claimed.
+  bool claimNodeForExternalPoll(String id) {
+    if (_refreshingNodes.contains(id)) return false;
+    _refreshingNodes.add(id);
+    return true;
+  }
+
+  /// Releases a claim taken with [claimNodeForExternalPoll].
+  void releaseNodeFromExternalPoll(String id) => _refreshingNodes.remove(id);
+
   /// Re-poll a single projector now, off the normal cycle — used when the
   /// Remote Preview dialog starts receiving frames (proof the input is live)
   /// so its input/signal/shutter reflect reality without waiting for the next
@@ -358,6 +375,19 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
     }
   }
 
+  // How long a plain (no-override) NTCONTROL poll defers to the most recent
+  // applyWebSignal write for a node's input/signal, instead of overwriting it
+  // with its own reading. Without this, the regular poll cycle has no way to
+  // know applyWebSignal's value is the fresher one and will blindly stomp it
+  // with NTCONTROL's — which was measured lagging the web status by a
+  // noticeable margin even while fully on (see applyWebSignal's doc comment)
+  // — the instant the next cycle runs, regressing the exact staleness this
+  // was built to fix. Long enough to cover that lag, short enough that a
+  // genuine subsequent NTCONTROL-side change (a real signal drop) isn't
+  // masked for long.
+  static const _webSignalGrace = Duration(seconds: 15);
+  final Map<String, DateTime> _lastWebSignalWrite = {};
+
   /// Patches [id]'s input/signal straight from an already-fetched web status
   /// — no NTCONTROL round trip, no cooldown. Remote Preview's signal tag is
   /// driven by the projector's web UI and updates the instant a `SIGNAL`
@@ -365,13 +395,16 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
   /// lag that by a noticeable margin even while fully powered on, so routing
   /// this through [refreshNode]'s NTCONTROL poll left Monitoring showing the
   /// old value until the next regular cycle caught up. This applies the
-  /// already-trusted value immediately instead.
+  /// already-trusted value immediately instead. Also marks [id] so the next
+  /// plain poll cycle (see [_webSignalGrace]) doesn't immediately overwrite
+  /// it with NTCONTROL's laggier reading.
   void applyWebSignal(String id, WebSignalStatus webSignal) {
     final idx = state.indexWhere((n) => n.id == id);
     if (idx == -1) return;
     final node = state[idx];
     final input = _formatWebInput(webSignal, node.input);
     final signal = _formatWebSignal(webSignal);
+    _lastWebSignalWrite[id] = DateTime.now();
     if (node.input == input && node.signal == signal) return;
     state = [
       for (final n in state)
@@ -449,19 +482,41 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
         );
         await Future.wait(
           batchIds.map((id) async {
+            // refreshNode() only checks isPolling once, at entry — it can
+            // still be mid-flight for this node when the regular timer fires
+            // a new cycle (isPolling was false when refreshNode started).
+            // Skip it here rather than open a second concurrent NTCONTROL
+            // sequence to the same projector; refreshNode's own write covers
+            // this cycle for that node.
+            if (_refreshingNodes.contains(id)) return;
             // Find the latest version of the node just before polling
             final nodeIndex = state.indexWhere((n) => n.id == id);
             if (nodeIndex == -1) return; // Node was deleted
 
             final node = state[nodeIndex];
 
-            // Offline nodes get a cheap TCP check first (1.5s) before full probe.
-            // All other states (connected, unprotected, unauthorized) go straight to
-            // _pollSingleProjector so no intermediate state is written before auth is confirmed.
-            if (node.connectionStatus == ConnectionStatus.offline) {
-              await _checkAndSetNodeStatus(node.id, node.ipAddress, node.port);
-            } else {
-              await _pollSingleProjector(node, telemetryConcurrency);
+            // Claimed for the duration of this node's own poll — otherwise
+            // claimNodeForExternalPoll (Remote Preview's pre-show probes)
+            // has no way to see this cycle is mid-flight on this node and
+            // would claim it anyway, reopening the exact NTCONTROL
+            // contention that mechanism exists to prevent.
+            _refreshingNodes.add(id);
+            try {
+              // Offline nodes get a cheap TCP check first (1.5s) before full
+              // probe. All other states (connected, unprotected,
+              // unauthorized) go straight to _pollSingleProjector so no
+              // intermediate state is written before auth is confirmed.
+              if (node.connectionStatus == ConnectionStatus.offline) {
+                await _checkAndSetNodeStatus(
+                  node.id,
+                  node.ipAddress,
+                  node.port,
+                );
+              } else {
+                await _pollSingleProjector(node, telemetryConcurrency);
+              }
+            } finally {
+              _refreshingNodes.remove(id);
             }
           }),
         );
@@ -509,7 +564,25 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
   };
 
   static String _formatWebInput(WebSignalStatus webSignal, String fallback) =>
-      webSignal.input.isNotEmpty ? _mapInputCode(webSignal.input) : fallback;
+      webSignal.input.isNotEmpty
+      ? _mapWebInputLabel(webSignal.input)
+      : fallback;
+
+  // The web status page uses its own compact spelling for INPUT — confirmed
+  // as `HDMI1` (see REMOTE_PREVIEW_PLAN.md §3.4), not NTCONTROL's short codes
+  // (`HD1`) that _mapInputCode handles, so that map's default case was
+  // passing it through unchanged — "HDMI1" in the Monitoring table right
+  // next to NTCONTROL-sourced rows reading "HDMI 1". Reuses _mapInputCode
+  // for the handful of names that do match verbatim (e.g. if a firmware
+  // variant reports NTCONTROL-style codes here too), then normalizes the
+  // common "LETTERSdigits" compact style into this app's "LETTERS digits"
+  // one used everywhere else.
+  static String _mapWebInputLabel(String input) {
+    final mapped = _mapInputCode(input);
+    if (mapped != input) return mapped;
+    final m = RegExp(r'^([A-Za-z]+)(\d+)$').firstMatch(input);
+    return m != null ? '${m.group(1)} ${m.group(2)}' : input;
+  }
 
   // Resolution/frame-rate only, no frequency — matches NTCONTROL's own
   // format so Monitoring shows one consistent style regardless of source.
@@ -615,12 +688,37 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
       // NTCONTROL's own signal read is unusable while in Standby — go to the
       // web UI's status page instead, but only when actually asked to (see
       // the param doc) and only once it's clear NTCONTROL came back empty.
-      final rawSignal = (telemetry['signal'] as String)
-          .replaceAll('NSGS1=', '')
+      // A null here means the QVX:NSGS1 query itself failed at the transport
+      // level (see pollProjectorTelemetry's valueOrNull) rather than the
+      // projector actually answering — treated the same as "unusable" so the
+      // Standby web-status fallback still kicks in; the signal field itself
+      // falls back to what's already displayed, not a guess (below).
+      final rawSignal = (telemetry['signal'] as String?)
+          ?.replaceAll('NSGS1=', '')
           .trim();
       final ntSignalUnusable =
-          rawSignal == 'ER401' || rawSignal == 'NO SIGNAL' || rawSignal.isEmpty;
-      final isStandby = telemetry['power'] != '001';
+          rawSignal == null ||
+          rawSignal == 'ER401' ||
+          rawSignal == 'NO SIGNAL' ||
+          rawSignal.isEmpty;
+      // Likewise, a failed QPW query can't tell us the power state — assume
+      // whatever was last known rather than defaulting to Standby.
+      final powerRaw = telemetry['power'] as String?;
+      final powerOn = powerRaw == null
+          ? node.powerStatus == PowerStatus.on
+          : powerRaw == '001';
+      final isStandby = !powerOn;
+      final shutterRaw = telemetry['shutter'] as String?;
+      final shutterClosed = shutterRaw == null
+          ? node.shutterStatus == ShutterStatus.closed
+          : shutterRaw == '1';
+      // A plain poll with no override of its own defers to a very recent
+      // applyWebSignal write instead of overwriting it — see _webSignalGrace.
+      final lastWebWrite = _lastWebSignalWrite[node.id];
+      final deferToWebSignal =
+          webSignalOverride == null &&
+          lastWebWrite != null &&
+          DateTime.now().difference(lastWebWrite) < _webSignalGrace;
       WebSignalStatus? webSignal = webSignalOverride;
       if (webSignal == null &&
           webSignalFallback &&
@@ -636,42 +734,58 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
       state = state.map((n) {
         if (n.id == node.id) {
           // Parse Input / Signal — prefer the web status (real in every power
-          // state) over NTCONTROL's reading whenever one was fetched/given.
+          // state) over NTCONTROL's reading whenever one was fetched/given,
+          // and defer to a just-applied web value (deferToWebSignal) rather
+          // than overwrite it with NTCONTROL's laggier one this cycle.
           final input = webSignal != null
               ? _formatWebInput(
                   webSignal,
                   _mapInputCode(telemetry['input'] ?? n.input),
                 )
-              : _mapInputCode(telemetry['input'] ?? n.input);
+              : (deferToWebSignal
+                    ? n.input
+                    : _mapInputCode(telemetry['input'] ?? n.input));
           final signal = webSignal != null
               ? _formatWebSignal(webSignal)
-              : (rawSignal.isEmpty || rawSignal == 'ER401'
-                    ? 'NO SIGNAL'
-                    : rawSignal);
+              : (deferToWebSignal || rawSignal == null
+                    ? n.signal
+                    : (rawSignal.isEmpty || rawSignal == 'ER401'
+                          ? 'NO SIGNAL'
+                          : rawSignal));
 
           // Parse Projector Runtime — QVX:RTMS1 replies "RTMS1=<hours>".
-          final runtimeRaw = (telemetry['runtime'] as String)
-              .replaceAll('RTMS1=', '')
+          final runtimeRaw = (telemetry['runtime'] as String?)
+              ?.replaceAll('RTMS1=', '')
               .trim();
-          final runtimeHours = int.tryParse(runtimeRaw);
-          final runtime = runtimeHours != null
-              ? '${_groupThousands(runtimeHours)}H'
-              : (runtimeRaw.isEmpty || runtimeRaw == 'ER401'
-                    ? '-'
-                    : '${runtimeRaw}H');
+          String runtime;
+          if (runtimeRaw == null) {
+            runtime = n.runtime;
+          } else {
+            final runtimeHours = int.tryParse(runtimeRaw);
+            runtime = runtimeHours != null
+                ? '${_groupThousands(runtimeHours)}H'
+                : (runtimeRaw.isEmpty || runtimeRaw == 'ER401'
+                      ? '-'
+                      : '${runtimeRaw}H');
+          }
 
           // Parse Light Runtime — the QVX:LRTS3=00 reply carries the
           // light-source on-time in hours after the last ':', same unit as
           // RTMS1 (e.g. "LRTS3=00:1577"). Lamp models answer ER401 (no ':')
           // and timeouts have no digits → "-".
-          final lightRaw = (telemetry['lightRuntime'] as String).trim();
-          final lightColon = lightRaw.lastIndexOf(':');
-          final lightHours = lightColon < 0
-              ? null
-              : int.tryParse(lightRaw.substring(lightColon + 1).trim());
-          final lightRuntime = lightHours == null
-              ? '-'
-              : '${_groupThousands(lightHours)}H';
+          final lightRaw = (telemetry['lightRuntime'] as String?)?.trim();
+          String lightRuntime;
+          if (lightRaw == null) {
+            lightRuntime = n.lightRuntime;
+          } else {
+            final lightColon = lightRaw.lastIndexOf(':');
+            final lightHours = lightColon < 0
+                ? null
+                : int.tryParse(lightRaw.substring(lightColon + 1).trim());
+            lightRuntime = lightHours == null
+                ? '-'
+                : '${_groupThousands(lightHours)}H';
+          }
 
           final intake = _formatTemp(telemetry['intakeTemp'] ?? n.intakeTemp);
           final exhaust = _formatTemp(
@@ -679,29 +793,34 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
           );
 
           // Parse Voltage
-          String voltageRaw = (telemetry['acVoltage'] as String)
-              .replaceAll('VMOI2=', '')
+          final voltageRaw = (telemetry['acVoltage'] as String?)
+              ?.replaceAll('VMOI2=', '')
               .trim();
-          String voltage = '-';
-          if (voltageRaw != 'ER401' && voltageRaw.length > 3) {
-            voltage = '${voltageRaw.substring(3)}V';
-          } else if (voltageRaw.length == 3) {
-            voltage = '${voltageRaw}V';
+          String voltage;
+          if (voltageRaw == null) {
+            voltage = n.acVoltage;
+          } else {
+            voltage = '-';
+            if (voltageRaw != 'ER401' && voltageRaw.length > 3) {
+              voltage = '${voltageRaw.substring(3)}V';
+            } else if (voltageRaw.length == 3) {
+              voltage = '${voltageRaw}V';
+            }
           }
 
           // Parse Errors
-          String errorsRaw = (telemetry['errors'] as String)
-              .replaceAll('ERRS2=', '')
+          final errorsRaw = (telemetry['errors'] as String?)
+              ?.replaceAll('ERRS2=', '')
               .trim();
-          String errors = errorsRaw.isEmpty ? 'NO ERRORS' : errorsRaw;
+          final errors = errorsRaw == null
+              ? n.errors
+              : (errorsRaw.isEmpty ? 'NO ERRORS' : errorsRaw);
 
           return n.copyWith(
             name: telemetry['modelName'] ?? n.name,
             serialNumber: telemetry['serialNumber'] ?? n.serialNumber,
-            powerStatus: telemetry['power'] == '001'
-                ? PowerStatus.on
-                : PowerStatus.standby,
-            shutterStatus: telemetry['shutter'] == '1'
+            powerStatus: powerOn ? PowerStatus.on : PowerStatus.standby,
+            shutterStatus: shutterClosed
                 ? ShutterStatus.closed
                 : ShutterStatus.open,
             input: input,
