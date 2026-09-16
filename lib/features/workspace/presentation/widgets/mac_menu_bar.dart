@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/services/docs_service.dart';
 import '../providers/app_settings_provider.dart';
+import '../providers/edit_history_status_provider.dart';
 import '../providers/project_provider.dart';
 import '../providers/workspace_provider.dart';
 import 'about_dialog.dart';
@@ -31,7 +32,10 @@ class MacMenuBar extends ConsumerWidget {
     final recentProjects = ref.watch(
       projectStateProvider.select((s) => s.recentProjects),
     );
-    ref.watch(workspaceProvider); // rebuild when undo/redo availability changes
+    // Not workspaceProvider directly — that rebuilds this native menu (an
+    // expensive PlatformMenuBar round trip) on every telemetry poll tick;
+    // editHistoryStatusProvider dedupes down to only real undo/redo changes.
+    final editHistory = ref.watch(editHistoryStatusProvider);
     final projectNotifier = ref.read(projectStateProvider.notifier);
     final wsNotifier = ref.read(workspaceProvider.notifier);
     final showLogs = ref.watch(appSettingsProvider.select((s) => s.showLogs));
@@ -229,7 +233,7 @@ class MacMenuBar extends ConsumerWidget {
                     LogicalKeyboardKey.keyZ,
                     meta: true,
                   ),
-                  onSelected: wsNotifier.canUndo
+                  onSelected: editHistory.canUndo
                       ? () => wsNotifier.undo()
                       : null,
                 ),
@@ -240,7 +244,7 @@ class MacMenuBar extends ConsumerWidget {
                     meta: true,
                     shift: true,
                   ),
-                  onSelected: wsNotifier.canRedo
+                  onSelected: editHistory.canRedo
                       ? () => wsNotifier.redo()
                       : null,
                 ),
