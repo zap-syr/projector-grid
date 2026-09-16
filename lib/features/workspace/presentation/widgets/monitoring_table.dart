@@ -636,13 +636,20 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
 
   // ── Column reorder ──────────────────────────────────────────────────────
 
+  // [allColumnIds] is the FULL saved column list (before the "hide Group
+  // while grouped" filter in build() removes it from what's rendered) — a
+  // drag reorder computed from just the visible/filtered columns would
+  // persist a list with 'group' dropped entirely, leaving it missing even
+  // after grouping is turned back off (only the Columns menu could restore
+  // it). Reordering the full list instead just carries 'group' along at
+  // whatever relative position it already held.
   void _reorderColumn(
-    List<_Column> current,
+    List<String> allColumnIds,
     String draggedId,
     String targetId,
   ) {
     if (draggedId == targetId) return;
-    final ids = [for (final c in current) c.id];
+    final ids = List.of(allColumnIds);
     final from = ids.indexOf(draggedId);
     final to = ids.indexOf(targetId);
     if (from < 0 || to < 0) return;
@@ -856,6 +863,7 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
 
   Widget _buildHeader(
     List<_Column> cols,
+    List<String> allColumnIds,
     List<double> widths,
     double tableWidth,
     TextStyle? headingStyle,
@@ -926,7 +934,7 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
             },
             onAcceptWithDetails: (d) {
               setState(() => _dragOverColId = null);
-              _reorderColumn(cols, d.data, col.id);
+              _reorderColumn(allColumnIds, d.data, col.id);
             },
             builder: (context, _, _) => Draggable<String>(
               data: col.id,
@@ -1005,6 +1013,10 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
 
     final theme = Theme.of(context);
     var cols = _resolveColumns(savedColumns);
+    // The full order, 'group' included, for _reorderColumn to persist —
+    // see its doc comment for why a reorder can't just use the (possibly
+    // Group-filtered) `cols` below.
+    final allColumnIds = [for (final c in cols) c.id];
     if (groupBy) {
       // The Group column is redundant once rows sit under group headers.
       final withoutGroup = [
@@ -1065,6 +1077,7 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
                     physics: const NeverScrollableScrollPhysics(),
                     child: _buildHeader(
                       cols,
+                      allColumnIds,
                       effectiveWidths,
                       tableWidth,
                       headingStyle,
