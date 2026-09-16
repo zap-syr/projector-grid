@@ -18,71 +18,51 @@ import '../../../../core/services/docs_service.dart';
 class TopMenuBar extends ConsumerWidget {
   const TopMenuBar({super.key});
 
+  // Every dropdown row — plain action, checkable toggle, or submenu — reserves
+  // the same left gutter that a checkmark would occupy, so labels line up on
+  // one edge whether or not that particular row ever shows a check.
+  static const double _leadingGutterWidth = 16;
+
+  // Standard label/shortcut column width shared by most dropdown rows.
+  // Submenus with wider labels (Columns, Presets, Row density, Monitoring
+  // Table's own toggles) size themselves individually instead.
+  static const double _menuItemWidth = 220;
+
+  static Widget _leadingGutter(bool checked) => SizedBox(
+    width: _leadingGutterWidth,
+    child: checked ? const Icon(Icons.check, size: 14) : null,
+  );
+
   static Widget _menuItem(
     BuildContext context, {
     required String label,
     String? shortcutLabel,
+    bool checked = false,
+    double? width,
     required VoidCallback? onPressed,
   }) {
-    return MenuItemButton(
-      onPressed: onPressed,
-      child: shortcutLabel == null
-          ? Text(label)
-          : SizedBox(
-              width: 220,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(label),
-                  Text(
-                    shortcutLabel,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Theme.of(context).colorScheme.onSurface
-                          .withValues(alpha: 0.45),
-                    ),
-                  ),
-                ],
+    final labelWidget = shortcutLabel == null
+        ? Text(label)
+        : Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(label),
+              Text(
+                shortcutLabel,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.onSurface
+                      .withValues(alpha: 0.45),
+                ),
               ),
-            ),
-    );
-  }
-
-  static Widget _viewRadioItem(
-    BuildContext context, {
-    required String label,
-    required bool checked,
-    required VoidCallback onPressed,
-    String? shortcutLabel,
-    double? width,
-  }) {
+            ],
+          );
     return MenuItemButton(
-      leadingIcon: SizedBox(
-        width: 16,
-        child: checked ? const Icon(Icons.check, size: 14) : null,
-      ),
+      leadingIcon: _leadingGutter(checked),
       onPressed: onPressed,
-      child: shortcutLabel == null
-          ? (width == null
-                ? Text(label)
-                : SizedBox(width: width, child: Text(label)))
-          : SizedBox(
-              width: width ?? 220,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(label),
-                  Text(
-                    shortcutLabel,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Theme.of(context).colorScheme.onSurface
-                          .withValues(alpha: 0.45),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+      child: width == null
+          ? labelWidget
+          : SizedBox(width: width, child: labelWidget),
     );
   }
 
@@ -170,6 +150,7 @@ class TopMenuBar extends ConsumerWidget {
                   context,
                   label: 'New Project',
                   shortcutLabel: 'Ctrl+N',
+                  width: _menuItemWidth,
                   onPressed: () async {
                     if (!await confirmUnsavedChanges(context, ref)) return;
                     notifier.newProject();
@@ -179,6 +160,7 @@ class TopMenuBar extends ConsumerWidget {
                   context,
                   label: 'Open Project',
                   shortcutLabel: 'Ctrl+O',
+                  width: _menuItemWidth,
                   onPressed: () async {
                     if (!await confirmUnsavedChanges(context, ref)) return;
                     await notifier.pickAndOpenProject();
@@ -187,16 +169,19 @@ class TopMenuBar extends ConsumerWidget {
 
                 // Open Recent
                 SubmenuButton(
+                  leadingIcon: _leadingGutter(false),
                   menuChildren: recentProjects.isEmpty
                       ? [
-                          const MenuItemButton(
+                          _menuItem(
+                            context,
+                            label: '(No recent projects)',
                             onPressed: null,
-                            child: Text('(No recent projects)'),
                           ),
                         ]
                       : [
                           ...recentProjects.map(
                             (path) => MenuItemButton(
+                              leadingIcon: _leadingGutter(false),
                               onPressed: () async {
                                 if (!await confirmUnsavedChanges(
                                   context,
@@ -213,9 +198,10 @@ class TopMenuBar extends ConsumerWidget {
                             ),
                           ),
                           const Divider(),
-                          MenuItemButton(
+                          _menuItem(
+                            context,
+                            label: 'Clear Recent Projects',
                             onPressed: () => notifier.clearRecentProjects(),
-                            child: const Text('Clear Recent Projects'),
                           ),
                         ],
                   child: const Text('Open Recent'),
@@ -227,12 +213,14 @@ class TopMenuBar extends ConsumerWidget {
                   context,
                   label: 'Save',
                   shortcutLabel: 'Ctrl+S',
+                  width: _menuItemWidth,
                   onPressed: () => notifier.saveProject(),
                 ),
                 _menuItem(
                   context,
                   label: 'Save As…',
                   shortcutLabel: 'Ctrl+Shift+S',
+                  width: _menuItemWidth,
                   onPressed: () => notifier.saveProjectAs(),
                 ),
 
@@ -242,6 +230,7 @@ class TopMenuBar extends ConsumerWidget {
                   context,
                   label: 'Exit',
                   shortcutLabel: 'Ctrl+Q',
+                  width: _menuItemWidth,
                   onPressed: () async {
                     if (!await confirmUnsavedChanges(context, ref)) return;
                     windowManager.destroy();
@@ -258,6 +247,7 @@ class TopMenuBar extends ConsumerWidget {
                   context,
                   label: 'Undo',
                   shortcutLabel: 'Ctrl+Z',
+                  width: _menuItemWidth,
                   onPressed: editHistory.canUndo
                       ? () => wsNotifier.undo()
                       : null,
@@ -266,6 +256,7 @@ class TopMenuBar extends ConsumerWidget {
                   context,
                   label: 'Redo',
                   shortcutLabel: 'Ctrl+Y',
+                  width: _menuItemWidth,
                   onPressed: editHistory.canRedo
                       ? () => wsNotifier.redo()
                       : null,
@@ -319,6 +310,7 @@ class TopMenuBar extends ConsumerWidget {
                   context,
                   label: 'Refresh',
                   shortcutLabel: 'F5',
+                  width: _menuItemWidth,
                   onPressed: () =>
                       ref.read(workspaceProvider.notifier).refreshAll(),
                 ),
@@ -338,41 +330,43 @@ class TopMenuBar extends ConsumerWidget {
             // ── View ──────────────────────────────────────────────────────
             SubmenuButton(
               menuChildren: [
-                _viewRadioItem(
+                _menuItem(
                   context,
                   label: 'Controls',
                   checked: !isMonitoringView,
-                  onPressed: () => settingsNotifier.setMonitoringView(false),
                   shortcutLabel: 'Ctrl+1',
+                  width: _menuItemWidth,
+                  onPressed: () => settingsNotifier.setMonitoringView(false),
                 ),
-                _viewRadioItem(
+                _menuItem(
                   context,
                   label: 'Monitoring',
                   checked: isMonitoringView,
-                  onPressed: () => settingsNotifier.setMonitoringView(true),
                   shortcutLabel: 'Ctrl+2',
+                  width: _menuItemWidth,
+                  onPressed: () => settingsNotifier.setMonitoringView(true),
                 ),
                 const Divider(),
-                MenuItemButton(
-                  leadingIcon: SizedBox(
-                    width: 16,
-                    child: showLogs ? const Icon(Icons.check, size: 14) : null,
-                  ),
+                _menuItem(
+                  context,
+                  label: 'Show Logs',
+                  checked: showLogs,
                   onPressed: () => settingsNotifier.setShowLogs(!showLogs),
-                  child: const Text('Show Logs'),
                 ),
                 const Divider(),
                 SubmenuButton(
+                  leadingIcon: _leadingGutter(false),
                   menuChildren: [
                     // ── Columns ──────────────────────────────────────────
                     SubmenuButton(
+                      leadingIcon: _leadingGutter(false),
                       menuChildren: [
                         for (final id in MonitoringTable.allColumnIds)
-                          _viewRadioItem(
+                          _menuItem(
                             context,
                             label: MonitoringTable.labelFor(id),
                             checked: visibleColumns.contains(id),
-                            width: 220,
+                            width: _menuItemWidth,
                             onPressed: () {
                               final next = MonitoringTable.toggledColumn(
                                 monitoringColumns,
@@ -384,27 +378,29 @@ class TopMenuBar extends ConsumerWidget {
                             },
                           ),
                         const Divider(),
-                        MenuItemButton(
+                        _menuItem(
+                          context,
+                          label: 'Show all columns',
+                          width: _menuItemWidth,
                           onPressed: () =>
                               settingsNotifier.setMonitoringColumns(
                                 MonitoringTable.showAllColumns,
                               ),
-                          child: const SizedBox(
-                            width: 220,
-                            child: Text('Show all columns'),
-                          ),
                         ),
                       ],
                       child: const SizedBox(width: 252, child: Text('Columns')),
                     ),
                     // ── Presets ──────────────────────────────────────────
                     SubmenuButton(
+                      leadingIcon: _leadingGutter(false),
                       menuChildren: [
                         for (final entry in MonitoringTable.presets.entries)
-                          MenuItemButton(
+                          _menuItem(
+                            context,
+                            label: entry.key,
+                            width: 180,
                             onPressed: () => settingsNotifier
                                 .setMonitoringColumns(entry.value),
-                            child: SizedBox(width: 180, child: Text(entry.key)),
                           ),
                       ],
                       child: const SizedBox(width: 252, child: Text('Presets')),
@@ -412,9 +408,10 @@ class TopMenuBar extends ConsumerWidget {
                     const Divider(),
                     // ── Row density ──────────────────────────────────────
                     SubmenuButton(
+                      leadingIcon: _leadingGutter(false),
                       menuChildren: [
                         for (final d in MonitoringDensity.values)
-                          _viewRadioItem(
+                          _menuItem(
                             context,
                             label: d.label,
                             checked: monitoringDensity == d,
@@ -429,7 +426,7 @@ class TopMenuBar extends ConsumerWidget {
                       ),
                     ),
                     const Divider(),
-                    _viewRadioItem(
+                    _menuItem(
                       context,
                       label: 'Fit columns to window',
                       checked: monitoringFitToWidth,
@@ -438,7 +435,7 @@ class TopMenuBar extends ConsumerWidget {
                         !monitoringFitToWidth,
                       ),
                     ),
-                    _viewRadioItem(
+                    _menuItem(
                       context,
                       label: 'Merge into groups',
                       checked: monitoringGroupBy,
@@ -460,6 +457,7 @@ class TopMenuBar extends ConsumerWidget {
                 _menuItem(
                   context,
                   label: 'Keyboard Shortcuts',
+                  width: _menuItemWidth,
                   onPressed: () => showDialog(
                     context: context,
                     builder: (_) => const KeyboardShortcutsDialog(),
@@ -468,12 +466,14 @@ class TopMenuBar extends ConsumerWidget {
                 _menuItem(
                   context,
                   label: 'OSC Reference',
+                  width: _menuItemWidth,
                   onPressed: () => DocsService.openOscReference(),
                 ),
                 const Divider(),
                 _menuItem(
                   context,
                   label: 'About',
+                  width: _menuItemWidth,
                   onPressed: () => showDialog(
                     context: context,
                     builder: (_) => const AppAboutDialog(),
