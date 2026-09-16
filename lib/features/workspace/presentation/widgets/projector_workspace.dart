@@ -576,8 +576,9 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
                       },
                       onPointerMove: (event) {
                         final panning = event.buttons == kMiddleMouseButton;
-                        if (panning != _isPanning)
+                        if (panning != _isPanning) {
                           setState(() => _isPanning = panning);
+                        }
                         if (panning) {
                           if (_horizontalController.hasClients) {
                             _horizontalController.jumpTo(

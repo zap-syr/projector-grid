@@ -870,7 +870,7 @@ class _CustomCommandsTab extends ConsumerWidget {
               padding: const EdgeInsets.only(bottom: 8),
               buildDefaultDragHandles: false,
               itemCount: commands.length,
-              onReorder: notifier.reorder,
+              onReorderItem: notifier.reorder,
               itemBuilder: (context, index) {
                 final cmd = commands[index];
                 return _CustomCommandTile(

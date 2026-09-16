@@ -86,7 +86,6 @@ class CustomCommandsNotifier extends _$CustomCommandsNotifier {
 
   void reorder(int oldIndex, int newIndex) {
     final updated = [...state];
-    if (newIndex > oldIndex) newIndex--;
     final item = updated.removeAt(oldIndex);
     updated.insert(newIndex, item);
     state = updated;
