@@ -60,6 +60,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   selected segmented options) is a real blue again instead of a muted grey —
   a side effect of 1.4.1's softer, less-saturated surface colours that ended
   up desaturating the accent along with them
+- Top menu bar: every dropdown item's label now starts at the same left
+  edge, whether or not it shows a checkmark, instead of checkable items
+  (Controls, Show Logs, column toggles, …) sitting further right than plain
+  ones in the same menu
 
 ### For Developers
 
