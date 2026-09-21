@@ -110,67 +110,29 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
     _loadValues();
   }
 
+  // Only queries which mode/method is active on each axis (Color Matching,
+  // Color Temperature) — the actual slider values are fetched afterward, and
+  // only for whichever mode/method turns out to be selected (below). Off/
+  // Default need no slider query at all, and Custom's Kelvin comes straight
+  // from QTE's own value — querying every mode's sliders unconditionally
+  // used to open up to 18 simultaneous TCP connections to the projector on
+  // every open, most of them for sliders the dialog wasn't even showing.
   Future<void> _loadValues() async {
-    final results = await Future.wait([
-      // Color Matching — indices 0–10
+    final modeResults = await Future.wait([
       _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:CMAI0'),
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QMR'),
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QMG'),
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QMB'),
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:C7CS0'),
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:C7CS1'),
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:C7CS2'),
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:C7CS3'),
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:C7CS4'),
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:C7CS5'),
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:C7CS6'),
-      // Color Temperature — indices 11–17
       _service.sendRawCommand(_ip, _port, _login, _password, 'QTE'),
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QHR'),
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QHG'),
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QHB'),
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QOR'),
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QOG'),
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QOB'),
     ]);
 
     if (!mounted) return;
 
-    // ── Color Matching ────────────────────────────────────────────────────
-    final methodRaw = results[0];
+    // ── Color Matching method ───────────────────────────────────────────────
+    final methodRaw = modeResults[0];
     if (methodRaw != null && methodRaw.contains('+')) {
       _method = int.tryParse(methodRaw.split('+').last) ?? 0;
     }
 
-    final keys3 = ['Red', 'Green', 'Blue'];
-    for (int i = 0; i < 3; i++) {
-      final raw = results[1 + i];
-      if (raw != null) {
-        final parsed = _parseRgb(raw);
-        if (parsed != null) _values3[keys3[i]] = parsed;
-      }
-    }
-
-    final keys7 = [
-      'Red',
-      'Green',
-      'Blue',
-      'Cyan',
-      'Magenta',
-      'Yellow',
-      'White',
-    ];
-    for (int i = 0; i < 7; i++) {
-      final raw = results[4 + i];
-      if (raw != null) {
-        final valuePart = raw.contains('=') ? raw.split('=').last : raw;
-        final parsed = _parseRgb(valuePart);
-        if (parsed != null) _values7[keys7[i]] = parsed;
-      }
-    }
-
-    // ── Color Temperature ─────────────────────────────────────────────────
-    final qteVal = int.tryParse(results[11]?.trim() ?? '');
+    // ── Color Temperature mode ──────────────────────────────────────────────
+    final qteVal = int.tryParse(modeResults[1]?.trim() ?? '');
     if (qteVal != null) {
       if (qteVal == 4) {
         _tempMode = _TempMode.user1;
@@ -184,27 +146,149 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
       }
     }
 
-    // White Balance High: 0–255
-    final hr = int.tryParse(results[12]?.trim() ?? '');
-    final hg = int.tryParse(results[13]?.trim() ?? '');
-    final hb = int.tryParse(results[14]?.trim() ?? '');
-    _whHigh = [
-      (hr ?? 128).clamp(0, 255),
-      (hg ?? 128).clamp(0, 255),
-      (hb ?? 128).clamp(0, 255),
-    ];
+    await Future.wait([
+      if (_method == 1) _refreshColorMatching3(),
+      if (_method == 2) _refreshColorMatching7(),
+      // White Balance is also the register Color Matching (3/7 colors) edits
+      // directly — QTE reads ER401 there (confirmed live) so _tempMode can't
+      // tell us to fetch it, _method has to.
+      if (_method != 0 ||
+          _tempMode == _TempMode.user1 ||
+          _tempMode == _TempMode.user2)
+        _refreshWhiteBalance(),
+    ]);
 
-    // White Balance Low: protocol 001–255, display = protocol - 128
-    final lr = int.tryParse(results[15]?.trim() ?? '');
-    final lg = int.tryParse(results[16]?.trim() ?? '');
-    final lb = int.tryParse(results[17]?.trim() ?? '');
-    _whLow = [
-      ((lr ?? 128) - 128).clamp(-127, 127),
-      ((lg ?? 128) - 128).clamp(-127, 127),
-      ((lb ?? 128) - 128).clamp(-127, 127),
-    ];
-
+    if (!mounted) return;
     setState(() => _loading = false);
+  }
+
+  // White Balance High: 0–255, direct from the register.
+  static List<int> _parseWhHigh(List<String?> raw, List<int> fallback) {
+    final hr = int.tryParse(raw[0]?.trim() ?? '');
+    final hg = int.tryParse(raw[1]?.trim() ?? '');
+    final hb = int.tryParse(raw[2]?.trim() ?? '');
+    return [
+      (hr ?? fallback[0]).clamp(0, 255),
+      (hg ?? fallback[1]).clamp(0, 255),
+      (hb ?? fallback[2]).clamp(0, 255),
+    ];
+  }
+
+  // White Balance Low: protocol 001–255, display = protocol - 128.
+  static List<int> _parseWhLow(List<String?> raw, List<int> fallback) {
+    final lr = int.tryParse(raw[0]?.trim() ?? '');
+    final lg = int.tryParse(raw[1]?.trim() ?? '');
+    final lb = int.tryParse(raw[2]?.trim() ?? '');
+    return [
+      lr == null ? fallback[0] : (lr - 128).clamp(-127, 127),
+      lg == null ? fallback[1] : (lg - 128).clamp(-127, 127),
+      lb == null ? fallback[2] : (lb - 128).clamp(-127, 127),
+    ];
+  }
+
+  // Re-derives _tempMode/_customK from a fresh QTE read. QTE reads ER401 the
+  // entire time Color Matching is active, so _tempMode can't be trusted the
+  // instant it returns to Off — needed both here and once at initial load
+  // (_loadValues has its own inline copy of this parse, batched together
+  // with the CMAI0 query there instead of calling this).
+  Future<void> _refreshTempMode() async {
+    final raw = await _service.sendRawCommand(
+      _ip,
+      _port,
+      _login,
+      _password,
+      'QTE',
+    );
+    if (!mounted) return;
+    final qteVal = int.tryParse(raw?.trim() ?? '');
+    if (qteVal == null) return;
+    setState(() {
+      if (qteVal == 4) {
+        _tempMode = _TempMode.user1;
+      } else if (qteVal == 9) {
+        _tempMode = _TempMode.user2;
+      } else if (qteVal == 10) {
+        _tempMode = _TempMode.defaultTemp;
+      } else if (qteVal >= 3200 && qteVal <= 13000) {
+        _tempMode = _TempMode.custom;
+        _customK = (qteVal ~/ 100) * 100;
+      }
+    });
+  }
+
+  // QHR/QHG/QHB/QOR/QOG/QOB are shared registers that report whichever User
+  // slot (OTE:04 / OTE:09) is currently active — the projector has no
+  // separate per-slot query command, confirmed live: switching modes changed
+  // what these registers returned, and switching back reproduced the
+  // original values exactly. Without this, the sliders kept showing
+  // whichever slot's values were current when the dialog first opened,
+  // unchanged by a mode switch.
+  Future<void> _refreshWhiteBalance() async {
+    final results = await Future.wait([
+      _service.sendRawCommand(_ip, _port, _login, _password, 'QHR'),
+      _service.sendRawCommand(_ip, _port, _login, _password, 'QHG'),
+      _service.sendRawCommand(_ip, _port, _login, _password, 'QHB'),
+      _service.sendRawCommand(_ip, _port, _login, _password, 'QOR'),
+      _service.sendRawCommand(_ip, _port, _login, _password, 'QOG'),
+      _service.sendRawCommand(_ip, _port, _login, _password, 'QOB'),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      _whHigh = _parseWhHigh(results.sublist(0, 3), _whHigh);
+      _whLow = _parseWhLow(results.sublist(3, 6), _whLow);
+    });
+  }
+
+  // QMR/QMG/QMB only report the 3-color method's values — refetched every
+  // time the method is switched to (including back to one already visited
+  // this session) so values changed externally while viewing 7-color still
+  // show up correctly.
+  Future<void> _refreshColorMatching3() async {
+    final results = await Future.wait([
+      _service.sendRawCommand(_ip, _port, _login, _password, 'QMR'),
+      _service.sendRawCommand(_ip, _port, _login, _password, 'QMG'),
+      _service.sendRawCommand(_ip, _port, _login, _password, 'QMB'),
+    ]);
+    if (!mounted) return;
+    const keys3 = ['Red', 'Green', 'Blue'];
+    setState(() {
+      for (int i = 0; i < 3; i++) {
+        final raw = results[i];
+        if (raw != null) {
+          final parsed = _parseRgb(raw);
+          if (parsed != null) _values3[keys3[i]] = parsed;
+        }
+      }
+    });
+  }
+
+  // QVX:C7CS0..6 only report the 7-color method's values — same rationale
+  // as _refreshColorMatching3.
+  Future<void> _refreshColorMatching7() async {
+    final results = await Future.wait([
+      for (var i = 0; i < 7; i++)
+        _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:C7CS$i'),
+    ]);
+    if (!mounted) return;
+    const keys7 = [
+      'Red',
+      'Green',
+      'Blue',
+      'Cyan',
+      'Magenta',
+      'Yellow',
+      'White',
+    ];
+    setState(() {
+      for (int i = 0; i < 7; i++) {
+        final raw = results[i];
+        if (raw != null) {
+          final valuePart = raw.contains('=') ? raw.split('=').last : raw;
+          final parsed = _parseRgb(valuePart);
+          if (parsed != null) _values7[keys7[i]] = parsed;
+        }
+      }
+    });
   }
 
   List<int>? _parseRgb(String raw) {
@@ -658,8 +742,48 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
     );
   }
 
+  Widget _buildWhiteBalanceSection(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildWhiteBalanceCard(
+            context,
+            title: 'White Balance High',
+            values: _whHigh,
+            min: 0,
+            max: 255,
+            divisions: 255,
+            onChanged: (ch, v) => setState(() => _whHigh[ch] = v),
+            onChangeEnd: (ch, v) => _sendWhHigh(ch, v),
+          ),
+          const SizedBox(height: 10),
+          _buildWhiteBalanceCard(
+            context,
+            title: 'White Balance Low',
+            values: _whLow,
+            min: -127,
+            max: 127,
+            divisions: 254,
+            onChanged: (ch, v) =>
+                setState(() => _whLow[ch] = v.abs() <= 3 ? 0 : v),
+            onChangeEnd: (ch, v) => _sendWhLow(ch, _whLow[ch]),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildColorTempTab(BuildContext context) {
     final theme = Theme.of(context);
+    // While Color Matching (3/7 colors) is active, the projector has no
+    // notion of a Color Temperature mode — QTE reads ER401 (confirmed live)
+    // — but White Balance High/Low remain live-editable through the same
+    // VHR/VHG/VHB/VOR/VOG/VOB registers Color Temperature's User 1/2 use.
+    // Lock the mode picker instead of leaving it selectable to a state the
+    // projector rejects, while keeping the sliders themselves usable.
+    final matchingActive = _method != 0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -678,60 +802,56 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
             ],
             selected: {_tempMode},
             showSelectedIcon: false,
-            onSelectionChanged: (s) {
-              final mode = s.first;
-              setState(() => _tempMode = mode);
-              _sendColorTemp(mode);
-            },
+            onSelectionChanged: matchingActive
+                ? null
+                : (s) async {
+                    final mode = s.first;
+                    setState(() => _tempMode = mode);
+                    // Awaited: each NTCONTROL command is its own TCP
+                    // connection, so firing the refresh without waiting for
+                    // this write's response first risks the read reaching
+                    // the projector before the switch actually applied.
+                    await _sendColorTemp(mode);
+                    if (mode == _TempMode.user1 || mode == _TempMode.user2) {
+                      await _refreshWhiteBalance();
+                    }
+                  },
           ),
         ),
+        if (matchingActive)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
+            child: Text(
+              'Fixed while Color Matching is active.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+              ),
+            ),
+          ),
         const SizedBox(height: 12),
         const Divider(height: 1),
         Expanded(
-          child: switch (_tempMode) {
-            _TempMode.defaultTemp => Center(
-              child: Text(
-                'Using the factory default color temperature',
-                style: TextStyle(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.45),
-                ),
-              ),
-            ),
-            _TempMode.custom => SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
-              child: _buildKelvinCard(context),
-            ),
-            _TempMode.user1 || _TempMode.user2 => SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _buildWhiteBalanceCard(
-                    context,
-                    title: 'White Balance High',
-                    values: _whHigh,
-                    min: 0,
-                    max: 255,
-                    divisions: 255,
-                    onChanged: (ch, v) => setState(() => _whHigh[ch] = v),
-                    onChangeEnd: (ch, v) => _sendWhHigh(ch, v),
+          child: matchingActive
+              ? _buildWhiteBalanceSection(context)
+              : switch (_tempMode) {
+                  _TempMode.defaultTemp => Center(
+                    child: Text(
+                      'Using the factory default color temperature',
+                      style: TextStyle(
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.45,
+                        ),
+                      ),
+                    ),
                   ),
-                  const SizedBox(height: 10),
-                  _buildWhiteBalanceCard(
-                    context,
-                    title: 'White Balance Low',
-                    values: _whLow,
-                    min: -127,
-                    max: 127,
-                    divisions: 254,
-                    onChanged: (ch, v) =>
-                        setState(() => _whLow[ch] = v.abs() <= 3 ? 0 : v),
-                    onChangeEnd: (ch, v) => _sendWhLow(ch, _whLow[ch]),
+                  _TempMode.custom => SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+                    child: _buildKelvinCard(context),
                   ),
-                ],
-              ),
-            ),
-          },
+                  _TempMode.user1 ||
+                  _TempMode.user2 => _buildWhiteBalanceSection(context),
+                },
         ),
       ],
     );
@@ -793,7 +913,33 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
                               ],
                               selected: {_method},
                               showSelectedIcon: false,
-                              onSelectionChanged: (s) => _setMethod(s.first),
+                              onSelectionChanged: (s) async {
+                                final method = s.first;
+                                // Awaited: same reasoning as the Color
+                                // Temperature switch — the reads below must
+                                // land after CMAI0's write actually applies.
+                                await _setMethod(method);
+                                if (method == 0) {
+                                  // QTE only reports something meaningful
+                                  // once Color Matching is off again —
+                                  // _tempMode may otherwise still be an
+                                  // unverified guess (never resolved if the
+                                  // dialog was opened while already in 3/7
+                                  // colors) or stale from before switching.
+                                  await _refreshTempMode();
+                                  return;
+                                }
+                                // White Balance is the same shared register
+                                // Color Temperature's User 1/2 edit — refresh
+                                // it too whenever Color Matching becomes
+                                // active, since QTE (and so _tempMode) can't
+                                // be trusted to reflect it in that state.
+                                await Future.wait([
+                                  if (method == 1) _refreshColorMatching3(),
+                                  if (method == 2) _refreshColorMatching7(),
+                                  _refreshWhiteBalance(),
+                                ]);
+                              },
                             ),
                           ),
                           const SizedBox(height: 12),
