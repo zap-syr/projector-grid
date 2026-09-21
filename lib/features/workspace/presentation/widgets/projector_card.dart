@@ -74,9 +74,11 @@ class _ProjectorCardState extends ConsumerState<ProjectorCard> {
     );
 
     // Status colors
-    final powerColor = node.powerStatus == PowerStatus.on
-        ? Colors.green
-        : Colors.red;
+    final powerColor = switch (node.powerStatus) {
+      PowerStatus.on => Colors.green,
+      PowerStatus.standby => Colors.red,
+      PowerStatus.turningOn || PowerStatus.cooling => Colors.amber,
+    };
     final shutterColor = node.shutterStatus == ShutterStatus.open
         ? Colors.green
         : Colors.red;

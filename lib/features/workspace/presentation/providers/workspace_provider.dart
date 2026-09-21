@@ -49,7 +49,6 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
   final List<_WorkspaceSnapshot> _undoStack = [];
   final List<_WorkspaceSnapshot> _redoStack = [];
   bool _isDragging = false;
-  final List<Timer> _optimisticTimers = [];
 
   List<ProjectorGroup> _groups = [];
   List<ProjectorGroup> get groups => List.unmodifiable(_groups);
@@ -69,7 +68,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
       _isPollingDisposed = true;
       _pollingTimer?.cancel();
       windowManager.removeListener(this);
-      for (final t in _optimisticTimers) {
+      for (final t in _powerTransitionTimers.values) {
         t.cancel();
       }
     });
@@ -571,6 +570,21 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
     _ => input,
   };
 
+  /// Parses `QVX:POWI1`'s `POWI1=+0000N` reply into a [PowerStatus]. Returns
+  /// null for a transport failure (already filtered to null upstream) or any
+  /// unrecognized reply, so callers fall back to the last known status
+  /// instead of guessing one.
+  static PowerStatus? _parsePowerStatus(String? raw) {
+    final suffix = raw?.split('=').last.trim();
+    return switch (suffix) {
+      '+00001' => PowerStatus.standby,
+      '+00002' => PowerStatus.turningOn,
+      '+00003' => PowerStatus.on,
+      '+00004' => PowerStatus.cooling,
+      _ => null,
+    };
+  }
+
   static String _formatWebInput(WebSignalStatus webSignal, String fallback) =>
       webSignal.input.isNotEmpty
       ? _mapWebInputLabel(webSignal.input)
@@ -705,13 +719,15 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
           ?.replaceAll('NSGS1=', '')
           .trim();
       final ntSignalUnusable = isUnusableSignalValue(rawSignal);
-      // Likewise, a failed QPW query can't tell us the power state — assume
-      // whatever was last known rather than defaulting to Standby.
+      // Likewise, a failed QVX:POWI1 query can't tell us the power state —
+      // assume whatever was last known rather than defaulting to Standby.
       final powerRaw = telemetry['power'] as String?;
-      final powerOn = powerRaw == null
-          ? node.powerStatus == PowerStatus.on
-          : powerRaw == '001';
-      final isStandby = !powerOn;
+      final powerStatus = _parsePowerStatus(powerRaw) ?? node.powerStatus;
+      // No live signal in Standby *or* Cooling (no picture in either), so
+      // the web-status fallback below covers both, not just Standby.
+      final isStandbyLike =
+          powerStatus == PowerStatus.standby ||
+          powerStatus == PowerStatus.cooling;
       final shutterRaw = telemetry['shutter'] as String?;
       final shutterClosed = shutterRaw == null
           ? node.shutterStatus == ShutterStatus.closed
@@ -732,7 +748,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
       WebSignalStatus? webSignal = webSignalOverride;
       if (webSignal == null &&
           webSignalFallback &&
-          isStandby &&
+          isStandbyLike &&
           ntSignalUnusable) {
         webSignal = await _webStatusService.fetchSignalStatus(
           node.ipAddress,
@@ -835,7 +851,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
           return n.copyWith(
             name: telemetry['modelName'] ?? n.name,
             serialNumber: telemetry['serialNumber'] ?? n.serialNumber,
-            powerStatus: powerOn ? PowerStatus.on : PowerStatus.standby,
+            powerStatus: powerStatus,
             shutterStatus: shutterClosed
                 ? ShutterStatus.closed
                 : ShutterStatus.open,
@@ -1038,41 +1054,62 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
   }
 
   // Helper to fetch a single specific telemetry string without hitting the entire sequence
-  Future<void> _pollSpecificTelemetry(
+  // Returns the raw response (null on failure) so callers that need to know
+  // whether the fetched value was actually usable — see
+  // _refreshSignalAfterPowerOn — don't have to re-derive it from state,
+  // which could still hold a stale reading from before this call.
+  Future<String?> _pollSpecificTelemetry(
     ProjectorNode initialNode,
     String command,
   ) async {
     // Re-find the node to ensure we have the most current credentials/IP
     final idx = state.indexWhere((n) => n.id == initialNode.id);
-    if (idx == -1) return;
+    if (idx == -1) return null;
     final node = state[idx];
 
-    final response = await _protocolService.sendRawCommand(
-      node.ipAddress,
-      node.port,
-      node.login,
-      node.password,
-      command,
-    );
+    // QVX:POWI1/QVX:NSGS1 use the ER-preserving variant: an ER401 reading on
+    // NSGS1 ("no signal") is real data we want to show immediately, not a
+    // failure to swallow — see sendRawCommandPreservingErrorCodes.
+    final preserveErrorCodes = command == 'QVX:POWI1' || command == 'QVX:NSGS1';
+    final response = preserveErrorCodes
+        ? await _protocolService.sendRawCommandPreservingErrorCodes(
+            node.ipAddress,
+            node.port,
+            node.login,
+            node.password,
+            command,
+          )
+        : await _protocolService.sendRawCommand(
+            node.ipAddress,
+            node.port,
+            node.login,
+            node.password,
+            command,
+          );
+    if (response == null) return null;
 
-    if (response != null &&
-        response != 'Timeout' &&
-        !response.contains('Error') &&
-        !response.contains('ERRA')) {
-      state = state.map((n) {
-        if (n.id == node.id) {
-          if (command == 'QSH') {
-            return n.copyWith(
-              shutterStatus: response == '1'
-                  ? ShutterStatus.closed
-                  : ShutterStatus.open,
-            );
-          }
-          // Add other specific telemetry command parses here if needed later
-        }
-        return n;
-      }).toList();
-    }
+    state = state.map((n) {
+      if (n.id != node.id) return n;
+      switch (command) {
+        case 'QSH':
+          return n.copyWith(
+            shutterStatus: response == '1'
+                ? ShutterStatus.closed
+                : ShutterStatus.open,
+          );
+        case 'QVX:POWI1':
+          final parsed = _parsePowerStatus(response);
+          return parsed == null ? n : n.copyWith(powerStatus: parsed);
+        case 'QVX:NSGS1':
+          final sig = response.replaceAll('NSGS1=', '').trim();
+          return n.copyWith(
+            signal: sig.isEmpty || sig == 'ER401' ? 'NO SIGNAL' : sig,
+          );
+        // Add other specific telemetry command parses here if needed later
+      }
+      return n;
+    }).toList();
+    return response;
   }
 
   Future<void> sendCommandToGroup(String groupId, String cmd) =>
@@ -1080,41 +1117,124 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
 
   Future<void> sendCommandToAll(String cmd) => _dispatchToNodes(state, cmd);
 
+  // How long a power-transition tracking loop (below) may keep polling
+  // before giving up and leaving the node on the regular poll cycle — well
+  // above the ~2-19s standby/cooling and turning-on durations measured on a
+  // PT-RQ25KE, generous enough for slower/older models without leaving a
+  // stuck node polling forever (e.g. the command silently failed to reach
+  // the projector despite `sendCommand` reporting success).
+  static const _powerTransitionTimeout = Duration(minutes: 2);
+  static const _powerTransitionPollInterval = Duration(seconds: 2);
+
+  // QVX:NSGS1 lags QVX:POWI1 reaching ON by a couple of seconds even with a
+  // real signal already connected — the projector hasn't finished locking to
+  // it the instant POWI1 flips (measured ~2s behind on a PT-RQ25KE via
+  // tool/power_status_probe.dart, 2026-09-21: POWI1 reached ON at +16s,
+  // NSGS1 didn't report the real resolution until +18s). A single read right
+  // at the ON transition reliably catches it still mid-lock and reads
+  // ER401 — retrying briefly, bounded so a genuinely disconnected input
+  // doesn't poll forever, avoids that false "NO SIGNAL".
+  static const _signalCatchUpTimeout = Duration(seconds: 12);
+
+  // One tracking loop per node — keyed so a command re-sent mid-transition
+  // (e.g. POF while still turningOn) can cancel and replace the loop already
+  // running for that node instead of running two in parallel.
+  final Map<String, Timer> _powerTransitionTimers = {};
+
+  /// Optimistically shows [transitional] immediately, then polls
+  /// `QVX:POWI1` for [nodeId] every [_powerTransitionPollInterval] until it
+  /// actually reaches [target] (or times out). This replaces guessing a
+  /// fixed delay before re-checking telemetry: the real hardware transition
+  /// (turningOn→on takes ~17-19s, cooling→standby ~2s on a PT-RQ25KE, but
+  /// varies by model/conditions) is what ends the loop, not a timer. The
+  /// instant [target] is actually observed, shutter and signal — neither
+  /// meaningful mid-transition — are refreshed too, since that's the exact
+  /// moment they become real again. Input is deliberately not re-fetched
+  /// here: QIN already reads correctly in Standby, unlike QVX:NSGS1.
+  void _startPowerTransitionTracking(
+    String nodeId,
+    PowerStatus transitional,
+    PowerStatus target,
+  ) {
+    _powerTransitionTimers.remove(nodeId)?.cancel();
+
+    state = state
+        .map((n) => n.id == nodeId ? n.copyWith(powerStatus: transitional) : n)
+        .toList();
+    _notifyStateChanged();
+
+    final startedAt = DateTime.now();
+
+    void scheduleNext() {
+      final t = Timer(_powerTransitionPollInterval, () async {
+        final node = state.where((n) => n.id == nodeId).firstOrNull;
+        if (node == null) {
+          _powerTransitionTimers.remove(nodeId);
+          return;
+        }
+
+        await _pollSpecificTelemetry(node, 'QVX:POWI1');
+        _notifyStateChanged();
+
+        final updated = state.where((n) => n.id == nodeId).firstOrNull;
+        final settled = updated?.powerStatus == target;
+        final timedOut =
+            DateTime.now().difference(startedAt) > _powerTransitionTimeout;
+        if (!settled && !timedOut) {
+          scheduleNext();
+          return;
+        }
+
+        _powerTransitionTimers.remove(nodeId);
+        if (settled && updated != null) {
+          await _pollSpecificTelemetry(updated, 'QSH');
+          if (target == PowerStatus.on) {
+            await _refreshSignalAfterPowerOn(nodeId);
+          } else {
+            final afterShutter = state.where((n) => n.id == nodeId).firstOrNull;
+            if (afterShutter != null) {
+              await _pollSpecificTelemetry(afterShutter, 'QVX:NSGS1');
+            }
+          }
+          _notifyStateChanged();
+        }
+      });
+      _powerTransitionTimers[nodeId] = t;
+    }
+
+    scheduleNext();
+  }
+
+  /// Retries `QVX:NSGS1` for [nodeId] every [_powerTransitionPollInterval]
+  /// until it reports a real reading or [_signalCatchUpTimeout] elapses —
+  /// see that constant's doc comment for why a single read right at the
+  /// turningOn→on transition isn't enough.
+  Future<void> _refreshSignalAfterPowerOn(String nodeId) async {
+    final deadline = DateTime.now().add(_signalCatchUpTimeout);
+    while (true) {
+      final node = state.where((n) => n.id == nodeId).firstOrNull;
+      if (node == null) return;
+      final raw = await _pollSpecificTelemetry(node, 'QVX:NSGS1');
+      final sig = raw?.replaceAll('NSGS1=', '').trim();
+      if (!isUnusableSignalValue(sig)) return;
+      if (DateTime.now().isAfter(deadline)) return;
+      await Future.delayed(_powerTransitionPollInterval);
+    }
+  }
+
   void _applyOptimisticUpdate(String nodeId, String cmd) {
     if (cmd == 'PON') {
-      state = state
-          .map(
-            (n) => n.id == nodeId ? n.copyWith(powerStatus: PowerStatus.on) : n,
-          )
-          .toList();
-      _notifyStateChanged();
-      final node = state.where((n) => n.id == nodeId).firstOrNull;
-      if (node != null) {
-        late Timer t;
-        t = Timer(const Duration(seconds: 8), () {
-          _optimisticTimers.remove(t);
-          _pollSpecificTelemetry(node, 'QSH');
-        });
-        _optimisticTimers.add(t);
-      }
+      _startPowerTransitionTracking(
+        nodeId,
+        PowerStatus.turningOn,
+        PowerStatus.on,
+      );
     } else if (cmd == 'POF') {
-      state = state
-          .map(
-            (n) => n.id == nodeId
-                ? n.copyWith(powerStatus: PowerStatus.standby)
-                : n,
-          )
-          .toList();
-      _notifyStateChanged();
-      final node = state.where((n) => n.id == nodeId).firstOrNull;
-      if (node != null) {
-        late Timer t;
-        t = Timer(const Duration(seconds: 5), () {
-          _optimisticTimers.remove(t);
-          _pollSpecificTelemetry(node, 'QSH');
-        });
-        _optimisticTimers.add(t);
-      }
+      _startPowerTransitionTracking(
+        nodeId,
+        PowerStatus.cooling,
+        PowerStatus.standby,
+      );
     } else if (cmd == 'OSH:0') {
       state = state
           .map(
@@ -1201,12 +1321,14 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
 
   // Drops every id-keyed tracking entry a deleted node leaves behind —
   // otherwise _refreshingNodes/_lastNodeRefresh/_lastWebSignalWrite/
-  // _lastWebSignalBaseline only ever grow for the life of the app process.
+  // _lastWebSignalBaseline/_powerTransitionTimers only ever grow for the
+  // life of the app process.
   void _forgetNode(String id) {
     _refreshingNodes.remove(id);
     _lastNodeRefresh.remove(id);
     _lastWebSignalWrite.remove(id);
     _lastWebSignalBaseline.remove(id);
+    _powerTransitionTimers.remove(id)?.cancel();
   }
 
   void deleteSelected() {

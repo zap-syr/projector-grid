@@ -2,7 +2,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'projector_node.freezed.dart';
 
-enum PowerStatus { on, standby }
+enum PowerStatus { standby, turningOn, on, cooling }
 
 enum ShutterStatus { open, closed }
 

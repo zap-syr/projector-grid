@@ -277,6 +277,26 @@ class PanasonicProtocolService {
     return response;
   }
 
+  /// Like [sendRawCommand], but keeps an application-level `ER`-code (e.g.
+  /// `ER401` = "no signal right now") as real data instead of collapsing it
+  /// to null — only a genuine transport failure (timeout/socket error)
+  /// becomes null. For callers that need to react to that data immediately
+  /// (e.g. showing "NO SIGNAL" the instant a projector finishes warming up)
+  /// rather than treating it the same as "couldn't ask".
+  Future<String?> sendRawCommandPreservingErrorCodes(
+    String ip,
+    int port,
+    String login,
+    String password,
+    String cmd,
+  ) async {
+    final response = await _sendSingleCommand(ip, port, login, password, cmd);
+    if (_isTransportFailure(response)) {
+      return null;
+    }
+    return response;
+  }
+
   /// Polls all essential telemetry points for the Monitoring Table, and
   /// classifies reachability/auth status from that same initial `QID` query.
   /// This used to be two separate methods (a dropped `probeProjector` plus
@@ -329,7 +349,7 @@ class PanasonicProtocolService {
     // chosen by the caller based on how many nodes are being polled overall.
     final results = await _runBounded<String>([
       () => _sendSingleCommand(ip, port, login, password, 'QSN'),
-      () => _sendSingleCommand(ip, port, login, password, 'QPW'),
+      () => _sendSingleCommand(ip, port, login, password, 'QVX:POWI1'),
       () => _sendSingleCommand(ip, port, login, password, 'QSH'),
       () => _sendSingleCommand(ip, port, login, password, 'QIN'),
       () => _sendSingleCommand(ip, port, login, password, 'QVX:NSGS1'),

@@ -221,6 +221,11 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
     size: 16,
     color: Colors.red,
   );
+  static const _iconPowerTransition = Icon(
+    Icons.power_settings_new,
+    size: 16,
+    color: Colors.amber,
+  );
   static const _iconShutterOpen = Icon(
     Icons.visibility,
     size: 16,
@@ -321,8 +326,18 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
       label: 'Power',
       defaultWidth: 130,
       iconPad: 22,
-      text: (n, _) => n.powerStatus == PowerStatus.on ? 'ON' : 'STANDBY',
-      sortKey: (n, _) => n.powerStatus == PowerStatus.on ? 0 : 1,
+      text: (n, _) => switch (n.powerStatus) {
+        PowerStatus.on => 'ON',
+        PowerStatus.turningOn => 'TURNING ON',
+        PowerStatus.cooling => 'COOLING',
+        PowerStatus.standby => 'STANDBY',
+      },
+      sortKey: (n, _) => switch (n.powerStatus) {
+        PowerStatus.on => 0,
+        PowerStatus.turningOn => 1,
+        PowerStatus.cooling => 2,
+        PowerStatus.standby => 3,
+      },
       cell: (_, n, _) => _powerCell(n),
     ),
     _Column(
@@ -790,17 +805,22 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
   }
 
   static Widget _powerCell(ProjectorNode node) {
-    final on = node.powerStatus == PowerStatus.on;
+    final (icon, label, color) = switch (node.powerStatus) {
+      PowerStatus.on => (_iconPowerOn, 'ON', Colors.green),
+      PowerStatus.turningOn => (_iconPowerTransition, 'TURNING ON', _warnText),
+      PowerStatus.cooling => (_iconPowerTransition, 'COOLING', _warnText),
+      PowerStatus.standby => (_iconPowerOff, 'STANDBY', Colors.red),
+    };
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        on ? _iconPowerOn : _iconPowerOff,
+        icon,
         _gap4,
         Flexible(
           child: Text(
-            on ? 'ON' : 'STANDBY',
+            label,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: on ? Colors.green : Colors.red),
+            style: TextStyle(color: color),
           ),
         ),
       ],
