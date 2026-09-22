@@ -93,6 +93,39 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
   _GeometryMode _mode = _GeometryMode.off;
   final Set<_GeometryMode> _loadedModes = {};
 
+  // Tier A — WUXGA-native panel → 3840x2400 Quad Pixel Drive canvas. Corner
+  // Correction inward limits confirmed live on PT-RQ25K: 960 H / 600 V
+  // (vs the WUXGA-class standard 480 H / 300 V). Outward limits (384/240)
+  // never change, on any model. Matched by numeric model code only (trailing
+  // lens/body-variant letters like K/K2/L stripped) — see
+  // plan/QUAD_PIXEL_DRIVE_CORNER_LIMITS.md for the full model survey.
+  static const _tierAModels = [
+    'PT-RQ25',
+    'PT-RQ45',
+    'PT-RQ35',
+    'PT-RQ18',
+    'PT-REQ15',
+    'PT-REQ12',
+    'PT-REQ10',
+    'PT-REQ80',
+  ];
+
+  // Tier B — WQXGA-native panel → 5120x3200 "4K+" canvas. Real Corner
+  // Correction limits are unconfirmed (no unit available to test), so these
+  // stay at the standard 480/300 limits rather than guess. They do have the
+  // QPDI1 register and still require it ON to enter a geometry mode, so they
+  // still get the auto-enable behavior below.
+  static const _tierBModels = ['PT-RQ32', 'PT-RQ22', 'PT-RQ13'];
+
+  // Geometry correction modes require Quad Pixel Drive ON on models that
+  // have it — the projector's own menu refuses to enter Keystone/Curved/
+  // Corner while it's OFF. QVX:QPDI1 can't be read reliably to detect this
+  // (it only answers while mode is Off, returning ER401 the instant any mode
+  // is active, regardless of model) so capability is determined once from
+  // the model name (QID) instead of a live register read.
+  bool _extendedCornerLimits = false; // Tier A only
+  bool _autoEnableQuadPixelDrive = false; // Tier A + Tier B
+
   final _corner = _CornerState();
   final _keystone = _KeystoneState();
   final _curved = _CurvedState();
@@ -112,17 +145,19 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
 
   // ─── Loading ─────────────────────────────────────────────────────────────
   Future<void> _loadInitial() async {
-    final raw = await _service.sendRawCommand(
-      _ip,
-      _port,
-      _login,
-      _password,
-      'QVX:GMMI0',
-    );
+    final results = await Future.wait([
+      _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:GMMI0'),
+      _service.sendRawCommand(_ip, _port, _login, _password, 'QID'),
+    ]);
     if (!mounted) return;
 
-    final modeRaw = _parseValue(raw, 'GMMI0');
+    final modeRaw = _parseValue(results[0], 'GMMI0');
     if (modeRaw != null) _mode = _GeometryMode.fromProtocol(modeRaw);
+
+    final model = results[1] ?? '';
+    _extendedCornerLimits = _tierAModels.any(model.contains);
+    _autoEnableQuadPixelDrive =
+        _extendedCornerLimits || _tierBModels.any(model.contains);
 
     setState(() => _loading = false);
     await _ensureModeLoaded(_mode);
@@ -392,12 +427,20 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
                       .toList(),
                   selected: {_mode},
                   showSelectedIcon: false,
-                  onSelectionChanged: (set) {
+                  onSelectionChanged: (set) async {
                     final m = set.first;
                     if (m == _mode) return;
+                    // Quad-pixel-capable models refuse to enter any geometry
+                    // mode while Quad Pixel Drive is off — enable it first so
+                    // the mode switch itself doesn't error out. VXX:QPDI1=ON
+                    // is idempotent, so no need to track current state.
+                    if (_autoEnableQuadPixelDrive &&
+                        _mode == _GeometryMode.off) {
+                      await _sendBool('QPDI1', true);
+                    }
                     setState(() => _mode = m);
-                    _sendMode(m);
-                    _ensureModeLoaded(m);
+                    await _sendMode(m);
+                    await _ensureModeLoaded(m);
                   },
                 ),
               ),
@@ -516,6 +559,7 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
               child: _CornerCorrectionCanvas(
                 key: _cornerCanvasKey,
                 state: _corner,
+                extendedCornerLimits: _extendedCornerLimits,
                 onCornerCommit: (List<(String, int)> commands) async {
                   for (final (key, value) in commands) {
                     await _sendInt(key, value);
@@ -1311,12 +1355,17 @@ class _TrapezoidPainter extends CustomPainter {
 // ─── Corner Correction Canvas ──────────────────────────────────────────────
 class _CornerCorrectionCanvas extends StatefulWidget {
   final _CornerState state;
+  // Tier A models only — widens the inward-facing movement limits for every
+  // corner (3840x2400 virtual canvas instead of the native panel's canvas).
+  // Outward limits never change.
+  final bool extendedCornerLimits;
   // Commands list is paired (param_key, value) for atomic per-drag commit.
   final Future<void> Function(List<(String, int)>) onCornerCommit;
 
   const _CornerCorrectionCanvas({
     super.key,
     required this.state,
+    required this.extendedCornerLimits,
     required this.onCornerCommit,
   });
 
@@ -1339,11 +1388,17 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
   };
 
   // 1 canvas pixel = 6 projector pixels (1920/320 = 1200/200 = 6.0).
-  // Protocol range ±480 H / ±300 V maps to ±80 / ±50 canvas pixels.
+  // Protocol range ±480 H / ±300 V maps to ±80 / ±50 canvas pixels. This is
+  // the VISUAL scale and never changes with Quad Pixel Drive — QPD doubles
+  // the inward protocol-unit ceiling (480→960, 300→600) because it doubles
+  // the addressing resolution, not because the physical/visual inward reach
+  // gets any bigger. See _toCanvas/_toRaw for the doubled-precision inward
+  // conversion that keeps drag behavior visually identical across models.
   static const double _scale = 6.0;
 
-  // Asymmetrical hardware limits (protocol values ÷ 6 = canvas pixels):
-  // H: outward 384 (64px), inward 480 (80px). V: outward 240 (40px), inward 300 (50px).
+  // Fixed canvas-pixel bounds, same on every model regardless of Quad Pixel
+  // Drive — visual reach doesn't change, only how many raw protocol units it
+  // takes to express it (see _scale comment above).
   static const Map<_Corner, Rect> _bounds = {
     // Left default X:80. Outward -64px → 16. Inward +80px → 160.
     // Top default Y:50.  Outward -40px → 10. Inward +50px → 100.
@@ -1354,6 +1409,41 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
     _Corner.ll: Rect.fromLTRB(16, 200, 160, 290),
     _Corner.lr: Rect.fromLTRB(320, 200, 464, 290),
   };
+
+  // Converts a raw protocol value to a canvas-pixel delta from the corner's
+  // default position. On Quad Pixel Drive models, the inward direction uses
+  // double the precision (scale 12 instead of 6) since QPD's wider inward
+  // ceiling (e.g. 960 instead of 480) represents the SAME physical maximum
+  // reach expressed in twice-as-fine units, not a bigger reach. Outward
+  // always uses the base scale — that limit is a fixed lens/mechanical
+  // constraint, unaffected by QPD.
+  double _toCanvas(int raw, {required bool inwardIsPositive}) {
+    final isInward = inwardIsPositive ? raw >= 0 : raw <= 0;
+    final scale = (isInward && widget.extendedCornerLimits)
+        ? _scale * 2
+        : _scale;
+    return raw / scale;
+  }
+
+  // Inverse of _toCanvas — canvas-pixel delta back to a raw protocol value.
+  int _toRaw(double canvasDelta, {required bool inwardIsPositive}) {
+    final isInward = inwardIsPositive ? canvasDelta >= 0 : canvasDelta <= 0;
+    final scale = (isInward && widget.extendedCornerLimits)
+        ? _scale * 2
+        : _scale;
+    return (canvasDelta * scale).round();
+  }
+
+  // Absolute outward ceiling — union of all 4 corners' outward-facing edges.
+  // Unlike _bounds, this never changes with Quad Pixel Drive, since outward
+  // reach is fixed. Drawn on the canvas so dragging stops at a visible
+  // frame instead of empty space.
+  Rect get _outerLimitRect => Rect.fromLTRB(
+    _bounds[_Corner.ul]!.left,
+    _bounds[_Corner.ul]!.top,
+    _bounds[_Corner.ur]!.right,
+    _bounds[_Corner.ll]!.bottom,
+  );
 
   final Set<_Corner> _selected = {};
   final Map<_Corner, Offset> _dragStartPositions = {};
@@ -1386,12 +1476,19 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
     LogicalKeyboardKey.arrowDown,
   };
 
-  static Offset _keyDelta(LogicalKeyboardKey key) => switch (key) {
-    LogicalKeyboardKey.arrowLeft => const Offset(-1 / _scale, 0),
-    LogicalKeyboardKey.arrowRight => const Offset(1 / _scale, 0),
-    LogicalKeyboardKey.arrowUp => const Offset(0, -1 / _scale),
-    LogicalKeyboardKey.arrowDown => const Offset(0, 1 / _scale),
-    _ => Offset.zero,
+  // Raw protocol-unit deltas (H, V) — always exactly 1 unit per key press.
+  // Increasing H always moves a corner right on screen and increasing V
+  // always moves it down, for every corner (raw/scale in _toCanvas is
+  // monotonic with a positive scale regardless of inward/outward zone), so a
+  // single pair of signed deltas works uniformly across all 4 corners —
+  // unlike a canvas-space delta, this isn't affected by the doubled inward
+  // scale on Quad Pixel Drive models.
+  static (int, int) _keyRawDelta(LogicalKeyboardKey key) => switch (key) {
+    LogicalKeyboardKey.arrowLeft => (-1, 0),
+    LogicalKeyboardKey.arrowRight => (1, 0),
+    LogicalKeyboardKey.arrowUp => (0, -1),
+    LogicalKeyboardKey.arrowDown => (0, 1),
+    _ => (0, 0),
   };
 
   @override
@@ -1405,10 +1502,29 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
   void clearSelection() => setState(() => _selected.clear());
 
   // ─── Arrow-key movement ───────────────────────────────────────────────────
-  void _applyStep(Offset delta) {
-    if (!mounted || _selected.isEmpty) return;
+  void _applyRawStep(int dh, int dv) {
+    if (!mounted || _selected.isEmpty || (dh == 0 && dv == 0)) return;
+    final inwardH = widget.extendedCornerLimits ? 960 : 480;
+    final inwardV = widget.extendedCornerLimits ? 600 : 300;
     for (final c in _selected) {
-      _applyCornerPosition(c, _positionOf(c) + delta);
+      switch (c) {
+        case _Corner.ul:
+          widget.state.gmfi6 = (widget.state.gmfi6 + dh).clamp(-384, inwardH);
+          widget.state.gmfi1 = (widget.state.gmfi1 + dv).clamp(-240, inwardV);
+          break;
+        case _Corner.ur:
+          widget.state.gmfi7 = (widget.state.gmfi7 + dh).clamp(-inwardH, 384);
+          widget.state.gmfi2 = (widget.state.gmfi2 + dv).clamp(-240, inwardV);
+          break;
+        case _Corner.ll:
+          widget.state.gmfi8 = (widget.state.gmfi8 + dh).clamp(-384, inwardH);
+          widget.state.gmfi3 = (widget.state.gmfi3 + dv).clamp(-inwardV, 240);
+          break;
+        case _Corner.lr:
+          widget.state.gmfi9 = (widget.state.gmfi9 + dh).clamp(-inwardH, 384);
+          widget.state.gmfi4 = (widget.state.gmfi4 + dv).clamp(-inwardV, 240);
+          break;
+      }
     }
     setState(() {});
   }
@@ -1418,14 +1534,17 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
     _keyHoldTimer?.cancel();
     _keyTimer?.cancel();
     _heldKey = key;
-    final delta = _keyDelta(key);
+    final (dh, dv) = _keyRawDelta(key);
 
     // Immediate single step on first press.
-    _applyStep(delta);
+    _applyRawStep(dh, dv);
 
     // After hold delay, begin slow continuous movement.
     _keyHoldTimer = Timer(_keyHoldDelay, () {
-      _keyTimer = Timer.periodic(_keyRepeatInterval, (_) => _applyStep(delta));
+      _keyTimer = Timer.periodic(
+        _keyRepeatInterval,
+        (_) => _applyRawStep(dh, dv),
+      );
     });
   }
 
@@ -1462,10 +1581,22 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
     final s = widget.state;
     final d = _defaults[c]!;
     return switch (c) {
-      _Corner.ul => Offset(d.dx + s.gmfi6 / _scale, d.dy + s.gmfi1 / _scale),
-      _Corner.ur => Offset(d.dx + s.gmfi7 / _scale, d.dy + s.gmfi2 / _scale),
-      _Corner.ll => Offset(d.dx + s.gmfi8 / _scale, d.dy + s.gmfi3 / _scale),
-      _Corner.lr => Offset(d.dx + s.gmfi9 / _scale, d.dy + s.gmfi4 / _scale),
+      _Corner.ul => Offset(
+        d.dx + _toCanvas(s.gmfi6, inwardIsPositive: true),
+        d.dy + _toCanvas(s.gmfi1, inwardIsPositive: true),
+      ),
+      _Corner.ur => Offset(
+        d.dx + _toCanvas(s.gmfi7, inwardIsPositive: false),
+        d.dy + _toCanvas(s.gmfi2, inwardIsPositive: true),
+      ),
+      _Corner.ll => Offset(
+        d.dx + _toCanvas(s.gmfi8, inwardIsPositive: true),
+        d.dy + _toCanvas(s.gmfi3, inwardIsPositive: false),
+      ),
+      _Corner.lr => Offset(
+        d.dx + _toCanvas(s.gmfi9, inwardIsPositive: false),
+        d.dy + _toCanvas(s.gmfi4, inwardIsPositive: false),
+      ),
     };
   }
 
@@ -1476,25 +1607,55 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
       position.dx.clamp(rect.left, rect.right),
       position.dy.clamp(rect.top, rect.bottom),
     );
-    final hValue = ((clamped.dx - defaultPos.dx) * _scale).round();
-    final vValue = ((clamped.dy - defaultPos.dy) * _scale).round();
+    final dxCanvas = clamped.dx - defaultPos.dx;
+    final dyCanvas = clamped.dy - defaultPos.dy;
+
+    // Defensive safety clamp against the true protocol range, in case of
+    // rounding at the boundary — the canvas-pixel clamp above already keeps
+    // values in range under normal operation.
+    final inwardH = widget.extendedCornerLimits ? 960 : 480;
+    final inwardV = widget.extendedCornerLimits ? 600 : 300;
 
     switch (which) {
       case _Corner.ul:
-        widget.state.gmfi6 = hValue.clamp(-384, 480);
-        widget.state.gmfi1 = vValue.clamp(-240, 300);
+        widget.state.gmfi6 = _toRaw(
+          dxCanvas,
+          inwardIsPositive: true,
+        ).clamp(-384, inwardH);
+        widget.state.gmfi1 = _toRaw(
+          dyCanvas,
+          inwardIsPositive: true,
+        ).clamp(-240, inwardV);
         break;
       case _Corner.ur:
-        widget.state.gmfi7 = hValue.clamp(-480, 384);
-        widget.state.gmfi2 = vValue.clamp(-240, 300);
+        widget.state.gmfi7 = _toRaw(
+          dxCanvas,
+          inwardIsPositive: false,
+        ).clamp(-inwardH, 384);
+        widget.state.gmfi2 = _toRaw(
+          dyCanvas,
+          inwardIsPositive: true,
+        ).clamp(-240, inwardV);
         break;
       case _Corner.ll:
-        widget.state.gmfi8 = hValue.clamp(-384, 480);
-        widget.state.gmfi3 = vValue.clamp(-300, 240);
+        widget.state.gmfi8 = _toRaw(
+          dxCanvas,
+          inwardIsPositive: true,
+        ).clamp(-384, inwardH);
+        widget.state.gmfi3 = _toRaw(
+          dyCanvas,
+          inwardIsPositive: false,
+        ).clamp(-inwardV, 240);
         break;
       case _Corner.lr:
-        widget.state.gmfi9 = hValue.clamp(-480, 384);
-        widget.state.gmfi4 = vValue.clamp(-300, 240);
+        widget.state.gmfi9 = _toRaw(
+          dxCanvas,
+          inwardIsPositive: false,
+        ).clamp(-inwardH, 384);
+        widget.state.gmfi4 = _toRaw(
+          dyCanvas,
+          inwardIsPositive: false,
+        ).clamp(-inwardV, 240);
         break;
     }
   }
@@ -1650,6 +1811,7 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
                                 ur: _positionOf(_Corner.ur),
                                 ll: _positionOf(_Corner.ll),
                                 lr: _positionOf(_Corner.lr),
+                                outerLimit: _outerLimitRect,
                                 outline: theme.colorScheme.primary,
                                 fill: theme.colorScheme.primary.withValues(
                                   alpha: 0.10,
@@ -1720,6 +1882,7 @@ enum _Corner { ul, ur, ll, lr }
 
 class _CornerCorrectionPainter extends CustomPainter {
   final Offset ul, ur, ll, lr;
+  final Rect outerLimit;
   final Color outline, fill, defaultColor;
 
   _CornerCorrectionPainter({
@@ -1727,13 +1890,56 @@ class _CornerCorrectionPainter extends CustomPainter {
     required this.ur,
     required this.ll,
     required this.lr,
+    required this.outerLimit,
     required this.outline,
     required this.fill,
     required this.defaultColor,
   });
 
+  // Dashed stroke around a rect — CustomPainter has no built-in dashed
+  // stroke, and this frame needs to read as a hard limit, distinct from the
+  // solid faint default-size reference rectangle.
+  static void _drawDashedRect(
+    Canvas canvas,
+    Rect rect,
+    Paint paint, {
+    double dashWidth = 6,
+    double dashSpace = 4,
+  }) {
+    void dashedLine(Offset start, Offset end) {
+      final total = (end - start).distance;
+      final direction = (end - start) / total;
+      var drawn = 0.0;
+      while (drawn < total) {
+        final segEnd = (drawn + dashWidth).clamp(0.0, total);
+        canvas.drawLine(
+          start + direction * drawn,
+          start + direction * segEnd,
+          paint,
+        );
+        drawn += dashWidth + dashSpace;
+      }
+    }
+
+    dashedLine(rect.topLeft, rect.topRight);
+    dashedLine(rect.topRight, rect.bottomRight);
+    dashedLine(rect.bottomRight, rect.bottomLeft);
+    dashedLine(rect.bottomLeft, rect.topLeft);
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
+    // Outer limit frame — the absolute ceiling any corner can be dragged to,
+    // drawn first so the warped quad below is always visually in front of it.
+    _drawDashedRect(
+      canvas,
+      outerLimit,
+      Paint()
+        ..color = defaultColor.withValues(alpha: 0.45)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
+
     // Default frame outline (faint reference rectangle).
     final defaultPaint = Paint()
       ..color = defaultColor.withValues(alpha: 0.5)
@@ -1784,6 +1990,7 @@ class _CornerCorrectionPainter extends CustomPainter {
       old.ur != ur ||
       old.ll != ll ||
       old.lr != lr ||
+      old.outerLimit != outerLimit ||
       old.outline != outline ||
       old.fill != fill ||
       old.defaultColor != defaultColor;
