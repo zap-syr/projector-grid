@@ -430,15 +430,26 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
                   onSelectionChanged: (set) async {
                     final m = set.first;
                     if (m == _mode) return;
+                    final wasOff = _mode == _GeometryMode.off;
+                    final needsLoad =
+                        m != _GeometryMode.off && !_loadedModes.contains(m);
+                    // Switch the selection and panel instantly — the network
+                    // round trips below (QPDI1 enable, mode command, and a
+                    // first-time parameter load are each a separate TCP
+                    // connection to the projector, see _ensureModeLoaded) run
+                    // in the background under the mode panel's own spinner
+                    // instead of freezing the SegmentedButton until they land.
+                    setState(() {
+                      _mode = m;
+                      if (needsLoad) _modeLoading = true;
+                    });
                     // Quad-pixel-capable models refuse to enter any geometry
                     // mode while Quad Pixel Drive is off — enable it first so
                     // the mode switch itself doesn't error out. VXX:QPDI1=ON
                     // is idempotent, so no need to track current state.
-                    if (_autoEnableQuadPixelDrive &&
-                        _mode == _GeometryMode.off) {
+                    if (_autoEnableQuadPixelDrive && wasOff) {
                       await _sendBool('QPDI1', true);
                     }
-                    setState(() => _mode = m);
                     await _sendMode(m);
                     await _ensureModeLoaded(m);
                   },
@@ -1812,6 +1823,12 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
                                 ll: _positionOf(_Corner.ll),
                                 lr: _positionOf(_Corner.lr),
                                 outerLimit: _outerLimitRect,
+                                linearityV: widget.state.gmfi5,
+                                linearityH: widget.state.gmfia,
+                                pincushionUpper: widget.state.gmfib,
+                                pincushionLower: widget.state.gmfic,
+                                pincushionLeft: widget.state.gmfid,
+                                pincushionRight: widget.state.gmfie,
                                 outline: theme.colorScheme.primary,
                                 fill: theme.colorScheme.primary.withValues(
                                   alpha: 0.10,
@@ -1883,6 +1900,14 @@ enum _Corner { ul, ur, ll, lr }
 class _CornerCorrectionPainter extends CustomPainter {
   final Offset ul, ur, ll, lr;
   final Rect outerLimit;
+  // Linearity V/H (GMFI5/GMFIA, ±127) and Pincushion Upper/Lower/Left/Right
+  // (GMFIB–E, ±100) — see plan discussion: Linearity shifts where the single
+  // cross line sits between opposite edges; Pincushion bows each edge with a
+  // parabola (zero at its two corners, peak at its midpoint). Both are pure
+  // preview math — the values themselves are already sent to the projector
+  // via the sliders in _buildCornerSliders, this only affects the drawing.
+  final int linearityV, linearityH;
+  final int pincushionUpper, pincushionLower, pincushionLeft, pincushionRight;
   final Color outline, fill, defaultColor;
 
   _CornerCorrectionPainter({
@@ -1891,10 +1916,105 @@ class _CornerCorrectionPainter extends CustomPainter {
     required this.ll,
     required this.lr,
     required this.outerLimit,
+    required this.linearityV,
+    required this.linearityH,
+    required this.pincushionUpper,
+    required this.pincushionLower,
+    required this.pincushionLeft,
+    required this.pincushionRight,
     required this.outline,
     required this.fill,
     required this.defaultColor,
   });
+
+  // Fraction of the 0.5 default position the cross line can shift toward an
+  // edge at full ±127 linearity — calibrated against VSS screenshots (the
+  // cross moved roughly 12-15% of the frame at the slider extremes).
+  static const double _crossAmplitude = 0.15;
+
+  // Pincushion bow amplitude in canvas pixels at value=±100 — calibrated
+  // against VSS screenshots (~12% of the default 320×200 frame per axis).
+  static const double _pincushionAmplitudeV = 24.0;
+  static const double _pincushionAmplitudeH = 38.0;
+
+  static double _parabola(double u) => 4 * u * (1 - u);
+
+  // Edge curves — each passes exactly through its two corner points (the
+  // parabola is zero at u=0/1) and bows by its own Pincushion value in
+  // between.
+  //
+  // Sign convention confirmed against the real projector (VSS's own preview
+  // turned out to render some edges with the opposite sign, so that was not
+  // trustworthy as a reference): positive Pincushion always bows that edge
+  // INWARD, toward the rectangle's center; negative always bows it OUTWARD.
+  // Same relative sense for all 4 edges, even though "inward" is a different
+  // absolute direction per edge (down for Upper, up for Lower, right for
+  // Left, left for Right).
+  Offset _top(double u) => Offset.lerp(
+    ul,
+    ur,
+    u,
+  )!.translate(0, pincushionUpper / 100 * _pincushionAmplitudeV * _parabola(u));
+  Offset _bottom(double u) => Offset.lerp(ll, lr, u)!.translate(
+    0,
+    -(pincushionLower / 100 * _pincushionAmplitudeV * _parabola(u)),
+  );
+  Offset _left(double v) => Offset.lerp(
+    ul,
+    ll,
+    v,
+  )!.translate(pincushionLeft / 100 * _pincushionAmplitudeH * _parabola(v), 0);
+  Offset _right(double v) => Offset.lerp(ur, lr, v)!.translate(
+    -(pincushionRight / 100 * _pincushionAmplitudeH * _parabola(v)),
+    0,
+  );
+
+  // Bilinear Coons patch: blends the 4 (possibly bowed) boundary curves into
+  // a smooth interior. Reduces to a plain bilinear lerp of the 4 corners when
+  // all Pincushion values are 0, matching the mesh's old un-bowed behavior.
+  Offset _coons(double u, double v) {
+    final ruled = Offset(
+      (1 - v) * _top(u).dx +
+          v * _bottom(u).dx +
+          (1 - u) * _left(v).dx +
+          u * _right(v).dx,
+      (1 - v) * _top(u).dy +
+          v * _bottom(u).dy +
+          (1 - u) * _left(v).dy +
+          u * _right(v).dy,
+    );
+    final bilinear = Offset(
+      (1 - u) * (1 - v) * ul.dx +
+          u * (1 - v) * ur.dx +
+          (1 - u) * v * ll.dx +
+          u * v * lr.dx,
+      (1 - u) * (1 - v) * ul.dy +
+          u * (1 - v) * ur.dy +
+          (1 - u) * v * ll.dy +
+          u * v * lr.dy,
+    );
+    return ruled - bilinear;
+  }
+
+  static const int _edgeSegments = 24;
+
+  Path _sampledPath(Offset Function(double t) point, int segments) {
+    final path = Path()..moveTo(point(0).dx, point(0).dy);
+    _appendCurve(path, point, segments);
+    return path;
+  }
+
+  // Appends lineTo segments only — no moveTo — so multiple curves chain into
+  // a single continuous subpath. addPath() would insert each curve as its
+  // own subpath instead (each with its own moveTo), which made close() draw
+  // a stray straight line back to the last subpath's start instead of
+  // closing the whole boundary.
+  void _appendCurve(Path path, Offset Function(double t) point, int segments) {
+    for (int i = 1; i <= segments; i++) {
+      final p = point(i / segments);
+      path.lineTo(p.dx, p.dy);
+    }
+  }
 
   // Dashed stroke around a rect — CustomPainter has no built-in dashed
   // stroke, and this frame needs to read as a hard limit, distinct from the
@@ -1947,41 +2067,41 @@ class _CornerCorrectionPainter extends CustomPainter {
       ..strokeWidth = 1;
     canvas.drawRect(const Rect.fromLTRB(80, 50, 400, 250), defaultPaint);
 
-    // Warped quadrilateral: fill + outline.
-    final path = Path()
-      ..moveTo(ul.dx, ul.dy)
-      ..lineTo(ur.dx, ur.dy)
-      ..lineTo(lr.dx, lr.dy)
-      ..lineTo(ll.dx, ll.dy)
-      ..close();
+    // Warped boundary: 4 bowed edges (straight when their Pincushion value is
+    // 0), fill + outline. Each edge curve passes exactly through its two
+    // corners, so this still pins to ul/ur/ll/lr like the old straight quad.
+    final boundary = Path()..moveTo(ul.dx, ul.dy);
+    _appendCurve(boundary, _top, _edgeSegments);
+    _appendCurve(boundary, _right, _edgeSegments);
+    _appendCurve(boundary, (t) => _bottom(1 - t), _edgeSegments);
+    _appendCurve(boundary, (t) => _left(1 - t), _edgeSegments);
+    boundary.close();
 
-    canvas.drawPath(path, Paint()..color = fill);
+    canvas.drawPath(boundary, Paint()..color = fill);
     canvas.drawPath(
-      path,
+      boundary,
       Paint()
         ..color = outline
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2,
     );
 
-    // 3x3 reference grid inside the warped quad.
+    // Single cross through the middle (matches VSS's 2x2 grid), shifted off
+    // center by Linearity and bowed by Pincushion via the Coons blend.
     final gridPaint = Paint()
-      ..color = outline.withValues(alpha: 0.25)
+      ..color = outline.withValues(alpha: 0.35)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
-    for (int i = 1; i < 3; i++) {
-      final t = i / 3.0;
-      canvas.drawLine(
-        Offset.lerp(ul, ur, t)!,
-        Offset.lerp(ll, lr, t)!,
-        gridPaint,
-      );
-      canvas.drawLine(
-        Offset.lerp(ul, ll, t)!,
-        Offset.lerp(ur, lr, t)!,
-        gridPaint,
-      );
-    }
+    final tCross = (0.5 + linearityH / 127 * _crossAmplitude).clamp(0.0, 1.0);
+    final sCross = (0.5 + linearityV / 127 * _crossAmplitude).clamp(0.0, 1.0);
+    canvas.drawPath(
+      _sampledPath((v) => _coons(tCross, v), _edgeSegments),
+      gridPaint,
+    );
+    canvas.drawPath(
+      _sampledPath((u) => _coons(u, sCross), _edgeSegments),
+      gridPaint,
+    );
   }
 
   @override
@@ -1991,6 +2111,12 @@ class _CornerCorrectionPainter extends CustomPainter {
       old.ll != ll ||
       old.lr != lr ||
       old.outerLimit != outerLimit ||
+      old.linearityV != linearityV ||
+      old.linearityH != linearityH ||
+      old.pincushionUpper != pincushionUpper ||
+      old.pincushionLower != pincushionLower ||
+      old.pincushionLeft != pincushionLeft ||
+      old.pincushionRight != pincushionRight ||
       old.outline != outline ||
       old.fill != fill ||
       old.defaultColor != defaultColor;
