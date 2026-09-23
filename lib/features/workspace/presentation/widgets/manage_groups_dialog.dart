@@ -8,24 +8,43 @@ import '../providers/scheduled_tasks_provider.dart';
 import '../providers/workspace_provider.dart';
 import 'dialog_title_bar.dart';
 
-const List<Color> _presetColors = [
-  Colors.red,
-  Colors.pink,
-  Colors.purple,
-  Colors.deepPurple,
-  Colors.indigo,
-  Colors.blue,
-  Colors.lightBlue,
-  Colors.cyan,
-  Colors.teal,
-  Colors.green,
-  Colors.lightGreen,
-  Colors.lime,
-  Colors.amber,
-  Colors.orange,
-  Colors.deepOrange,
-  Colors.brown,
+/// 8 hues x 3 tones, flattened tone-major (row 0 = lightest tone of every
+/// hue, row 1 = mid, row 2 = deepest) so a `crossAxisCount: 8` grid renders
+/// one hue per column, light-to-dark top to bottom.
+const List<Color> _curatedPalette = [
+  Color(0xFFF87171),
+  Color(0xFFFB923C),
+  Color(0xFFFBBF24),
+  Color(0xFF4ADE80),
+  Color(0xFF2DD4BF),
+  Color(0xFF60A5FA),
+  Color(0xFFA78BFA),
+  Color(0xFFF472B6),
+  Color(0xFFEF4444),
+  Color(0xFFF97316),
+  Color(0xFFF59E0B),
+  Color(0xFF22C55E),
+  Color(0xFF14B8A6),
+  Color(0xFF3B82F6),
+  Color(0xFF8B5CF6),
+  Color(0xFFEC4899),
+  Color(0xFFB91C1C),
+  Color(0xFFC2410C),
+  Color(0xFFB45309),
+  Color(0xFF15803D),
+  Color(0xFF0F766E),
+  Color(0xFF1D4ED8),
+  Color(0xFF6D28D9),
+  Color(0xFFBE185D),
 ];
+
+/// The readable text/icon color to paint on top of [background] — mirrors
+/// how the group's card chip picks its own text color (see ProjectorCard).
+Color contrastOn(Color background) {
+  return ThemeData.estimateBrightnessForColor(background) == Brightness.light
+      ? const Color(0xFF15171B)
+      : Colors.white;
+}
 
 /// Shows the New / Edit Group dialog. Returns the created/updated group, or null.
 /// Can be called standalone (from context menu "New Group...") or from ManageGroupsDialog.
@@ -54,13 +73,17 @@ class _GroupEditorDialog extends StatefulWidget {
   State<_GroupEditorDialog> createState() => _GroupEditorDialogState();
 }
 
+/// Soft cap on group names — long names get ellipsized on the ~120px-wide
+/// card chip anyway, and this keeps the generated OSC address reasonable.
+const int _maxGroupNameLength = 24;
+
 class _GroupEditorDialogState extends State<_GroupEditorDialog> {
   late final _nameController = TextEditingController(
     text: widget.existing?.name ?? '',
   );
   late Color _selectedColor = widget.existing != null
       ? Color(widget.existing!.color)
-      : _presetColors[0];
+      : _curatedPalette[0];
   String? _nameError;
 
   @override
@@ -95,6 +118,7 @@ class _GroupEditorDialogState extends State<_GroupEditorDialog> {
                 children: [
                   TextField(
                     controller: _nameController,
+                    maxLength: _maxGroupNameLength,
                     decoration: InputDecoration(
                       labelText: 'Group Name',
                       border: const OutlineInputBorder(),
@@ -118,35 +142,43 @@ class _GroupEditorDialogState extends State<_GroupEditorDialog> {
                       }
                     },
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 8),
                   Text('Color', style: theme.textTheme.bodySmall),
                   const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: _presetColors.map((color) {
+                  GridView.count(
+                    crossAxisCount: 8,
+                    mainAxisSpacing: 6,
+                    crossAxisSpacing: 6,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    children: _curatedPalette.map((color) {
                       final isSelected =
                           color.toARGB32() == _selectedColor.toARGB32();
                       return GestureDetector(
                         onTap: () => setState(() => _selectedColor = color),
-                        child: Container(
-                          width: 28,
-                          height: 28,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 120),
                           decoration: BoxDecoration(
                             color: color,
-                            shape: BoxShape.circle,
-                            border: isSelected
-                                ? Border.all(
-                                    color: theme.colorScheme.onSurface,
-                                    width: 2.5,
-                                  )
+                            borderRadius: BorderRadius.circular(9),
+                            boxShadow: isSelected
+                                ? [
+                                    BoxShadow(
+                                      color: cs.onSurface,
+                                      spreadRadius: 2,
+                                    ),
+                                    BoxShadow(
+                                      color: theme.dialogTheme.backgroundColor!,
+                                      spreadRadius: 1,
+                                    ),
+                                  ]
                                 : null,
                           ),
                           child: isSelected
-                              ? const Icon(
+                              ? Icon(
                                   Icons.check,
-                                  size: 16,
-                                  color: Colors.white,
+                                  size: 15,
+                                  color: contrastOn(color),
                                 )
                               : null,
                         ),

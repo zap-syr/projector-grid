@@ -8,6 +8,13 @@ import '../../domain/projector_node.dart';
 import '../../domain/projector_group.dart';
 import '../providers/selection_provider.dart';
 
+/// How strongly a grouped card's background is tinted with its group's
+/// color. Applied via [Color.alphaBlend] over the card's normal surface
+/// color, so 0 is indistinguishable from an ungrouped card and 1 would
+/// replace the surface entirely with the flat group color. Kept as a single
+/// named constant, rather than inlined, so it's a one-line change to tune.
+const double kProjectorCardGroupTintOpacity = 0.15;
+
 class ProjectorCard extends ConsumerStatefulWidget {
   final ProjectorNode node;
   final ProjectorGroup? group;
@@ -89,6 +96,69 @@ class _ProjectorCardState extends ConsumerState<ProjectorCard> {
       ConnectionStatus.offline => Colors.red,
     };
 
+    // The status bar + name/IP column, shared by grouped and ungrouped
+    // cards alike — a grouped card tints its own background instead of
+    // changing anything inside this column (see build below).
+    final cardBody = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          color: colorScheme.surfaceContainerHighest,
+          child: Row(
+            children: [
+              Icon(Icons.power_settings_new, size: 14, color: powerColor),
+              const SizedBox(width: 4),
+              Icon(Icons.visibility, size: 14, color: shutterColor),
+              const SizedBox(width: 4),
+              if (node.errors != 'NO ERRORS' && node.errors != '-')
+                const Icon(
+                  Icons.warning_amber_rounded,
+                  size: 14,
+                  color: Colors.orange,
+                ),
+              const Spacer(),
+              if (node.connectionStatus == ConnectionStatus.unauthorized)
+                const Icon(Icons.lock_outline, size: 12, color: Colors.amber),
+              if (node.connectionStatus == ConnectionStatus.unprotected)
+                const Icon(Icons.lock_open, size: 12, color: Colors.blue),
+              const SizedBox(width: 4),
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: connectionColor,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const Spacer(),
+        // Content area
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+          child: Text(
+            node.name,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(left: 8.0, right: 8.0, bottom: 8.0),
+          child: Text(
+            node.ipAddress,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.7),
+            ),
+          ),
+        ),
+      ],
+    );
+
     // Zoom changes rescale left/top just like a real position change would,
     // but should snap instantly rather than ease like an actual drag-snap
     // correction — otherwise every card visibly "jumps" on every zoom step.
@@ -134,105 +204,123 @@ class _ProjectorCardState extends ConsumerState<ProjectorCard> {
         scale: widget.zoom,
         alignment: Alignment.topLeft,
         child: RepaintBoundary(
-          child: MenuAnchor(
-            controller: _menuController,
-            consumeOutsideTap: true,
-            menuChildren: [
-              MenuItemButton(
-                onPressed: () => _closeAndRun(widget.onEdit),
-                leadingIcon: const Icon(Icons.edit_outlined),
-                child: const Text('Edit'),
-              ),
-              MenuItemButton(
-                onPressed: () => _closeAndRun(widget.onBrightnessControl),
-                leadingIcon: const Icon(Icons.brightness_6),
-                child: const Text('Brightness Control'),
-              ),
-              MenuItemButton(
-                onPressed: () => _closeAndRun(widget.onColorCorrection),
-                leadingIcon: const Icon(Icons.tune),
-                child: const Text('Color Correction'),
-              ),
-              MenuItemButton(
-                onPressed: () => _closeAndRun(widget.onGeometryCorrection),
-                leadingIcon: const Icon(Icons.grid_4x4_outlined),
-                child: const Text('Geometry Correction'),
-              ),
-              MenuItemButton(
-                onPressed: () => _closeAndRun(widget.onRemotePreview),
-                leadingIcon: const Icon(Icons.cast),
-                child: const Text('Remote Preview'),
-              ),
-              MenuItemButton(
-                onPressed: () => _closeAndRun(() {
-                  final url = 'http://${node.ipAddress}';
-                  if (Platform.isWindows) {
-                    Process.run('cmd', ['/c', 'start', url]);
-                  } else if (Platform.isMacOS) {
-                    Process.run('open', [url]);
-                  } else if (Platform.isLinux) {
-                    Process.run('xdg-open', [url]);
-                  }
-                }),
-                leadingIcon: const Icon(Icons.open_in_browser),
-                child: const Text('Open in Browser'),
-              ),
-              const Divider(height: 1),
-              MenuItemButton(
-                onPressed: widget.onSelectGroup != null
-                    ? () => _closeAndRun(widget.onSelectGroup!)
-                    : null,
-                leadingIcon: const Icon(Icons.select_all),
-                child: const Text('Select in Group'),
-              ),
-              SubmenuButton(
-                menuChildren: widget.buildGroupMenuItems(),
-                leadingIcon: const Icon(Icons.workspaces_outlined),
-                child: const Text('Assign to Group'),
-              ),
-              const Divider(height: 1),
-              MenuItemButton(
-                onPressed: () => _closeAndRun(widget.onDelete),
-                leadingIcon: Builder(
-                  builder: (context) => Icon(
-                    Icons.delete_outline,
-                    color: Theme.of(context).colorScheme.error,
+          // The group chip is a sibling of MenuAnchor, not a descendant of
+          // it — a Tooltip (which the chip may show) nested inside another
+          // overlay-based widget like MenuAnchor corrupts the Windows
+          // accessibility tree (AXTree) once enough of them rebuild at once,
+          // e.g. on every zoom step. See flutter/flutter#98099 and the
+          // Otzaria fix for the same "tooltip inside overlay anchor" crash.
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              MenuAnchor(
+                controller: _menuController,
+                consumeOutsideTap: true,
+                menuChildren: [
+                  MenuItemButton(
+                    onPressed: () => _closeAndRun(widget.onEdit),
+                    leadingIcon: const Icon(Icons.edit_outlined),
+                    child: const Text('Edit'),
                   ),
-                ),
-                child: Builder(
-                  builder: (context) => Text(
-                    'Delete',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
+                  MenuItemButton(
+                    onPressed: () => _closeAndRun(widget.onBrightnessControl),
+                    leadingIcon: const Icon(Icons.brightness_6),
+                    child: const Text('Brightness Control'),
+                  ),
+                  MenuItemButton(
+                    onPressed: () => _closeAndRun(widget.onColorCorrection),
+                    leadingIcon: const Icon(Icons.tune),
+                    child: const Text('Color Correction'),
+                  ),
+                  MenuItemButton(
+                    onPressed: () => _closeAndRun(widget.onGeometryCorrection),
+                    leadingIcon: const Icon(Icons.grid_4x4_outlined),
+                    child: const Text('Geometry Correction'),
+                  ),
+                  MenuItemButton(
+                    onPressed: () => _closeAndRun(widget.onRemotePreview),
+                    leadingIcon: const Icon(Icons.cast),
+                    child: const Text('Remote Preview'),
+                  ),
+                  MenuItemButton(
+                    onPressed: () => _closeAndRun(() {
+                      final url = 'http://${node.ipAddress}';
+                      if (Platform.isWindows) {
+                        Process.run('cmd', ['/c', 'start', url]);
+                      } else if (Platform.isMacOS) {
+                        Process.run('open', [url]);
+                      } else if (Platform.isLinux) {
+                        Process.run('xdg-open', [url]);
+                      }
+                    }),
+                    leadingIcon: const Icon(Icons.open_in_browser),
+                    child: const Text('Open in Browser'),
+                  ),
+                  const Divider(height: 1),
+                  MenuItemButton(
+                    onPressed: widget.onSelectGroup != null
+                        ? () => _closeAndRun(widget.onSelectGroup!)
+                        : null,
+                    leadingIcon: const Icon(Icons.select_all),
+                    child: const Text('Select in Group'),
+                  ),
+                  SubmenuButton(
+                    menuChildren: widget.buildGroupMenuItems(),
+                    leadingIcon: const Icon(Icons.workspaces_outlined),
+                    child: const Text('Assign to Group'),
+                  ),
+                  const Divider(height: 1),
+                  MenuItemButton(
+                    onPressed: () => _closeAndRun(widget.onDelete),
+                    leadingIcon: Builder(
+                      builder: (context) => Icon(
+                        Icons.delete_outline,
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                    child: Builder(
+                      builder: (context) => Text(
+                        'Delete',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ),
-            ],
-            child: MouseRegion(
-              cursor: SystemMouseCursors.click,
-              onEnter: (_) => setState(() => _isHovered = true),
-              onExit: (_) => setState(() => _isHovered = false),
-              child: GestureDetector(
-                onTap: widget.onTap,
-                onPanDown: widget.onPanDown,
-                onPanUpdate: widget.onPanUpdate,
-                onPanEnd: widget.onPanEnd,
-                onSecondaryTapUp: (details) {
-                  _menuController.open(
-                    position: details.localPosition * widget.zoom,
-                  );
-                },
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    AnimatedContainer(
+                ],
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  onEnter: (_) => setState(() => _isHovered = true),
+                  onExit: (_) => setState(() => _isHovered = false),
+                  child: GestureDetector(
+                    onTap: widget.onTap,
+                    onPanDown: widget.onPanDown,
+                    onPanUpdate: widget.onPanUpdate,
+                    onPanEnd: widget.onPanEnd,
+                    onSecondaryTapUp: (details) {
+                      _menuController.open(
+                        position: details.localPosition * widget.zoom,
+                      );
+                    },
+                    child: AnimatedContainer(
                       duration: const Duration(milliseconds: 120),
                       width: 120,
                       height: 100,
                       padding: EdgeInsets.all(isSelected ? 0 : 1),
                       decoration: BoxDecoration(
-                        color: colorScheme.surface,
+                        // A grouped card's background is the normal surface
+                        // color tinted with the group's color rather than a
+                        // separate bar or border, so the whole card reads as
+                        // "belongs to this group" at a glance without adding
+                        // any new shape to the card.
+                        color: group == null
+                            ? colorScheme.surface
+                            : Color.alphaBlend(
+                                Color(
+                                  group.color,
+                                ).withValues(alpha: kProjectorCardGroupTintOpacity),
+                                colorScheme.surface,
+                              ),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
                           color: isSelected
@@ -252,147 +340,100 @@ class _ProjectorCardState extends ConsumerState<ProjectorCard> {
                           ),
                         ],
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Top Bar with optional group color stripe overlaid
-                          Stack(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: colorScheme.surfaceContainerHighest,
-                                  borderRadius: const BorderRadius.vertical(
-                                    top: Radius.circular(7),
-                                  ),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.power_settings_new,
-                                      size: 14,
-                                      color: powerColor,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Icon(
-                                      Icons.visibility,
-                                      size: 14,
-                                      color: shutterColor,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    if (node.errors != 'NO ERRORS' &&
-                                        node.errors != '-')
-                                      const Icon(
-                                        Icons.warning_amber_rounded,
-                                        size: 14,
-                                        color: Colors.orange,
-                                      ),
-                                    const Spacer(),
-                                    if (node.connectionStatus ==
-                                        ConnectionStatus.unauthorized)
-                                      const Icon(
-                                        Icons.lock_outline,
-                                        size: 12,
-                                        color: Colors.amber,
-                                      ),
-                                    if (node.connectionStatus ==
-                                        ConnectionStatus.unprotected)
-                                      const Icon(
-                                        Icons.lock_open,
-                                        size: 12,
-                                        color: Colors.blue,
-                                      ),
-                                    const SizedBox(width: 4),
-                                    Container(
-                                      width: 8,
-                                      height: 8,
-                                      decoration: BoxDecoration(
-                                        color: connectionColor,
-                                        shape: BoxShape.circle,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              // Group color stripe overlay
-                              if (group != null)
-                                Positioned(
-                                  top: 0,
-                                  left: 0,
-                                  right: 0,
-                                  child: Container(
-                                    height: 4,
-                                    decoration: BoxDecoration(
-                                      color: Color(group.color),
-                                      borderRadius: const BorderRadius.vertical(
-                                        top: Radius.circular(7),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                          const Spacer(),
-                          // Content area
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8.0,
-                              vertical: 4.0,
-                            ),
-                            child: Text(
-                              node.name,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.only(
-                              left: 8.0,
-                              right: 8.0,
-                              bottom: 8.0,
-                            ),
-                            child: Text(
-                              node.ipAddress,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.textTheme.bodySmall?.color
-                                    ?.withValues(alpha: 0.7),
-                              ),
-                            ),
-                          ),
-                        ],
+                      // Explicit ClipRRect rather than the container's own
+                      // clipBehavior: with a border drawn on the *outer*
+                      // 8px-radius edge and this content inset by the
+                      // border's own width, the content has to be clipped to
+                      // the smaller *inner* radius (8 - border width) to line
+                      // up flush with that border — the same correction the
+                      // status bar below already relies on for its top
+                      // corners. See: https://github.com/flutter/flutter/issues/149631
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(7),
+                        child: cardBody,
                       ),
                     ),
-                    // Group label
-                    if (group != null)
-                      SizedBox(
-                        width: 120,
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: Text(
-                            group.name,
-                            textAlign: TextAlign.center,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: Color(group.color),
-                              fontSize: 9,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
+                  ),
                 ),
               ),
-            ),
+              // Group chip — a sibling of MenuAnchor rather than nested
+              // inside it (see the comment on the outer Column above).
+              if (group != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 3),
+                  child: _GroupChip(group: group),
+                ),
+            ],
           ),
         ),
       ),
     );
+  }
+}
+
+/// The colored pill under a grouped card: the group name, painted in
+/// whichever of black/white actually reads on top of the group's color —
+/// unlike plain text set in the raw group color, this stays legible no
+/// matter how light or dark that color is. Constrained to the card's own
+/// 120px width so a long group name ellipsizes instead of overlapping its
+/// neighbors; the full name only shows as a hover tooltip when it's actually
+/// been cut off.
+class _GroupChip extends StatelessWidget {
+  const _GroupChip({required this.group});
+
+  final ProjectorGroup group;
+
+  static const _maxWidth = 120.0;
+  static const _padding = EdgeInsets.symmetric(horizontal: 8, vertical: 3);
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Color(group.color);
+    final textColor =
+        ThemeData.estimateBrightnessForColor(color) == Brightness.light
+        ? const Color(0xFF15171B)
+        : Colors.white;
+    final textStyle = TextStyle(
+      fontSize: 9,
+      fontWeight: FontWeight.w600,
+      color: textColor,
+      height: 1,
+    );
+
+    final painter = TextPainter(
+      text: TextSpan(text: group.name, style: textStyle),
+      maxLines: 1,
+      textDirection: Directionality.of(context),
+    )..layout();
+    final isTruncated = painter.width > (_maxWidth - _padding.horizontal);
+
+    final chip = Container(
+      // No `alignment` and no fixed `height` here, on purpose. `alignment`
+      // (or wrapping the child in Align/Center) makes a render object fill
+      // the full *available* extent whenever that extent is bounded but not
+      // exact — which a `maxWidth`-only cap always is — so either one
+      // re-introduces the "chip stretches to the card's width" bug this
+      // already went through once. A forced exact `height` has the same
+      // problem from the other side: it creates a taller box than the text
+      // needs, and with no alignment to center *within* it, the text just
+      // sits at the box's top edge. Sizing purely from padding avoids the
+      // mismatch instead of trying to correct for it — the box always hugs
+      // the text exactly, in both axes, so there's nothing left to center.
+      constraints: const BoxConstraints(maxWidth: _maxWidth),
+      padding: _padding,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(9),
+      ),
+      child: Text(
+        group.name,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        textAlign: TextAlign.center,
+        style: textStyle,
+      ),
+    );
+
+    return isTruncated ? Tooltip(message: group.name, child: chip) : chip;
   }
 }
