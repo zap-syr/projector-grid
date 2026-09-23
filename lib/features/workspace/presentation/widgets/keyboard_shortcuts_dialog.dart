@@ -104,6 +104,11 @@ class KeyboardShortcutsDialog extends StatelessWidget {
                           keys: ['Ctrl', 'D'],
                           description: 'Deselect all projectors',
                         ),
+                        _Shortcut(
+                          keys: ['Ctrl', 'G'],
+                          description:
+                              "Select all projectors in the selected projector's group",
+                        ),
                       ],
                     ),
                     const _Section(

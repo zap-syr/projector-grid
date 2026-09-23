@@ -48,6 +48,10 @@ class FocusOnNodesIntent extends Intent {
   const FocusOnNodesIntent({required this.allProjectors});
 }
 
+class SelectGroupIntent extends Intent {
+  const SelectGroupIntent();
+}
+
 class ProjectorWorkspace extends ConsumerStatefulWidget {
   const ProjectorWorkspace({super.key});
 
@@ -378,6 +382,17 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
                     LogicalKeyboardKey.meta,
                     LogicalKeyboardKey.keyD,
                   ): const DeselectAllIntent(),
+                  // Select in Group — takes the group from the first/only
+                  // selected projector (see the action below); a no-op if
+                  // nothing is selected or the selection has no group.
+                  LogicalKeySet(
+                    LogicalKeyboardKey.control,
+                    LogicalKeyboardKey.keyG,
+                  ): const SelectGroupIntent(),
+                  LogicalKeySet(
+                    LogicalKeyboardKey.meta,
+                    LogicalKeyboardKey.keyG,
+                  ): const SelectGroupIntent(),
                   LogicalKeySet(LogicalKeyboardKey.delete):
                       const DeleteIntent(),
                   LogicalKeySet(
@@ -503,6 +518,22 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
                     ),
                     DeselectAllIntent: CallbackAction<DeselectAllIntent>(
                       onInvoke: (intent) => notifier.deselectAll(),
+                    ),
+                    SelectGroupIntent: CallbackAction<SelectGroupIntent>(
+                      onInvoke: (intent) {
+                        final selectedIds = ref.read(selectionProvider);
+                        if (selectedIds.isEmpty) return null;
+                        // "First" means first in canvas/list order, not
+                        // insertion order into the (unordered) selection set.
+                        final anchor = nodes.firstWhere(
+                          (n) => selectedIds.contains(n.id),
+                        );
+                        final groupId = anchor.groupId;
+                        if (groupId != null) {
+                          notifier.selectNodesInGroup(groupId);
+                        }
+                        return null;
+                      },
                     ),
                     SendCommandIntent: CallbackAction<SendCommandIntent>(
                       onInvoke: (intent) =>
