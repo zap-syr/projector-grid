@@ -58,7 +58,7 @@ put it on the replacement" a one-click flow.
 - **Snapshots dialog** (`DialogTitleBar` + list):
   - Left: list of snapshots — name, source projector, model, date; search box on top.
   - Right: details of the selected snapshot, grouped by **section chips**
-    (Geometry · Color · Brightness · Edge Blending · Picture), each with a checkbox so the user
+    (Geometry · Color · Brightness · Edge Blending · Picture · Lens), each with a checkbox so the user
     can restore only part of it (e.g. "Geometry only").
   - **Diff view** (optional second step): before applying, read the live values and show only
     the registers that differ — `Current → Snapshot` — so the user sees what will change.
@@ -83,10 +83,30 @@ JSON — no new dependencies (consistent with the persistence rules in CLAUDE.md
     "geometry":   { "GMMI0": "+00010", "GMFI1": "+00012", "...": "..." },
     "color":      { "CMAI0": "+00001", "QHR": "...", "...": "..." },
     "brightness": { "OPEI1": "+00000", "LOPI2": "+01000", "LOPI3": "+01000" },
-    "edgeBlend":  { "EDBI0": "+00001", "GU": "0", "EU": "0000", "...": "..." }
+    "edgeBlend":  { "EDBI0": "+00001", "GU": "0", "EU": "0000", "...": "..." },
+    "picture":    { "QPM": "USR", "QVR": "032", "QVB": "032", "QGA": "2.2", "...": "..." },
+    "lens":       { "LNSI7": "+00120", "LNSI8": "-00310", "LNSI9": "+01733", "LNSIA": "+00870",
+                    "NCGS5": "LENSMEMORY1", "...": "..." }
   }
 }
 ```
+
+**Lens section.** A snapshot can't carry lens-memory *contents*: NTCONTROL only loads, saves and
+deletes slots (`VXX:LNMI1/2/3=+0000n`, memory 1–10 = `+00000`…`+00009`), with no query for a
+slot's stored position or for the active slot. What *is* readable and writable is the absolute
+lens position — `QVX:LNSI7` / `LNSI8` / `LNSI9` / `LNSIA` (shift H, shift V, focus, zoom) — so
+the Lens section stores and restores those four values, plus the ten memory names
+(`NCGS5`–`NCGS7`, `NCGS9`, `NCGSA`–`NCGSF`) for reference. Ranges depend on the lens, so
+restore the Lens section only when `QVX:LNEI4` (lens ID) matches the snapshot's; otherwise
+disable it with the model-guard banner. Swap workflow that keeps memories: restore the
+position, then `VXX:LNMI2` saves it into the slot the user picks.
+
+**Picture section.** Picture mode `VPM:xxx` / `QPM` (`DYN NAT STD CIN GRA DIC USR`) written
+**first**, then the per-mode values: contrast `VCN`/`QVR`, brightness `VBR`/`QVB`, colour
+`VCO`/`QVC`, tint `VTN`/`QVT`, sharpness `VSR`/`QVS`, colour temperature `OTE`/`QTE`, gamma
+`VGA`/`QGA`, white balance `VOR`/`VOG`/`VOB`/`VHR`/`VHG`/`VHB`. Optional **Identity** section
+(off by default): projector name `QVX:NCGS8` — useful when the replacement unit should take
+the old unit's name.
 Values are stored **raw, exactly as the projector returned them**, so restore is
 `write(key, raw)` with no per-field reformatting and no rounding drift.
 
@@ -107,9 +127,10 @@ Values are stored **raw, exactly as the projector returned them**, so restore is
 - `presentation/widgets/snapshots_dialog.dart` — the dialog.
 
 ### Open questions / risks
-- **Lens memory and picture mode:** the command strings for reading/writing lens memory slots
-  aren't in `command_reference.md`. Before adding a "Lens" section, the owner needs to supply them
-  (per the `panasonic-ntcontrol` skill rule: don't guess commands).
+- ~~Lens memory and picture mode commands~~ — **resolved 2026-09-28** from the PT-RQ35K2/RZ34K2
+  command list (see Lens / Picture sections above and the skill's `command_reference.md`).
+  Still to check on a live unit: the exact reply format of `QVX:LNSI7`…`LNSIA`, and whether
+  writing an absolute position with `VXX:LNSI7=…` moves the lens there in one step.
 - **Registers that can't be read in some states** (e.g. `QPDI1` → `ER401` while a geometry mode
   is active). The registry needs a per-register "read only when…" note; skip-and-report
   instead of failing the whole capture.
@@ -139,7 +160,8 @@ open, fade-in), *"Walk-in logo"* (group Stage: test pattern off, input HDMI2), *
   - Left: name, colour, target (*All* / *Group* / *Selected at fire time*), keyboard
     shortcut, OSC address (auto slug `/pgrid/cue/<slug>`, like custom commands).
   - Right: **action list** — each row = action picker (the same command catalogue as the
-    control bar: Power, Shutter, Input, Test Pattern, Lens, Picture Mode, Custom Command) +
+    control bar: Power, Shutter, Input, Test Pattern, Lens Memory load `VXX:LNMI1=+0000n`,
+    Picture Mode `VPM:xxx`, Freeze `OFZ:0/1`, Custom Command) +
     parameter + optional **delay after** (e.g. wait 30 s for warm-up). Rows reorder by drag
     (`ReorderableListView`).
   - "Test" button fires the cue on the *selected* projectors only.
@@ -187,14 +209,27 @@ Answers "which physical projector is this card?" (and the reverse). Works outsid
 mode — typical use is right after rigging, or when a card's name doesn't match what's on the wall.
 - **Where:** card context menu *Identify*, toolbar button, shortcut **`N`** (*Name*). Acts on
   the **selection** — one card, or several at once.
-- **What happens (on screen):** each targeted projector shows its **name** on the image for
-  ~5 s (the projector's own device-name OSD, as VSS's *Show Device Name* does). Fallback until
-  that command is known or on models without it: the shutter blinks closed/open twice.
+- **What happens (on screen):** each targeted projector **flashes** for ~5 s so it stands out on
+  the wall. The PT-RQ35K2/RZ34K2 command list has **no device-name OSD command** (VSS's *Show
+  Device Name* isn't in it; `RIS`/`RVS` "ID" commands are IR-remote addressing, not a visual
+  identify), so the name overlay stays a later upgrade if a Wireshark capture of VSS turns one
+  up. Flash method, chosen so it doesn't depend on shutter fade settings:
+  1. Read the current test pattern (`QTS`) and shutter (`QSH`).
+  2. Open the shutter if closed (`OSH:0`), then alternate `OTS:01` white / `OTS:02` black
+     every ~0.5 s for 5 s.
+  3. Restore the previous pattern (`OTS:<saved>`) and shutter state.
+  Why not blink the shutter: the projector applies its **shutter fade** (`QVX:SEFS1` fade-in /
+  `SEFS2` fade-out, up to 10 s each) to every `OSH` command, so a shutter blink can take tens of
+  seconds or be invisible. Test-pattern switching isn't faded. On a closed-shutter unit the
+  first open still fades in — acceptable, it only delays the start.
+  Worth trying on a live unit: `STS` (remote STATUS key) opens the status screen on the image —
+  if it shows the projector name it's a cheap overlay alternative.
 - **What happens (in the app):** the targeted cards pulse with a highlight ring for the same 5 s,
   so screen and UI point at the same unit.
-- **Identify All** (toolbar dropdown / **`Shift+N`**): every projector shows its name at the same
-  time — one look at the wall maps the whole layout. Pressing again (or `Esc`) hides the names
-  early.
+- **Identify All** (toolbar dropdown / **`Shift+N`**): every projector flashes **one after
+  another** in layout order (~2 s each), and the matching card pulses at the same moment — one
+  pass maps the whole layout. (Flashing all at once only works with a name overlay, which isn't
+  available.) Pressing again (or `Esc`) stops early and restores every unit.
 
 ### UX — 3.2 Alignment mode
 - **Enter:** toolbar toggle, shortcut **`Ctrl+L`**. A thin coloured banner across the workspace:
@@ -246,9 +281,10 @@ mode — typical use is right after rigging, or when a card's name doesn't match
   ends. No up/down navigation. Clicking a card focuses it directly.
   The arrow keys keep their normal Lens Shift function — acting on the focused projector, which
   is exactly what's needed while converging it.
-- **Identify inside the mode:** the banner's *Identify* button (or `N`) shows the name on
-  **every projector currently open in the mode** (focused + neighbours, or all under Show
-  All) — not only the focused one. Why it's still needed although the focused projector
+- **Identify inside the mode:** the banner's *Identify* button (or `N`) flashes **every
+  projector currently open in the mode** (focused + neighbours, or all under Show All) one
+  after another in layout order, each with its card pulsing — not only the focused one — then
+  puts the mode's patterns back. Why it's still needed although the focused projector
   already has its own pattern:
   - With the **Blend / Color** presets (or *Same as focused*) every open projector shows the
     same image, so the wall alone no longer tells which one is focused — Identify does.
@@ -256,7 +292,19 @@ mode — typical use is right after rigging, or when a card's name doesn't match
     projector overlapping on the right really is PJ-06), i.e. that the card layout matches
     the wall before trusting the neighbour detection.
   No "identify on switch" option — the focused pattern already marks the focused projector in
-  the default preset, and an automatic 5 s name overlay on every `<`/`>` would get in the way.
+  the default preset, and an automatic flash on every `<`/`>` would get in the way.
+- **Shutter fade is always 0 in the mode (decision 2026-09-28).** Projectors with a shutter
+  fade set (`QVX:SEFS1` / `SEFS2`, up to 10 s) would make every `<`/`>` step and Show All
+  toggle wait for the fade. It isn't an option in the UI; it just happens:
+  - On entry, read `SEFS1`/`SEFS2` for each projector in scope. **Only where a value isn't
+    `0.0`**, save it and write `VXX:SEFS1=0.0` / `VXX:SEFS2=0.0`. Projectors already at
+    `0.0` aren't touched.
+  - On Exit, write back the saved values, and only for the projectors that were changed.
+  - This changes a projector setting temporarily, so the saved values also go to app settings.
+    If the app quits or crashes mid-mode, they're restored on the next launch (projectors that
+    are offline then keep the entry pending until they come back).
+  - Event log: one line per projector changed, e.g. "Shutter fade 2.0/2.0 s → 0 for alignment",
+    and one line when it's restored.
 - **Show neighbours** (banner toggle, default off, remembered in app settings):
   - Also opens the shutters of the focused projector's **neighbours**, so the overlap is
     visible while tuning geometry or the blend.
@@ -309,24 +357,31 @@ uses ~74 px, so a fourth status icon there would be cramped and hard to scan.
 - Alignment mode reuses it, so the card itself shows who has which pattern — no extra labels.
 
 Data: `ProjectorNode.testPattern` (Freezed, `String?`, OTS code). Set optimistically from
-every `OTS:xx` the app sends (`_applyOptimisticUpdate`, like shutter/power); if a test-pattern
-**query** command exists (`QTS`? — confirm via the `panasonic-ntcontrol` skill / the owner,
-don't guess), also add it to `pollProjectorTelemetry` so changes made on the projector or by
-other software show up. Transient telemetry → covered by `_stripTransient`/`_mergeWithTelemetry`.
+every `OTS:xx` the app sends (`_applyOptimisticUpdate`, like shutter/power), and polled with
+**`QTS`** (confirmed in the PT-RQ35K2/RZ34K2 list; reply is the bare two-digit code, e.g. `07`
+→ store as `OTS:07` so it matches the icon/label maps in `control_bar.dart`). Adding it to
+`pollProjectorTelemetry` makes changes done on the projector or by other software show up; it's
+the 12th query per cycle, so check the poll cycle time on a large project. Unknown codes
+(e.g. `32`–`34`, `52`, `80`–`83` — valid but not in the app's map) show a generic thumbnail
+with the raw code in the tooltip. Transient telemetry → covered by
+`_stripTransient`/`_mergeWithTelemetry`.
 
 ### Code
 - `presentation/providers/identify_provider.dart` — `identify(Set<String> nodeIds)`,
   `identifyAll()`, `cancel()`; holds `Set<String> pulsing` for the card ring and a 5 s timer.
-  Sends the device-name OSD on/off (or the shutter-blink fallback) through the group
-  dispatch from §10.
+  Runs the flash sequence (`QTS` + `QSH` → `OSH:0` → `OTS:01`/`OTS:02` alternating → restore)
+  through the group dispatch from §10; `identifyAll()` runs it node by node in `layoutOrder`.
+  Cancel always restores.
 - `presentation/providers/alignment_provider.dart` — state `{active, scope, focusedId,
   preset, focusedPattern, othersPattern (null = same as focused), showNeighbours,
   includeDiagonals, showAll, Set<String> manualNeighbours,
-  Map<id, (shutter, pattern)> saved}`; `enter()`, `focus(id)`, `next()/prev()`,
+  Map<id, (shutter, pattern, fadeIn?, fadeOut?)> saved}`; `enter()`, `focus(id)`, `next()/prev()`,
   `toggleShowAll()`, `exit()`. Each projector's role is derived from state
   (`focused` / `neighbour` / `shown` / `closed`); on every change only projectors whose role
   changed get commands — not the whole wall. Show All off simply recomputes roles from
   `showNeighbours`, which gives the "return to the previous view" behaviour for free.
+  Must not depend on widget state (focus nodes, `BuildContext`): the web API (§5) drives the
+  same methods, and the banner reacts to state changes from either side.
 - `lib/features/workspace/domain/card_layout.dart` — pure functions, unit-tested (§7.1):
   - `layoutOrder(nodes)` — sort by `y` then `x` with a row tolerance of half a card height.
   - `neighbours(node, nodes, {maxGap = 60, minOverlap = 0.5, diagonals})` — the gap/overlap
@@ -336,14 +391,16 @@ other software show up. Transient telemetry → covered by `_stripTransient`/`_m
 - Keyboard: `<` / `>` (`comma` / `period`, with or without Shift), `A`, `N`, `Shift+N`,
   `Ctrl+L`, `Esc` registered next to the existing `I`/`O`/`F` bindings; `<`/`>`/`A`/`Esc` are
   active only while `alignmentProvider.active`. Arrow keys are untouched (Lens Shift).
-- Commands reuse `OSH:0/1` and `OTS:xx`; the current test pattern is read once on entry for
-  the restore (confirm the query string with the owner/skill before implementing).
+- Commands reuse `OSH:0/1` and `OTS:xx`; on entry the current state is read per projector
+  for the restore: `QSH` (shutter), `QTS` (test pattern) and `QVX:SEFS1`/`SEFS2` (shutter
+  fade; saved only when not `0.0`). Pending fade restores live in `appSettingsProvider`
+  (`Map<nodeId, (fadeIn, fadeOut)>`), cleared per projector once restored.
 - Banner widget in `projector_workspace.dart`'s Stack; focused card = primary ring, neighbours
   = dimmer secondary ring, Identify = pulsing ring.
-- **Needs a command:** the device-name OSD command isn't in `command_reference.md`. VSS has
-  *Show Device Name*, so it exists — the owner supplies it from the RS-232C/LAN command list
-  or a Wireshark capture of VSS pressing that button. Until then Identify uses the
-  shutter-blink fallback.
+- **Device-name overlay (later):** not in the PT-RQ35K2/RZ34K2 command list. If a Wireshark
+  capture of VSS's *Show Device Name* shows an NTCONTROL command (it may use the web UI
+  instead), add it to the skill and switch Identify / Identify All to "all at once, name on
+  image". Until then: the flash method above.
 
 ---
 
@@ -365,6 +422,18 @@ only shows them. Nobody watches a table all night.
 
 Each rule has hysteresis (e.g. clear only when 2 °C below the threshold) so values hovering
 near the limit don't flap.
+
+Optional rules whose commands are confirmed in the PT-RQ35K2/RZ34K2 list but **not polled
+today** (each would add a query to the poll cycle, so off by default and polled only when
+enabled):
+| Rule | Command | Trips when |
+|---|---|---|
+| Running on backup input | `QVX:BACI4` | `+00001` — the main signal failed and the projector switched to its backup input; the image may still look fine, so this is the one worth having |
+| DIGITAL LINK lost | `QVX:DKSI1` | `+00000` (no link) on a projector whose input is `DL1` |
+| Multi Projector Sync link | `QVX:MPSI2` | status changes away from the value seen when the rule was enabled |
+
+Models that don't support a command answer `ERR1`/`ER401` → the rule is shown as
+"not supported" for that projector instead of alerting.
 
 ### UX
 - **Preferences → new "Alerts" tab:** rule list with enable switch + threshold stepper
@@ -391,7 +460,8 @@ near the limit don't flap.
 - Temperatures are stored formatted (`_formatTemp`) — add numeric parsing in one place (or
   keep raw numeric fields on `ProjectorNode`: Freezed field + `build_runner`).
 - Desktop notifications: evaluate `local_notifier` (Windows + macOS) vs a platform channel;
-  pick after a quick spike — this is the only new dependency in the plan.
+  pick after a quick spike. New Dart dependencies in this roadmap: this one, plus `shelf` /
+  `shelf_router` for F7 (§5).
 
 ---
 
@@ -401,44 +471,240 @@ near the limit don't flap.
 Monitoring from any device on the show network — a phone at FOH, a laptop in the projection
 booth — without installing anything.
 
+### Access model (decided 2026-09-28: PIN is mandatory)
+Two roles, each with its own PIN:
+| Role | PIN | Can do |
+|---|---|---|
+| **Viewer** | Viewer PIN (always required) | Read status, alerts, live updates. The server rejects every `POST` from a viewer session with `403`, so hiding buttons isn't the only guard. |
+| **Operator** | Operator PIN (exists only while *Allow control* is on) | Everything a viewer can, plus **power, shutter, test pattern, lens shift / focus / zoom / home**, cues, and **Alignment mode** (§3). Confirmation rules below. |
+
+- One PIN field on the login page. The server checks which PIN matches and gives the session
+  that role; the user doesn't pick a role.
+- A viewer can press **Unlock control** and enter the operator PIN to upgrade the same session;
+  **Lock** drops it back to viewer.
+- The two PINs must differ (the settings tab refuses equal values). 4–8 digits.
+- With *Allow control* off, only the Viewer PIN exists and the server has no write routes at all.
+- **Sessions:** a successful PIN returns a random session token in an `HttpOnly` cookie
+  (browsers) or in the JSON reply (scripts). It expires after 12 h idle. Changing either PIN
+  or pressing *Sign out all clients* in the settings tab invalidates every session.
+- **Brute force:** 5 wrong PINs from one IP → that IP is locked out for 60 s, doubling on each
+  repeat; each lockout is logged in the Event Log.
+- **Scripts / Companion / QLab:** `POST /api/login {"pin": "…"}` → token, then
+  `Authorization: Bearer <token>`.
+- Plain HTTP on the show LAN: the PIN crosses the network unencrypted. Acceptable on a
+  closed show network; the settings tab says so in one line. HTTPS with a self-signed
+  certificate only makes phones show warnings, so it's out of scope.
+
 ### UX
-- **Preferences → "Web Access" tab:** enable switch, port (default 8080), optional access PIN,
-  *read-only* vs *control* mode, and the URL + **QR code** (`http://<this-machine-ip>:8080`)
-  to open it on a phone.
-- **Web page** (served by the app, mobile-first):
-  - Summary header: online / offline / warnings counts, active alerts (§4).
-  - Projector list grouped by group: name, power, shutter, input/signal, temps, errors —
-    colour states like the app's cards.
-  - Live updates via **Server-Sent Events** (simpler than WebSocket, auto-reconnect in
-    browsers).
-  - In *control* mode: per-projector and per-group buttons (power, shutter) and the Cues
-    strip (§2). Every write asks for confirmation on the page.
-- The app shows a small "Web access on · 2 clients" indicator in the status bar.
+- **Preferences → "Web Access" tab:** *Enable* switch, port (default 8080), **Viewer PIN**,
+  *Allow control* switch → **Operator PIN**, *Sign out all clients*, connected clients list
+  (IP, role, last seen), and the URL + **QR code** (`http://<this-machine-ip>:8080`) for phones.
+- **Web page** (served by the app, responsive). Mockup: artifact *Projector Grid Web Monitor*
+  (https://claude.ai/artifact/W5t59BABLdayaHUmaVkZu5). It has desktop and phone views, a
+  Viewer/Operator switch and a With/No groups switch.
+  - Login: PIN pad on phones, single field on desktop; shows the project name.
+  - Top bar: project name, online / offline / warnings counts, live indicator, role chip
+    (*Viewer* / *Operator*), *Unlock control* / *Lock*; operator also gets **Alignment**.
+
+#### Layout with and without groups
+- **With groups:** one section per group (name, count, *Select* for operators), projectors in
+  layout order inside each; ungrouped projectors go in a final *Ungrouped* section.
+- **No groups** (project without groups): a single **All projectors** section in layout order
+  (left→right, top→bottom, same `layoutOrder` as §3), with *Select all*. Same columns, no
+  group headers; everything else is identical, so it isn't a separate page mode — just the
+  list rendered without sections when `/api/groups` is empty.
+
+#### Status colours — same rules as the app
+Taken from `projector_card.dart` / `monitoring_table.dart` so the web and the app read the same:
+| Field | Rule |
+|---|---|
+| Connection dot | green online / unprotected, amber auth error (+ lock icon), red offline |
+| Power | power icon + label: green **ON**, red **STANDBY**, amber **TURNING ON** / **COOLING** |
+| Shutter | eye icon + label: green **OPEN**, red **CLOSED** |
+| Errors | green check **NO ERRORS**; red error icon + the error text; card/phone shows the orange warning triangle like the app card header |
+| Intake temp | amber ≥ 40 °C, red ≥ 45 °C (`_intakeWarmC` / `_intakeHotC`) |
+| Exhaust temp | amber ≥ 55 °C, red ≥ 65 °C (`_exhaustWarmC` / `_exhaustHotC`) |
+| Signal | plain text, like the app's table (`NO SIGNAL` isn't tinted there) |
+| Test pattern | mini swatch + name when a pattern is on **and** the shutter is open (§3.3) |
+| Group | group colour dot + name (`_groupCell`) |
+The thresholds are served by the API (`/api/config`), not hard-coded in the page, so a later
+change in the app (or the §4 alert thresholds) applies to both.
+
+#### Desktop layout
+Header (project, status filters *All / Online / Offline / Warnings* with counts — clicking one
+filters the table, live indicator, *Alignment* for operators, role + *Unlock control* / *Lock*)
+→ toolbar (selection, search by name / IP / serial, "N of M shown", **Columns**) → table.
+
+#### Table — the app's Monitoring table, feature for feature
+The web table is a port of `monitoring_table.dart`, not a simplified list. **Same columns, same
+ids, labels, default widths and canonical order** (the `_allColumns` descriptors, served by
+`/api/config` so the two can't drift):
+
+- **All columns:** Connection, Name, Serial Number, Group, IP Address, Power, Shutter,
+  Input, Signal, Test Pattern (new, from §3.3), Projector Runtime, Light Runtime,
+  Intake Temp, Exhaust Temp, AC Voltage, Errors.
+- **Default visible:** the app's `_defaultVisibleIds`, i.e. all of the above except Group and
+  Test Pattern.
+
+The app's `model` column shows `node.name` but is labelled "Model". The web labels it
+**Name**. Worth renaming in the app too (label only, the id stays `model` so saved layouts
+keep working).
+
+| App feature | Web |
+|---|---|
+| Show / hide columns (View ▸ Monitoring Table), last column can't be hidden, re-shown column returns to its canonical slot (`toggledColumn`) | **Columns** popover: checklist, same rules |
+| Presets *Essentials / Thermal / Signal / Show all* | Preset buttons in the popover + *Reset* |
+| Click header to sort, again to reverse; default `ip` ascending | Same; arrow on the sorted header, `aria-sort` |
+| Drag a header to reorder | Drag headers (drop marker left/right); also drag in the popover list |
+| Drag a header's right edge to resize; double-click it to auto-fit | Same; the edge shows a hairline on hover. Auto-fit measures the widest cell, like `onAutoFit` |
+| Fit to width (`monitoringFitToWidth`), with the `_resizeBaseFor` maths so a resized column lands where dragged | Same switch and the same formula; floor 60 px (`_minColWidth`); sideways scroll only when floors push past the viewport |
+| Density compact / standard / comfortable (row 32 / 40 / 52 px) | Same three options |
+| Group-by (`monitoringGroupBy`); the Group column is hidden while grouping | Same switch (disabled when the project has no groups); collapsible group sections with an online / warnings / offline summary |
+
+- **Where the layout is saved:** per browser (`localStorage`), not in the app's settings, so a
+  phone and a booth laptop can differ. The first visit starts from the app's current layout
+  (`monitoringColumns`, widths, sort, density, fit, group-by from `/api/config`).
+- **Pinned columns:** the selection column and the first visible column stay pinned when the
+  table scrolls sideways.
+- **Operator width:** in operator mode the control panel takes 340 px. With all 14 default
+  columns the table then hits the 60 px floors, the same as the app in a narrow window;
+  *Essentials* fits cleanly.
+- **Phone:** cards show a fixed summary (power, shutter, signal, temps, errors). Tapping a card
+  expands it to every field (IP, serial, runtimes, voltage, test pattern, group).
+
+**Alerts on request:** a 52 px **rail** at the far right, for both roles:
+- a bell with the active count, coloured by the worst severity;
+- one tick per alert in its severity colour.
+
+Clicking it opens a 360 px **drawer over the content**, not a new column, so the table and
+control panel don't reflow. Each card shows projector, rule, detail, *since*, and
+*Acknowledge* (operator only). The open/closed choice is kept per browser in `localStorage`.
+Phone: bell in the top bar plus an "N active alerts" pill → alerts bottom sheet.
+
+#### Control (operator)
+- **Target = selection**, like the app's control bar. Offline projectors can't be selected.
+  - **Select all:** tri-state checkbox in the toolbar (selects every visible row, so it
+    respects the filter/search), `Ctrl+A`.
+  - **Group:** tri-state checkbox on each group row.
+  - **Select ▾ menu:** All projectors, All online, Only with warnings, Invert, one entry per
+    group, Clear (`Esc`).
+  - **Rows:** click toggles, **Shift-click** selects a range.
+  - **Phone:** a *Select all* bar above the list, a checkbox per group header, tap cards;
+    bottom bar *"N selected · Clear · Control"*.
+- **Desktop:** right-hand **Control** panel (340 px). Header: just *Control* + "N selected".
+  No name chips or empty-state text, because the selection is already visible in the table.
+  With nothing selected the controls are shown disabled, like the app's control bar. Blocks
+  top to bottom, in the control bar's order:
+  - *Power* On / Standby
+  - *Shutter* Open / Close
+  - *Test pattern* — full-width *Off*, then a 4-column swatch grid (White, Black, Red, Green,
+    Blue, Cross Hatch, CH Red / Green / Blue, Colour bars, Window, Circle), *More patterns*
+    expands the rest of `_testPatternOptions`; the current pattern is highlighted when one
+    projector is selected
+  - *Lens* — **one column**: "moves N lenses" warning (when N > 1) → speed Slow / Normal /
+    Fast → shift D-pad → *Home position* → Focus −/+ → Zoom −/+. Same `VXX:LNSI2…5` commands
+    as the control bar; holding a button repeats with the control bar's throttle.
+- **Phone:** *Control* opens a bottom sheet with the same blocks.
+- **Confirmation:** power always; shutter and test pattern only when more than one projector
+  is targeted; lens steps never (a dialog per nudge would make the lens unusable); Lens Home
+  always. Destructive confirms (power off, shutter close) use a red button.
+- After a command: a toast with the §10 result summary (*"Shutter Close — Stage 4/4 OK"*).
+- Every web command is logged in the Event Log with its source, e.g. *"Web · 192.168.0.77 ·
+  Operator"*.
+
+#### Alignment mode on the web
+It is **the app's** Alignment mode (§3), driven remotely — not a second implementation.
+`alignmentProvider` stays the single source of truth; the web page shows its state via SSE and
+sends actions to it. Entering from the phone shows the banner in the app too, and vice versa.
+Only one alignment session exists at a time; a second client entering joins the same session.
+- **Desktop:** the app's banner across the page, in one row: *◀ name n of N ▶ · Neighbours ·
+  Show all · Identify · Preset [Geometry | Blend | Color | Custom] · Focused ▾ · Others ▾ ·
+  Exit*.
+  - The presets are the app's §3.2 table, including **Custom**.
+  - *Focused ▾* / *Others ▾* open a swatch popover filtered by the preset: Geometry → cross
+    hatches, Blend / Color → solid colours, **Custom → every test pattern**. *Others* also has
+    *Same as focused*.
+  - Picking a pattern keeps the preset; switching to Custom keeps the current patterns. Same
+    rules as the app's *Presets ▾* popover. The web has room to put the pickers inline, so it
+    doesn't need the popover.
+  - The first table column shows a role marker instead of the checkbox (focused = filled,
+    neighbour = ring, shown = light ring), with a legend in the toolbar.
+  - Shutter-closed rows are dimmed; clicking a row focuses it; `,` / `.` step.
+  - The control panel becomes *Lens · PJ-xx*, acting on the focused projector only.
+- **Viewer during alignment:** the session is shared, so a viewer sees a read-only banner
+  (*"Alignment in progress · PJ-03 focused · 3 of 7 · Geometry — controlled by an
+  operator"*) and the role markers, but no controls. Row clicks do nothing.
+- **Phone** (the main use case — walking the room with a phone):
+  - big ◀ ▶ with the focused name and *n / total*;
+  - Neighbours / Show All / Identify toggles;
+  - a **wall mini-map** built from the card layout — focused filled, neighbours outlined,
+    offline dashed; tap a tile to focus it;
+  - preset switch (Geometry / Blend / Color / **Custom**) and *Focused* / *Others* rows that
+    open a bottom sheet with the filtered swatch grid;
+  - the lens block for the focused projector.
+- *Adjust ▾* (geometry / colour dialogs) stays app-only.
+- Exit from the web restores shutters, patterns and shutter fades exactly like Exit in the app.
+
+- The app shows a small "Web access on · 3 clients (1 operator)" indicator in the status bar.
+- Live updates via **Server-Sent Events** (simpler than WebSocket, auto-reconnect in browsers).
 
 ### API (same server)
 | Method | Path | |
 |---|---|---|
-| GET | `/api/projectors` | all nodes + telemetry (JSON) |
+| POST | `/api/login` | `{ "pin": "…" }` → session token + role; no auth needed |
+| POST | `/api/logout` | ends the session |
+| GET | `/api/config` | project name, role, status-colour thresholds, test-pattern list |
+| GET | `/api/projectors` | all nodes + telemetry, in layout order (JSON) |
 | GET | `/api/projectors/{id}` | one node |
-| GET | `/api/groups` | groups |
+| GET | `/api/groups` | groups (empty array → the page shows the flat list) |
 | GET | `/api/alerts` | active alerts |
-| GET | `/api/events` | SSE stream: node changes, alerts, cue results |
-| POST | `/api/projectors/{id}/command` | `{ "command": "OSH:1" }` — control mode only |
-| POST | `/api/groups/{id}/command` | same, for a group |
+| GET | `/api/alignment` | alignment state: active, focused, roles, preset, toggles |
+| GET | `/api/events` | SSE stream: node changes, alerts, alignment state, command results |
+| POST | `/api/actions` | `{ "targets": [ids] \| {"group": id} \| "all", "action": … }` — see below |
 | POST | `/api/cues/{id}/fire` | fire a cue |
+| POST | `/api/alignment/{op}` | `enter`, `exit`, `next`, `prev`, `focus/{id}`, `neighbours`, `showAll`, `identify`, `preset/{name}` |
+
+All `POST`s except `/api/login` need an operator session.
+
+**Typed actions instead of raw commands.** `/api/actions` takes a small fixed vocabulary,
+which the server maps to NTCONTROL, so the web can't send arbitrary commands (e.g.
+`VXX:RSTS1=…` — factory reset):
+| `action` | Maps to |
+|---|---|
+| `{"power": "on" \| "off"}` | `PON` / `POF` |
+| `{"shutter": "open" \| "close"}` | `OSH:0` / `OSH:1` |
+| `{"testPattern": "07"}` | `OTS:07` — code must be in the app's pattern list |
+| `{"lens": "shiftH" \| "shiftV" \| "focus" \| "zoom", "dir": "+" \| "-", "speed": "slow" \| "normal" \| "fast"}` | `VXX:LNSI2…5=+SSSSSD` (same encoding as the control bar) |
+| `{"lens": "home"}` | `VXX:LNSI1=+00001` |
+The reply is the §10 `DispatchResult` (ok / failed / skipped offline).
 
 Useful beyond the web page: Companion, QLab, custom scripts can poll or drive the app over HTTP.
 
 ### Code
-- `lib/core/services/web_server_service.dart` — `dart:io` `HttpServer.bind(InternetAddress.anyIPv4, port)`
-  with a small router; **no new dependency needed** (`shelf` is an option if routing grows).
-  Transport-only, like `osc_service.dart`.
+- **Web page: Svelte 5 + Vite + TypeScript** single-page app in `web_ui/`, built into
+  `assets/web/` and bundled with the app (decided 2026-09-28). The stack, repo layout, dev
+  commands, API-contract rules, CI and build order are in **`WEB_UI_PLAN.md`**.
+- `lib/core/services/web_server_service.dart` — `shelf` + `shelf_router`, bound with
+  `InternetAddress.anyIPv4`. Serves the built page from `rootBundle` (`assets/web/`), the
+  `/api/*` routes and SSE. Transport-only, like `osc_service.dart`.
 - `presentation/providers/web_server_provider.dart` (`keepAlive`) — lifecycle from settings,
-  pushes SSE events from `ref.listen(workspaceProvider)` / alerts / cues.
-- Web page: a single static HTML/JS/CSS file embedded as a Dart string (same approach as
-  `lib/core/docs/osc_reference_html.dart`) — no build step.
-- Security: bind on all interfaces only when enabled; PIN as a bearer token for `POST`;
-  control mode off by default; firewall prompt on Windows on first bind — document it.
+  pushes SSE events from `ref.listen(workspaceProvider)` / alerts / cues / `alignmentProvider`.
+  Routes call the same notifiers the UI uses: `WorkspaceNotifier.dispatchCommand` (§10) for
+  actions, `alignmentProvider` for alignment. No command logic lives in the server.
+- `lib/core/services/web_actions.dart` — pure mapping `WebAction → NTCONTROL string` (the
+  table above), unit-tested (§7.1). The lens encoding is shared with `control_bar.dart` so the
+  two can't drift.
+- The Monitoring column catalogue (id, label, default width, canonical order, default set,
+  presets) moves out of `_MonitoringTableState` statics into a plain-Dart
+  `domain/monitoring_columns.dart`, which both the table and `/api/config` read. Cell rendering
+  stays per side (Flutter widgets vs. the page's JS), keyed by column id.
+- Status-colour thresholds move from `monitoring_table.dart` statics into one shared place
+  (e.g. `core/theme/status_thresholds.dart`) that both the table and `/api/config` read.
+- Lens hold-to-repeat: the page sends one action per repeat tick; the server applies the same
+  per-projector throttle as `_throttledSend`, so a laggy phone can't queue up a burst.
+- Security: bind on all interfaces only when enabled; sessions and PIN checks as in *Access
+  model* above; *Allow control* off by default; PINs stored as salted hashes in app settings
+  (not plain text); firewall prompt on Windows on first bind — document it.
 - Keep the small OSC addition from the original F7 as a follow-up:
   `/pgrid/query/<projector>` → reply with status to the sender.
 
@@ -604,7 +870,13 @@ Today `_dispatchToNodes` logs one event per node and returns nothing; on a 30-pr
 ---
 
 ## 12. Open inputs needed from the owner
-- Command strings for: lens memory load/save/read, current test pattern query, device-name
-  OSD / identify (F1, F4).
+- ~~Command strings for lens memory, current test pattern query, device-name OSD~~ —
+  resolved 2026-09-28 from the PT-RQ35K2/RZ34K2 command list: lens memory `VXX:LNMI1/2/3`
+  (no read-back — F1 backs up the absolute lens position instead), test pattern query `QTS`,
+  no device-name OSD command (F4 Identify uses the test-pattern flash).
+- ~~Go / no-go on zeroing shutter fade in Alignment mode~~ — decided 2026-09-28: always zero
+  it while in the mode, only where it isn't already 0, and restore on Exit (§3.2).
+- Live-unit checks: `QVX:LNSI7`…`LNSIA` reply format and absolute write (F1); whether `STS`
+  shows the projector name on the image (F4).
 - Alert default thresholds per model family, if the defaults in §4 don't fit.
 - Go / no-go on §6 (error handler + log file).
