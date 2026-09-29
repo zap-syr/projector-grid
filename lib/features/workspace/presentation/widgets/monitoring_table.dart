@@ -4,6 +4,8 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import '../providers/app_settings_provider.dart';
 import '../providers/workspace_provider.dart';
+import '../../../../core/theme/status_thresholds.dart';
+import '../../domain/monitoring_columns.dart';
 import '../../domain/projector_group.dart';
 import '../../domain/projector_node.dart';
 import '../../domain/test_patterns.dart';
@@ -11,15 +13,13 @@ import '../../domain/test_patterns.dart';
 const double _kRowHeight = 40;
 const EdgeInsets _kCellPadding = EdgeInsets.symmetric(horizontal: 16);
 
-/// One monitoring-table column. The descriptor list (`_allColumns`) is the
-/// single source of truth for what columns exist, their default geometry, how
-/// they sort, and how a cell renders — replacing the old parallel
-/// `_columnLabels` / `_columnWidths` / index `switch` that all had to stay
-/// aligned by hand.
+/// One monitoring-table column: its catalogue entry ([spec], shared with the
+/// Web UI) plus how it sorts and how a cell renders in Flutter.
 class _Column {
-  final String id;
-  final String label;
-  final double defaultWidth;
+  final MonitoringColumnSpec spec;
+  String get id => spec.id;
+  String get label => spec.label;
+  double get defaultWidth => spec.defaultWidth;
 
   /// Leading-icon allowance (px) added on top of the measured text width when
   /// auto-fitting, for cells that render an icon before their text.
@@ -44,9 +44,7 @@ class _Column {
   cell;
 
   const _Column({
-    required this.id,
-    required this.label,
-    required this.defaultWidth,
+    required this.spec,
     required this.text,
     required this.sortKey,
     required this.cell,
@@ -72,18 +70,8 @@ class MonitoringTable extends ConsumerStatefulWidget {
 
   /// Visible columns (ordered) the table would actually render for [saved] —
   /// resolves the "empty means defaults" rule so the menu shows real state.
-  static List<String> resolveVisible(List<String> saved) {
-    final ids = saved.isEmpty
-        ? _MonitoringTableState._defaultVisibleIds
-        : saved;
-    final known = [
-      for (final id in ids)
-        if (_MonitoringTableState._columnsById.containsKey(id)) id,
-    ];
-    return known.isEmpty
-        ? List.of(_MonitoringTableState._defaultVisibleIds)
-        : known;
-  }
+  static List<String> resolveVisible(List<String> saved) =>
+      resolveMonitoringColumns(saved);
 
   /// Toggles [id] in the visible set. Re-showing a column drops it back at its
   /// canonical position relative to the columns already visible. Returns null
@@ -112,35 +100,7 @@ class MonitoringTable extends ConsumerStatefulWidget {
   }
 
   /// Named column presets for the menu.
-  static const Map<String, List<String>> presets = {
-    'Essentials': [
-      'connection',
-      'model',
-      'ip',
-      'power',
-      'shutter',
-      'input',
-      'errors',
-    ],
-    'Thermal': [
-      'connection',
-      'model',
-      'ip',
-      'intake',
-      'exhaust',
-      'runtime',
-      'voltage',
-    ],
-    'Signal': [
-      'connection',
-      'model',
-      'ip',
-      'input',
-      'signal',
-      'power',
-      'shutter',
-    ],
-  };
+  static const Map<String, List<String>> presets = kMonitoringPresets;
 
   static List<String> get showAllColumns => allColumnIds;
 }
@@ -252,25 +212,13 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
   /// surface. Used for "Auth Error" and the warm-temperature tint.
   static const _warnText = Color(0xFFB26A00);
 
-  // Hard-coded thermal severity thresholds (°C) for the Intake/Exhaust tint.
-  // Intake tracks the projectors' 0–45 °C operating spec — units raise a
-  // temperature fault around 45 °C and shut down near 50 °C. Exhaust is
-  // `QTM:1`, the internal optics / around-lamp sensor, which Panasonic never
-  // gives a numeric limit for (only the qualitative TEMP indicator), so these
-  // are a deliberately high heuristic to avoid false alarms — tune once there
-  // is field data.
-  static const double _intakeWarmC = 40, _intakeHotC = 45;
-  static const double _exhaustWarmC = 55, _exhaustHotC = 65;
-
   // ── Column descriptors ──────────────────────────────────────────────────
 
-  /// Every known column, in canonical order. `_defaultVisibleIds` picks the
-  /// subset shown before the user customises anything.
+  /// Every known column, in the canonical order of `kMonitoringColumns`
+  /// (a test checks they match).
   static final List<_Column> _allColumns = [
     _Column(
-      id: 'connection',
-      label: 'Connection',
-      defaultWidth: 130,
+      spec: kColConnection,
       // 22 for the status dot + gap6, plus 16 more for the trailing lock
       // icon (gap4 + 12px) shown on Auth Error / unprotected rows — see
       // _connectionCell.
@@ -290,25 +238,19 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
       cell: (_, n, _) => _connectionCell(n),
     ),
     _Column(
-      id: 'model',
-      label: 'Model',
-      defaultWidth: 160,
+      spec: kColModel,
       text: (n, _) => n.name,
       sortKey: (n, _) => n.name.toLowerCase(),
       cell: (_, n, _) => _CellText(n.name),
     ),
     _Column(
-      id: 'serial',
-      label: 'Serial Number',
-      defaultWidth: 160,
+      spec: kColSerial,
       text: (n, _) => n.serialNumber,
       sortKey: (n, _) => n.serialNumber.toLowerCase(),
       cell: (_, n, _) => _CellText(n.serialNumber),
     ),
     _Column(
-      id: 'group',
-      label: 'Group',
-      defaultWidth: 150,
+      spec: kColGroup,
       iconPad: 18,
       text: (n, groups) => _groupOf(n, groups)?.name ?? '—',
       // Ungrouped sorts last (ascending) via a high sentinel.
@@ -316,17 +258,13 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
       cell: (_, n, groups) => _groupCell(_groupOf(n, groups)),
     ),
     _Column(
-      id: 'ip',
-      label: 'IP Address',
-      defaultWidth: 130,
+      spec: kColIp,
       text: (n, _) => n.ipAddress,
       sortKey: (n, _) => _ipSortKey(n.ipAddress),
       cell: (_, n, _) => _CellText(n.ipAddress),
     ),
     _Column(
-      id: 'power',
-      label: 'Power',
-      defaultWidth: 130,
+      spec: kColPower,
       iconPad: 22,
       text: (n, _) => switch (n.powerStatus) {
         PowerStatus.on => 'ON',
@@ -343,59 +281,45 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
       cell: (_, n, _) => _powerCell(n),
     ),
     _Column(
-      id: 'shutter',
-      label: 'Shutter',
-      defaultWidth: 110,
+      spec: kColShutter,
       iconPad: 22,
       text: (n, _) => n.shutterStatus == ShutterStatus.open ? 'OPEN' : 'CLOSED',
       sortKey: (n, _) => n.shutterStatus == ShutterStatus.open ? 0 : 1,
       cell: (_, n, _) => _shutterCell(n),
     ),
     _Column(
-      id: 'input',
-      label: 'Input',
-      defaultWidth: 90,
+      spec: kColInput,
       text: (n, _) => n.input,
       sortKey: (n, _) => n.input.toLowerCase(),
       cell: (_, n, _) => _CellText(n.input),
     ),
     _Column(
-      id: 'signal',
-      label: 'Signal',
-      defaultWidth: 140,
+      spec: kColSignal,
       text: (n, _) => n.signal,
       sortKey: (n, _) => n.signal.toLowerCase(),
       cell: (_, n, _) => _CellText(n.signal),
     ),
     _Column(
-      id: 'testPattern',
-      label: 'Test Pattern',
-      defaultWidth: 170,
+      spec: kColTestPattern,
       iconPad: 24,
       text: (n, _) => _testPatternText(n),
       sortKey: (n, _) => _testPatternText(n).toLowerCase(),
       cell: (context, n, _) => _testPatternCell(context, n),
     ),
     _Column(
-      id: 'runtime',
-      label: 'Projector Runtime',
-      defaultWidth: 150,
+      spec: kColRuntime,
       text: (n, _) => n.runtime,
       sortKey: (n, _) => _leadingNum(n.runtime),
       cell: (_, n, _) => _CellText(n.runtime),
     ),
     _Column(
-      id: 'lightRuntime',
-      label: 'Light Runtime',
-      defaultWidth: 130,
+      spec: kColLightRuntime,
       text: (n, _) => n.lightRuntime,
       sortKey: (n, _) => _leadingNum(n.lightRuntime),
       cell: (_, n, _) => _CellText(n.lightRuntime),
     ),
     _Column(
-      id: 'intake',
-      label: 'Intake Temp',
-      defaultWidth: 130,
+      spec: kColIntake,
       text: (n, _) => n.intakeTemp,
       sortKey: (n, _) => _leadingNum(n.intakeTemp),
       cell: (_, n, _) => _CellText(
@@ -404,9 +328,7 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
       ),
     ),
     _Column(
-      id: 'exhaust',
-      label: 'Exhaust Temp',
-      defaultWidth: 150,
+      spec: kColExhaust,
       text: (n, _) => n.exhaustTemp,
       sortKey: (n, _) => _leadingNum(n.exhaustTemp),
       cell: (_, n, _) => _CellText(
@@ -415,17 +337,13 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
       ),
     ),
     _Column(
-      id: 'voltage',
-      label: 'AC Voltage',
-      defaultWidth: 130,
+      spec: kColVoltage,
       text: (n, _) => n.acVoltage,
       sortKey: (n, _) => _leadingNum(n.acVoltage),
       cell: (_, n, _) => _CellText(n.acVoltage),
     ),
     _Column(
-      id: 'errors',
-      label: 'Errors',
-      defaultWidth: 140,
+      spec: kColErrors,
       iconPad: 20,
       text: (n, _) => n.errors == '-'
           ? '-'
@@ -440,44 +358,19 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
     ),
   ];
 
-  static const List<String> _defaultVisibleIds = [
-    'connection',
-    'model',
-    'serial',
-    'ip',
-    'power',
-    'shutter',
-    'input',
-    'signal',
-    'runtime',
-    'lightRuntime',
-    'intake',
-    'exhaust',
-    'voltage',
-    'errors',
-  ];
-
   static final Map<String, _Column> _columnsById = {
     for (final c in _allColumns) c.id: c,
   };
 
-  /// Floor for auto-fit / (future) manual column resize.
-  static const double _minColWidth = 60;
+  static const double _minColWidth = kMonitoringMinColumnWidth;
 
   // ── Column resolution ───────────────────────────────────────────────────
 
   /// Turns the persisted id list into concrete descriptors. Empty / all-unknown
   /// falls back to the default set; unknown ids are dropped.
-  List<_Column> _resolveColumns(List<String> saved) {
-    final ids = saved.isEmpty ? _defaultVisibleIds : saved;
-    final cols = [
-      for (final id in ids)
-        if (_columnsById[id] != null) _columnsById[id]!,
-    ];
-    return cols.isEmpty
-        ? [for (final id in _defaultVisibleIds) _columnsById[id]!]
-        : cols;
-  }
+  List<_Column> _resolveColumns(List<String> saved) => [
+    for (final id in MonitoringTable.resolveVisible(saved)) _columnsById[id]!,
+  ];
 
   // ── Static value helpers ────────────────────────────────────────────────
 
@@ -610,14 +503,13 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
 
   /// Text tint for an Intake/Exhaust cell from its display string: `null`
   /// (default colour) when normal or unreadable (`-`, `Timeout`), amber past
-  /// the warm threshold, red past the hot one. See `_intakeWarmC` etc.
+  /// the warm threshold, red past the hot one (`status_thresholds.dart`).
   static Color? _tempTint(String display, {required bool exhaust}) {
     final n = _leadingNum(display);
     if (n == double.negativeInfinity) return null;
-    final warm = exhaust ? _exhaustWarmC : _intakeWarmC;
-    final hot = exhaust ? _exhaustHotC : _intakeHotC;
-    if (n >= hot) return Colors.red;
-    if (n >= warm) return _warnText;
+    final t = exhaust ? kExhaustTempThreshold : kIntakeTempThreshold;
+    if (n >= t.hot) return Colors.red;
+    if (n >= t.warm) return _warnText;
     return null;
   }
 
