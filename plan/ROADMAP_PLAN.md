@@ -540,7 +540,7 @@ Two roles, each with its own PIN:
   (browsers) or in the JSON reply (scripts). It expires after 12 h idle. Changing either PIN
   or pressing *Sign out all clients* in the settings tab invalidates every session.
 - **Brute force:** 5 wrong PINs from one IP → that IP is locked out for 60 s, doubling on each
-  repeat; each lockout is logged in the Event Log.
+  repeat up to 1 h; each lockout is logged in the Event Log.
 - **Scripts / Companion / QLab:** `POST /api/login {"pin": "…"}` → token, then
   `Authorization: Bearer <token>`.
 - Plain HTTP on the show LAN: the PIN crosses the network unencrypted. Acceptable on a
@@ -709,6 +709,7 @@ Only one alignment session exists at a time; a second client entering joins the 
 |---|---|---|
 | POST | `/api/login` | `{ "pin": "…" }` → session token + role; no auth needed |
 | POST | `/api/logout` | ends the session |
+| GET | `/api/session` | project name + whether this client is signed in; no auth needed (the login page shows the project name) |
 | GET | `/api/config` | project name, role, status-colour thresholds, test-pattern list |
 | GET | `/api/projectors` | all nodes + telemetry, in layout order (JSON) |
 | GET | `/api/projectors/{id}` | one node |

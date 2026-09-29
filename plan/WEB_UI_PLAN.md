@@ -180,6 +180,9 @@ Vite copies `public/` into the output on every build, and the committed copies i
 - **Table layout** is persisted in `localStorage` under a versioned key
   (`pg.table.v1`). The first load seeds it from `/api/config`. Wrap every access in
   try/catch.
+- **Logo:** the app's own icon (`src/assets/app_icon.png`, copied from the macOS
+  AppIcon set; favicon `public/favicon.png`), not a generic projector glyph (owner,
+  2026-09-29).
 - **Theming:** `tokens.css` defines light and dark tokens. It follows
   `prefers-color-scheme` with a manual override stored locally. Status colours come only
   from tokens.
@@ -211,8 +214,12 @@ Then the existing `build_runner → format → analyze → flutter test`. The re
    - Preferences → Web Access tab with enable + port.
    - No `/api/*` yet, so nothing but the static page is exposed before auth exists.
    - **Done when:** a phone opens the page from the app.
-2. `[ ]` **Contract + auth + read-only data** (auth moved here from step 5, owner
-   2026-09-29 — the API must never be reachable without a PIN):
+2. `[x]` **Contract + auth + read-only data** (auth moved here from step 5, owner
+   2026-09-29 — the API must never be reachable without a PIN). Notes: the page shows a
+   temporary `InterimTable` until step 3; `/api/session` (no auth) gives the login page the
+   project name; sessions live in memory (an app restart signs everyone out); lockout
+   doubling stops at 1 h; fixtures regenerate with
+   `flutter test --update-goldens test/unit/web_api_dto_test.dart`.
    - `openapi.yaml`, generated types, golden fixtures;
    - server auth: Viewer PIN (salted hash in settings), `/api/login` / `/api/logout`,
      session cookie + bearer, 12 h idle expiry, lockout, *Sign out all clients*;
