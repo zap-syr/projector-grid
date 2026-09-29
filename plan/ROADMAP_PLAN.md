@@ -16,7 +16,7 @@ accepted item so each can be picked up independently. Edge Blending has its own 
 | F1 | Settings backup / restore / clone | **Accepted** → §1 | Strong value; the owner asked for UX + implementation design |
 | F2 | Apply dialog settings to a group | `[dropped]` | Every projector is tuned individually; a rarely used feature |
 | F3 | Cues / scenes | **Accepted** → §2 | Owner asked for UX + implementation design |
-| F4 | Alignment mode (solo / identify) | **Accepted** → §3 | "Very useful" |
+| F4 | Alignment mode (solo / identify) | **Accepted** → §3, `[~]` Alignment mode + test-pattern indicator done; Identify `[later]` | "Very useful" |
 | F5 | Telemetry alerts | **Accepted** → §4 | |
 | F6 | Network discovery | `[dropped]` | Already exists — the Add Projector dialog scans the network |
 | F7 | Two-way OSC | **Reframed** → §5 | The owner prefers a local web server / API so monitoring can be viewed from any device (phone, laptop) |
@@ -193,17 +193,40 @@ open, fade-in), *"Walk-in logo"* (group Stage: test pattern off, input HDMI2), *
 **Status (2026-09-29):** Alignment mode (§3.2) and the test-pattern indicator (§3.3) are
 implemented; **Identify (§3.1) is `[later]`** — the flash-by-test-pattern method is not
 settled, the owner decides after tests on a real projector. So the banner has no *Identify*
-button and `N` / `Shift+N` are unbound for now. Deviations from the design below:
+button and Identify has no shortcut yet (`N` went to Neighbours, see below).
+
+Done:
+- **Test-pattern indicator (§3.3)** — `QTS` is the 12th poll query; `ProjectorNode.testPattern`
+  is polled and set optimistically on every `OTS:xx`; card thumbnail on the IP row (open
+  shutter only); opt-in *Test Pattern* column (icon + name) in Monitoring. Pattern list and
+  icons shared in `domain/test_patterns.dart`.
+- **Alignment mode (§3.2)** — `alignment_provider.dart` (state, entry capture of shutter /
+  pattern / fade, per-projector command loops, restore on exit, pending fade restores in app
+  settings), `alignment_banner.dart`, card rings and dimming in `projector_card.dart`,
+  shortcuts in `projector_workspace.dart`, toolbar button, *Tools → Alignment Mode*, Keyboard
+  Shortcuts section. Pure rules in `domain/alignment.dart` (presets, roles, commands) and
+  `domain/card_layout.dart` (`layoutOrder`, `neighbours`; card size constants now live here).
+- **Tests** — `test/unit/alignment_test.dart`, `test/unit/card_layout_test.dart`,
+  `test/providers/alignment_provider_test.dart` (entry/exit, navigation, fades, rapid
+  presses, a hung projector), test-pattern polling in `workspace_provider_test.dart`.
+- **`tool/projector_simulator.dart`** — loopback projectors + a matching `.pgrid`, used to
+  test the mode without hardware (see `DEVELOPMENT.md`).
+- Commits `9e1e13e`, `a0f70ca`, `f5df3ea`, `8b36ccc` (feature), `62adcbe` (simulator).
+
+Deviations from the design below:
 - **Scope** = the selection when 2+ cards are selected (e.g. a group via `Ctrl+G`), otherwise
   all projectors. The banner doesn't name the scope or group (owner, 2026-09-29).
   Offline / not-answering projectors are left out on entry.
 - **`N` toggles Neighbours** (owner asked for a shortcut, 2026-09-29), so Identify needs a
   different key when it is designed. The banner row starts with the mode icon only (no
   "Alignment —" label) and shows no projector name (the ring on the card marks the focused
-  one). Order: icon · ◀ `n/N` ▶ · Neighbours · Show All · Presets ▾ · Adjust ▾ · Exit. A grouped card's group chip always sits below the
-  ring width (in and out of the mode), so it never covers a ring and doesn't jump. Neighbours / Show All are plain text buttons like Presets / Adjust;
-  when on they become a solid dark pill with orange text (same font weight, so turning one
-  on doesn't widen it).
+  one). Order: icon · ◀ `n/N` ▶ · Neighbours · Show All · Presets ▾ · Adjust ▾ · Exit.
+  A grouped card's group chip always sits below the ring width (in and out of the mode), so
+  it never covers a ring and doesn't jump. Neighbours / Show All are plain text buttons like
+  Presets / Adjust; when on they become a solid dark pill with orange text (same font weight,
+  so turning one on doesn't widen it). No shortcut hints in the banner or its tooltips.
+- **Selection is pinned to the focused projector** while the mode is on (a click on empty
+  canvas, `Ctrl+D`, `Ctrl+A` or a marquee snaps back), so the control bar always acts on it.
 - **No Blend preset** (owner, 2026-09-29): it was identical to Color, so the presets are
   Geometry / Color / Custom.
 - **Presets ▾** is a menu with *Preset / Focused / Others* submenus and a *Diagonal neighbours*
@@ -766,8 +789,8 @@ Small (≈1 day), no new dependencies. Also listed as item 7 in `IMPROVEMENT_PLA
 
 ## 7. `[~]` R6 — Pre-release Test Suite
 
-**Status (2026-09-29):** the suite is in place — 169 passing, 1 skipped (a known bug), up from
-one smoke test. Committed in `8a33ebc` (tests, refactors, CI) and `5c57b1e` (`dart format lib`).
+**Status (2026-09-29):** the suite is in place — 210 passing, 1 skipped (a known bug), up from
+one smoke test (169 at the R6 commit; F4 added the rest). Committed in `8a33ebc` (tests, refactors, CI) and `5c57b1e` (`dart format lib`).
 Open items are listed in §7.5.
 
 Layout: `test/unit/` (pure logic), `test/providers/` (Riverpod), `test/widgets/`, shared fakes
@@ -953,7 +976,9 @@ Today `_dispatchToNodes` logs one event per node and returns nothing; on a 30-pr
 - ~~Command strings for lens memory, current test pattern query, device-name OSD~~ —
   resolved 2026-09-28 from the PT-RQ35K2/RZ34K2 command list: lens memory `VXX:LNMI1/2/3`
   (no read-back — F1 backs up the absolute lens position instead), test pattern query `QTS`,
-  no device-name OSD command (F4 Identify uses the test-pattern flash).
+  no device-name OSD command.
+- **F4 Identify method** — deferred (2026-09-29): the owner doesn't consider the test-pattern
+  flash in §3.1 settled and decides after tests on a real projector.
 - ~~Go / no-go on zeroing shutter fade in Alignment mode~~ — decided 2026-09-28: always zero
   it while in the mode, only where it isn't already 0, and restore on Exit (§3.2).
 - Live-unit checks: `QVX:LNSI7`…`LNSIA` reply format and absolute write (F1); whether `STS`
