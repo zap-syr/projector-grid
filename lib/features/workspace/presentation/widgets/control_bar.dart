@@ -8,6 +8,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../core/services/app_config_dir.dart';
 import '../../domain/custom_command.dart';
+import '../../domain/test_patterns.dart';
 import '../providers/custom_commands_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../providers/selection_provider.dart';
@@ -67,58 +68,8 @@ class _ControlBarState extends ConsumerState<ControlBar> {
     'VXX:LNSI0=+00023': 'Focus/Zoom',
   };
 
-  static const Map<String, String> _testPatternIcons = {
-    'OTS:01': 'assets/icons/test_patterns/tp_white.svg',
-    'OTS:02': 'assets/icons/test_patterns/tp_black.svg',
-    'OTS:22': 'assets/icons/test_patterns/tp_red.svg',
-    'OTS:23': 'assets/icons/test_patterns/tp_green.svg',
-    'OTS:24': 'assets/icons/test_patterns/tp_blue.svg',
-    'OTS:28': 'assets/icons/test_patterns/tp_cyan.svg',
-    'OTS:29': 'assets/icons/test_patterns/tp_magenta.svg',
-    'OTS:30': 'assets/icons/test_patterns/tp_yellow.svg',
-    'OTS:05': 'assets/icons/test_patterns/tp_window.svg',
-    'OTS:06': 'assets/icons/test_patterns/tp_reversed_window.svg',
-    'OTS:08': 'assets/icons/test_patterns/tp_colorbar_vert.svg',
-    'OTS:51': 'assets/icons/test_patterns/tp_colorbar_horiz.svg',
-    'OTS:78': 'assets/icons/test_patterns/tp_focus.svg',
-    'OTS:59': 'assets/icons/test_patterns/tp_aspect_frame.svg',
-    'OTS:07': 'assets/icons/test_patterns/tp_crosshatch.svg',
-    'OTS:70': 'assets/icons/test_patterns/tp_crosshatch_red.svg',
-    'OTS:71': 'assets/icons/test_patterns/tp_crosshatch_green.svg',
-    'OTS:72': 'assets/icons/test_patterns/tp_crosshatch_blue.svg',
-    'OTS:73': 'assets/icons/test_patterns/tp_crosshatch_cyan.svg',
-    'OTS:74': 'assets/icons/test_patterns/tp_crosshatch_magenta.svg',
-    'OTS:75': 'assets/icons/test_patterns/tp_crosshatch_yellow.svg',
-    'OTS:87': 'assets/icons/test_patterns/tp_circle.svg',
-  };
-
-  static const Map<String, String> _testPatternOptions = {
-    'OTS:01': 'White',
-    'OTS:02': 'Black',
-    'OTS:22': 'Red',
-    'OTS:23': 'Green',
-    'OTS:24': 'Blue',
-    'OTS:28': 'Cyan',
-    'OTS:29': 'Magenta',
-    'OTS:30': 'Yellow',
-    'OTS:05': 'Window',
-    'OTS:06': 'Reversed Window',
-    'OTS:08': 'Color Bar Vert',
-    'OTS:51': 'Color Bar Horiz',
-    'OTS:78': 'Focus',
-    // 'OTS:32': 'Focus (Level 0%)',
-    // 'OTS:33': 'Focus (Level 50%)',
-    // 'OTS:34': 'Focus (Level 100%)',
-    'OTS:59': 'Aspect Frame',
-    'OTS:07': 'Cross Hatch',
-    'OTS:70': 'Cross Hatch Red',
-    'OTS:71': 'Cross Hatch Green',
-    'OTS:72': 'Cross Hatch Blue',
-    'OTS:73': 'Cross Hatch Cyan',
-    'OTS:74': 'Cross Hatch Magenta',
-    'OTS:75': 'Cross Hatch Yellow',
-    'OTS:87': 'Circle',
-  };
+  static const Map<String, String> _testPatternIcons = kTestPatternIcons;
+  static const Map<String, String> _testPatternOptions = kTestPatternLabels;
 
   static const Map<String, String> _inputOptions = {
     'IIS:HD1': 'HDMI 1',
