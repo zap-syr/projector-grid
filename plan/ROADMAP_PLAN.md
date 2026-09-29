@@ -188,7 +188,33 @@ open, fade-in), *"Walk-in logo"* (group Stage: test pattern off, input HDMI2), *
 
 ---
 
-## 3. `[ ]` F4 — Alignment Mode (Solo / Identify)
+## 3. `[~]` F4 — Alignment Mode (Solo / Identify)
+
+**Status (2026-09-29):** Alignment mode (§3.2) and the test-pattern indicator (§3.3) are
+implemented; **Identify (§3.1) is `[later]`** — the flash-by-test-pattern method is not
+settled, the owner decides after tests on a real projector. So the banner has no *Identify*
+button and `N` / `Shift+N` are unbound for now. Deviations from the design below:
+- **Scope** = the selection when 2+ cards are selected (e.g. a group via `Ctrl+G`), otherwise
+  all projectors. The banner doesn't name the scope or group (owner, 2026-09-29).
+  Offline / not-answering projectors are left out on entry.
+- **`N` toggles Neighbours** (owner asked for a shortcut, 2026-09-29), so Identify needs a
+  different key when it is designed. The banner row starts with the mode icon only (no
+  "Alignment —" label) and shows no projector name (the ring on the card marks the focused
+  one). Order: icon · ◀ `n/N` ▶ · Neighbours · Show All · Presets ▾ · Adjust ▾ · Exit. A grouped card's group chip always sits below the
+  ring width (in and out of the mode), so it never covers a ring and doesn't jump. Neighbours / Show All are plain text buttons like Presets / Adjust;
+  when on they become a solid dark pill with orange text (same font weight, so turning one
+  on doesn't widen it).
+- **No Blend preset** (owner, 2026-09-29): it was identical to Color, so the presets are
+  Geometry / Color / Custom.
+- **Presets ▾** is a menu with *Preset / Focused / Others* submenus and a *Diagonal neighbours*
+  check item, not a popover with dropdowns (dropdown routes inside a menu overlay close it).
+- Commands go out through **one loop per projector**: each loop re-reads the target before
+  every command, so rapid `<` / `>` presses only move the target (a projector passed through
+  gets at most one command, never an open shutter), commands on one projector never
+  interleave, and a projector that stopped answering (~9 s send timeout) doesn't hold up the
+  others.
+- `Ctrl+L` also lives in *Tools → Alignment Mode*; quitting the app while the mode is on runs
+  Exit first (5 s cap) before closing.
 
 ### Why
 When converging a multi-projector setup you constantly need "show me only this projector,
@@ -255,8 +281,7 @@ mode — typical use is right after rigging, or when a card's name doesn't match
   | Preset | Dropdowns offer | Default focused | Default others | Use |
   |---|---|---|---|---|
   | **Geometry** (default) | all cross hatches: `OTS:07`, `70`–`75` (white, red, green, blue, cyan, magenta, yellow) | Cross Hatch `07` | Cross Hatch Red `70` | Converging lines in the overlap — colours tell which line is whose |
-  | **Blend** | all solid colours: `OTS:01` white, `02` black, `22` red, `23` green, `24` blue, `28` cyan, `29` magenta, `30` yellow | White `01` | Same as focused | Checking the blend seam — a flat field must look uniform |
-  | **Color** | same solid colours as Blend | White `01` | Same as focused | Colour/brightness matching between neighbours |
+  | **Color** | all solid colours: `OTS:01` white, `02` black, `22` red, `23` green, `24` blue, `28` cyan, `29` magenta, `30` yellow | White `01` | Same as focused | Colour/brightness matching and checking the blend seam |
   | **Custom** | every test pattern | keeps current | keeps current | Anything else (window, colour bars, focus, circle…) |
   Changing a dropdown keeps the preset (the lists are already filtered to the task). Preset and
   both patterns are remembered in app settings.
@@ -271,11 +296,11 @@ mode — typical use is right after rigging, or when a card's name doesn't match
   *Exit* at the far right. A `LayoutBuilder` only changes how compact the controls are:
   | Banner width | Layout |
   |---|---|
-  | **≥ 900 px** | Toggles as labelled pills with shortcut hints (*Show All · A*, *Identify · N*); Exit as *Exit · Esc* |
+  | **≥ 900 px** | Toggles as labelled pills (*Neighbours*, *Show All*); Exit as *Exit* |
   | **600–900 px** | Toggles become **icon buttons** with tooltips (filled when on); Exit as *Exit* |
   | **< 600 px** (min window) | Icon toggles; name truncated with ellipsis; Exit as an icon |
   Name, ◀ ▶, Presets ▾, Adjust ▾ and Exit are never hidden. Every icon-only control keeps a
-  tooltip with its shortcut (`Show All · A`).
+  tooltip with its name only — no shortcut hints in the banner (owner, 2026-09-29).
 - **Navigation — previous / next only:** **`<`** / **`>`** (or the banner ◀ ▶) step to the
   previous / next projector in **layout order: left→right, top→bottom**; wraps around at the
   ends. No up/down navigation. Clicking a card focuses it directly.
@@ -286,7 +311,7 @@ mode — typical use is right after rigging, or when a card's name doesn't match
   after another in layout order, each with its card pulsing — not only the focused one — then
   puts the mode's patterns back. Why it's still needed although the focused projector
   already has its own pattern:
-  - With the **Blend / Color** presets (or *Same as focused*) every open projector shows the
+  - With the **Color** preset (or *Same as focused*) every open projector shows the
     same image, so the wall alone no longer tells which one is focused — Identify does.
   - Even with distinct patterns, it confirms **which neighbour is which** (e.g. that the
     projector overlapping on the right really is PJ-06), i.e. that the card layout matches
@@ -322,11 +347,11 @@ mode — typical use is right after rigging, or when a card's name doesn't match
     **`Ctrl+click`** on a card in Alignment mode toggles it as a neighbour manually (kept for
     the session, cleared on Exit).
   - Neighbours show the **Others** pattern (see Patterns above).
-  - Neighbour cards get a secondary (dimmer) highlight ring in the workspace.
+  - Neighbour cards get a thinner highlight ring in the workspace.
 - **Show All** (banner toggle, shortcut **`A`**) — a temporary overview of the whole wall:
   - On: opens the shutters of **every** projector in scope. The focused projector keeps the
     *Focused* pattern; all others show the *Others* pattern (with the Geometry preset the
-    focused one still stands out; with Blend/Color everyone shows the same field).
+    focused one still stands out; with Color everyone shows the same field).
   - Off (toggle again, or `A`): returns to the **previous view** — solo (only the focused
     projector open) or, if *Show neighbours* was on, focused + neighbours.
   - `<` / `>` still work while Show All is on: they only move the focus (pattern swap between
@@ -395,8 +420,12 @@ with the raw code in the tooltip. Transient telemetry → covered by
   for the restore: `QSH` (shutter), `QTS` (test pattern) and `QVX:SEFS1`/`SEFS2` (shutter
   fade; saved only when not `0.0`). Pending fade restores live in `appSettingsProvider`
   (`Map<nodeId, (fadeIn, fadeOut)>`), cleared per projector once restored.
-- Banner widget in `projector_workspace.dart`'s Stack; focused card = primary ring, neighbours
-  = dimmer secondary ring, Identify = pulsing ring.
+- Banner widget above the canvas. Mode colour is an orange accent (`AppTheme.alignmentAccent`),
+  opposite the blue selection colour. Focused card = 3 px orange ring with a 2 px gap and a
+  glow (replaces the selection border), neighbours = 2 px ring in a paler peach tone
+  (`AppTheme.alignmentNeighbour`), cards the mode keeps closed are dimmed by an opaque scrim —
+  not opacity, which let the canvas grid show through (owner feedback 2026-09-29: the first, tertiary-colour rings
+  merged with the selection border and neighbours were hard to see).
 - **Device-name overlay (later):** not in the PT-RQ35K2/RZ34K2 command list. If a Wireshark
   capture of VSS's *Show Device Name* shows an NTCONTROL command (it may use the web UI
   instead), add it to the skill and switch Identify / Identify All to "all at once, name on
@@ -622,7 +651,7 @@ Only one alignment session exists at a time; a second client entering joins the 
   Exit*.
   - The presets are the app's §3.2 table, including **Custom**.
   - *Focused ▾* / *Others ▾* open a swatch popover filtered by the preset: Geometry → cross
-    hatches, Blend / Color → solid colours, **Custom → every test pattern**. *Others* also has
+    hatches, Color → solid colours, **Custom → every test pattern**. *Others* also has
     *Same as focused*.
   - Picking a pattern keeps the preset; switching to Custom keeps the current patterns. Same
     rules as the app's *Presets ▾* popover. The web has room to put the pickers inline, so it
@@ -639,7 +668,7 @@ Only one alignment session exists at a time; a second client entering joins the 
   - Neighbours / Show All / Identify toggles;
   - a **wall mini-map** built from the card layout — focused filled, neighbours outlined,
     offline dashed; tap a tile to focus it;
-  - preset switch (Geometry / Blend / Color / **Custom**) and *Focused* / *Others* rows that
+  - preset switch (Geometry / Color / **Custom**) and *Focused* / *Others* rows that
     open a bottom sheet with the filtered swatch grid;
   - the lens block for the focused projector.
 - *Adjust ▾* (geometry / colour dialogs) stays app-only.
