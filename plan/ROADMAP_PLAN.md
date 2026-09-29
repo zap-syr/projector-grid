@@ -25,7 +25,7 @@ accepted item so each can be picked up independently. Edge Blending has its own 
 | R3 | Autosave / crash recovery | `[dropped]` | The project holds only card layout, cheap to redo |
 | R4 | Global error handler + log file | **Clarified** → §6, awaiting a go/no-go | The owner didn't follow the original one-liner — explained in §6 |
 | R5 | Show lock mode | `[later]` | During shows the app is mostly used for monitoring; accidental commands are unlikely |
-| R6 | Pre-release test suite | **Accepted** → §7 | Owner asked for a concrete list |
+| R6 | Pre-release test suite | **Accepted** → §7, `[~]` suite in place | Owner asked for a concrete list |
 | U1 | Fix light theme in dialogs | **Accepted** → §8 | |
 | U2 | Shared dialog widgets | **Accepted** → §9 | |
 | U3 | Group command result summary | **Accepted** → §10 | |
@@ -735,59 +735,93 @@ Small (≈1 day), no new dependencies. Also listed as item 7 in `IMPROVEMENT_PLA
 
 ---
 
-## 7. `[ ]` R6 — Pre-release Test Suite
+## 7. `[~]` R6 — Pre-release Test Suite
 
-Today there is one smoke test (`test/widget_test.dart`). Priorities, cheapest and highest value
-first. Use the `test-writer` agent; fakes instead of real sockets.
+**Status (2026-09-29):** the suite is in place — 169 passing, 1 skipped (a known bug), up from
+one smoke test. Committed in `8a33ebc` (tests, refactors, CI) and `5c57b1e` (`dart format lib`).
+Open items are listed in §7.5.
 
-### 7.1 Unit tests — pure logic (no Flutter)
-- **Protocol parsing/formatting** (`panasonic_protocol_service.dart`):
-  `00` prefix stripping (incl. model names containing `00`), `_isFailureResponse` vs
-  `_isTransportFailure` (`Timeout`, `Error: …`, `ERR3`, `ER401`), MD5 prefix for a known
-  token/login/password.
-- **Telemetry parsing** in `_pollSingleProjector`: `LRTS3=00:<hours>` (parse after last `:`),
-  `ERRS2=` empty → `NO ERRORS`, voltage `VMOI2` lengths, temps via `_formatTemp`,
-  `ER401` handling for runtime/signal, fallback to last-known value on transport failure.
-  → Extract these into pure functions first (a small refactor) so they're testable.
-- **Dialog formatters:** `_fmtInt` (`+00012`, `-00012`), `_fmtDeg`, `_fmtThrow`, `_parseValue`
-  with and without `KEY=`; Edge Blending `f4` / RGBW tuple once added.
-- **Corner Correction maths:** `_toCanvas`/`_toRaw` round-trip on standard and Quad Pixel Drive
-  (Tier A) models, clamps at inward/outward limits (`QUAD_PIXEL_DRIVE_CORNER_LIMITS.md`).
-- **Model tier matching:** `PT-RQ35K`, `PT-RQ35KL`, `PT-RQ35K2` → Tier A; `PT-RQ32K` → Tier B;
-  unrelated → none.
-- **`commandLabel`** mapping for every control-bar command.
-- **OSC codec:** address matching, argument types, custom-command slugs (`tool/osc_codec_test.dart`
-  has cases worth porting into `test/`).
-- **Scheduler:** `_isDue` for once/daily/weekly, missed-run behaviour, and the known DST
-  spring-forward case (`IMPROVEMENT_PLAN.md` item 10) as a regression test.
+Layout: `test/unit/` (pure logic), `test/providers/` (Riverpod), `test/widgets/`, shared fakes
+in `test/helpers/`:
+- `fake_protocol_service.dart` — scriptable `PanasonicProtocolService`, never opens a socket.
+- `fake_projector_server.dart` — loopback NTCONTROL server, used only by the protocol tests.
+- `test_config_dir.dart` — points `appConfigFilePath` at a temp dir via
+  `debugAppConfigDirOverride`. **Every test that builds a provider or the app must call
+  `useTempConfigDir()`** — the old smoke test read and could overwrite the real user's
+  `app_settings.json`.
+- `provider_harness.dart` / `app_harness.dart` — container / full-app setup with the fake
+  service and a mocked `window_manager` channel.
 
-### 7.2 Provider tests (Riverpod `ProviderContainer` + fake protocol service)
-Requires `PanasonicProtocolService` to be injectable (a provider, or constructor param) —
-`IMPROVEMENT_PLAN.md` item 5; do this refactor first.
-- `workspaceProvider`: add/delete/move nodes; **undo/redo keeps live telemetry**
-  (`_stripTransient` / `_mergeWithTelemetry` — a documented invariant in CLAUDE.md).
-- Optimistic updates: `PON` → `turningOn`, shutter commands flip state, reverted on failure.
-- Polling: offline after failures, "Came online" / "Went offline" log events emitted once.
-- `projectStateProvider`: save → load round-trip of the JSON (v2 today, v3 with cues later);
-  dirty flag set/cleared correctly; recent-projects list capped.
-- `statusSummaryProvider`: counts; doesn't emit when counts are unchanged.
-- `eventLogProvider`: capped at 500.
-- `customCommandsProvider`: slug generation uniqueness.
+Refactors done first (behaviour unchanged):
+- `protocolServiceProvider` (`presentation/providers/protocol_service_provider.dart`);
+  `workspaceProvider` and the Geometry dialog read the service from it.
+- Pure functions extracted: `domain/telemetry_parsing.dart`, `domain/geometry_values.dart`
+  (formatters, `parseKeyed*`, `quadPixelTierFor`, corner canvas maths and limits),
+  `domain/schedule_due.dart` (`isTaskDue`).
+- `OscService.processMessage` (`@visibleForTesting`) routes a message without a socket.
 
-### 7.3 Widget tests
-- Projector card context menu: every item present and wired (Geometry, Edge Blending, …).
-- Geometry dialog with a fake service: loads mode, switching mode sends `VXX:GMMI0=…`,
-  a failed write shows the failure notice.
-- `SleekStepperInput`: typing + Enter commits, clamps to min/max, invalid text reverts,
-  up/down step.
-- Keyboard shortcuts after switching Controls ↔ Monitoring (the IndexedStack focus quirk):
-  Ctrl+A still selects all.
-- Window close with unsaved changes shows the confirm dialog (mock `windowManager`).
+### 7.1 `[x]` Unit tests — pure logic
+- `[x]` Protocol: `00` stripping (incl. model names containing `00`), MD5 prefix (known
+  answer), failure vs transport-failure classification, `pollProjectorTelemetry`
+  online/unprotected/unauthorized/offline — against the loopback fake projector.
+- `[x]` Telemetry parsing: runtime, light runtime, errors, voltage, temperature, signal, power,
+  input labels, fallback to the last known value.
+- `[x]` Geometry formatters and `parseKeyedValue` with and without `KEY=`.
+- `[ ]` Edge Blending `f4` / RGBW tuple formatters — once Edge Blending exists.
+- `[x]` Corner Correction maths: round-trip on standard and Tier A, canvas bounds land exactly
+  on the protocol limits.
+- `[x]` Model tiers: `PT-RQ35K`/`KL`/`K2` → A, `PT-RQ32K` → B, unrelated → none.
+- `[x]` `commandLabel` for every control-bar command. **Found and fixed:** partial lens
+  calibration (`VXX:LNSI0=+000xx`) logged the raw command.
+- `[x]` OSC: address routing, rate limit, custom slugs, codec round-trip, outbound status
+  change detection.
+- `[x]` Scheduler: once/daily/weekly, missed run, same-minute guard. DST spring-forward
+  regression test is written but **skipped** until `IMPROVEMENT_PLAN.md` item 10 is fixed.
 
-### 7.4 Release gate (CI)
-`.github/` exists — add a workflow on Windows + macOS runners:
-`dart run build_runner build` → `dart format --set-exit-if-changed .` → `flutter analyze` →
-`flutter test --coverage`. Block merges to `main` on failure.
+### 7.2 `[x]` Provider tests
+- `[x]` `workspaceProvider`: add/delete/move, groups, undo/redo, **undo keeps live telemetry**.
+- `[x]` Optimistic updates: shutter flips, failures leave state untouched, `PON`/`POF`
+  transition then settle on what `QVX:POWI1` reports (a `PON` that didn't take reverts).
+- `[x]` Polling: telemetry parsing, per-field fallback, "Went offline" / "Authentication
+  failed" / hardware error logged once, no overlapping poll cycles.
+- `[x]` "Came online". **Found and fixed:** a projector coming back via the normal poll cycle
+  was never logged (`_checkAndSetNodeStatus` flipped it to connected before polling). Now
+  logged on return and after an edit; the first check of a newly added projector stays quiet.
+- `[x]` `projectStateProvider`: v2 open/save round-trip, telemetry never persisted, dirty flag,
+  recent list (newest first, deduped, capped at 10, missing files dropped), corrupt file,
+  500-node cap.
+- `[ ]` Project file v3 round-trip — once cues (§2) land.
+- `[x]` `statusSummaryProvider`, `eventLogProvider` (500 cap), `customCommandsProvider`
+  (slug clashes, persistence, malformed entry dropped).
+
+### 7.3 `[x]` Widget tests
+- `[x]` Card context menu: every item present and wired. `[ ]` Add Edge Blending once it exists.
+- `[x]` Geometry dialog: loads mode, mode switch sends `VXX:GMMI0=…`, QPD auto-enable only
+  from Off, failed write shows the notice.
+- `[x]` `SleekStepperInput`: Enter/blur commit, clamp, step snapping, invalid text reverts,
+  buttons and hold-to-repeat.
+- `[x]` Ctrl+A after Controls ↔ Monitoring (verified to fail if `_requestViewFocus` is removed).
+- `[x]` Window close: clean closes, dirty asks, Cancel keeps, Discard closes.
+
+### 7.4 `[~]` Release gate (CI)
+- `[x]` `.github/workflows/ci.yml` on Windows + macOS: `build_runner` →
+  `dart format --set-exit-if-changed lib test` → `flutter analyze lib test` →
+  `flutter test --coverage`. Scoped to `lib/` and `test/` because `tool/` scripts aren't held
+  to the lint/format rules (see CLAUDE.md).
+- `[ ]` Block merges to `main`: enable branch protection with the CI check required — a
+  GitHub repo setting, not a file.
+
+### 7.5 Open items
+- `[ ]` Fix the DST spring-forward bug (`IMPROVEMENT_PLAN.md` item 10), then unskip its test.
+- `[ ]` Branch protection on `main` (§7.4).
+- `[ ]` Edge Blending and project v3 tests as those features land.
+- `[ ]` Custom-command ids are `microsecondsSinceEpoch`; Windows' clock is coarse enough that
+  two adds in the same tick share an id. Unreachable at human click speed — fix only if
+  commands are ever created programmatically.
+
+Note: on the dev laptop `flutter_tester.exe` sometimes dies with the same Dart VM profiler
+access violation as the debug app (`debug_crash_investigation.md`). A run then shows a batch of
+"did not complete" tests with no error text. Rerun, or use `flutter test --concurrency=1`.
 
 ---
 

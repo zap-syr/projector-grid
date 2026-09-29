@@ -825,6 +825,9 @@ there's a checklist to work through.
     no catch-up logic. A task scheduled for a clock time that gets skipped
     entirely on the DST spring-forward night (e.g. 2:30 AM when the clock
     jumps 1:59:59 → 3:00:00) never fires that day, with no log entry.
+    A regression test exists and is skipped until this is fixed:
+    `test/unit/schedule_due_test.dart` (the logic now lives in `isTaskDue`,
+    `domain/schedule_due.dart`).
 
 11. `[x]` **Unhandled exception if the native file-picker process can't
     launch.** `_showOpenDialog`/`_showSaveDialog` (`project_provider.dart:209`)
