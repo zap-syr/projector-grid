@@ -1,72 +1,38 @@
 <script lang="ts">
-  import ProjectorIcon from './lib/components/shell/ProjectorIcon.svelte';
+  import Header from './lib/components/shell/Header.svelte';
+  import Login from './lib/components/shell/Login.svelte';
+  import InterimTable from './lib/components/table/InterimTable.svelte';
+  import { config } from './lib/state/config.svelte';
+  import { live } from './lib/state/live.svelte';
+  import { session } from './lib/state/session.svelte';
+
+  void session.refresh();
+
+  // Signed in → load the config and open the event stream; signed out → close it.
+  $effect(() => {
+    if (session.status !== 'signedIn') return;
+    void config.load();
+    live.connect();
+    return () => live.disconnect();
+  });
 </script>
 
-<div class="app">
-  <header class="hdr">
-    <div class="logo"><ProjectorIcon /></div>
-    <div class="title">
-      <b>Projector Grid</b>
-      <span>Web Monitor</span>
-    </div>
-  </header>
-  <main class="empty">
-    <p>Connected to the app. Monitoring is not available yet.</p>
-  </main>
-</div>
+{#if session.status === 'signedIn'}
+  <div class="app">
+    <Header />
+    {#if config.value}
+      <InterimTable config={config.value} />
+    {/if}
+  </div>
+{:else if session.status === 'signedOut'}
+  <Login />
+{/if}
 
 <style>
   .app {
-    min-height: 100%;
+    height: 100%;
     display: grid;
     grid-template-rows: auto 1fr;
-  }
-
-  .hdr {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    height: 60px;
-    padding: 0 16px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--line);
-  }
-
-  .logo {
-    width: 32px;
-    height: 32px;
-    border-radius: 9px;
-    background: var(--accent);
-    color: var(--on-accent);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex: none;
-  }
-
-  .title {
-    display: flex;
-    flex-direction: column;
-    line-height: 1.2;
-  }
-
-  .title b {
-    font-size: 15px;
-    font-weight: 650;
-    letter-spacing: -0.01em;
-  }
-
-  .title span {
-    font-size: 12px;
-    color: var(--faint);
-  }
-
-  .empty {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 48px 16px;
-    color: var(--faint);
-    text-align: center;
+    min-height: 0;
   }
 </style>

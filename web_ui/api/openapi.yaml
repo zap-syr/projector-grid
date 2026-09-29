@@ -1,0 +1,496 @@
+openapi: 3.1.0
+info:
+  title: Projector Grid Web API
+  version: 0.2.0
+  description: |
+    Served by the Projector Grid app on the port set in Preferences → Web Access.
+    Every route except `/api/login` and `/api/session` needs a session: the
+    `pg_session` cookie (browsers) or `Authorization: Bearer <token>` (scripts).
+
+    The source of truth for the shapes below. The Dart side writes sample
+    payloads to `test/fixtures/api/*.json`; `tests/contract.test.ts` validates
+    them against these schemas.
+servers:
+  - url: /
+
+components:
+  responses:
+    Unauthorized:
+      description: No session, or it expired.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  securitySchemes:
+    cookie:
+      type: apiKey
+      in: cookie
+      name: pg_session
+    bearer:
+      type: http
+      scheme: bearer
+
+  schemas:
+    Role:
+      type: string
+      enum: [viewer, operator]
+
+    Error:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: string
+          enum: [bad_request, invalid_pin, locked_out, unauthorized, not_found]
+        retryAfter:
+          type: integer
+          description: Seconds until the IP may try again (`locked_out` only).
+
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [pin]
+      properties:
+        pin:
+          type: string
+
+    LoginResponse:
+      type: object
+      additionalProperties: false
+      required: [token, role]
+      properties:
+        token:
+          type: string
+        role:
+          $ref: '#/components/schemas/Role'
+
+    Session:
+      type: object
+      additionalProperties: false
+      required: [projectName, authenticated]
+      properties:
+        projectName:
+          type: string
+        authenticated:
+          type: boolean
+        role:
+          $ref: '#/components/schemas/Role'
+
+    Projector:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - ip
+        - groupId
+        - x
+        - y
+        - connection
+        - power
+        - shutter
+        - serial
+        - input
+        - signal
+        - testPattern
+        - runtime
+        - lightRuntime
+        - intakeTemp
+        - exhaustTemp
+        - acVoltage
+        - errors
+      description: |
+        Display strings are exactly what the app shows ('-' = not polled yet).
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        ip:
+          type: string
+        groupId:
+          type: [string, 'null']
+        x:
+          type: number
+          description: Card position on the app's canvas (px).
+        y:
+          type: number
+        connection:
+          type: string
+          enum: [connected, offline, unauthorized, unprotected]
+        power:
+          type: string
+          enum: [standby, turningOn, on, cooling]
+        shutter:
+          type: string
+          enum: [open, closed]
+        serial:
+          type: string
+        input:
+          type: string
+        signal:
+          type: string
+        testPattern:
+          type: [string, 'null']
+          description: '`OTS:xx` command of the active pattern, `OTS:00` = off, null = not polled.'
+        runtime:
+          type: string
+        lightRuntime:
+          type: string
+        intakeTemp:
+          type: string
+        exhaustTemp:
+          type: string
+        acVoltage:
+          type: string
+        errors:
+          type: string
+          description: "'NO ERRORS', '-' or the projector's error code."
+
+    Projectors:
+      type: array
+      description: In layout order (left→right, top→bottom).
+      items:
+        $ref: '#/components/schemas/Projector'
+
+    Group:
+      type: object
+      additionalProperties: false
+      required: [id, name, color]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        color:
+          type: string
+          pattern: '^#[0-9A-F]{6}$'
+
+    Groups:
+      type: array
+      items:
+        $ref: '#/components/schemas/Group'
+
+    TempThreshold:
+      type: object
+      additionalProperties: false
+      required: [warm, hot]
+      properties:
+        warm:
+          type: number
+        hot:
+          type: number
+
+    ColumnId:
+      type: string
+      enum:
+        - connection
+        - model
+        - serial
+        - group
+        - ip
+        - power
+        - shutter
+        - input
+        - signal
+        - testPattern
+        - runtime
+        - lightRuntime
+        - intake
+        - exhaust
+        - voltage
+        - errors
+
+    Density:
+      type: string
+      enum: [compact, standard, comfortable]
+
+    TableLayout:
+      type: object
+      additionalProperties: false
+      required: [columns, widths, sortColumn, sortAscending, density, fitToWidth, groupBy]
+      properties:
+        columns:
+          type: array
+          items:
+            $ref: '#/components/schemas/ColumnId'
+        widths:
+          type: object
+          additionalProperties:
+            type: number
+        sortColumn:
+          $ref: '#/components/schemas/ColumnId'
+        sortAscending:
+          type: boolean
+        density:
+          $ref: '#/components/schemas/Density'
+        fitToWidth:
+          type: boolean
+        groupBy:
+          type: boolean
+
+    Config:
+      type: object
+      additionalProperties: false
+      required:
+        - projectName
+        - role
+        - columns
+        - defaultColumns
+        - presets
+        - minColumnWidth
+        - layout
+        - thresholds
+        - testPatterns
+      properties:
+        projectName:
+          type: string
+        role:
+          $ref: '#/components/schemas/Role'
+        columns:
+          type: array
+          description: Every Monitoring column, in canonical order.
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, label, defaultWidth]
+            properties:
+              id:
+                $ref: '#/components/schemas/ColumnId'
+              label:
+                type: string
+              defaultWidth:
+                type: number
+        defaultColumns:
+          type: array
+          items:
+            $ref: '#/components/schemas/ColumnId'
+        presets:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [name, columns]
+            properties:
+              name:
+                type: string
+              columns:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ColumnId'
+        minColumnWidth:
+          type: number
+        layout:
+          $ref: '#/components/schemas/TableLayout'
+        thresholds:
+          type: object
+          additionalProperties: false
+          required: [intake, exhaust]
+          properties:
+            intake:
+              $ref: '#/components/schemas/TempThreshold'
+            exhaust:
+              $ref: '#/components/schemas/TempThreshold'
+        testPatterns:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [code, label]
+            properties:
+              code:
+                type: string
+              label:
+                type: string
+
+    Alerts:
+      type: array
+      description: Always empty until telemetry alerts (ROADMAP §4) exist.
+      maxItems: 0
+
+    SnapshotEvent:
+      type: object
+      additionalProperties: false
+      required: [projectName, projectors, groups]
+      properties:
+        projectName:
+          type: string
+        projectors:
+          $ref: '#/components/schemas/Projectors'
+        groups:
+          $ref: '#/components/schemas/Groups'
+
+    ProjectEvent:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          type: string
+
+    SignedOutEvent:
+      type: object
+      additionalProperties: false
+
+security:
+  - cookie: []
+  - bearer: []
+
+paths:
+  /api/login:
+    post:
+      security: []
+      summary: Sign in with a PIN
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Signed in. Also sets the `pg_session` HttpOnly cookie.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: 'Body isn''t `{"pin": "<string>"}`.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Wrong PIN.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Too many wrong PINs from this IP; see `Retry-After`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/logout:
+    post:
+      summary: End this session
+      responses:
+        '204':
+          description: Signed out; the cookie is cleared.
+
+  /api/session:
+    get:
+      security: []
+      summary: Project name, and whether this client is signed in
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+
+  /api/config:
+    get:
+      summary: Column catalogue, presets, the app's table layout, thresholds, test patterns
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Config'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/projectors:
+    get:
+      summary: All projectors with telemetry, in layout order
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Projectors'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/projectors/{id}:
+    get:
+      summary: One projector
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Projector'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: No such projector.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/groups:
+    get:
+      summary: Groups (empty → the page shows one flat list)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Groups'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/alerts:
+    get:
+      summary: Active alerts
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Alerts'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/events:
+    get:
+      summary: Live updates (Server-Sent Events)
+      description: |
+        `text/event-stream`; a `: ping` comment every 15 s. Events (`event:` name → `data:` JSON):
+
+        | Event | Data | When |
+        |---|---|---|
+        | `snapshot` | `SnapshotEvent` | first, on every (re)connect |
+        | `projectors` | `Projectors` | projectors added, removed or reordered |
+        | `projector` | `Projector` | one projector changed |
+        | `groups` | `Groups` | groups changed |
+        | `project` | `ProjectEvent` | another project was opened or saved under a new name |
+        | `signedOut` | `SignedOutEvent` | the session ended (PIN changed, *Sign out all clients*, Web Access off); the stream then closes |
+      responses:
+        '200':
+          description: Event stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'

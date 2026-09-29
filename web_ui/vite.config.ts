@@ -2,8 +2,11 @@ import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { svelteTesting } from '@testing-library/svelte/vite';
 import { defineConfig } from 'vitest/config';
 
-export default defineConfig({
-  plugins: [svelte(), svelteTesting()],
+import { mockApi } from './mocks/mockApi.ts';
+
+export default defineConfig(({ mode }) => ({
+  // `--mode mock` (npm run dev:mock) serves /api from mocks/ instead of the app.
+  plugins: [svelte(), svelteTesting(), ...(mode === 'mock' ? [mockApi()] : [])],
   // Relative URLs, so index.html works whatever path the app serves it from.
   base: './',
   build: {
@@ -14,12 +17,13 @@ export default defineConfig({
     sourcemap: false,
   },
   server: {
-    proxy: {
-      '/api': { target: 'http://localhost:8080', changeOrigin: true },
-    },
+    proxy:
+      mode === 'mock'
+        ? undefined
+        : { '/api': { target: 'http://localhost:8080', changeOrigin: true } },
   },
   test: {
     environment: 'jsdom',
     include: ['tests/**/*.test.ts'],
   },
-});
+}));

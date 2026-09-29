@@ -1,9 +1,16 @@
 import { render, screen } from '@testing-library/svelte';
-import { expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 
 import App from '../src/App.svelte';
 
-test('renders the app shell', () => {
+afterEach(() => vi.unstubAllGlobals());
+
+test('signed out → the PIN page with the project name', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => Response.json({ projectName: 'Main Hall', authenticated: false })),
+  );
   render(App);
-  expect(screen.getByText('Projector Grid')).toBeTruthy();
+  expect(await screen.findByText('Main Hall')).toBeTruthy();
+  expect(screen.getByLabelText('PIN')).toBeTruthy();
 });
