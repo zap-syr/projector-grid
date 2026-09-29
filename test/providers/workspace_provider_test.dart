@@ -211,6 +211,43 @@ void main() {
       c.dispose();
     });
 
+    testWidgets('multi-projector commands log a summary line', (tester) async {
+      final c = makeContainer(fake);
+      final ws = c.read(workspaceProvider.notifier);
+      fake.commandSucceeds['10.0.0.2'] = false;
+      ws.setNodes([
+        node('1'),
+        node('2'),
+        node('3', status: ConnectionStatus.offline),
+      ]);
+      final result = await ws.sendCommandToAll('OOS:1');
+      expect(result.ok, 1);
+      expect(result.failed.map((n) => n.id), ['2']);
+      expect(result.skipped.map((n) => n.id), ['3']);
+
+      final summary = c.read(eventLogProvider).first;
+      expect(summary.severity, LogSeverity.warning);
+      expect(summary.projectorIp, isNull);
+      expect(
+        summary.message,
+        'OSD On — 1/3 OK · 1 failed · 1 skipped. '
+        'Failed: Proj 2. Skipped: Proj 3',
+      );
+      // Cancels the poll/power-transition timers before the pending-timer check.
+      c.dispose();
+    });
+
+    testWidgets('single-projector commands log no summary', (tester) async {
+      final c = makeContainer(fake);
+      final ws = c.read(workspaceProvider.notifier);
+      ws.setNodes([node('1'), node('2')]);
+      c.read(selectionProvider.notifier).set({'1'});
+      await ws.sendCommandToSelected('OOS:1');
+      expect(logMessages(c), ['Sent: OSD On']);
+      // Cancels the poll/power-transition timers before the pending-timer check.
+      c.dispose();
+    });
+
     testWidgets('group commands only reach that group', (tester) async {
       final c = makeContainer(fake);
       c.read(workspaceProvider.notifier).setNodes([

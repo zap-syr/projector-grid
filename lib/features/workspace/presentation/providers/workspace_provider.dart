@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../../domain/dispatch_result.dart';
 import '../../domain/projector_node.dart';
 import '../../domain/projector_group.dart';
 import '../../domain/log_event.dart';
@@ -899,7 +900,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
     }
   }
 
-  Future<void> sendCommandToSelected(String cmd) {
+  Future<DispatchResult> sendCommandToSelected(String cmd) {
     final selected = ref.read(selectionProvider);
     return _dispatchToNodes(state.where((n) => selected.contains(n.id)), cmd);
   }
@@ -915,18 +916,25 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
 
   /// Sends [cmd] to every reachable node in [nodes] concurrently in batches
   /// of [_networkBatchSize], rather than awaiting each one's TCP round-trip
-  /// in sequence.
-  Future<void> _dispatchToNodes(
+  /// in sequence. With more than one node, a summary line goes to the Event
+  /// Log after the last reply so a 30-projector command is readable at a
+  /// glance instead of only as 30 per-node entries.
+  Future<DispatchResult> _dispatchToNodes(
     Iterable<ProjectorNode> nodes,
     String cmd,
   ) async {
-    final targets = nodes
-        .where(
-          (n) =>
-              n.connectionStatus == ConnectionStatus.connected ||
-              n.connectionStatus == ConnectionStatus.unprotected,
-        )
-        .toList();
+    final all = nodes.toList();
+    final targets = <ProjectorNode>[];
+    final skipped = <ProjectorNode>[];
+    for (final n in all) {
+      if (n.connectionStatus == ConnectionStatus.connected ||
+          n.connectionStatus == ConnectionStatus.unprotected) {
+        targets.add(n);
+      } else {
+        skipped.add(n);
+      }
+    }
+    final failedIds = <String>{};
 
     for (var start = 0; start < targets.length; start += _networkBatchSize) {
       final batch = targets.sublist(
@@ -955,10 +963,34 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
           );
           if (success) {
             _applyOptimisticUpdate(node.id, cmd);
+          } else {
+            failedIds.add(node.id);
           }
         }),
       );
     }
+
+    final result = DispatchResult(
+      command: cmd,
+      ok: targets.length - failedIds.length,
+      // Filtered from targets, not collected in completion order, so the
+      // summary lists projectors in workspace order.
+      failed: [
+        for (final n in targets)
+          if (failedIds.contains(n.id)) n,
+      ],
+      skipped: skipped,
+    );
+    if (all.length > 1) {
+      _logEvent(
+        LogEvent(
+          severity: result.allOk ? LogSeverity.info : LogSeverity.warning,
+          type: LogEventType.command,
+          message: dispatchSummary(result),
+        ),
+      );
+    }
+    return result;
   }
 
   // Helper to fetch a single specific telemetry string without hitting the entire sequence
@@ -1020,10 +1052,11 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
     return response;
   }
 
-  Future<void> sendCommandToGroup(String groupId, String cmd) =>
+  Future<DispatchResult> sendCommandToGroup(String groupId, String cmd) =>
       _dispatchToNodes(state.where((n) => n.groupId == groupId), cmd);
 
-  Future<void> sendCommandToAll(String cmd) => _dispatchToNodes(state, cmd);
+  Future<DispatchResult> sendCommandToAll(String cmd) =>
+      _dispatchToNodes(state, cmd);
 
   // How long a power-transition tracking loop (below) may keep polling
   // before giving up and leaving the node on the regular poll cycle — well
