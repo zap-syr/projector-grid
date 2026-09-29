@@ -39,6 +39,11 @@ class AppSettings {
   final bool showLogs;
   final bool isMonitoringView;
 
+  /// Web Access: the built-in HTTP server for the Web UI.
+  static const int defaultWebPort = 8080;
+  final bool webEnabled;
+  final int webPort;
+
   /// Monitoring-table layout. `monitoringColumns` is the ordered list of
   /// *visible* column ids (see `MonitoringTable` for the id set); an empty list
   /// means "use the table's default set/order". `monitoringColumnWidths` holds
@@ -79,6 +84,8 @@ class AppSettings {
     this.oscSendPort = 9000,
     this.showLogs = false,
     this.isMonitoringView = false,
+    this.webEnabled = false,
+    this.webPort = defaultWebPort,
     this.monitoringColumns = const [],
     this.monitoringColumnWidths = const {},
     this.monitoringSortColumnId = 'ip',
@@ -104,6 +111,8 @@ class AppSettings {
     int? oscSendPort,
     bool? showLogs,
     bool? isMonitoringView,
+    bool? webEnabled,
+    int? webPort,
     List<String>? monitoringColumns,
     Map<String, double>? monitoringColumnWidths,
     String? monitoringSortColumnId,
@@ -130,6 +139,8 @@ class AppSettings {
       oscSendPort: oscSendPort ?? this.oscSendPort,
       showLogs: showLogs ?? this.showLogs,
       isMonitoringView: isMonitoringView ?? this.isMonitoringView,
+      webEnabled: webEnabled ?? this.webEnabled,
+      webPort: webPort ?? this.webPort,
       monitoringColumns: monitoringColumns ?? this.monitoringColumns,
       monitoringColumnWidths:
           monitoringColumnWidths ?? this.monitoringColumnWidths,
@@ -163,6 +174,8 @@ class AppSettings {
     'oscSendPort': oscSendPort,
     'showLogs': showLogs,
     'isMonitoringView': isMonitoringView,
+    'webEnabled': webEnabled,
+    'webPort': webPort,
     'monitoringColumns': monitoringColumns,
     'monitoringColumnWidths': monitoringColumnWidths,
     'monitoringSortColumnId': monitoringSortColumnId,
@@ -197,6 +210,8 @@ class AppSettings {
     oscSendPort: (json['oscSendPort'] as int?) ?? 9000,
     showLogs: (json['showLogs'] as bool?) ?? false,
     isMonitoringView: (json['isMonitoringView'] as bool?) ?? false,
+    webEnabled: (json['webEnabled'] as bool?) ?? false,
+    webPort: (json['webPort'] as int?) ?? defaultWebPort,
     monitoringColumns:
         (json['monitoringColumns'] as List?)?.cast<String>() ?? const [],
     monitoringColumnWidths:
@@ -307,6 +322,16 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
 
   void setMonitoringView(bool monitoring) {
     state = state.copyWith(isMonitoringView: monitoring);
+    _save(state);
+  }
+
+  void setWebEnabled(bool enabled) {
+    state = state.copyWith(webEnabled: enabled);
+    _save(state);
+  }
+
+  void setWebPort(int port) {
+    state = state.copyWith(webPort: port);
     _save(state);
   }
 

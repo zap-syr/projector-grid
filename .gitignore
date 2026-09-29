@@ -56,3 +56,11 @@ support_docs/
 GEMINI.md
 # Widget Preview related
 .widget_preview/
+
+# Web UI build output (web_ui/ → npm run build). The .gitkeep files stay so the
+# asset folders listed in pubspec.yaml exist on a fresh clone.
+/assets/web/*
+!/assets/web/.gitkeep
+!/assets/web/assets/
+/assets/web/assets/*
+!/assets/web/assets/.gitkeep

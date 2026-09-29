@@ -517,7 +517,7 @@ Models that don't support a command answer `ERR1`/`ER401` → the rule is shown 
 
 ---
 
-## 5. `[ ]` F7 (reframed) — Local Web Monitor & HTTP API
+## 5. `[~]` F7 (reframed) — Local Web Monitor & HTTP API
 
 ### Why
 Monitoring from any device on the show network — a phone at FOH, a laptop in the projection
@@ -550,7 +550,9 @@ Two roles, each with its own PIN:
 ### UX
 - **Preferences → "Web Access" tab:** *Enable* switch, port (default 8080), **Viewer PIN**,
   *Allow control* switch → **Operator PIN**, *Sign out all clients*, connected clients list
-  (IP, role, last seen), and the URL + **QR code** (`http://<this-machine-ip>:8080`) for phones.
+  (IP, role, last seen), and the URL (`http://<this-machine-ip>:8080`) with a drop-down of
+  this machine's IPv4 addresses (show PCs often have several NICs). A **QR code** for the
+  selected URL is `[later]` — the owner decides later (it needs a new dependency).
 - **Web page** (served by the app, responsive). Mockup: artifact *Projector Grid Web Monitor*
   (https://claude.ai/artifact/W5t59BABLdayaHUmaVkZu5). It has desktop and phone views, a
   Viewer/Operator switch and a With/No groups switch.
@@ -598,9 +600,9 @@ ids, labels, default widths and canonical order** (the `_allColumns` descriptors
 - **Default visible:** the app's `_defaultVisibleIds`, i.e. all of the above except Group and
   Test Pattern.
 
-The app's `model` column shows `node.name` but is labelled "Model". The web labels it
-**Name**. Worth renaming in the app too (label only, the id stays `model` so saved layouts
-keep working).
+The app's `model` column shows `node.name` and is labelled "Model". The web keeps the
+**Model** label to match the app (owner, 2026-09-29); the list above says "Name" only to
+describe what the column shows.
 
 | App feature | Web |
 |---|---|
@@ -666,11 +668,13 @@ Phone: bell in the top bar plus an "N active alerts" pill → alerts bottom shee
 
 #### Alignment mode on the web
 It is **the app's** Alignment mode (§3), driven remotely — not a second implementation.
+**Identify is left out on the web** until it exists in the app (§3.1 is `[later]`), and the
+presets follow the app: Geometry / Color / Custom (no Blend, §3 deviations).
 `alignmentProvider` stays the single source of truth; the web page shows its state via SSE and
 sends actions to it. Entering from the phone shows the banner in the app too, and vice versa.
 Only one alignment session exists at a time; a second client entering joins the same session.
 - **Desktop:** the app's banner across the page, in one row: *◀ name n of N ▶ · Neighbours ·
-  Show all · Identify · Preset [Geometry | Blend | Color | Custom] · Focused ▾ · Others ▾ ·
+  Show all · Preset [Geometry | Color | Custom] · Focused ▾ · Others ▾ ·
   Exit*.
   - The presets are the app's §3.2 table, including **Custom**.
   - *Focused ▾* / *Others ▾* open a swatch popover filtered by the preset: Geometry → cross
@@ -688,7 +692,7 @@ Only one alignment session exists at a time; a second client entering joins the 
   operator"*) and the role markers, but no controls. Row clicks do nothing.
 - **Phone** (the main use case — walking the room with a phone):
   - big ◀ ▶ with the focused name and *n / total*;
-  - Neighbours / Show All / Identify toggles;
+  - Neighbours / Show All toggles;
   - a **wall mini-map** built from the card layout — focused filled, neighbours outlined,
     offline dashed; tap a tile to focus it;
   - preset switch (Geometry / Color / **Custom**) and *Focused* / *Others* rows that
@@ -709,12 +713,14 @@ Only one alignment session exists at a time; a second client entering joins the 
 | GET | `/api/projectors` | all nodes + telemetry, in layout order (JSON) |
 | GET | `/api/projectors/{id}` | one node |
 | GET | `/api/groups` | groups (empty array → the page shows the flat list) |
-| GET | `/api/alerts` | active alerts |
+| GET | `/api/alerts` | active alerts; returns `[]` until F5 (§4) lands |
 | GET | `/api/alignment` | alignment state: active, focused, roles, preset, toggles |
 | GET | `/api/events` | SSE stream: node changes, alerts, alignment state, command results |
 | POST | `/api/actions` | `{ "targets": [ids] \| {"group": id} \| "all", "action": … }` — see below |
-| POST | `/api/cues/{id}/fire` | fire a cue |
-| POST | `/api/alignment/{op}` | `enter`, `exit`, `next`, `prev`, `focus/{id}`, `neighbours`, `showAll`, `identify`, `preset/{name}` |
+| POST | `/api/alignment/{op}` | `enter`, `exit`, `next`, `prev`, `focus/{id}`, `neighbours`, `showAll`, `preset/{name}` |
+
+Not in the first version (owner, 2026-09-29): `POST /api/cues/{id}/fire` is added together
+with F3 (§2); `identify` is added when §3.1 exists in the app.
 
 All `POST`s except `/api/login` need an operator session.
 
@@ -741,8 +747,10 @@ Useful beyond the web page: Companion, QLab, custom scripts can poll or drive th
   `/api/*` routes and SSE. Transport-only, like `osc_service.dart`.
 - `presentation/providers/web_server_provider.dart` (`keepAlive`) — lifecycle from settings,
   pushes SSE events from `ref.listen(workspaceProvider)` / alerts / cues / `alignmentProvider`.
-  Routes call the same notifiers the UI uses: `WorkspaceNotifier.dispatchCommand` (§10) for
-  actions, `alignmentProvider` for alignment. No command logic lives in the server.
+  Routes call the same notifiers the UI uses: a new public
+  `WorkspaceNotifier.sendCommandToNodes(ids, cmd, {source})` over `_dispatchToNodes` (§10) for
+  actions — `source` puts *"Web · IP · Operator"* into the Event Log — and
+  `alignmentProvider` for alignment. No command logic lives in the server.
 - `lib/core/services/web_actions.dart` — pure mapping `WebAction → NTCONTROL string` (the
   table above), unit-tested (§7.1). The lens encoding is shared with `control_bar.dart` so the
   two can't drift.
@@ -753,7 +761,8 @@ Useful beyond the web page: Companion, QLab, custom scripts can poll or drive th
 - Status-colour thresholds move from `monitoring_table.dart` statics into one shared place
   (e.g. `core/theme/status_thresholds.dart`) that both the table and `/api/config` read.
 - Lens hold-to-repeat: the page sends one action per repeat tick; the server applies the same
-  per-projector throttle as `_throttledSend`, so a laggy phone can't queue up a burst.
+  rule as `_throttledSend` (drop a lens step while the previous one is still in flight), but
+  per projector, so a laggy phone can't queue up a burst.
 - Security: bind on all interfaces only when enabled; sessions and PIN checks as in *Access
   model* above; *Allow control* off by default; PINs stored as salted hashes in app settings
   (not plain text); firewall prompt on Windows on first bind — document it.

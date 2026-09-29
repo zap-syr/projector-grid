@@ -8,6 +8,7 @@ import 'package:window_manager/window_manager.dart';
 import '../providers/alignment_provider.dart';
 import '../providers/app_settings_provider.dart';
 import '../providers/osc_provider.dart';
+import '../providers/web_server_provider.dart';
 import '../providers/project_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../widgets/alignment_banner.dart';
@@ -273,6 +274,8 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
     // persisted "OSC enabled" setting. Nothing else reads it until the user
     // opens Preferences, and a lazy keepAlive provider doesn't self-instantiate.
     ref.read(oscProvider.notifier);
+    // Same for the Web Access server.
+    ref.read(webServerProvider.notifier);
     // Same for Alignment mode: it restores shutter fades a previous session
     // left zeroed as soon as those projectors come online.
     ref.read(alignmentProvider.notifier);

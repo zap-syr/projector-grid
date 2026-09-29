@@ -52,6 +52,7 @@ dependencies:
   flutter_svg: ^2.2.4
   osc: ^1.0.0
   package_info_plus: ^10.2.1
+  shelf: ^1.4.2
 
 dev_dependencies:
   flutter_test:
@@ -84,6 +85,9 @@ flutter:
   assets:
     - assets/icons/lens_shift/
     - assets/icons/test_patterns/
+    # Built Web UI (web_ui/). Asset folders aren't recursive, hence both.
+    - assets/web/
+    - assets/web/assets/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

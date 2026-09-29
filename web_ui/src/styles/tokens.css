@@ -1,0 +1,141 @@
+/*
+ * Design tokens from the Web Monitor mockup. Light by default; dark follows
+ * prefers-color-scheme unless the page pins a theme via data-theme on <html>.
+ * Status colours (ok / warn / err) are only ever taken from here.
+ */
+:root {
+  color-scheme: light;
+  --bg: #eef0f4;
+  --app: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #f8f9fb;
+  --hover: #f1f3f7;
+  --line: #e4e7ed;
+  --line-strong: #d2d7e0;
+  --text: #101828;
+  --muted: #566175;
+  --faint: #8a93a6;
+  --accent: #1a73e8;
+  --accent-hover: #1765cc;
+  --accent-soft: #e8f0fe;
+  --accent-line: #aecbfa;
+  --on-accent: #ffffff;
+  --ok: #188038;
+  --ok-soft: #e6f4ea;
+  --warn: #b06000;
+  --warn-soft: #fef3e0;
+  --err: #c5221f;
+  --err-soft: #fce8e6;
+  --scrim: rgba(16, 24, 40, 0.42);
+  --sh-1: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --sh-2: 0 8px 24px -6px rgba(16, 24, 40, 0.18);
+  --sh-3: 0 24px 56px -12px rgba(16, 24, 40, 0.32);
+
+  --r-lg: 14px;
+  --r: 10px;
+  --r-sm: 7px;
+  --sans: 'Geist Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'Geist Mono Variable', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --bg: #08090c;
+    --app: #0d0f14;
+    --surface: #13161d;
+    --surface-2: #171b23;
+    --hover: #1b2029;
+    --line: #222733;
+    --line-strong: #2e3441;
+    --text: #e8ebf1;
+    --muted: #9aa3b5;
+    --faint: #6a7386;
+    --accent: #8ab4f8;
+    --accent-hover: #a8c7fa;
+    --accent-soft: rgba(138, 180, 248, 0.13);
+    --accent-line: rgba(138, 180, 248, 0.45);
+    --on-accent: #0a1a33;
+    --ok: #5bb974;
+    --ok-soft: rgba(91, 185, 116, 0.13);
+    --warn: #fbbc04;
+    --warn-soft: rgba(251, 188, 4, 0.12);
+    --err: #f28b82;
+    --err-soft: rgba(242, 139, 130, 0.13);
+    --scrim: rgba(0, 0, 0, 0.6);
+    --sh-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --sh-2: 0 8px 24px -6px rgba(0, 0, 0, 0.6);
+    --sh-3: 0 24px 56px -12px rgba(0, 0, 0, 0.8);
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #08090c;
+  --app: #0d0f14;
+  --surface: #13161d;
+  --surface-2: #171b23;
+  --hover: #1b2029;
+  --line: #222733;
+  --line-strong: #2e3441;
+  --text: #e8ebf1;
+  --muted: #9aa3b5;
+  --faint: #6a7386;
+  --accent: #8ab4f8;
+  --accent-hover: #a8c7fa;
+  --accent-soft: rgba(138, 180, 248, 0.13);
+  --accent-line: rgba(138, 180, 248, 0.45);
+  --on-accent: #0a1a33;
+  --ok: #5bb974;
+  --ok-soft: rgba(91, 185, 116, 0.13);
+  --warn: #fbbc04;
+  --warn-soft: rgba(251, 188, 4, 0.12);
+  --err: #f28b82;
+  --err-soft: rgba(242, 139, 130, 0.13);
+  --scrim: rgba(0, 0, 0, 0.6);
+  --sh-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --sh-2: 0 8px 24px -6px rgba(0, 0, 0, 0.6);
+  --sh-3: 0 24px 56px -12px rgba(0, 0, 0, 0.8);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--app);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

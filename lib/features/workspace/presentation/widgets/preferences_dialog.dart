@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/app_settings_provider.dart';
 import '../providers/osc_provider.dart';
+import '../providers/web_server_provider.dart';
 import '../providers/workspace_provider.dart';
 import 'dialog_title_bar.dart';
 
@@ -28,6 +29,11 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
   late final TextEditingController _oscSendIpController;
   late final TextEditingController _oscSendPortController;
 
+  // Web Access
+  late bool _webEnabled;
+  late final TextEditingController _webPortController;
+  String? _webUrlIp;
+
   List<NetworkInterface>? _networkInterfaces;
 
   @override
@@ -47,6 +53,10 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
     _oscSendPortController = TextEditingController(
       text: settings.oscSendPort.toString(),
     );
+    _webEnabled = settings.webEnabled;
+    _webPortController = TextEditingController(
+      text: settings.webPort.toString(),
+    );
     _loadNetworkInterfaces();
   }
 
@@ -56,8 +66,20 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
       includeLinkLocal: false,
       type: InternetAddressType.IPv4,
     );
-    if (mounted) setState(() => _networkInterfaces = interfaces);
+    if (mounted) {
+      setState(() {
+        _networkInterfaces = interfaces;
+        _webUrlIp = _localIps.firstOrNull;
+      });
+    }
   }
+
+  List<String> get _localIps => [
+    for (final iface in _networkInterfaces ?? const <NetworkInterface>[])
+      for (final addr in iface.addresses) addr.address,
+  ];
+
+  String _webUrl(String ip) => 'http://$ip:${_webPortController.text}';
 
   @override
   void dispose() {
@@ -65,6 +87,7 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
     _oscReceivePortController.dispose();
     _oscSendIpController.dispose();
     _oscSendPortController.dispose();
+    _webPortController.dispose();
     super.dispose();
   }
 
@@ -126,6 +149,19 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
       oscNotifier.restart();
     }
 
+    // Web Access — the port is saved first because start() reads it.
+    final webPort = int.tryParse(_webPortController.text);
+    final webPortValid = webPort != null && webPort > 0 && webPort <= 65535;
+    if (webPortValid) settingsNotifier.setWebPort(webPort);
+    final webNotifier = ref.read(webServerProvider.notifier);
+    if (_webEnabled && !oldSettings.webEnabled) {
+      webNotifier.start();
+    } else if (!_webEnabled && oldSettings.webEnabled) {
+      webNotifier.stop();
+    } else if (_webEnabled && webPortValid && webPort != oldSettings.webPort) {
+      webNotifier.restart();
+    }
+
     Navigator.of(context).pop();
   }
 
@@ -148,6 +184,99 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
     return entries;
   }
 
+  Widget _buildWebAccessTab(ThemeData theme) {
+    final ip = _webUrlIp;
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text('Web Access', style: theme.textTheme.titleSmall),
+              const Spacer(),
+              Switch(
+                value: _webEnabled,
+                onChanged: (value) => setState(() => _webEnabled = value),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text('Port', style: theme.textTheme.titleSmall),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: 120,
+            child: TextField(
+              controller: _webPortController,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              onChanged: (_) => setState(() {}),
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                isDense: true,
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text('Address', style: theme.textTheme.titleSmall),
+          const SizedBox(height: 8),
+          DropdownMenu<String>(
+            // Rebuilt once the interface list arrives so the first address
+            // shows as selected.
+            key: ValueKey(_networkInterfaces == null),
+            initialSelection: ip,
+            expandedInsets: EdgeInsets.zero,
+            requestFocusOnTap: false,
+            enableFilter: false,
+            inputDecorationTheme: const InputDecorationTheme(
+              border: OutlineInputBorder(),
+              isDense: true,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
+            ),
+            dropdownMenuEntries: [
+              for (final iface
+                  in _networkInterfaces ?? const <NetworkInterface>[])
+                for (final addr in iface.addresses)
+                  DropdownMenuEntry(
+                    value: addr.address,
+                    label: '${iface.name}  ${addr.address}',
+                  ),
+            ],
+            onSelected: (value) => setState(() => _webUrlIp = value),
+          ),
+          if (ip != null) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: SelectableText(
+                    _webUrl(ip),
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Copy',
+                  icon: const Icon(Icons.copy, size: 18),
+                  onPressed: () =>
+                      Clipboard.setData(ClipboardData(text: _webUrl(ip))),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -158,7 +287,7 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
         width: 480,
         height: 480,
         child: DefaultTabController(
-          length: 2,
+          length: 3,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -169,6 +298,7 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
                 tabs: const [
                   Tab(text: 'General'),
                   Tab(text: 'OSC'),
+                  Tab(text: 'Web Access'),
                 ],
                 labelStyle: theme.textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.bold,
@@ -383,6 +513,9 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
                         ],
                       ),
                     ),
+
+                    // ── Web Access ───────────────────────────────────────
+                    _buildWebAccessTab(theme),
                   ],
                 ),
               ),

@@ -68,10 +68,11 @@ web_ui/                         # the Svelte project (own package.json)
       alignment/                # Banner, PatternPicker, WallMap
       phone/                    # CardList, ProjectorCard, BottomSheet, PinPad
     styles/tokens.css           # colour/type/spacing tokens from the mockup (light + dark)
-    fonts/                      # self-hosted woff2 (Geist, Geist Mono)
+  public/                       # favicon + the .gitkeep placeholders (see §5)
   mocks/                        # dev-only fake API: fixtures + Vite middleware
   tests/                        # Vitest unit + component tests
-assets/web/                     # BUILD OUTPUT, git-ignored (only .gitkeep committed)
+assets/web/                     # BUILD OUTPUT, git-ignored (only the .gitkeep files committed)
+  assets/                       # Vite's hashed JS/CSS/fonts
 test/fixtures/api/              # golden JSON written by Dart tests, read by web tests
 ```
 
@@ -79,15 +80,15 @@ test/fixtures/api/              # golden JSON written by Dart tests, read by web
 
 | Tool | Use |
 |---|---|
-| Node.js LTS (pinned in `.nvmrc` + `engines`), **npm** | package manager; lockfile committed |
+| Node.js LTS (24, pinned in `.nvmrc` + `engines`), **npm** | package manager; lockfile committed |
 | Svelte 5 (runes only: `$state`, `$derived`, `$effect`, `$props`) | components; no legacy `writable` stores or `export let` |
 | Vite | dev server, proxy, production build |
-| TypeScript `strict` + `svelte-check` | types; no `any` |
+| TypeScript `strict` + `svelte-check` | types; no `any`. Pinned to 5.9: `svelte-check`, `typescript-eslint` and `openapi-typescript` don't accept TS 7 yet |
 | `openapi-typescript` | generates `types.gen.ts` from `api/openapi.yaml` |
-| TanStack Table core (`@tanstack/table-core`) | headless column visibility / order / sizing / sorting / grouping; wrap it in a small runes adapter. Check whether an official Svelte 5 adapter is available at setup time; if it is, use it instead |
+| TanStack Table (`@tanstack/svelte-table` 9, the official Svelte 5 adapter) | headless column visibility / order / sizing / sorting / grouping; installed at step 3 |
 | Vitest + `@testing-library/svelte` | unit + component tests |
 | ESLint (`eslint-plugin-svelte`) + Prettier (`prettier-plugin-svelte`) | lint / format |
-| `@fontsource` packages (or woff2 files in `src/fonts/`) | self-hosted fonts |
+| `@fontsource-variable/geist` + `geist-mono` | self-hosted fonts (bundled by Vite; no `src/fonts/`) |
 | Playwright | later: e2e against the mock API |
 
 No CSS framework: port the mockup's CSS as component-scoped styles on top of `tokens.css`.
@@ -121,6 +122,13 @@ export default defineConfig({
 ```
 SSE works through the Vite proxy. If it buffers, set `proxy['/api'].configure` to disable
 compression for `text/event-stream`.
+
+**Keeping `assets/web/` buildable on a fresh clone.** Flutter asset directories aren't
+recursive, so `pubspec.yaml` lists both `assets/web/` and `assets/web/assets/`, and
+`flutter build` fails if either folder is missing. `emptyOutDir` would delete a committed
+`.gitkeep`, so the `.gitkeep` files live in `web_ui/public/` and `web_ui/public/assets/`:
+Vite copies `public/` into the output on every build, and the committed copies in
+`assets/web/` keep a clone without Node building.
 
 ## 6. The API contract
 
@@ -196,25 +204,33 @@ Then the existing `build_runner → format → analyze → flutter test`. The re
 
 ## 10. Implementation order
 
-1. `[ ]` **Scaffold:**
+1. `[x]` **Scaffold:**
    - Vite `svelte-ts` template in `web_ui/`, tooling from §4, `tokens.css` + fonts;
    - `assets/web/.gitkeep` + `.gitignore`; `pubspec.yaml` asset entry;
    - `web_server_service.dart` serving the built page;
    - Preferences → Web Access tab with enable + port.
+   - No `/api/*` yet, so nothing but the static page is exposed before auth exists.
    - **Done when:** a phone opens the page from the app.
-2. `[ ]` **Contract + read-only data:**
+2. `[ ]` **Contract + auth + read-only data** (auth moved here from step 5, owner
+   2026-09-29 — the API must never be reachable without a PIN):
    - `openapi.yaml`, generated types, golden fixtures;
-   - `/api/config`, `/api/projectors`, `/api/events`;
+   - server auth: Viewer PIN (salted hash in settings), `/api/login` / `/api/logout`,
+     session cookie + bearer, 12 h idle expiry, lockout, *Sign out all clients*;
+     Web Access tab gets the Viewer PIN field;
+   - a plain login page (single PIN field + project name); the phone PIN pad stays in step 5;
+   - `/api/config`, `/api/projectors`, `/api/groups`, `/api/alerts` (returns `[]` until
+     ROADMAP §4), `/api/events`;
    - `mocks/` + `dev:mock`.
 3. `[ ]` **Viewer desktop table:** columns, sort, show/hide, presets, reorder, resize,
    auto-fit, fit-to-width, density, group-by; status colours; filters + search.
 4. `[ ]` **Alerts rail / drawer** (needs ROADMAP §4 alerts provider; show an empty rail until
    then).
-5. `[ ]` **Auth:** PIN pad, viewer/operator sessions, lockout, *Unlock control* / *Lock*.
+5. `[ ]` **Operator auth:** *Allow control* + Operator PIN, operator role on sessions,
+   *Unlock control* / *Lock*, phone PIN pad.
 6. `[ ]` **Operator controls:** selection model, control panel, confirmations, toasts with
    the §10 result summary, `/api/actions`.
-7. `[ ]` **Alignment on the web** (after ROADMAP §3 exists in the app): banner, presets incl.
-   Custom, pattern pickers, read-only banner for viewers.
+7. `[ ]` **Alignment on the web:** banner, presets Geometry / Color / Custom, pattern
+   pickers, read-only banner for viewers. No Identify until ROADMAP §3.1 exists in the app.
 8. `[ ]` **Phone layout:** cards, expand, select bar, control / alerts / pattern sheets,
    wall map.
 9. `[ ]` **CI + docs:** workflow steps; add the `web_ui` commands to `DEVELOPMENT.md`
@@ -222,7 +238,6 @@ Then the existing `build_runner → format → analyze → flutter test`. The re
 
 ## 11. Open points
 
-- TanStack Table: an official Svelte 5 adapter, or `table-core` plus our own adapter (decide
-  at step 1).
-- Whether to precompress assets (`.br`/`.gz`) at build time. The total is small, so it's
-  optional.
+- ~~TanStack Table adapter~~ — decided at step 1: the official `@tanstack/svelte-table` 9
+  (stable, Svelte 5).
+- ~~Precompressed assets~~ — not doing: the bundle is small and it's a LAN.
