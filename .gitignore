@@ -51,8 +51,8 @@ support_docs/
 .agents/
 .gemini/
 .gemini.md
-.claude
+# Project skills, agents and CLAUDE.md are shared; per-machine permissions are not.
+.claude/settings.local.json
 GEMINI.md
-CLAUDE.md
 # Widget Preview related
 .widget_preview/
