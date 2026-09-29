@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../domain/log_event.dart';
 import 'custom_tooltip.dart';
 import '../providers/app_settings_provider.dart';
@@ -50,13 +51,13 @@ class _EventLogPanelState extends ConsumerState<EventLogPanel> {
   }
 
   static bool _matchesTypeFilter(LogEvent e, _LogFilter f) => switch (f) {
-        _LogFilter.all => true,
-        _LogFilter.errors =>
-          e.severity == LogSeverity.error || e.severity == LogSeverity.warning,
-        _LogFilter.commands => e.type == LogEventType.command,
-        _LogFilter.connectivity => e.type == LogEventType.connectivity,
-        _LogFilter.osc => e.type == LogEventType.osc,
-      };
+    _LogFilter.all => true,
+    _LogFilter.errors =>
+      e.severity == LogSeverity.error || e.severity == LogSeverity.warning,
+    _LogFilter.commands => e.type == LogEventType.command,
+    _LogFilter.connectivity => e.type == LogEventType.connectivity,
+    _LogFilter.osc => e.type == LogEventType.osc,
+  };
 
   List<LogEvent> _filterEvents(List<LogEvent> events) {
     return events.where((e) {
@@ -73,12 +74,12 @@ class _EventLogPanelState extends ConsumerState<EventLogPanel> {
       events.where((e) => _matchesTypeFilter(e, f)).length;
 
   static String _filterLabel(_LogFilter f) => switch (f) {
-        _LogFilter.all => 'All',
-        _LogFilter.errors => 'Errors',
-        _LogFilter.commands => 'Commands',
-        _LogFilter.connectivity => 'Connectivity',
-        _LogFilter.osc => 'OSC',
-      };
+    _LogFilter.all => 'All',
+    _LogFilter.errors => 'Errors',
+    _LogFilter.commands => 'Commands',
+    _LogFilter.connectivity => 'Connectivity',
+    _LogFilter.osc => 'OSC',
+  };
 
   void _copyToClipboard(List<LogEvent> events, BuildContext context) {
     final buf = StringBuffer();
@@ -88,7 +89,9 @@ class _EventLogPanelState extends ConsumerState<EventLogPanel> {
       final s = e.timestamp.second.toString().padLeft(2, '0');
       final ip = e.projectorIp ?? '–';
       final name = e.projectorName != null ? ' (${e.projectorName})' : '';
-      buf.writeln('[$h:$m:$s] [${e.severity.name.toUpperCase()}] [$ip]$name ${e.message}');
+      buf.writeln(
+        '[$h:$m:$s] [${e.severity.name.toUpperCase()}] [$ip]$name ${e.message}',
+      );
     }
     Clipboard.setData(ClipboardData(text: buf.toString()));
     if (!context.mounted) return;
@@ -181,29 +184,30 @@ class _EventLogPanelState extends ConsumerState<EventLogPanel> {
                         color: cs.onSurface.withValues(alpha: 0.38),
                       ),
                       isDense: true,
-                      contentPadding:
-                          const EdgeInsets.fromLTRB(28, 0, 8, 0),
+                      contentPadding: const EdgeInsets.fromLTRB(28, 0, 8, 0),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(11),
                         borderSide: BorderSide(color: cs.outline),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(11),
-                        borderSide:
-                            BorderSide(color: cs.outline.withValues(alpha: 0.5)),
+                        borderSide: BorderSide(
+                          color: cs.outline.withValues(alpha: 0.5),
+                        ),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(11),
-                        borderSide:
-                            BorderSide(color: cs.primary, width: 1.5),
+                        borderSide: BorderSide(color: cs.primary, width: 1.5),
                       ),
                       prefixIcon: Icon(
                         Icons.search,
                         size: 13,
                         color: cs.onSurface.withValues(alpha: 0.38),
                       ),
-                      prefixIconConstraints:
-                          const BoxConstraints(minWidth: 28, minHeight: 22),
+                      prefixIconConstraints: const BoxConstraints(
+                        minWidth: 28,
+                        minHeight: 22,
+                      ),
                     ),
                     onChanged: (v) => setState(() => _searchQuery = v),
                   ),
@@ -212,8 +216,9 @@ class _EventLogPanelState extends ConsumerState<EventLogPanel> {
                 _IconBtn(
                   icon: Icons.copy_outlined,
                   tooltip: 'Copy visible events to clipboard',
-                  onPressed:
-                      filtered.isEmpty ? null : () => _copyToClipboard(filtered, context),
+                  onPressed: filtered.isEmpty
+                      ? null
+                      : () => _copyToClipboard(filtered, context),
                 ),
                 _IconBtn(
                   icon: Icons.delete_outline,
@@ -284,16 +289,16 @@ class _FilterTab extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
         margin: const EdgeInsets.only(right: 2),
         decoration: BoxDecoration(
-          color: active ? cs.primary.withValues(alpha: 0.12) : Colors.transparent,
+          color: active
+              ? cs.primary.withValues(alpha: 0.12)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(4),
         ),
         child: Text(
           count > 0 ? '$label  $count' : label,
           style: TextStyle(
             fontSize: 11,
-            color: active
-                ? cs.primary
-                : cs.onSurface.withValues(alpha: 0.55),
+            color: active ? cs.primary : cs.onSurface.withValues(alpha: 0.55),
             fontWeight: active ? FontWeight.w600 : FontWeight.normal,
           ),
         ),
@@ -309,11 +314,7 @@ class _IconBtn extends StatelessWidget {
   final String tooltip;
   final VoidCallback? onPressed;
 
-  const _IconBtn({
-    required this.icon,
-    required this.tooltip,
-    this.onPressed,
-  });
+  const _IconBtn({required this.icon, required this.tooltip, this.onPressed});
 
   @override
   Widget build(BuildContext context) {
@@ -343,11 +344,11 @@ class _LogRow extends StatelessWidget {
       '${dt.second.toString().padLeft(2, '0')}';
 
   static Color _severityColor(LogSeverity s) => switch (s) {
-        LogSeverity.error => const Color(0xFFEF5350),
-        LogSeverity.warning => const Color(0xFFFFB300),
-        LogSeverity.info => const Color(0xFF42A5F5),
-        LogSeverity.success => const Color(0xFF66BB6A),
-      };
+    LogSeverity.error => const Color(0xFFEF5350),
+    LogSeverity.warning => const Color(0xFFFFB300),
+    LogSeverity.info => const Color(0xFF42A5F5),
+    LogSeverity.success => const Color(0xFF66BB6A),
+  };
 
   @override
   Widget build(BuildContext context) {

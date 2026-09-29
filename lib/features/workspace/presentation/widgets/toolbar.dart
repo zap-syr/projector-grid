@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../providers/app_settings_provider.dart';
 import '../providers/workspace_provider.dart';
 import 'add_projector_dialog.dart';
@@ -11,8 +12,9 @@ class MainToolbar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isMonitoringView =
-        ref.watch(appSettingsProvider.select((s) => s.isMonitoringView));
+    final isMonitoringView = ref.watch(
+      appSettingsProvider.select((s) => s.isMonitoringView),
+    );
     final settingsNotifier = ref.read(appSettingsProvider.notifier);
     return Container(
       height: 48,
@@ -36,13 +38,18 @@ class MainToolbar extends ConsumerWidget {
                 children: [
                   FilledButton.icon(
                     onPressed: () {
-                      final existingIps = ref.read(workspaceProvider).map((n) => n.ipAddress).toList();
+                      final existingIps = ref
+                          .read(workspaceProvider)
+                          .map((n) => n.ipAddress)
+                          .toList();
                       showDialog(
                         context: context,
                         builder: (context) => AddProjectorDialog(
                           existingIps: existingIps,
                           onAddProjectors: (projectors) {
-                            ref.read(workspaceProvider.notifier).addProjectors(projectors);
+                            ref
+                                .read(workspaceProvider.notifier)
+                                .addProjectors(projectors);
                           },
                         ),
                       );

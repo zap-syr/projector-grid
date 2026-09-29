@@ -1,4 +1,5 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+
 import '../../../../core/services/osc_service.dart';
 import '../../domain/projector_node.dart';
 import '../../domain/log_event.dart';
@@ -32,46 +33,61 @@ class OscNotifier extends _$OscNotifier {
   }
 
   void _wireCallbacks() {
-    _service.onCommand = ({
-      required String ntcontrolCmd,
-      String? groupId,
-      bool all = false,
-    }) async {
-      final wsNotifier = ref.read(workspaceProvider.notifier);
+    _service.onCommand =
+        ({
+          required String ntcontrolCmd,
+          String? groupId,
+          bool all = false,
+        }) async {
+          final wsNotifier = ref.read(workspaceProvider.notifier);
 
-      String target;
-      if (all) {
-        target = 'all projectors';
-      } else if (groupId != null) {
-        final group = wsNotifier.groups.where((g) => g.id == groupId).firstOrNull;
-        target = group != null ? 'group: ${group.oscAddress}' : 'group';
-      } else {
-        target = 'unknown';
-      }
-      ref.read(eventLogProvider.notifier).log(LogEvent(
-        severity: LogSeverity.info,
-        type: LogEventType.osc,
-        message: 'OSC → ${commandLabel(ntcontrolCmd)} ($target)',
-      ));
+          String target;
+          if (all) {
+            target = 'all projectors';
+          } else if (groupId != null) {
+            final group = wsNotifier.groups
+                .where((g) => g.id == groupId)
+                .firstOrNull;
+            target = group != null ? 'group: ${group.oscAddress}' : 'group';
+          } else {
+            target = 'unknown';
+          }
+          ref
+              .read(eventLogProvider.notifier)
+              .log(
+                LogEvent(
+                  severity: LogSeverity.info,
+                  type: LogEventType.osc,
+                  message: 'OSC → ${commandLabel(ntcontrolCmd)} ($target)',
+                ),
+              );
 
-      if (all) {
-        await wsNotifier.sendCommandToAll(ntcontrolCmd);
-      } else if (groupId != null) {
-        await wsNotifier.sendCommandToGroup(groupId, ntcontrolCmd);
-      }
-    };
+          if (all) {
+            await wsNotifier.sendCommandToAll(ntcontrolCmd);
+          } else if (groupId != null) {
+            await wsNotifier.sendCommandToGroup(groupId, ntcontrolCmd);
+          }
+        };
 
     _service.getStatus = () {
       final nodes = ref.read(workspaceProvider);
-      final online = nodes.where((n) =>
-        n.connectionStatus == ConnectionStatus.connected ||
-        n.connectionStatus == ConnectionStatus.unprotected
-      ).length;
-      final offline = nodes.where((n) => n.connectionStatus == ConnectionStatus.offline).length;
-      final warnings = nodes.where((n) =>
-        n.errors != 'NO ERRORS' && n.errors != '-' ||
-        n.connectionStatus == ConnectionStatus.unauthorized
-      ).length;
+      final online = nodes
+          .where(
+            (n) =>
+                n.connectionStatus == ConnectionStatus.connected ||
+                n.connectionStatus == ConnectionStatus.unprotected,
+          )
+          .length;
+      final offline = nodes
+          .where((n) => n.connectionStatus == ConnectionStatus.offline)
+          .length;
+      final warnings = nodes
+          .where(
+            (n) =>
+                n.errors != 'NO ERRORS' && n.errors != '-' ||
+                n.connectionStatus == ConnectionStatus.unauthorized,
+          )
+          .length;
       return (online: online, offline: offline, warnings: warnings);
     };
 
@@ -103,12 +119,17 @@ class OscNotifier extends _$OscNotifier {
     // listening and re-attempt the same doomed bind on every launch.
     ref.read(appSettingsProvider.notifier).setOscActive(_service.isActive);
     if (!_service.isActive) {
-      ref.read(eventLogProvider.notifier).log(LogEvent(
-        severity: LogSeverity.error,
-        type: LogEventType.osc,
-        message: 'OSC failed to start — could not bind receive port '
-            '${settings.oscReceivePort}',
-      ));
+      ref
+          .read(eventLogProvider.notifier)
+          .log(
+            LogEvent(
+              severity: LogSeverity.error,
+              type: LogEventType.osc,
+              message:
+                  'OSC failed to start — could not bind receive port '
+                  '${settings.oscReceivePort}',
+            ),
+          );
     }
 
     // Push status on every state change

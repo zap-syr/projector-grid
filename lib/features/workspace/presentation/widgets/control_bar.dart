@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+
 import '../../../../core/services/app_config_dir.dart';
 import '../../domain/custom_command.dart';
 import '../providers/custom_commands_provider.dart';
@@ -535,8 +536,7 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                                 ),
                                 const SizedBox(width: _spacingXs),
                                 _SvgBtn(
-                                  assetPath:
-                                      'assets/icons/lens_shift/right_normal.svg',
+                                  assetPath: 'assets/icons/lens_shift/right_normal.svg',
                                   onPressed: hasSelection
                                       ? () => _throttledSend('VXX:LNSI2=+00100')
                                       : null,
@@ -586,9 +586,7 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                           onPressed: hasSelection
                               ? () => ref
                                     .read(workspaceProvider.notifier)
-                                    .sendCommandToSelected(
-                                      'VXX:LNSI1=+00001',
-                                    )
+                                    .sendCommandToSelected('VXX:LNSI1=+00001')
                               : null,
                           child: const FittedBox(child: Text('Home Position')),
                         ),
@@ -960,9 +958,8 @@ class _CustomCommandTile extends StatelessWidget {
             child: Icon(
               Icons.drag_handle,
               size: 18,
-              color: Theme.of(
-                context,
-              ).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+              color: Theme.of(context).colorScheme.onSurfaceVariant
+                  .withValues(alpha: 0.5),
             ),
           ),
           const SizedBox(width: 8),

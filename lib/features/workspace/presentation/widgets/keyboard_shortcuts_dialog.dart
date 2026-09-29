@@ -106,8 +106,7 @@ class KeyboardShortcutsDialog extends StatelessWidget {
                         ),
                         _Shortcut(
                           keys: ['Ctrl', 'G'],
-                          description:
-                              "Select all projectors in the selected projector's group",
+                          description: "Select all projectors in the selected projector's group",
                         ),
                       ],
                     ),

@@ -1,5 +1,7 @@
 import 'dart:io';
+
 import 'package:flutter/foundation.dart';
+
 import '../docs/osc_reference_html.dart';
 import 'app_config_dir.dart';
 

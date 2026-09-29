@@ -51,9 +51,9 @@ class _SleekStepperInputState extends State<SleekStepperInput> {
     _focusNode = FocusNode();
     _focusNode.addListener(_onFocusChange);
     if (widget.autofocus) {
-      WidgetsBinding.instance.addPostFrameCallback(
-        (_) { if (mounted) _focusNode.requestFocus(); },
-      );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _focusNode.requestFocus();
+      });
     }
   }
 
@@ -189,7 +189,10 @@ class _SleekStepperInputState extends State<SleekStepperInput> {
                     ),
                   ),
                 ),
-                Container(height: 1, color: Colors.white.withValues(alpha: 0.1)),
+                Container(
+                  height: 1,
+                  color: Colors.white.withValues(alpha: 0.1),
+                ),
                 Expanded(
                   child: GestureDetector(
                     onTapDown: (_) => _startStepping(-1),

@@ -19,11 +19,7 @@ class CustomCommand {
 
   String get oscAddress => '/pgrid/custom/$oscSlug';
 
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'name': name,
-    'command': command,
-  };
+  Map<String, dynamic> toJson() => {'id': id, 'name': name, 'command': command};
 
   factory CustomCommand.fromJson(Map<String, dynamic> json) => CustomCommand(
     id: json['id'] as String,

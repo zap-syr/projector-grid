@@ -71,7 +71,9 @@ class _CustomTooltipState extends State<CustomTooltip> {
                         style: TextStyle(
                           color: colorScheme.onInverseSurface,
                           fontSize: 12,
-                          fontStyle: i > 0 ? FontStyle.italic : FontStyle.normal,
+                          fontStyle: i > 0
+                              ? FontStyle.italic
+                              : FontStyle.normal,
                         ),
                       ),
                   ],
@@ -134,8 +136,10 @@ class _TooltipLayoutDelegate extends SingleChildLayoutDelegate {
   Offset getPositionForChild(Size size, Size childSize) {
     final idealLeft =
         buttonPosition.dx + buttonSize.width / 2 - childSize.width / 2;
-    final left =
-        idealLeft.clamp(_margin, size.width - childSize.width - _margin);
+    final left = idealLeft.clamp(
+      _margin,
+      size.width - childSize.width - _margin,
+    );
 
     final double top = placement == TooltipPlacement.top
         ? buttonPosition.dy - childSize.height - _gap

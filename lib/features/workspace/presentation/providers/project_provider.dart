@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+
 import '../../../../core/services/app_config_dir.dart';
 import '../../domain/log_event.dart';
 import '../../domain/projector_group.dart';
@@ -30,7 +32,9 @@ class ProjectState {
     List<String>? recentProjects,
   }) {
     return ProjectState(
-      currentFilePath: clearCurrentFilePath ? null : (currentFilePath ?? this.currentFilePath),
+      currentFilePath: clearCurrentFilePath
+          ? null
+          : (currentFilePath ?? this.currentFilePath),
       isDirty: isDirty ?? this.isDirty,
       recentProjects: recentProjects ?? this.recentProjects,
     );
@@ -54,8 +58,7 @@ class ProjectStateNotifier extends _$ProjectStateNotifier {
       }
     });
 
-    ref.listen<List<ScheduledTask>>(scheduledTasksProvider,
-        (previous, next) {
+    ref.listen<List<ScheduledTask>>(scheduledTasksProvider, (previous, next) {
       if (_suppressDirty || previous == null) return;
       if (_taskConfigChanged(previous, next)) {
         state = state.copyWith(isDirty: true);
@@ -90,10 +93,7 @@ class ProjectStateNotifier extends _$ProjectStateNotifier {
     return false;
   }
 
-  bool _taskConfigChanged(
-    List<ScheduledTask> prev,
-    List<ScheduledTask> next,
-  ) {
+  bool _taskConfigChanged(List<ScheduledTask> prev, List<ScheduledTask> next) {
     if (prev.length != next.length) return true;
     final prevMap = {for (final t in prev) t.id: t};
     for (final t in next) {
@@ -148,7 +148,8 @@ class ProjectStateNotifier extends _$ProjectStateNotifier {
         return;
       }
 
-      final json = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+      final json =
+          jsonDecode(await file.readAsString()) as Map<String, dynamic>;
       final nodes = _deserializeNodes(json);
       final groups = _deserializeGroups(json);
 
@@ -157,7 +158,8 @@ class ProjectStateNotifier extends _$ProjectStateNotifier {
       wsNotifier.setNodes(nodes);
       wsNotifier.setGroups(groups);
       wsNotifier.refreshAll();
-      ref.read(scheduledTasksProvider.notifier)
+      ref
+          .read(scheduledTasksProvider.notifier)
           .loadTasks(_deserializeTasks(json));
       _suppressDirty = false;
 
@@ -169,11 +171,15 @@ class ProjectStateNotifier extends _$ProjectStateNotifier {
       );
       _saveRecentProjects(updated);
     } catch (e) {
-      ref.read(eventLogProvider.notifier).log(LogEvent(
-        severity: LogSeverity.error,
-        type: LogEventType.command,
-        message: 'Failed to open project: $e',
-      ));
+      ref
+          .read(eventLogProvider.notifier)
+          .log(
+            LogEvent(
+              severity: LogSeverity.error,
+              type: LogEventType.command,
+              message: 'Failed to open project: $e',
+            ),
+          );
     }
   }
 
@@ -185,11 +191,15 @@ class ProjectStateNotifier extends _$ProjectStateNotifier {
       // The native picker process itself failed to launch (e.g. PowerShell
       // blocked by policy, osascript unavailable) — surface it instead of
       // letting the exception propagate out of a plain onPressed handler.
-      ref.read(eventLogProvider.notifier).log(LogEvent(
-        severity: LogSeverity.error,
-        type: LogEventType.command,
-        message: 'Failed to open the file picker: $e',
-      ));
+      ref
+          .read(eventLogProvider.notifier)
+          .log(
+            LogEvent(
+              severity: LogSeverity.error,
+              type: LogEventType.command,
+              message: 'Failed to open the file picker: $e',
+            ),
+          );
       return false;
     }
     if (path == null) return false;
@@ -217,11 +227,15 @@ class ProjectStateNotifier extends _$ProjectStateNotifier {
     } catch (e) {
       // Same reasoning as pickAndOpenProject: the native picker process
       // itself failed to launch, not a project-file write failure.
-      ref.read(eventLogProvider.notifier).log(LogEvent(
-        severity: LogSeverity.error,
-        type: LogEventType.command,
-        message: 'Failed to open the file picker: $e',
-      ));
+      ref
+          .read(eventLogProvider.notifier)
+          .log(
+            LogEvent(
+              severity: LogSeverity.error,
+              type: LogEventType.command,
+              message: 'Failed to open the file picker: $e',
+            ),
+          );
       return false;
     }
     if (path == null) return false;
@@ -234,7 +248,9 @@ class ProjectStateNotifier extends _$ProjectStateNotifier {
   static Future<String?> _showOpenDialog() async {
     if (Platform.isWindows) {
       final result = await Process.run('powershell', [
-        '-NoProfile', '-NonInteractive', '-Command',
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
         r'''
 Add-Type -AssemblyName System.Windows.Forms
 $owner = New-Object System.Windows.Forms.Form
@@ -261,14 +277,17 @@ if ($r -eq 'OK') { Write-Output $dialog.FileName }
   }
 
   static Future<String?> _showSaveDialog(String defaultName) async {
-    final safeName =
-        defaultName.endsWith('.pgrid') ? defaultName : '$defaultName.pgrid';
+    final safeName = defaultName.endsWith('.pgrid')
+        ? defaultName
+        : '$defaultName.pgrid';
 
     if (Platform.isWindows) {
       // Escape single quotes for PowerShell single-quoted string literals.
       final escaped = safeName.replaceAll("'", "''");
       final result = await Process.run('powershell', [
-        '-NoProfile', '-NonInteractive', '-Command',
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
         '''
 Add-Type -AssemblyName System.Windows.Forms
 \$owner = New-Object System.Windows.Forms.Form
@@ -352,30 +371,40 @@ if (\$r -eq 'OK') { Write-Output \$dialog.FileName }
   List<ProjectorNode> _deserializeNodes(Map<String, dynamic> json) {
     final nodes = json['nodes'] as List<dynamic>;
     if (nodes.length > 500) {
-      throw FormatException('Project contains too many nodes (${nodes.length}); maximum is 500');
+      throw FormatException(
+        'Project contains too many nodes (${nodes.length}); maximum is 500',
+      );
     }
-    return nodes.map((n) => ProjectorNode(
-      id: n['id'] as String,
-      name: n['name'] as String,
-      ipAddress: n['ipAddress'] as String,
-      port: (n['port'] as int).clamp(1, 65535),
-      login: n['login'] as String,
-      password: n['password'] as String,
-      x: (n['x'] as num).toDouble(),
-      y: (n['y'] as num).toDouble(),
-      groupId: n['groupId'] as String?,
-    )).toList();
+    return nodes
+        .map(
+          (n) => ProjectorNode(
+            id: n['id'] as String,
+            name: n['name'] as String,
+            ipAddress: n['ipAddress'] as String,
+            port: (n['port'] as int).clamp(1, 65535),
+            login: n['login'] as String,
+            password: n['password'] as String,
+            x: (n['x'] as num).toDouble(),
+            y: (n['y'] as num).toDouble(),
+            groupId: n['groupId'] as String?,
+          ),
+        )
+        .toList();
   }
 
   static List<ProjectorGroup> _deserializeGroups(Map<String, dynamic> json) {
     final groups = json['groups'] as List<dynamic>?;
     if (groups == null) return [];
-    return groups.map((g) => ProjectorGroup(
-      id: g['id'] as String,
-      name: g['name'] as String,
-      color: g['color'] as int,
-      oscAddress: (g['oscAddress'] as String?) ?? '',
-    )).toList();
+    return groups
+        .map(
+          (g) => ProjectorGroup(
+            id: g['id'] as String,
+            name: g['name'] as String,
+            color: g['color'] as int,
+            oscAddress: (g['oscAddress'] as String?) ?? '',
+          ),
+        )
+        .toList();
   }
 
   static List<ScheduledTask> _deserializeTasks(Map<String, dynamic> json) {
@@ -405,8 +434,9 @@ if (\$r -eq 'OK') { Write-Output \$dialog.FileName }
             ? DateTime.tryParse(j['oneTimeAt'] as String)
             : null,
         timeOfDay: j['timeOfDay'] as String?,
-        weekdays:
-            (j['weekdays'] as List<dynamic>?)?.map((e) => e as int).toList(),
+        weekdays: (j['weekdays'] as List<dynamic>?)
+            ?.map((e) => e as int)
+            .toList(),
         enabled: j['enabled'] as bool? ?? true,
         lastRunAt: j['lastRunAt'] != null
             ? DateTime.tryParse(j['lastRunAt'] as String)
@@ -414,19 +444,19 @@ if (\$r -eq 'OK') { Write-Output \$dialog.FileName }
       );
 
   static Map<String, dynamic> _scheduledTaskToJson(ScheduledTask t) => {
-        'id': t.id,
-        'name': t.name,
-        'command': t.command,
-        'commandLabel': t.commandLabel,
-        'target': t.target.name,
-        if (t.targetGroupId != null) 'targetGroupId': t.targetGroupId,
-        'scheduleType': t.scheduleType.name,
-        if (t.oneTimeAt != null) 'oneTimeAt': t.oneTimeAt!.toIso8601String(),
-        if (t.timeOfDay != null) 'timeOfDay': t.timeOfDay,
-        if (t.weekdays != null) 'weekdays': t.weekdays,
-        'enabled': t.enabled,
-        if (t.lastRunAt != null) 'lastRunAt': t.lastRunAt!.toIso8601String(),
-      };
+    'id': t.id,
+    'name': t.name,
+    'command': t.command,
+    'commandLabel': t.commandLabel,
+    'target': t.target.name,
+    if (t.targetGroupId != null) 'targetGroupId': t.targetGroupId,
+    'scheduleType': t.scheduleType.name,
+    if (t.oneTimeAt != null) 'oneTimeAt': t.oneTimeAt!.toIso8601String(),
+    if (t.timeOfDay != null) 'timeOfDay': t.timeOfDay,
+    if (t.weekdays != null) 'weekdays': t.weekdays,
+    'enabled': t.enabled,
+    if (t.lastRunAt != null) 'lastRunAt': t.lastRunAt!.toIso8601String(),
+  };
 
   // ── Recent projects ───────────────────────────────────────────────────────
 
@@ -465,10 +495,8 @@ if (\$r -eq 'OK') { Write-Output \$dialog.FileName }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
-  static String _fileName(String path) =>
-      path.split(RegExp(r'[/\\]')).last;
+  static String _fileName(String path) => path.split(RegExp(r'[/\\]')).last;
 }
 
 /// Returns just the file name from a full path.
-String projectFileName(String path) =>
-    path.split(RegExp(r'[/\\]')).last;
+String projectFileName(String path) => path.split(RegExp(r'[/\\]')).last;

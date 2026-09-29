@@ -316,9 +316,9 @@ class _ProjectorCardState extends ConsumerState<ProjectorCard> {
                         color: group == null
                             ? colorScheme.surface
                             : Color.alphaBlend(
-                                Color(
-                                  group.color,
-                                ).withValues(alpha: kProjectorCardGroupTintOpacity),
+                                Color(group.color).withValues(
+                                  alpha: kProjectorCardGroupTintOpacity,
+                                ),
                                 colorScheme.surface,
                               ),
                         borderRadius: BorderRadius.circular(8),
