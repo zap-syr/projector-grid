@@ -26,9 +26,9 @@ accepted item so each can be picked up independently. Edge Blending has its own 
 | R4 | Global error handler + log file | **Clarified** → §6, awaiting a go/no-go | The owner didn't follow the original one-liner — explained in §6 |
 | R5 | Show lock mode | `[later]` | During shows the app is mostly used for monitoring; accidental commands are unlikely |
 | R6 | Pre-release test suite | **Accepted** → §7, `[~]` suite in place | Owner asked for a concrete list |
-| U1 | Fix light theme in dialogs | **Accepted** → §8 | |
-| U2 | Shared dialog widgets | **Accepted** → §9 | |
-| U3 | Group command result summary | **Accepted** → §10 | |
+| U1 | Fix light theme in dialogs | **Accepted** → §8, `[x]` done | |
+| U2 | Shared dialog widgets | **Accepted** → §9, `[x]` done | |
+| U3 | Group command result summary | **Accepted** → §10, `[x]` done | Summary goes to the Event Log, not a SnackBar |
 | U4 | Side panel instead of modal dialogs | `[dropped]` | Doesn't fit the current layout; dialogs are open → adjust → close, rarely revisited |
 | U5 | Command palette (Ctrl+K) | **Accepted** → §11 | Owner asked for UX + code design |
 | U6 | Monitoring table keyboard/filter/export | `[later]` | Already tracked in `MONITORING_UI_PLAN.md` §5/§7/§9 |
@@ -825,7 +825,7 @@ access violation as the debug app (`debug_crash_investigation.md`). A run then s
 
 ---
 
-## 8. `[ ]` U1 — Light Theme Fix in Dialogs
+## 8. `[x]` U1 — Light Theme Fix in Dialogs
 
 Hard-coded dark-only colours make dialog labels and inputs nearly invisible in the light theme:
 - `geometry_correction_dialog.dart` — labels use `Colors.white70` (`_sliderRow`,
@@ -838,9 +838,14 @@ stepper fill/borders; `colorScheme.primary` at 50 % for focus. Grep the rest of 
 `Colors.white` / `Colors.black` used as text/border colours and fix the same way. Verify with
 the `flutter-windows-gui-check` skill in both themes.
 
+**Done:** also fixed the Add Projector scan spinner (`onPrimary`) and the Kelvin slider
+overlay (`onSurface` 12 %). Remaining `Colors.white/black` uses are intentional: shadows,
+contrast text on group colours, the Remote Preview's always-black viewport, corner-handle
+rings and the Kelvin thumb drawn over the gradient.
+
 ---
 
-## 9. `[ ]` U2 — Shared Dialog Widgets
+## 9. `[x]` U2 — Shared Dialog Widgets
 
 Geometry, Color, Brightness and the upcoming Edge Blending dialog each carry their own copies of
 the same building blocks. Extract into `presentation/widgets/common/`:
@@ -856,18 +861,30 @@ the same building blocks. Extract into `presentation/widgets/common/`:
 
 Migrate one dialog at a time, behaviour unchanged; Edge Blending is built on these from day one.
 
+**Done:** all four in `presentation/widgets/common/`; Geometry, Color and Brightness migrated.
+`LabeledSliderRow` has `above`/`inline` layouts and a `snap` flag (the Corner sliders are
+continuous). `ProjectorSettingsClient` also has `queryAll` (batches of 8) and `writeBool`;
+it uses raw key strings for now — switch to the §1 registry when F1 lands. Color and
+Brightness now take the service from `protocolServiceProvider` instead of `new`-ing one.
+Brightness keeps its own `_PercentSlider` (no stepper, % readout).
+
 ---
 
-## 10. `[ ]` U3 — Group Command Result Summary
+## 10. `[x]` U3 — Group Command Result Summary
 
 Today `_dispatchToNodes` logs one event per node and returns nothing; on a 30-projector
 "Power On" the user can't tell at a glance whether everything worked.
 
-- `_dispatchToNodes` returns `DispatchResult { int ok; List<ProjectorNode> failed; List<ProjectorNode> skippedOffline; }`.
-- After a group/all/selection command, a **SnackBar** (floating, bottom-left above the status
-  bar): *"Power On — 28/30 OK · 2 failed"* with a **Details** action → a small dialog listing
-  failed and skipped projectors, each with a *Retry* button and *Retry all failed*.
-- Single-projector commands keep today's behaviour (no snackbar noise).
+- `_dispatchToNodes` (and `sendCommandToSelected/Group/All`) return
+  `DispatchResult { command; int ok; List<ProjectorNode> failed; List<ProjectorNode> skipped; }`
+  (`domain/dispatch_result.dart`); `skipped` = not connected (offline or unauthorized).
+- After a group/all/selection command, one **summary entry in the Event Log** (via
+  `eventLogProvider`, no SnackBar): *"Power On — 28/30 OK · 2 failed · 1 skipped. Failed: A, B.
+  Skipped: C"* (`dispatchSummary`). Severity is `info` when all succeeded, `warning` when
+  anything failed or was skipped, so it stands out in the log panel.
+- The per-node entries stay; the summary line is appended after the last node has replied.
+- Single-projector commands keep today's behaviour (no summary line) — decided by the
+  target count (> 1), so a one-projector group also stays quiet.
 - Reused by Cues (§2), the web API (§5) and scheduled tasks (logged summary line).
 
 ---
