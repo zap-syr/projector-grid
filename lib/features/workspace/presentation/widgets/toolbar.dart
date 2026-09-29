@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../providers/alignment_provider.dart';
 import '../providers/app_settings_provider.dart';
 import '../providers/workspace_provider.dart';
 import 'add_projector_dialog.dart';
+import 'alignment_banner.dart';
 import 'manage_groups_dialog.dart';
 import 'scheduled_tasks_dialog.dart';
 
@@ -14,6 +16,9 @@ class MainToolbar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isMonitoringView = ref.watch(
       appSettingsProvider.select((s) => s.isMonitoringView),
+    );
+    final alignmentActive = ref.watch(
+      alignmentProvider.select((s) => s.active || s.busy),
     );
     final settingsNotifier = ref.read(appSettingsProvider.notifier);
     return Container(
@@ -79,6 +84,18 @@ class MainToolbar extends ConsumerWidget {
                     icon: const Icon(Icons.schedule, size: 18),
                     label: const Text('Scheduled Tasks'),
                   ),
+                  const SizedBox(width: 8),
+                  alignmentActive
+                      ? FilledButton.tonalIcon(
+                          onPressed: () => toggleAlignmentMode(ref),
+                          icon: const Icon(Icons.center_focus_strong, size: 18),
+                          label: const Text('Alignment'),
+                        )
+                      : OutlinedButton.icon(
+                          onPressed: () => toggleAlignmentMode(ref),
+                          icon: const Icon(Icons.center_focus_strong, size: 18),
+                          label: const Text('Alignment'),
+                        ),
                 ],
               ),
             ),

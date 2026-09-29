@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../../core/services/app_config_dir.dart';
+import '../../domain/alignment.dart';
 
 part 'app_settings_provider.g.dart';
 
@@ -55,6 +56,19 @@ class AppSettings {
   final MonitoringDensity monitoringDensity;
   final bool monitoringGroupBy;
 
+  /// Alignment mode choices, remembered between sessions.
+  /// [alignmentOthersPattern] null = same as focused.
+  final AlignmentPreset alignmentPreset;
+  final String alignmentFocusedPattern;
+  final String? alignmentOthersPattern;
+  final bool alignmentShowNeighbours;
+  final bool alignmentDiagonals;
+
+  /// Shutter fade times Alignment mode zeroed and hasn't written back yet,
+  /// keyed by projector IP. Persisted so a quit or crash mid-mode still
+  /// restores them on the next launch.
+  final Map<String, ShutterFade> pendingFadeRestores;
+
   const AppSettings({
     this.pollingIntervalSeconds = defaultPollingIntervalSeconds,
     this.themeMode = ThemeMode.dark,
@@ -72,6 +86,12 @@ class AppSettings {
     this.monitoringFitToWidth = true,
     this.monitoringDensity = MonitoringDensity.standard,
     this.monitoringGroupBy = false,
+    this.alignmentPreset = AlignmentPreset.geometry,
+    this.alignmentFocusedPattern = 'OTS:07',
+    this.alignmentOthersPattern = 'OTS:70',
+    this.alignmentShowNeighbours = false,
+    this.alignmentDiagonals = false,
+    this.pendingFadeRestores = const {},
   });
 
   AppSettings copyWith({
@@ -91,6 +111,13 @@ class AppSettings {
     bool? monitoringFitToWidth,
     MonitoringDensity? monitoringDensity,
     bool? monitoringGroupBy,
+    AlignmentPreset? alignmentPreset,
+    String? alignmentFocusedPattern,
+    String? alignmentOthersPattern,
+    bool clearAlignmentOthersPattern = false,
+    bool? alignmentShowNeighbours,
+    bool? alignmentDiagonals,
+    Map<String, ShutterFade>? pendingFadeRestores,
   }) {
     return AppSettings(
       pollingIntervalSeconds:
@@ -113,6 +140,16 @@ class AppSettings {
       monitoringFitToWidth: monitoringFitToWidth ?? this.monitoringFitToWidth,
       monitoringDensity: monitoringDensity ?? this.monitoringDensity,
       monitoringGroupBy: monitoringGroupBy ?? this.monitoringGroupBy,
+      alignmentPreset: alignmentPreset ?? this.alignmentPreset,
+      alignmentFocusedPattern:
+          alignmentFocusedPattern ?? this.alignmentFocusedPattern,
+      alignmentOthersPattern: clearAlignmentOthersPattern
+          ? null
+          : (alignmentOthersPattern ?? this.alignmentOthersPattern),
+      alignmentShowNeighbours:
+          alignmentShowNeighbours ?? this.alignmentShowNeighbours,
+      alignmentDiagonals: alignmentDiagonals ?? this.alignmentDiagonals,
+      pendingFadeRestores: pendingFadeRestores ?? this.pendingFadeRestores,
     );
   }
 
@@ -133,6 +170,15 @@ class AppSettings {
     'monitoringFitToWidth': monitoringFitToWidth,
     'monitoringDensity': monitoringDensity.name,
     'monitoringGroupBy': monitoringGroupBy,
+    'alignmentPreset': alignmentPreset.name,
+    'alignmentFocusedPattern': alignmentFocusedPattern,
+    'alignmentOthersPattern': alignmentOthersPattern,
+    'alignmentShowNeighbours': alignmentShowNeighbours,
+    'alignmentDiagonals': alignmentDiagonals,
+    'pendingFadeRestores': {
+      for (final e in pendingFadeRestores.entries)
+        e.key: {'in': e.value.fadeIn, 'out': e.value.fadeOut},
+    },
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) => AppSettings(
@@ -166,6 +212,26 @@ class AppSettings {
       orElse: () => MonitoringDensity.standard,
     ),
     monitoringGroupBy: (json['monitoringGroupBy'] as bool?) ?? false,
+    alignmentPreset: AlignmentPreset.values.firstWhere(
+      (p) => p.name == json['alignmentPreset'],
+      orElse: () => AlignmentPreset.geometry,
+    ),
+    alignmentFocusedPattern:
+        (json['alignmentFocusedPattern'] as String?) ?? 'OTS:07',
+    alignmentOthersPattern: json.containsKey('alignmentOthersPattern')
+        ? json['alignmentOthersPattern'] as String?
+        : 'OTS:70',
+    alignmentShowNeighbours:
+        (json['alignmentShowNeighbours'] as bool?) ?? false,
+    alignmentDiagonals: (json['alignmentDiagonals'] as bool?) ?? false,
+    pendingFadeRestores:
+        (json['pendingFadeRestores'] as Map?)?.map(
+          (k, v) => MapEntry(k as String, (
+            fadeIn: (v as Map)['in'] as String,
+            fadeOut: v['out'] as String,
+          )),
+        ) ??
+        const {},
   );
 }
 
@@ -276,6 +342,41 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
 
   void setMonitoringGroupBy(bool groupBy) {
     state = state.copyWith(monitoringGroupBy: groupBy);
+    _save(state);
+  }
+
+  void setAlignmentPatterns({
+    required AlignmentPreset preset,
+    required String focused,
+    required String? others,
+  }) {
+    state = state.copyWith(
+      alignmentPreset: preset,
+      alignmentFocusedPattern: focused,
+      alignmentOthersPattern: others,
+      clearAlignmentOthersPattern: others == null,
+    );
+    _save(state);
+  }
+
+  void setAlignmentShowNeighbours(bool show) {
+    state = state.copyWith(alignmentShowNeighbours: show);
+    _save(state);
+  }
+
+  void setAlignmentDiagonals(bool diagonals) {
+    state = state.copyWith(alignmentDiagonals: diagonals);
+    _save(state);
+  }
+
+  void setPendingFadeRestore(String ip, ShutterFade? fade) {
+    final next = Map<String, ShutterFade>.of(state.pendingFadeRestores);
+    if (fade == null) {
+      next.remove(ip);
+    } else {
+      next[ip] = fade;
+    }
+    state = state.copyWith(pendingFadeRestores: Map.unmodifiable(next));
     _save(state);
   }
 }

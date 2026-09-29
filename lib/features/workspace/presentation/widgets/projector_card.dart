@@ -3,10 +3,17 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
+import '../../../../core/theme/app_theme.dart';
+import '../../domain/alignment.dart';
+import '../../domain/card_layout.dart';
 import '../../domain/projector_node.dart';
 import '../../domain/projector_group.dart';
+import '../../domain/test_patterns.dart';
+import '../providers/alignment_provider.dart';
 import '../providers/selection_provider.dart';
+import 'custom_tooltip.dart';
 
 /// How strongly a grouped card's background is tinted with its group's
 /// color. Applied via [Color.alphaBlend] over the card's normal surface
@@ -61,6 +68,10 @@ class ProjectorCard extends ConsumerStatefulWidget {
 }
 
 class _ProjectorCardState extends ConsumerState<ProjectorCard> {
+  // How far the focused card's Alignment ring reaches past the card edge
+  // (its outer shadow's spreadRadius).
+  static const double _ringWidth = 5;
+
   final _menuController = MenuController();
   bool _isHovered = false;
   double? _lastZoom;
@@ -79,6 +90,14 @@ class _ProjectorCardState extends ConsumerState<ProjectorCard> {
     final isSelected = ref.watch(
       selectionProvider.select((ids) => ids.contains(node.id)),
     );
+    final alignmentRole = ref.watch(
+      alignmentProvider.select((s) => s.roles[node.id]),
+    );
+    // In Alignment mode the focused card is also the selection; its ring
+    // replaces the selection border instead of stacking on it.
+    final showSelection = isSelected && alignmentRole == null;
+    final alignmentAccent = AppTheme.alignmentAccent(theme.brightness);
+    final alignmentNeighbour = AppTheme.alignmentNeighbour(theme.brightness);
 
     // Status colors
     final powerColor = switch (node.powerStatus) {
@@ -149,11 +168,26 @@ class _ProjectorCardState extends ConsumerState<ProjectorCard> {
         ),
         Padding(
           padding: const EdgeInsets.only(left: 8.0, right: 8.0, bottom: 8.0),
-          child: Text(
-            node.ipAddress,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.7),
-            ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  node.ipAddress,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.textTheme.bodySmall?.color?.withValues(
+                      alpha: 0.7,
+                    ),
+                  ),
+                ),
+              ),
+              // A pattern behind a closed shutter isn't on screen, so it
+              // isn't shown either.
+              if (isTestPatternActive(node.testPattern) &&
+                  node.shutterStatus == ShutterStatus.open)
+                _TestPatternThumb(code: node.testPattern!),
+            ],
           ),
         ),
       ],
@@ -302,55 +336,108 @@ class _ProjectorCardState extends ConsumerState<ProjectorCard> {
                         position: details.localPosition * widget.zoom,
                       );
                     },
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 120),
-                      width: 120,
-                      height: 100,
-                      padding: EdgeInsets.all(isSelected ? 0 : 1),
+                    // Alignment mode ring, drawn outside the card with a 2 px
+                    // canvas-coloured gap so it never merges with the card's
+                    // own border: focused = 3 px ring and a glow, open
+                    // neighbour = 2 px ring in a paler tone. Kept out of the
+                    // AnimatedContainer below on purpose — interpolating
+                    // between two different shadow lists shrinks and fades
+                    // both rings mid-way, which read as a blink on every
+                    // `<` / `>` step. Later shadows paint over earlier ones,
+                    // so the gap goes last.
+                    child: DecoratedBox(
                       decoration: BoxDecoration(
-                        // A grouped card's background is the normal surface
-                        // color tinted with the group's color rather than a
-                        // separate bar or border, so the whole card reads as
-                        // "belongs to this group" at a glance without adding
-                        // any new shape to the card.
-                        color: group == null
-                            ? colorScheme.surface
-                            : Color.alphaBlend(
-                                Color(group.color).withValues(
-                                  alpha: kProjectorCardGroupTintOpacity,
-                                ),
-                                colorScheme.surface,
-                              ),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: isSelected
-                              ? colorScheme.primary
-                              : (_isHovered
-                                    ? colorScheme.primary.withValues(
-                                        alpha: 0.85,
-                                      )
-                                    : colorScheme.outline),
-                          width: isSelected ? 2 : 1,
-                        ),
                         boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.1),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
-                          ),
+                          if (alignmentRole == AlignmentRole.focused) ...[
+                            BoxShadow(
+                              color: alignmentAccent.withValues(alpha: 0.5),
+                              blurRadius: 14,
+                              spreadRadius: _ringWidth,
+                            ),
+                            BoxShadow(
+                              color: alignmentAccent,
+                              spreadRadius: _ringWidth,
+                            ),
+                            BoxShadow(
+                              color: colorScheme.surface,
+                              spreadRadius: 2,
+                            ),
+                          ] else if (alignmentRole == AlignmentRole.shown) ...[
+                            BoxShadow(
+                              color: alignmentNeighbour,
+                              spreadRadius: 4,
+                            ),
+                            BoxShadow(
+                              color: colorScheme.surface,
+                              spreadRadius: 2,
+                            ),
+                          ],
                         ],
                       ),
-                      // Explicit ClipRRect rather than the container's own
-                      // clipBehavior: with a border drawn on the *outer*
-                      // 8px-radius edge and this content inset by the
-                      // border's own width, the content has to be clipped to
-                      // the smaller *inner* radius (8 - border width) to line
-                      // up flush with that border — the same correction the
-                      // status bar below already relies on for its top
-                      // corners. See: https://github.com/flutter/flutter/issues/149631
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(7),
-                        child: cardBody,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 120),
+                        width: kCardWidth,
+                        height: kCardHeight,
+                        padding: EdgeInsets.all(showSelection ? 0 : 1),
+                        decoration: BoxDecoration(
+                          // A grouped card's background is the normal surface
+                          // color tinted with the group's color rather than a
+                          // separate bar or border, so the whole card reads as
+                          // "belongs to this group" at a glance without adding
+                          // any new shape to the card.
+                          color: group == null
+                              ? colorScheme.surface
+                              : Color.alphaBlend(
+                                  Color(group.color).withValues(
+                                    alpha: kProjectorCardGroupTintOpacity,
+                                  ),
+                                  colorScheme.surface,
+                                ),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: showSelection
+                                ? colorScheme.primary
+                                : (_isHovered
+                                      ? colorScheme.primary.withValues(
+                                          alpha: 0.85,
+                                        )
+                                      : colorScheme.outline),
+                            width: showSelection ? 2 : 1,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.1),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        // Cards whose shutter the mode keeps closed are dimmed
+                        // like the dark projectors on the wall — with an
+                        // opaque scrim, not opacity, so the canvas grid
+                        // doesn't show through.
+                        foregroundDecoration:
+                            alignmentRole == AlignmentRole.closed
+                            ? BoxDecoration(
+                                color: colorScheme.surface.withValues(
+                                  alpha: 0.6,
+                                ),
+                                borderRadius: BorderRadius.circular(8),
+                              )
+                            : null,
+                        // Explicit ClipRRect rather than the container's own
+                        // clipBehavior: with a border drawn on the *outer*
+                        // 8px-radius edge and this content inset by the
+                        // border's own width, the content has to be clipped to
+                        // the smaller *inner* radius (8 - border width) to line
+                        // up flush with that border — the same correction the
+                        // status bar below already relies on for its top
+                        // corners. See: https://github.com/flutter/flutter/issues/149631
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(7),
+                          child: cardBody,
+                        ),
                       ),
                     ),
                   ),
@@ -358,14 +445,42 @@ class _ProjectorCardState extends ConsumerState<ProjectorCard> {
               ),
               // Group chip — a sibling of MenuAnchor rather than nested
               // inside it (see the comment on the outer Column above).
+              // Always sits below the widest Alignment ring, so it never
+              // covers a ring and doesn't jump when the mode is toggled.
               if (group != null)
                 Padding(
-                  padding: const EdgeInsets.only(top: 3),
+                  padding: const EdgeInsets.only(top: 3 + _ringWidth),
                   child: _GroupChip(group: group),
                 ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// 16×10 preview of the active test pattern, bottom-right of the card.
+class _TestPatternThumb extends StatelessWidget {
+  const _TestPatternThumb({required this.code});
+
+  final String code;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final icon = kTestPatternIcons[code];
+    return CustomTooltip(
+      message: 'Test pattern: ${testPatternLabel(code)}',
+      child: Container(
+        width: 16,
+        height: 10,
+        decoration: BoxDecoration(
+          border: Border.all(color: colorScheme.outlineVariant, width: 0.5),
+        ),
+        child: icon != null
+            ? SvgPicture.asset(icon, fit: BoxFit.cover)
+            : Icon(Icons.grid_on, size: 9, color: colorScheme.onSurfaceVariant),
       ),
     );
   }

@@ -5,10 +5,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../providers/alignment_provider.dart';
 import '../providers/app_settings_provider.dart';
 import '../providers/osc_provider.dart';
 import '../providers/project_provider.dart';
 import '../providers/workspace_provider.dart';
+import '../widgets/alignment_banner.dart';
 import '../widgets/control_bar.dart';
 import '../widgets/event_log_panel.dart';
 import '../widgets/mac_menu_bar.dart';
@@ -48,6 +50,10 @@ class _ShowControlsIntent extends Intent {
 
 class _ShowMonitoringIntent extends Intent {
   const _ShowMonitoringIntent();
+}
+
+class _ToggleAlignmentIntent extends Intent {
+  const _ToggleAlignmentIntent();
 }
 
 class MainWorkspaceScreen extends ConsumerStatefulWidget {
@@ -139,7 +145,16 @@ class _WorkspaceBodyState extends ConsumerState<_WorkspaceBody> {
                     child: const Row(
                       children: [
                         Expanded(
-                          child: RepaintBoundary(child: ProjectorWorkspace()),
+                          child: Column(
+                            children: [
+                              AlignmentBanner(),
+                              Expanded(
+                                child: RepaintBoundary(
+                                  child: ProjectorWorkspace(),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                         RepaintBoundary(child: ControlBar()),
                       ],
@@ -190,8 +205,18 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
   Future<bool> _handleQuitChannelCall(MethodCall call) async {
     if (call.method != 'confirmQuit') return true;
     if (!mounted) return true;
-    return TopMenuBar.confirmUnsavedChanges(context, ref);
+    final canQuit = await TopMenuBar.confirmUnsavedChanges(context, ref);
+    if (canQuit) await _leaveAlignmentMode();
+    return canQuit;
   }
+
+  /// Puts projectors back before the app goes away. Bounded so an
+  /// unreachable projector can't hold up quitting; any shutter fade left
+  /// zeroed is restored on the next launch.
+  Future<void> _leaveAlignmentMode() => ref
+      .read(alignmentProvider.notifier)
+      .exit()
+      .timeout(const Duration(seconds: 5), onTimeout: () {});
 
   /// `windowManager.destroy()` always calls `NSApp.terminate(nil)` under the
   /// hood, which re-enters AppDelegate's `applicationShouldTerminate` on
@@ -231,6 +256,7 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
     }
     final canProceed = await TopMenuBar.confirmUnsavedChanges(context, ref);
     if (canProceed) {
+      await _leaveAlignmentMode();
       await _markTerminationApproved();
       await windowManager.destroy();
     }
@@ -247,6 +273,9 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
     // persisted "OSC enabled" setting. Nothing else reads it until the user
     // opens Preferences, and a lazy keepAlive provider doesn't self-instantiate.
     ref.read(oscProvider.notifier);
+    // Same for Alignment mode: it restores shutter fades a previous session
+    // left zeroed as soon as those projectors come online.
+    ref.read(alignmentProvider.notifier);
 
     return MacMenuBar(
       child: Shortcuts(
@@ -269,6 +298,8 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
               const _ShowControlsIntent(),
           const SingleActivator(LogicalKeyboardKey.digit2, control: true):
               const _ShowMonitoringIntent(),
+          const SingleActivator(LogicalKeyboardKey.keyL, control: true):
+              const _ToggleAlignmentIntent(),
           if (Platform.isMacOS) ...<ShortcutActivator, Intent>{
             const SingleActivator(LogicalKeyboardKey.keyN, meta: true):
                 const _NewProjectIntent(),
@@ -287,6 +318,8 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
                 const _ShowControlsIntent(),
             const SingleActivator(LogicalKeyboardKey.digit2, meta: true):
                 const _ShowMonitoringIntent(),
+            const SingleActivator(LogicalKeyboardKey.keyL, meta: true):
+                const _ToggleAlignmentIntent(),
           },
         },
         child: Actions(
@@ -326,6 +359,7 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
                 if (!await TopMenuBar.confirmUnsavedChanges(context, ref)) {
                   return null;
                 }
+                await _leaveAlignmentMode();
                 await _markTerminationApproved();
                 await windowManager.destroy();
                 return null;
@@ -346,6 +380,12 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
             _ShowMonitoringIntent: CallbackAction<_ShowMonitoringIntent>(
               onInvoke: (_) {
                 ref.read(appSettingsProvider.notifier).setMonitoringView(true);
+                return null;
+              },
+            ),
+            _ToggleAlignmentIntent: CallbackAction<_ToggleAlignmentIntent>(
+              onInvoke: (_) {
+                toggleAlignmentMode(ref);
                 return null;
               },
             ),

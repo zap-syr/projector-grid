@@ -1,6 +1,24 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
+  /// Alignment mode's accent: orange, opposite the blue selection accent, so
+  /// its card rings and banner never blend with selection.
+  static Color alignmentAccent(Brightness brightness) =>
+      brightness == Brightness.light
+      ? const Color(0xFFE8710A)
+      : const Color(0xFFFF9E40);
+
+  /// Ring of the focused projector's open neighbours: a paler tone of
+  /// [alignmentAccent], so neighbours read as related but clearly not the
+  /// focused card.
+  static Color alignmentNeighbour(Brightness brightness) =>
+      brightness == Brightness.light
+      ? const Color(0xFFF7B77E)
+      : const Color(0xFFFFDDB3);
+
+  /// Text and icons on [alignmentAccent].
+  static const Color onAlignmentAccent = Color(0xFF231200);
+
   static ThemeData get lightTheme => _base(Brightness.light);
 
   static ThemeData get darkTheme => _base(Brightness.dark);

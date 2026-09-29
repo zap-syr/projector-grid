@@ -162,6 +162,35 @@ class KeyboardShortcutsDialog extends StatelessWidget {
                       ],
                     ),
                     const _Section(
+                      title: 'Alignment',
+                      shortcuts: [
+                        _Shortcut(
+                          keys: ['Ctrl', 'L'],
+                          description: 'Enter / exit Alignment mode',
+                        ),
+                        _Shortcut(
+                          keys: ['<', '>'],
+                          description: 'Previous / next projector',
+                        ),
+                        _Shortcut(
+                          keys: ['N'],
+                          description: 'Neighbours on / off',
+                        ),
+                        _Shortcut(
+                          keys: ['A'],
+                          description: 'Show All on / off',
+                        ),
+                        _Shortcut(
+                          keys: ['Ctrl', 'Click'],
+                          description: 'Add / remove a neighbour',
+                        ),
+                        _Shortcut(
+                          keys: ['Esc'],
+                          description: 'Exit Alignment mode',
+                        ),
+                      ],
+                    ),
+                    const _Section(
                       title: 'Lens Shift',
                       shortcuts: [
                         _Shortcut(

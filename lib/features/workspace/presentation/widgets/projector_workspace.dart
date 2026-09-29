@@ -6,8 +6,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../providers/alignment_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../providers/selection_provider.dart';
+import '../../domain/card_layout.dart';
 import '../../domain/projector_node.dart';
 import '../../domain/projector_group.dart';
 import 'projector_card.dart';
@@ -50,6 +52,41 @@ class FocusOnNodesIntent extends Intent {
 
 class SelectGroupIntent extends Intent {
   const SelectGroupIntent();
+}
+
+class AlignmentStepIntent extends Intent {
+  final int delta;
+  const AlignmentStepIntent(this.delta);
+}
+
+class AlignmentShowAllIntent extends Intent {
+  const AlignmentShowAllIntent();
+}
+
+class AlignmentNeighboursIntent extends Intent {
+  const AlignmentNeighboursIntent();
+}
+
+class AlignmentExitIntent extends Intent {
+  const AlignmentExitIntent();
+}
+
+/// Enabled only while Alignment mode is on, so outside it `<` `>` `A` `N`
+/// and `Esc` fall through to other handlers and do nothing here.
+class _AlignmentAction<T extends Intent> extends Action<T> {
+  _AlignmentAction(this.ref, this.onInvoke);
+
+  final WidgetRef ref;
+  final void Function(AlignmentNotifier notifier, T intent) onInvoke;
+
+  @override
+  bool isEnabled(T intent) => ref.read(alignmentProvider).active;
+
+  @override
+  Object? invoke(T intent) {
+    onInvoke(ref.read(alignmentProvider.notifier), intent);
+    return null;
+  }
 }
 
 class ProjectorWorkspace extends ConsumerStatefulWidget {
@@ -198,10 +235,10 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
     }
   }
 
-  // Card size mirrors the fixed dimensions in projector_card.dart — the
-  // bounding box needs the cards' visual extent, not just their x/y anchors.
-  static const double _cardWidth = 120.0;
-  static const double _cardHeight = 100.0;
+  // The bounding box needs the cards' visual extent, not just their x/y
+  // anchors.
+  static const double _cardWidth = kCardWidth;
+  static const double _cardHeight = kCardHeight;
   static const double _focusPadding = 60.0;
 
   // Mirrors WorkspaceNotifier._clampX/_clampY so the live drag preview lands
@@ -510,9 +547,45 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
                       const FocusOnNodesIntent(allProjectors: false),
                   const SingleActivator(LogicalKeyboardKey.keyF, shift: true):
                       const FocusOnNodesIntent(allProjectors: true),
+
+                  // ── Alignment mode (only while it's on) ─────────────────
+                  // `<` / `>` are Shift+comma / Shift+period; the bare keys
+                  // work too so no modifier is needed.
+                  const SingleActivator(LogicalKeyboardKey.comma):
+                      const AlignmentStepIntent(-1),
+                  const SingleActivator(LogicalKeyboardKey.comma, shift: true):
+                      const AlignmentStepIntent(-1),
+                  const SingleActivator(LogicalKeyboardKey.period):
+                      const AlignmentStepIntent(1),
+                  const SingleActivator(LogicalKeyboardKey.period, shift: true):
+                      const AlignmentStepIntent(1),
+                  const SingleActivator(LogicalKeyboardKey.keyA):
+                      const AlignmentShowAllIntent(),
+                  const SingleActivator(LogicalKeyboardKey.keyN):
+                      const AlignmentNeighboursIntent(),
+                  const SingleActivator(LogicalKeyboardKey.escape):
+                      const AlignmentExitIntent(),
                 },
                 child: Actions(
                   actions: {
+                    AlignmentStepIntent: _AlignmentAction<AlignmentStepIntent>(
+                      ref,
+                      (a, intent) => intent.delta > 0 ? a.next() : a.previous(),
+                    ),
+                    AlignmentShowAllIntent:
+                        _AlignmentAction<AlignmentShowAllIntent>(
+                          ref,
+                          (a, _) => a.toggleShowAll(),
+                        ),
+                    AlignmentNeighboursIntent:
+                        _AlignmentAction<AlignmentNeighboursIntent>(
+                          ref,
+                          (a, _) => a.toggleNeighbours(),
+                        ),
+                    AlignmentExitIntent: _AlignmentAction<AlignmentExitIntent>(
+                      ref,
+                      (a, _) => a.exit(),
+                    ),
                     SelectAllIntent: CallbackAction<SelectAllIntent>(
                       onInvoke: (intent) => notifier.selectAll(),
                     ),
@@ -758,12 +831,37 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
                                             dragOverrides: _dragOverrides,
                                             zoom: _currentZoom,
                                             onTap: () {
+                                              // In Alignment mode a click
+                                              // focuses the card and
+                                              // Ctrl+click toggles it as a
+                                              // neighbour instead of
+                                              // selecting.
+                                              final alignment = ref.read(
+                                                alignmentProvider.notifier,
+                                              );
+                                              if (ref
+                                                  .read(alignmentProvider)
+                                                  .active) {
+                                                _isMultiSelect
+                                                    ? alignment
+                                                          .toggleManualNeighbour(
+                                                            node.id,
+                                                          )
+                                                    : alignment.focus(node.id);
+                                                return;
+                                              }
                                               notifier.selectNodeOnTap(
                                                 node.id,
                                                 multiSelect: _isMultiSelect,
                                               );
                                             },
                                             onPanDown: (details) {
+                                              if (_isMultiSelect &&
+                                                  ref
+                                                      .read(alignmentProvider)
+                                                      .active) {
+                                                return;
+                                              }
                                               notifier.selectNodeOnDown(
                                                 node.id,
                                                 multiSelect: _isMultiSelect,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../providers/alignment_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../providers/project_provider.dart';
 import '../providers/app_settings_provider.dart';
@@ -11,27 +12,22 @@ import 'manage_groups_dialog.dart';
 import 'scheduled_tasks_dialog.dart';
 import 'keyboard_shortcuts_dialog.dart';
 import 'about_dialog.dart';
+import 'common/menu_check_gutter.dart';
 import 'add_projector_dialog.dart';
+import 'alignment_banner.dart';
 import 'monitoring_table.dart';
 import '../../../../core/services/docs_service.dart';
 
 class TopMenuBar extends ConsumerWidget {
   const TopMenuBar({super.key});
 
-  // Every dropdown row — plain action, checkable toggle, or submenu — reserves
-  // the same left gutter that a checkmark would occupy, so labels line up on
-  // one edge whether or not that particular row ever shows a check.
-  static const double _leadingGutterWidth = 16;
-
   // Standard label/shortcut column width shared by most dropdown rows.
   // Submenus with wider labels (Columns, Presets, Row density, Monitoring
   // Table's own toggles) size themselves individually instead.
   static const double _menuItemWidth = 220;
 
-  static Widget _leadingGutter(bool checked) => SizedBox(
-    width: _leadingGutterWidth,
-    child: checked ? const Icon(Icons.check, size: 14) : null,
-  );
+  static Widget _leadingGutter(bool checked) =>
+      MenuCheckGutter(checked: checked);
 
   static Widget _menuItem(
     BuildContext context, {
@@ -116,6 +112,9 @@ class TopMenuBar extends ConsumerWidget {
     final showLogs = ref.watch(appSettingsProvider.select((s) => s.showLogs));
     final isMonitoringView = ref.watch(
       appSettingsProvider.select((s) => s.isMonitoringView),
+    );
+    final alignmentActive = ref.watch(
+      alignmentProvider.select((s) => s.active),
     );
     final monitoringColumns = ref.watch(
       appSettingsProvider.select((s) => s.monitoringColumns),
@@ -304,6 +303,14 @@ class TopMenuBar extends ConsumerWidget {
                     context: context,
                     builder: (_) => const ScheduledTasksDialog(),
                   ),
+                ),
+                _menuItem(
+                  context,
+                  label: 'Alignment Mode',
+                  checked: alignmentActive,
+                  shortcutLabel: 'Ctrl+L',
+                  width: _menuItemWidth,
+                  onPressed: () => toggleAlignmentMode(ref),
                 ),
                 const Divider(),
                 _menuItem(

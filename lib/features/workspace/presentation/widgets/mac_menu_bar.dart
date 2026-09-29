@@ -5,12 +5,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/services/docs_service.dart';
+import '../providers/alignment_provider.dart';
 import '../providers/app_settings_provider.dart';
 import '../providers/edit_history_status_provider.dart';
 import '../providers/project_provider.dart';
 import '../providers/workspace_provider.dart';
 import 'about_dialog.dart';
 import 'add_projector_dialog.dart';
+import 'alignment_banner.dart';
 import 'keyboard_shortcuts_dialog.dart';
 import 'manage_groups_dialog.dart';
 import 'monitoring_table.dart';
@@ -39,6 +41,9 @@ class MacMenuBar extends ConsumerWidget {
     final projectNotifier = ref.read(projectStateProvider.notifier);
     final wsNotifier = ref.read(workspaceProvider.notifier);
     final showLogs = ref.watch(appSettingsProvider.select((s) => s.showLogs));
+    final alignmentActive = ref.watch(
+      alignmentProvider.select((s) => s.active),
+    );
     final isMonitoringView = ref.watch(
       appSettingsProvider.select((s) => s.isMonitoringView),
     );
@@ -299,6 +304,15 @@ class MacMenuBar extends ConsumerWidget {
                       builder: (_) => const ScheduledTasksDialog(),
                     );
                   },
+                ),
+                // No native shortcut: Cmd+L is bound in
+                // main_workspace_screen.dart, and a toggle firing from both
+                // would cancel itself out.
+                PlatformMenuItem(
+                  label: alignmentActive
+                      ? '✓ Alignment Mode'
+                      : 'Alignment Mode',
+                  onSelected: () => toggleAlignmentMode(ref),
                 ),
               ],
             ),
