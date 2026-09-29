@@ -1,0 +1,215 @@
+import 'dart:convert';
+import 'dart:io';
+import 'dart:math';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:projector_grid/core/services/web_api.dart';
+import 'package:projector_grid/core/services/web_auth.dart';
+import 'package:projector_grid/core/services/web_event_hub.dart';
+import 'package:shelf/shelf.dart';
+
+class _Conn implements HttpConnectionInfo {
+  _Conn(String ip) : remoteAddress = InternetAddress(ip);
+  @override
+  final InternetAddress remoteAddress;
+  @override
+  int get remotePort => 50000;
+  @override
+  int get localPort => 8080;
+}
+
+class _Source implements WebApiSource {
+  final signedInSessions = <WebSession>[];
+
+  @override
+  String get projectName => 'Main Hall';
+  @override
+  final String viewerPinHash = hashPin('1234', random: Random(1));
+  @override
+  Json config(WebRole role) => {'role': role.name};
+  @override
+  List<Json> projectors() => [
+    {'id': 'a', 'name': 'PJ-01'},
+    {'id': 'b', 'name': 'PJ-02'},
+  ];
+  @override
+  List<Json> groups() => const [];
+  @override
+  List<WebEvent> snapshotEvents() => [(name: 'snapshot', data: 'S')];
+  @override
+  void signedIn(WebSession session) => signedInSessions.add(session);
+}
+
+void main() {
+  late _Source source;
+  late WebAuth auth;
+  late WebEventHub hub;
+  late Handler api;
+
+  setUp(() {
+    source = _Source();
+    auth = WebAuth();
+    hub = WebEventHub();
+    api = WebApi(auth: auth, hub: hub, source: source).handler;
+  });
+  tearDown(() => hub.closeAll());
+
+  Future<Response> send(
+    String method,
+    String path, {
+    Object? body,
+    Map<String, String> headers = const {},
+    String ip = '10.0.0.5',
+  }) async => api(
+    Request(
+      method,
+      Uri.parse('http://localhost$path'),
+      body: body == null ? null : (body is String ? body : jsonEncode(body)),
+      headers: headers,
+      context: {'shelf.io.connection_info': _Conn(ip)},
+    ),
+  );
+
+  Future<Object?> jsonOf(Response r) async =>
+      jsonDecode(await r.readAsString());
+
+  Future<String> loginToken() async {
+    final r = await send('POST', '/api/login', body: {'pin': '1234'});
+    return ((await jsonOf(r)) as Map)['token'] as String;
+  }
+
+  group('/api/login', () {
+    test('right PIN → token, role and an HttpOnly cookie', () async {
+      final r = await send('POST', '/api/login', body: {'pin': '1234'});
+      expect(r.statusCode, 200);
+      final body = (await jsonOf(r)) as Map;
+      expect(body['role'], 'viewer');
+      expect(
+        r.headers['set-cookie'],
+        '${WebApi.cookieName}=${body['token']}; Path=/; HttpOnly; SameSite=Strict',
+      );
+      expect(source.signedInSessions.single.ip, '10.0.0.5');
+    });
+
+    test('wrong PIN → 401', () async {
+      final r = await send('POST', '/api/login', body: {'pin': '9999'});
+      expect(r.statusCode, 401);
+      expect(await jsonOf(r), {'error': 'invalid_pin'});
+    });
+
+    test('bad bodies → 400', () async {
+      expect((await send('POST', '/api/login', body: 'nope')).statusCode, 400);
+      expect(
+        (await send('POST', '/api/login', body: {'pin': 1234})).statusCode,
+        400,
+      );
+      expect((await send('POST', '/api/login', body: [1])).statusCode, 400);
+    });
+
+    test('lockout → 429 with Retry-After', () async {
+      for (var i = 0; i < WebAuth.maxFailures - 1; i++) {
+        await send('POST', '/api/login', body: {'pin': '0000'});
+      }
+      final r = await send('POST', '/api/login', body: {'pin': '0000'});
+      expect(r.statusCode, 429);
+      expect(r.headers['retry-after'], '60');
+      expect(await jsonOf(r), {'error': 'locked_out', 'retryAfter': 60});
+    });
+  });
+
+  test('/api/session reports the project and whether signed in', () async {
+    expect(await jsonOf(await send('GET', '/api/session')), {
+      'projectName': 'Main Hall',
+      'authenticated': false,
+    });
+    final token = await loginToken();
+    expect(
+      await jsonOf(
+        await send(
+          'GET',
+          '/api/session',
+          headers: {'cookie': 'other=1; ${WebApi.cookieName}=$token'},
+        ),
+      ),
+      {'projectName': 'Main Hall', 'authenticated': true, 'role': 'viewer'},
+    );
+  });
+
+  group('authenticated routes', () {
+    test('401 without a session', () async {
+      for (final path in [
+        '/api/config',
+        '/api/projectors',
+        '/api/projectors/a',
+        '/api/groups',
+        '/api/alerts',
+        '/api/events',
+      ]) {
+        final r = await send('GET', path);
+        expect(r.statusCode, 401, reason: path);
+        expect(await jsonOf(r), {'error': 'unauthorized'});
+      }
+      expect((await send('POST', '/api/logout')).statusCode, 401);
+    });
+
+    test('bearer token and cookie both work', () async {
+      final token = await loginToken();
+      final byBearer = await send(
+        'GET',
+        '/api/config',
+        headers: {'authorization': 'Bearer $token'},
+      );
+      expect(await jsonOf(byBearer), {'role': 'viewer'});
+      final byCookie = await send(
+        'GET',
+        '/api/groups',
+        headers: {'cookie': '${WebApi.cookieName}=$token'},
+      );
+      expect(byCookie.statusCode, 200);
+    });
+
+    test('data routes', () async {
+      final h = {'authorization': 'Bearer ${await loginToken()}'};
+      expect(
+        (await jsonOf(await send('GET', '/api/projectors', headers: h)))
+            as List,
+        hasLength(2),
+      );
+      expect(await jsonOf(await send('GET', '/api/projectors/b', headers: h)), {
+        'id': 'b',
+        'name': 'PJ-02',
+      });
+      expect(
+        (await send('GET', '/api/projectors/zz', headers: h)).statusCode,
+        404,
+      );
+      expect(
+        await jsonOf(await send('GET', '/api/alerts', headers: h)),
+        isEmpty,
+      );
+      final r = await send('GET', '/api/nope', headers: h);
+      expect(r.statusCode, 404);
+      expect(r.headers['cache-control'], 'no-store');
+    });
+
+    test('/api/events streams the snapshot first', () async {
+      final r = await send(
+        'GET',
+        '/api/events',
+        headers: {'authorization': 'Bearer ${await loginToken()}'},
+      );
+      expect(r.headers['content-type'], startsWith('text/event-stream'));
+      expect(r.context['shelf.io.buffer_output'], isFalse);
+      final chunks = await r.read().map(utf8.decode).take(2).toList();
+      expect(chunks, ['retry: 3000\n\n', 'event: snapshot\ndata: "S"\n\n']);
+    });
+
+    test('logout ends the session and clears the cookie', () async {
+      final h = {'authorization': 'Bearer ${await loginToken()}'};
+      final r = await send('POST', '/api/logout', headers: h);
+      expect(r.statusCode, 204);
+      expect(r.headers['set-cookie'], contains('Max-Age=0'));
+      expect((await send('GET', '/api/config', headers: h)).statusCode, 401);
+    });
+  });
+}
