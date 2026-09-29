@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/projector_node.dart';
-import '../../../../core/services/panasonic_protocol_service.dart';
+import '../providers/protocol_service_provider.dart';
 import 'command_failure_notice.dart';
+import 'common/labeled_slider_row.dart';
+import 'common/projector_settings_client.dart';
+import 'common/section_card.dart';
 import 'dialog_title_bar.dart';
 import 'sleek_stepper_input.dart';
 
@@ -60,17 +64,24 @@ class _KelvinThumbShape extends SliderComponentShape {
   }
 }
 
-class ColorCorrectionDialog extends StatefulWidget {
+class ColorCorrectionDialog extends ConsumerStatefulWidget {
   final ProjectorNode node;
 
   const ColorCorrectionDialog({super.key, required this.node});
 
   @override
-  State<ColorCorrectionDialog> createState() => _ColorCorrectionDialogState();
+  ConsumerState<ColorCorrectionDialog> createState() =>
+      _ColorCorrectionDialogState();
 }
 
-class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
-  final _service = PanasonicProtocolService();
+class _ColorCorrectionDialogState extends ConsumerState<ColorCorrectionDialog> {
+  late final _client = ProjectorSettingsClient(
+    service: ref.read(protocolServiceProvider),
+    node: widget.node,
+    onFailure: (cmd) {
+      if (mounted) notifyCommandFailure(context, cmd);
+    },
+  );
 
   bool _loading = true;
 
@@ -99,11 +110,6 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
   List<int> _whHigh = [128, 128, 128]; // R,G,B  0–255
   List<int> _whLow = [0, 0, 0]; // R,G,B  -127..+127 (display)
 
-  String get _ip => widget.node.ipAddress;
-  int get _port => widget.node.port;
-  String get _login => widget.node.login;
-  String get _password => widget.node.password;
-
   @override
   void initState() {
     super.initState();
@@ -119,8 +125,8 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
   // every open, most of them for sliders the dialog wasn't even showing.
   Future<void> _loadValues() async {
     final modeResults = await Future.wait([
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:CMAI0'),
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QTE'),
+      _client.query('QVX:CMAI0'),
+      _client.query('QTE'),
     ]);
 
     if (!mounted) return;
@@ -192,13 +198,7 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
   // (_loadValues has its own inline copy of this parse, batched together
   // with the CMAI0 query there instead of calling this).
   Future<void> _refreshTempMode() async {
-    final raw = await _service.sendRawCommand(
-      _ip,
-      _port,
-      _login,
-      _password,
-      'QTE',
-    );
+    final raw = await _client.query('QTE');
     if (!mounted) return;
     final qteVal = int.tryParse(raw?.trim() ?? '');
     if (qteVal == null) return;
@@ -225,12 +225,12 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
   // unchanged by a mode switch.
   Future<void> _refreshWhiteBalance() async {
     final results = await Future.wait([
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QHR'),
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QHG'),
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QHB'),
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QOR'),
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QOG'),
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QOB'),
+      _client.query('QHR'),
+      _client.query('QHG'),
+      _client.query('QHB'),
+      _client.query('QOR'),
+      _client.query('QOG'),
+      _client.query('QOB'),
     ]);
     if (!mounted) return;
     setState(() {
@@ -245,9 +245,9 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
   // show up correctly.
   Future<void> _refreshColorMatching3() async {
     final results = await Future.wait([
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QMR'),
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QMG'),
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QMB'),
+      _client.query('QMR'),
+      _client.query('QMG'),
+      _client.query('QMB'),
     ]);
     if (!mounted) return;
     const keys3 = ['Red', 'Green', 'Blue'];
@@ -266,8 +266,7 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
   // as _refreshColorMatching3.
   Future<void> _refreshColorMatching7() async {
     final results = await Future.wait([
-      for (var i = 0; i < 7; i++)
-        _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:C7CS$i'),
+      for (var i = 0; i < 7; i++) _client.query('QVX:C7CS$i'),
     ]);
     if (!mounted) return;
     const keys7 = [
@@ -302,22 +301,11 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
   static String _fmt(int v) => v.toString().padLeft(4, '0');
   static String _fmt3(int v) => v.toString().padLeft(3, '0');
 
-  void _notifyFailure(String cmd) {
-    if (mounted) notifyCommandFailure(context, cmd);
-  }
-
   // ── Color Matching sends ──────────────────────────────────────────────────
   Future<void> _setMethod(int method) async {
     setState(() => _method = method);
     final cmd = 'VXX:CMAI0=+${method.toString().padLeft(5, '0')}';
-    final response = await _service.sendRawCommand(
-      _ip,
-      _port,
-      _login,
-      _password,
-      cmd,
-    );
-    if (response == null) _notifyFailure(cmd);
+    await _client.writeRaw(cmd);
   }
 
   Future<void> _set3Color(String color, List<int> rgb) async {
@@ -327,14 +315,7 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
       _ => 'VMB',
     };
     final cmd = '$prefix:${_fmt(rgb[0])},${_fmt(rgb[1])},${_fmt(rgb[2])}';
-    final response = await _service.sendRawCommand(
-      _ip,
-      _port,
-      _login,
-      _password,
-      cmd,
-    );
-    if (response == null) _notifyFailure(cmd);
+    await _client.writeRaw(cmd);
   }
 
   Future<void> _set7Color(String color, List<int> rgb) async {
@@ -350,14 +331,7 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
     final idx = keys7.indexOf(color);
     if (idx == -1) return;
     final cmd = 'VXX:C7CS$idx=${_fmt(rgb[0])},${_fmt(rgb[1])},${_fmt(rgb[2])}';
-    final response = await _service.sendRawCommand(
-      _ip,
-      _port,
-      _login,
-      _password,
-      cmd,
-    );
-    if (response == null) _notifyFailure(cmd);
+    await _client.writeRaw(cmd);
   }
 
   // ── Color Temperature sends ───────────────────────────────────────────────
@@ -369,14 +343,7 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
       _TempMode.custom => '$_customK',
     };
     final cmd = 'OTE:$code';
-    final response = await _service.sendRawCommand(
-      _ip,
-      _port,
-      _login,
-      _password,
-      cmd,
-    );
-    if (response == null) _notifyFailure(cmd);
+    await _client.writeRaw(cmd);
   }
 
   Future<void> _sendWhHigh(int channel, int value) async {
@@ -386,14 +353,7 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
       _ => 'VHB',
     };
     final cmd = '$prefix:${_fmt3(value)}';
-    final response = await _service.sendRawCommand(
-      _ip,
-      _port,
-      _login,
-      _password,
-      cmd,
-    );
-    if (response == null) _notifyFailure(cmd);
+    await _client.writeRaw(cmd);
   }
 
   Future<void> _sendWhLow(int channel, int displayValue) async {
@@ -404,14 +364,7 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
     };
     final protocol = (displayValue + 128).clamp(1, 255);
     final cmd = '$prefix:${_fmt3(protocol)}';
-    final response = await _service.sendRawCommand(
-      _ip,
-      _port,
-      _login,
-      _password,
-      cmd,
-    );
-    if (response == null) _notifyFailure(cmd);
+    await _client.writeRaw(cmd);
   }
 
   // ── Shared helpers ────────────────────────────────────────────────────────
@@ -425,121 +378,11 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
     _ => Colors.white,
   };
 
-  Widget _buildRgbSlider(
-    BuildContext context, {
-    required String label,
-    required Color color,
-    required int value,
-    required double min,
-    required double max,
-    required int divisions,
-    double step = 1.0,
-    required ValueChanged<double> onChanged,
-    required ValueChanged<double> onChangeEnd,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 14,
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: SliderTheme(
-              data: SliderTheme.of(context).copyWith(
-                activeTrackColor: color.withValues(alpha: 0.8),
-                thumbColor: color,
-                inactiveTrackColor: color.withValues(alpha: 0.2),
-                overlayColor: color.withValues(alpha: 0.1),
-                trackHeight: 2,
-                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-              ),
-              child: Slider(
-                value: value.toDouble(),
-                min: min,
-                max: max,
-                divisions: divisions,
-                onChanged: onChanged,
-                onChangeEnd: onChangeEnd,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          SleekStepperInput(
-            initialValue: value.toString(),
-            min: min,
-            max: max,
-            step: step,
-            onValueChanged: (s) {
-              final v = double.tryParse(s);
-              if (v != null) {
-                onChanged(v);
-                onChangeEnd(v);
-              }
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildColorMatchSliderRow(
-    BuildContext context,
-    String label,
-    Color color,
-    int value,
-    ValueChanged<double> onChanged,
-    ValueChanged<double> onChangeEnd,
-  ) {
-    return _buildRgbSlider(
-      context,
-      label: label,
-      color: color,
-      value: value,
-      min: 0,
-      max: 2048,
-      divisions: 2048,
-      onChanged: onChanged,
-      onChangeEnd: onChangeEnd,
-    );
-  }
-
-  // Flat, always-visible section card used for both color-matching entries
-  // and color-temperature groups — no collapse/expand, so nothing gets added
-  // to or removed from the accessibility tree when switching modes.
-  Widget _sectionCard(BuildContext context, {required Widget child}) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
-      decoration: BoxDecoration(
-        // surfaceContainerHighest, not surfaceContainerHigh: the Dialog's own
-        // Material background already uses surfaceContainerHigh by default,
-        // so matching it here would make the cards blend into the dialog body.
-        color: theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.9),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.12),
-            blurRadius: 4,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
-      child: child,
-    );
-  }
+  static const _rgbChannels = [
+    (0, 'R', Colors.red),
+    (1, 'G', Colors.green),
+    (2, 'B', Colors.blue),
+  ];
 
   Widget _buildColorCard(
     BuildContext context,
@@ -553,8 +396,7 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: _sectionCard(
-        context,
+      child: SectionCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -583,30 +425,19 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
               ],
             ),
             const SizedBox(height: 6),
-            _buildColorMatchSliderRow(
-              context,
-              'R',
-              Colors.red,
-              rgb[0],
-              (v) => setState(() => valuesMap[colorName]![0] = v.round()),
-              (_) => onSend(colorName, List.from(valuesMap[colorName]!)),
-            ),
-            _buildColorMatchSliderRow(
-              context,
-              'G',
-              Colors.green,
-              rgb[1],
-              (v) => setState(() => valuesMap[colorName]![1] = v.round()),
-              (_) => onSend(colorName, List.from(valuesMap[colorName]!)),
-            ),
-            _buildColorMatchSliderRow(
-              context,
-              'B',
-              Colors.blue,
-              rgb[2],
-              (v) => setState(() => valuesMap[colorName]![2] = v.round()),
-              (_) => onSend(colorName, List.from(valuesMap[colorName]!)),
-            ),
+            for (final (i, label, color) in _rgbChannels)
+              LabeledSliderRow(
+                layout: SliderLabelLayout.inline,
+                label: label,
+                color: color,
+                value: rgb[i].toDouble(),
+                min: 0,
+                max: 2048,
+                onChanged: (v) =>
+                    setState(() => valuesMap[colorName]![i] = v.round()),
+                onChangeEnd: (_) =>
+                    onSend(colorName, List.from(valuesMap[colorName]!)),
+              ),
           ],
         ),
       ),
@@ -616,8 +447,7 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
   // ── Color Temperature tab ─────────────────────────────────────────────────
   Widget _buildKelvinCard(BuildContext context) {
     final theme = Theme.of(context);
-    return _sectionCard(
-      context,
+    return SectionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -676,7 +506,9 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
                     trackHeight: 10,
                     activeTrackColor: Colors.transparent,
                     inactiveTrackColor: Colors.transparent,
-                    overlayColor: Colors.white.withValues(alpha: 0.15),
+                    overlayColor: theme.colorScheme.onSurface.withValues(
+                      alpha: 0.12,
+                    ),
                   ),
                   child: Slider(
                     min: 3200,
@@ -704,13 +536,11 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
     required List<int> values,
     required double min,
     required double max,
-    required int divisions,
     required void Function(int channel, int value) onChanged,
     required void Function(int channel, int value) onChangeEnd,
   }) {
     final theme = Theme.of(context);
-    return _sectionCard(
-      context,
+    return SectionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -721,21 +551,16 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
             ),
           ),
           const SizedBox(height: 4),
-          for (final t in [
-            (0, 'R', Colors.red),
-            (1, 'G', Colors.green),
-            (2, 'B', Colors.blue),
-          ])
-            _buildRgbSlider(
-              context,
-              label: t.$2,
-              color: t.$3,
-              value: values[t.$1],
+          for (final (i, label, color) in _rgbChannels)
+            LabeledSliderRow(
+              layout: SliderLabelLayout.inline,
+              label: label,
+              color: color,
+              value: values[i].toDouble(),
               min: min,
               max: max,
-              divisions: divisions,
-              onChanged: (v) => onChanged(t.$1, v.round()),
-              onChangeEnd: (v) => onChangeEnd(t.$1, v.round()),
+              onChanged: (v) => onChanged(i, v.round()),
+              onChangeEnd: (v) => onChangeEnd(i, v.round()),
             ),
         ],
       ),
@@ -754,7 +579,6 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
             values: _whHigh,
             min: 0,
             max: 255,
-            divisions: 255,
             onChanged: (ch, v) => setState(() => _whHigh[ch] = v),
             onChangeEnd: (ch, v) => _sendWhHigh(ch, v),
           ),
@@ -765,7 +589,6 @@ class _ColorCorrectionDialogState extends State<ColorCorrectionDialog> {
             values: _whLow,
             min: -127,
             max: 127,
-            divisions: 254,
             onChanged: (ch, v) =>
                 setState(() => _whLow[ch] = v.abs() <= 3 ? 0 : v),
             onChangeEnd: (ch, v) => _sendWhLow(ch, _whLow[ch]),

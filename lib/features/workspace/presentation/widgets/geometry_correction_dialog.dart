@@ -8,9 +8,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/geometry_values.dart';
 import '../../domain/projector_node.dart';
-import '../../../../core/services/panasonic_protocol_service.dart';
 import '../providers/protocol_service_provider.dart';
 import 'command_failure_notice.dart';
+import 'common/dialog_split_layout.dart';
+import 'common/labeled_slider_row.dart';
+import 'common/projector_settings_client.dart';
 import 'custom_tooltip.dart';
 import 'dialog_title_bar.dart';
 import 'sleek_stepper_input.dart';
@@ -90,8 +92,12 @@ class GeometryCorrectionDialog extends ConsumerStatefulWidget {
 
 class _GeometryCorrectionDialogState
     extends ConsumerState<GeometryCorrectionDialog> {
-  late final PanasonicProtocolService _service = ref.read(
-    protocolServiceProvider,
+  late final _client = ProjectorSettingsClient(
+    service: ref.read(protocolServiceProvider),
+    node: widget.node,
+    onFailure: (cmd) {
+      if (mounted) notifyCommandFailure(context, cmd);
+    },
   );
 
   bool _loading = true;
@@ -114,11 +120,6 @@ class _GeometryCorrectionDialogState
 
   final _cornerCanvasKey = GlobalKey<_CornerCorrectionCanvasState>();
 
-  String get _ip => widget.node.ipAddress;
-  int get _port => widget.node.port;
-  String get _login => widget.node.login;
-  String get _password => widget.node.password;
-
   @override
   void initState() {
     super.initState();
@@ -127,17 +128,15 @@ class _GeometryCorrectionDialogState
 
   // ─── Loading ─────────────────────────────────────────────────────────────
   Future<void> _loadInitial() async {
-    final results = await Future.wait([
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:GMMI0'),
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QID'),
-    ]);
+    final (modeRaw, model) = await (
+      _client.readValue('GMMI0'),
+      _client.query('QID'),
+    ).wait;
     if (!mounted) return;
 
-    final modeRaw = parseKeyedValue(results[0], 'GMMI0');
     if (modeRaw != null) _mode = _GeometryMode.fromProtocol(modeRaw);
 
-    final model = results[1] ?? '';
-    final tier = quadPixelTierFor(model);
+    final tier = quadPixelTierFor(model ?? '');
     _extendedCornerLimits = tier == QuadPixelTier.a;
     _autoEnableQuadPixelDrive = tier != QuadPixelTier.none;
 
@@ -189,28 +188,9 @@ class _GeometryCorrectionDialogState
       'GMFIE',
       'GMFIF',
     ];
-    // Cap concurrent connections to the projector. A 15-wide burst completes
-    // on a flagship but ~5% of the queries stall ~1s, and weaker models hit
-    // ERR3 outright (see tool/projector_stress_test.dart). Batches of 8 keep
-    // the load well under 200ms.
-    const maxConcurrent = 8;
-    final results = <String?>[];
-    for (var i = 0; i < keys.length; i += maxConcurrent) {
-      final batch = keys.sublist(i, (i + maxConcurrent).clamp(0, keys.length));
-      results.addAll(
-        await Future.wait(
-          batch.map(
-            (k) => _service.sendRawCommand(
-              _ip,
-              _port,
-              _login,
-              _password,
-              'QVX:$k',
-            ),
-          ),
-        ),
-      );
-    }
+    // A 15-wide burst stalls ~5% of the queries ~1s on a flagship; batches
+    // of 8 keep the load well under 200ms.
+    final results = await _client.queryAll([for (final k in keys) 'QVX:$k']);
     if (!mounted) return;
 
     int parseAt(int i, String key) => parseKeyedInt(results[i], key) ?? 0;
@@ -234,109 +214,46 @@ class _GeometryCorrectionDialogState
   }
 
   Future<void> _loadKeystone() async {
-    final results = await Future.wait([
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:GMKS0'),
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:GMKI4'),
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:GMKI7'),
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:GMKS8'),
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:GMKS9'),
-    ]);
+    final (gmks0, gmki4, gmki7, gmks8, gmks9) = await (
+      _client.readDouble('GMKS0'),
+      _client.readInt('GMKI4'),
+      _client.readInt('GMKI7'),
+      _client.readDouble('GMKS8'),
+      _client.readDouble('GMKS9'),
+    ).wait;
     if (!mounted) return;
 
     _keystone
-      ..gmks0 = parseKeyedDouble(results[0], 'GMKS0') ?? 1.5
-      ..gmki4 = parseKeyedInt(results[1], 'GMKI4') ?? 0
-      ..gmki7 = parseKeyedInt(results[2], 'GMKI7') ?? 0
-      ..gmks8 = parseKeyedDouble(results[3], 'GMKS8') ?? 0.0
-      ..gmks9 = parseKeyedDouble(results[4], 'GMKS9') ?? 0.0;
+      ..gmks0 = gmks0 ?? 1.5
+      ..gmki4 = gmki4 ?? 0
+      ..gmki7 = gmki7 ?? 0
+      ..gmks8 = gmks8 ?? 0.0
+      ..gmks9 = gmks9 ?? 0.0;
   }
 
   Future<void> _loadCurved() async {
-    final results = await Future.wait([
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:GMCS0'),
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:GMCI2'),
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:GMCI3'),
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:GMCI6'),
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:GMCI7'),
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:GMCS8'),
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:GMCS9'),
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:GMCIA'),
-    ]);
+    final (gmcs0, gmci2, gmci3, gmci6, gmci7, gmcs8, gmcs9, gmcia) = await (
+      _client.readDouble('GMCS0'),
+      _client.readInt('GMCI2'),
+      _client.readInt('GMCI3'),
+      _client.readInt('GMCI6'),
+      _client.readInt('GMCI7'),
+      _client.readDouble('GMCS8'),
+      _client.readDouble('GMCS9'),
+      _client.readInt('GMCIA'),
+    ).wait;
     if (!mounted) return;
 
     _curved
-      ..gmcs0 = parseKeyedDouble(results[0], 'GMCS0') ?? 1.5
-      ..gmci2 = parseKeyedInt(results[1], 'GMCI2') ?? 0
-      ..gmci3 = parseKeyedInt(results[2], 'GMCI3') ?? 0
-      ..gmci6 = parseKeyedInt(results[3], 'GMCI6') ?? 0
-      ..gmci7 = parseKeyedInt(results[4], 'GMCI7') ?? 0
-      ..gmcs8 = parseKeyedDouble(results[5], 'GMCS8') ?? 0.0
-      ..gmcs9 = parseKeyedDouble(results[6], 'GMCS9') ?? 0.0
-      ..gmcia = (parseKeyedInt(results[7], 'GMCIA') ?? 0) == 1;
+      ..gmcs0 = gmcs0 ?? 1.5
+      ..gmci2 = gmci2 ?? 0
+      ..gmci3 = gmci3 ?? 0
+      ..gmci6 = gmci6 ?? 0
+      ..gmci7 = gmci7 ?? 0
+      ..gmcs8 = gmcs8 ?? 0.0
+      ..gmcs9 = gmcs9 ?? 0.0
+      ..gmcia = (gmcia ?? 0) == 1;
   }
-
-  // ─── Formatters ──────────────────────────────────────────────────────────
-  // Clean numeric string for SleekStepperInput: integer when whole, 1dp otherwise.
-  static String _cleanStr(double v) {
-    final r = v.roundToDouble();
-    return v == r ? r.toInt().toString() : v.toStringAsFixed(1);
-  }
-
-  // ─── Senders ─────────────────────────────────────────────────────────────
-
-  void _notifyFailure(String cmd) {
-    if (mounted) notifyCommandFailure(context, cmd);
-  }
-
-  Future<void> _sendMode(_GeometryMode m) async {
-    final cmd = 'VXX:GMMI0=${m.protocolValue}';
-    final response = await _service.sendRawCommand(
-      _ip,
-      _port,
-      _login,
-      _password,
-      cmd,
-    );
-    if (response == null) _notifyFailure(cmd);
-  }
-
-  Future<void> _sendInt(String key, int v) async {
-    final cmd = 'VXX:$key=${formatNtInt(v)}';
-    final response = await _service.sendRawCommand(
-      _ip,
-      _port,
-      _login,
-      _password,
-      cmd,
-    );
-    if (response == null) _notifyFailure(cmd);
-  }
-
-  Future<void> _sendDeg(String key, double v) async {
-    final cmd = 'VXX:$key=${formatNtDeg(v)}';
-    final response = await _service.sendRawCommand(
-      _ip,
-      _port,
-      _login,
-      _password,
-      cmd,
-    );
-    if (response == null) _notifyFailure(cmd);
-  }
-
-  Future<void> _sendThrow(String key, double v) async {
-    final cmd = 'VXX:$key=${formatNtThrow(v)}';
-    final response = await _service.sendRawCommand(
-      _ip,
-      _port,
-      _login,
-      _password,
-      cmd,
-    );
-    if (response == null) _notifyFailure(cmd);
-  }
-
-  Future<void> _sendBool(String key, bool on) => _sendInt(key, on ? 1 : 0);
 
   // ─── Build ───────────────────────────────────────────────────────────────
   @override
@@ -393,9 +310,9 @@ class _GeometryCorrectionDialogState
                     // the mode switch itself doesn't error out. VXX:QPDI1=ON
                     // is idempotent, so no need to track current state.
                     if (_autoEnableQuadPixelDrive && wasOff) {
-                      await _sendBool('QPDI1', true);
+                      await _client.writeBool('QPDI1', true);
                     }
-                    await _sendMode(m);
+                    await _client.writeRaw('VXX:GMMI0=${m.protocolValue}');
                     await _ensureModeLoaded(m);
                   },
                 ),
@@ -420,25 +337,6 @@ class _GeometryCorrectionDialogState
     _GeometryMode.keystone => _buildKeystoneBody(),
     _GeometryMode.curved => _buildCurvedBody(),
   };
-
-  // Two-column split: canvas left (5 parts) + scrollable controls right (4 parts).
-  // Both panels grow proportionally so the canvas stays large at any dialog width.
-  Widget _buildSplitLayout({required Widget left, required Widget right}) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Expanded(flex: 5, child: left),
-        const VerticalDivider(width: 1, thickness: 1),
-        Expanded(
-          flex: 4,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: right,
-          ),
-        ),
-      ],
-    );
-  }
 
   // ─── Off / PC placeholders ───────────────────────────────────────────────
   Widget _buildOffBody() => Center(
@@ -477,12 +375,12 @@ class _GeometryCorrectionDialogState
       'GMFI8',
       'GMFI9',
     ]) {
-      await _sendInt(key, 0);
+      await _client.writeInt(key, 0);
     }
   }
 
   Widget _buildCornerBody() {
-    return _buildSplitLayout(
+    return DialogSplitLayout(
       left: _buildCornerLeftPanel(),
       right: _buildCornerSliders(),
     );
@@ -518,7 +416,7 @@ class _GeometryCorrectionDialogState
                 extendedCornerLimits: _extendedCornerLimits,
                 onCornerCommit: (List<(String, int)> commands) async {
                   for (final (key, value) in commands) {
-                    await _sendInt(key, value);
+                    await _client.writeInt(key, value);
                   }
                 },
               ),
@@ -552,7 +450,7 @@ class _GeometryCorrectionDialogState
               showSelectedIcon: false,
               onSelectionChanged: (v) {
                 setState(() => _corner.gmfif = v.first);
-                _sendInt('GMFIF', v.first);
+                _client.writeInt('GMFIF', v.first);
               },
               style: ButtonStyle(
                 visualDensity: VisualDensity.compact,
@@ -562,7 +460,8 @@ class _GeometryCorrectionDialogState
           ],
         ),
         const SizedBox(height: 12),
-        _sliderRow(
+        LabeledSliderRow(
+          snap: false,
           label: 'Linearity V',
           value: _corner.gmfi5.toDouble(),
           min: -127,
@@ -570,9 +469,12 @@ class _GeometryCorrectionDialogState
           onChanged: manual
               ? (v) => setState(() => _corner.gmfi5 = v.round())
               : null,
-          onChangeEnd: manual ? (v) => _sendInt('GMFI5', v.round()) : null,
+          onChangeEnd: manual
+              ? (v) => _client.writeInt('GMFI5', v.round())
+              : null,
         ),
-        _sliderRow(
+        LabeledSliderRow(
+          snap: false,
           label: 'Linearity H',
           value: _corner.gmfia.toDouble(),
           min: -127,
@@ -580,9 +482,12 @@ class _GeometryCorrectionDialogState
           onChanged: manual
               ? (v) => setState(() => _corner.gmfia = v.round())
               : null,
-          onChangeEnd: manual ? (v) => _sendInt('GMFIA', v.round()) : null,
+          onChangeEnd: manual
+              ? (v) => _client.writeInt('GMFIA', v.round())
+              : null,
         ),
-        _sliderRow(
+        LabeledSliderRow(
+          snap: false,
           label: 'Pincushion Upper',
           value: _corner.gmfib.toDouble(),
           min: -100,
@@ -590,9 +495,12 @@ class _GeometryCorrectionDialogState
           onChanged: manual
               ? (v) => setState(() => _corner.gmfib = v.round())
               : null,
-          onChangeEnd: manual ? (v) => _sendInt('GMFIB', v.round()) : null,
+          onChangeEnd: manual
+              ? (v) => _client.writeInt('GMFIB', v.round())
+              : null,
         ),
-        _sliderRow(
+        LabeledSliderRow(
+          snap: false,
           label: 'Pincushion Lower',
           value: _corner.gmfic.toDouble(),
           min: -100,
@@ -600,9 +508,12 @@ class _GeometryCorrectionDialogState
           onChanged: manual
               ? (v) => setState(() => _corner.gmfic = v.round())
               : null,
-          onChangeEnd: manual ? (v) => _sendInt('GMFIC', v.round()) : null,
+          onChangeEnd: manual
+              ? (v) => _client.writeInt('GMFIC', v.round())
+              : null,
         ),
-        _sliderRow(
+        LabeledSliderRow(
+          snap: false,
           label: 'Pincushion Left',
           value: _corner.gmfid.toDouble(),
           min: -100,
@@ -610,9 +521,12 @@ class _GeometryCorrectionDialogState
           onChanged: manual
               ? (v) => setState(() => _corner.gmfid = v.round())
               : null,
-          onChangeEnd: manual ? (v) => _sendInt('GMFID', v.round()) : null,
+          onChangeEnd: manual
+              ? (v) => _client.writeInt('GMFID', v.round())
+              : null,
         ),
-        _sliderRow(
+        LabeledSliderRow(
+          snap: false,
           label: 'Pincushion Right',
           value: _corner.gmfie.toDouble(),
           min: -100,
@@ -620,84 +534,22 @@ class _GeometryCorrectionDialogState
           onChanged: manual
               ? (v) => setState(() => _corner.gmfie = v.round())
               : null,
-          onChangeEnd: manual ? (v) => _sendInt('GMFIE', v.round()) : null,
+          onChangeEnd: manual
+              ? (v) => _client.writeInt('GMFIE', v.round())
+              : null,
         ),
-      ],
-    );
-  }
-
-  Widget _sliderRow({
-    required String label,
-    required double value,
-    required double min,
-    required double max,
-    required ValueChanged<double>? onChanged,
-    required ValueChanged<double>? onChangeEnd,
-  }) {
-    final enabled = onChanged != null || onChangeEnd != null;
-    final stepper = SleekStepperInput(
-      initialValue: _cleanStr(value),
-      min: min,
-      max: max,
-      onValueChanged: (s) {
-        final v = double.tryParse(s);
-        if (v != null) {
-          onChanged?.call(v);
-          onChangeEnd?.call(v);
-        }
-      },
-    );
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(color: Colors.white70, fontSize: 13),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: SliderTheme(
-                data: SliderTheme.of(context).copyWith(
-                  trackHeight: 2,
-                  thumbShape: const RoundSliderThumbShape(
-                    enabledThumbRadius: 6,
-                  ),
-                ),
-                child: Slider(
-                  value: value.clamp(min, max),
-                  min: min,
-                  max: max,
-                  onChanged: onChanged,
-                  onChangeEnd: onChangeEnd,
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
-            // Always wrap in the same ancestor shape (only toggling its
-            // properties) so the stepper's Element/State — and its text-field
-            // semantics — survive Auto/Manual switches instead of being torn
-            // down and recreated.
-            IgnorePointer(
-              ignoring: !enabled,
-              child: Opacity(opacity: enabled ? 1.0 : 0.38, child: stepper),
-            ),
-          ],
-        ),
-        const SizedBox(height: 24),
       ],
     );
   }
 
   // ─── Keystone ────────────────────────────────────────────────────────────
   Widget _buildKeystoneBody() {
-    return _buildSplitLayout(
+    return DialogSplitLayout(
       left: _buildPreviewUnavailable(),
       right: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _labeledSlider(
+          LabeledSliderRow(
             label: 'Vertical Keystone',
             value: _keystone.gmks8,
             min: -40,
@@ -707,9 +559,9 @@ class _GeometryCorrectionDialogState
               () => _keystone.gmks8 = double.parse(v.toStringAsFixed(1)),
             ),
             onChangeEnd: (v) =>
-                _sendDeg('GMKS8', double.parse(v.toStringAsFixed(1))),
+                _client.writeDeg('GMKS8', double.parse(v.toStringAsFixed(1))),
           ),
-          _labeledSlider(
+          LabeledSliderRow(
             label: 'Horizontal Keystone',
             value: _keystone.gmks9,
             min: -15,
@@ -719,29 +571,29 @@ class _GeometryCorrectionDialogState
               () => _keystone.gmks9 = double.parse(v.toStringAsFixed(1)),
             ),
             onChangeEnd: (v) =>
-                _sendDeg('GMKS9', double.parse(v.toStringAsFixed(1))),
+                _client.writeDeg('GMKS9', double.parse(v.toStringAsFixed(1))),
           ),
-          _labeledSlider(
+          LabeledSliderRow(
             label: 'Vertical Balance',
             value: _keystone.gmki4.toDouble(),
             min: -60,
             max: 60,
             onChanged: (v) => setState(() => _keystone.gmki4 = v.round()),
-            onChangeEnd: (v) => _sendInt('GMKI4', v.round()),
+            onChangeEnd: (v) => _client.writeInt('GMKI4', v.round()),
           ),
-          _labeledSlider(
+          LabeledSliderRow(
             label: 'Horizontal Balance',
             value: _keystone.gmki7.toDouble(),
             min: -30,
             max: 30,
             onChanged: (v) => setState(() => _keystone.gmki7 = v.round()),
-            onChangeEnd: (v) => _sendInt('GMKI7', v.round()),
+            onChangeEnd: (v) => _client.writeInt('GMKI7', v.round()),
           ),
           _throwRatioField(
             value: _keystone.gmks0,
             onCommit: (v) {
               setState(() => _keystone.gmks0 = v);
-              _sendThrow('GMKS0', v);
+              _client.writeThrow('GMKS0', v);
             },
           ),
         ],
@@ -751,28 +603,28 @@ class _GeometryCorrectionDialogState
 
   // ─── Curved ──────────────────────────────────────────────────────────────
   Widget _buildCurvedBody() {
-    return _buildSplitLayout(
+    return DialogSplitLayout(
       left: _buildPreviewUnavailable(),
       right: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _labeledSlider(
+          LabeledSliderRow(
             label: 'Vertical Arc',
             value: _curved.gmci3.toDouble(),
             min: -40,
             max: 40,
             onChanged: (v) => setState(() => _curved.gmci3 = v.round()),
-            onChangeEnd: (v) => _sendInt('GMCI3', v.round()),
+            onChangeEnd: (v) => _client.writeInt('GMCI3', v.round()),
           ),
-          _labeledSlider(
+          LabeledSliderRow(
             label: 'Horizontal Arc',
             value: _curved.gmci7.toDouble(),
             min: -40,
             max: 40,
             onChanged: (v) => setState(() => _curved.gmci7 = v.round()),
-            onChangeEnd: (v) => _sendInt('GMCI7', v.round()),
+            onChangeEnd: (v) => _client.writeInt('GMCI7', v.round()),
           ),
-          _labeledSlider(
+          LabeledSliderRow(
             label: 'Vertical Keystone',
             value: _curved.gmcs8,
             min: -40,
@@ -782,9 +634,9 @@ class _GeometryCorrectionDialogState
               () => _curved.gmcs8 = double.parse(v.toStringAsFixed(1)),
             ),
             onChangeEnd: (v) =>
-                _sendDeg('GMCS8', double.parse(v.toStringAsFixed(1))),
+                _client.writeDeg('GMCS8', double.parse(v.toStringAsFixed(1))),
           ),
-          _labeledSlider(
+          LabeledSliderRow(
             label: 'Horizontal Keystone',
             value: _curved.gmcs9,
             min: -15,
@@ -794,29 +646,29 @@ class _GeometryCorrectionDialogState
               () => _curved.gmcs9 = double.parse(v.toStringAsFixed(1)),
             ),
             onChangeEnd: (v) =>
-                _sendDeg('GMCS9', double.parse(v.toStringAsFixed(1))),
+                _client.writeDeg('GMCS9', double.parse(v.toStringAsFixed(1))),
           ),
-          _labeledSlider(
+          LabeledSliderRow(
             label: 'Vertical Balance',
             value: _curved.gmci2.toDouble(),
             min: -60,
             max: 60,
             onChanged: (v) => setState(() => _curved.gmci2 = v.round()),
-            onChangeEnd: (v) => _sendInt('GMCI2', v.round()),
+            onChangeEnd: (v) => _client.writeInt('GMCI2', v.round()),
           ),
-          _labeledSlider(
+          LabeledSliderRow(
             label: 'Horizontal Balance',
             value: _curved.gmci6.toDouble(),
             min: -30,
             max: 30,
             onChanged: (v) => setState(() => _curved.gmci6 = v.round()),
-            onChangeEnd: (v) => _sendInt('GMCI6', v.round()),
+            onChangeEnd: (v) => _client.writeInt('GMCI6', v.round()),
           ),
           _throwRatioField(
             value: _curved.gmcs0,
             onCommit: (v) {
               setState(() => _curved.gmcs0 = v);
-              _sendThrow('GMCS0', v);
+              _client.writeThrow('GMCS0', v);
             },
           ),
           Row(
@@ -832,7 +684,7 @@ class _GeometryCorrectionDialogState
                 value: _curved.gmcia,
                 onChanged: (v) {
                   setState(() => _curved.gmcia = v);
-                  _sendBool('GMCIA', v);
+                  _client.writeBool('GMCIA', v);
                 },
               ),
             ],
@@ -910,66 +762,6 @@ class _GeometryCorrectionDialogState
     );
   }
 
-  // Slider with label/stepper row above; full-width track.
-  Widget _labeledSlider({
-    required String label,
-    required double value,
-    required double min,
-    required double max,
-    required ValueChanged<double> onChanged,
-    required ValueChanged<double> onChangeEnd,
-    double step = 1.0,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(color: Colors.white70, fontSize: 13),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: SliderTheme(
-                data: SliderTheme.of(context).copyWith(
-                  trackHeight: 2,
-                  thumbShape: const RoundSliderThumbShape(
-                    enabledThumbRadius: 6,
-                  ),
-                  tickMarkShape: SliderTickMarkShape.noTickMark,
-                ),
-                child: Slider(
-                  value: value.clamp(min, max),
-                  min: min,
-                  max: max,
-                  divisions: ((max - min) / step).round(),
-                  onChanged: onChanged,
-                  onChangeEnd: onChangeEnd,
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
-            SleekStepperInput(
-              initialValue: _cleanStr(value),
-              min: min,
-              max: max,
-              step: step,
-              onValueChanged: (s) {
-                final v = double.tryParse(s);
-                if (v != null) {
-                  onChanged(v);
-                  onChangeEnd(v);
-                }
-              },
-            ),
-          ],
-        ),
-        const SizedBox(height: 24),
-      ],
-    );
-  }
-
   Widget _throwRatioField({
     required double value,
     required ValueChanged<double> onCommit,
@@ -977,9 +769,12 @@ class _GeometryCorrectionDialogState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Lens Throw Ratio',
-          style: TextStyle(color: Colors.white70, fontSize: 13),
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            fontSize: 13,
+          ),
         ),
         const SizedBox(height: 8),
         Row(

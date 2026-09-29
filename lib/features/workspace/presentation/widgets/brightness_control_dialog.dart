@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/projector_node.dart';
-import '../../../../core/services/panasonic_protocol_service.dart';
+import '../providers/protocol_service_provider.dart';
 import 'command_failure_notice.dart';
+import 'common/projector_settings_client.dart';
 import 'dialog_title_bar.dart';
 
 // Operating mode enum matching Panasonic OPEI1 protocol values.
@@ -44,28 +46,30 @@ enum _OperatingMode {
   bool get isUserMode => this == user1 || this == user2 || this == user3;
 }
 
-class BrightnessControlDialog extends StatefulWidget {
+class BrightnessControlDialog extends ConsumerStatefulWidget {
   final ProjectorNode node;
 
   const BrightnessControlDialog({super.key, required this.node});
 
   @override
-  State<BrightnessControlDialog> createState() =>
+  ConsumerState<BrightnessControlDialog> createState() =>
       _BrightnessControlDialogState();
 }
 
-class _BrightnessControlDialogState extends State<BrightnessControlDialog> {
-  final _service = PanasonicProtocolService();
+class _BrightnessControlDialogState
+    extends ConsumerState<BrightnessControlDialog> {
+  late final _client = ProjectorSettingsClient(
+    service: ref.read(protocolServiceProvider),
+    node: widget.node,
+    onFailure: (cmd) {
+      if (mounted) notifyCommandFailure(context, cmd);
+    },
+  );
 
   bool _loading = true;
   _OperatingMode _mode = _OperatingMode.normal;
   double _lightOutput = 100.0; // percentage 8–100
   double _maxLightOutput = 100.0; // percentage 8–100
-
-  String get _ip => widget.node.ipAddress;
-  int get _port => widget.node.port;
-  String get _login => widget.node.login;
-  String get _password => widget.node.password;
 
   @override
   void initState() {
@@ -77,82 +81,31 @@ class _BrightnessControlDialogState extends State<BrightnessControlDialog> {
   // 80 = 8%, 1000 = 100% (linear).
   static double _toPercent(int v) => 8.0 + (v - 80) / 920 * 92;
   static int _toProtocol(double pct) => (80 + (pct - 8) / 92 * 920).round();
-  static String _fmt(int v) => '+${v.toString().padLeft(5, '0')}';
 
   Future<void> _loadValues() async {
-    final results = await Future.wait([
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:OPEI1'),
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:LOPI2'),
-      _service.sendRawCommand(_ip, _port, _login, _password, 'QVX:LOPI3'),
-    ]);
+    final (modeRaw, lopi2, lopi3) = await (
+      _client.readValue('OPEI1'),
+      _client.readInt('LOPI2'),
+      _client.readInt('LOPI3'),
+    ).wait;
 
     if (!mounted) return;
 
-    final modeRaw = _parseValue(results[0], 'OPEI1');
     if (modeRaw != null) _mode = _OperatingMode.fromProtocol(modeRaw);
-
-    final lopi2 = _parseInt(results[1], 'LOPI2');
     if (lopi2 != null) _lightOutput = _toPercent(lopi2).clamp(8.0, 100.0);
-
-    final lopi3 = _parseInt(results[2], 'LOPI3');
     if (lopi3 != null) _maxLightOutput = _toPercent(lopi3).clamp(8.0, 100.0);
 
     setState(() => _loading = false);
   }
 
-  // Extract value after "KEY=" from a protocol response string.
-  String? _parseValue(String? response, String key) {
-    if (response == null) return null;
-    final idx = response.indexOf('$key=');
-    if (idx < 0) return null;
-    return response.substring(idx + key.length + 1).trim();
-  }
+  Future<void> _sendMode(_OperatingMode mode) =>
+      _client.writeRaw('VXX:OPEI1=${mode.protocolValue}');
 
-  int? _parseInt(String? response, String key) {
-    final raw = _parseValue(response, key);
-    if (raw == null) return null;
-    return int.tryParse(raw.replaceAll('+', '').replaceAll('-', ''));
-  }
+  Future<void> _sendLightOutput(double pct) =>
+      _client.writeInt('LOPI2', _toProtocol(pct));
 
-  void _notifyFailure(String cmd) {
-    if (mounted) notifyCommandFailure(context, cmd);
-  }
-
-  Future<void> _sendMode(_OperatingMode mode) async {
-    final cmd = 'VXX:OPEI1=${mode.protocolValue}';
-    final response = await _service.sendRawCommand(
-      _ip,
-      _port,
-      _login,
-      _password,
-      cmd,
-    );
-    if (response == null) _notifyFailure(cmd);
-  }
-
-  Future<void> _sendLightOutput(double pct) async {
-    final cmd = 'VXX:LOPI2=${_fmt(_toProtocol(pct))}';
-    final response = await _service.sendRawCommand(
-      _ip,
-      _port,
-      _login,
-      _password,
-      cmd,
-    );
-    if (response == null) _notifyFailure(cmd);
-  }
-
-  Future<void> _sendMaxLightOutput(double pct) async {
-    final cmd = 'VXX:LOPI3=${_fmt(_toProtocol(pct))}';
-    final response = await _service.sendRawCommand(
-      _ip,
-      _port,
-      _login,
-      _password,
-      cmd,
-    );
-    if (response == null) _notifyFailure(cmd);
-  }
+  Future<void> _sendMaxLightOutput(double pct) =>
+      _client.writeInt('LOPI3', _toProtocol(pct));
 
   @override
   Widget build(BuildContext context) {
