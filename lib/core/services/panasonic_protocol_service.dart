@@ -338,10 +338,10 @@ class PanasonicProtocolService {
     final Map<String, dynamic> telemetry = {};
     telemetry['modelName'] = modelResponse;
 
-    // Run the 11 remaining telemetry queries with bounded concurrency rather
-    // than one at a time (which would pay every round-trip's latency 11
-    // times over per node, per poll cycle) or all 11 at once (which used to
-    // open up to 11 simultaneous TCP connections to the same projector —
+    // Run the 12 remaining telemetry queries with bounded concurrency rather
+    // than one at a time (which would pay every round-trip's latency 12
+    // times over per node, per poll cycle) or all 12 at once (which used to
+    // open up to 12 simultaneous TCP connections to the same projector —
     // this device class's embedded TCP/IP stack commonly supports only a
     // handful of connections total, shared across its web UI, control port,
     // etc., so a 10-wide burst risked ERR3 ["busy"] and false-offline
@@ -359,6 +359,7 @@ class PanasonicProtocolService {
       () => _sendSingleCommand(ip, port, login, password, 'QTM:1'),
       () => _sendSingleCommand(ip, port, login, password, 'QVX:VMOI2'),
       () => _sendSingleCommand(ip, port, login, password, 'QVX:ERRS2'),
+      () => _sendSingleCommand(ip, port, login, password, 'QTS'),
     ], concurrency);
 
     // QID succeeding while every follow-up query fails means the projector
@@ -392,6 +393,7 @@ class PanasonicProtocolService {
     telemetry['exhaustTemp'] = valueOrNull(results[8]);
     telemetry['acVoltage'] = valueOrNull(results[9]);
     telemetry['errors'] = valueOrNull(results[10]);
+    telemetry['testPattern'] = valueOrNull(results[11]);
 
     final status = isProtected ? ProbeResult.online : ProbeResult.unprotected;
     return (status, telemetry);

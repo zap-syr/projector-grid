@@ -186,6 +186,7 @@ void main() {
         'QTM:1': '0041/0106',
         'QVX:VMOI2': 'VMOI2=+00230',
         'QVX:ERRS2': 'ERRS2=',
+        'QTS': '07',
       });
       final (probe, t) = await poll();
       expect(probe, ProbeResult.unprotected);
@@ -202,6 +203,7 @@ void main() {
         'exhaustTemp': '0041/0106',
         'acVoltage': 'VMOI2=+00230',
         'errors': 'ERRS2=',
+        'testPattern': '07',
       });
     });
 

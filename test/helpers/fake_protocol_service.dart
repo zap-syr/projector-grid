@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:projector_grid/core/services/panasonic_protocol_service.dart';
 
 /// Scriptable stand-in for [PanasonicProtocolService] — never opens a socket.
@@ -11,9 +13,16 @@ class FakeProtocolService extends PanasonicProtocolService {
   /// `sendCommand` result per IP. Unset IPs succeed.
   final Map<String, bool> commandSucceeds = {};
 
+  /// `sendCommand` to these IPs doesn't answer until the completer does —
+  /// a projector that stopped responding mid-command.
+  final Map<String, Completer<void>> holdCommands = {};
+
   /// `sendRawCommand` / `sendRawCommandPreservingErrorCodes` reply per
   /// command. Unset commands return null (transport failure).
   final Map<String, String?> rawResponses = {};
+
+  /// Per-IP overrides of [rawResponses], checked first.
+  final Map<String, Map<String, String?>> rawResponsesByIp = {};
 
   final List<(String ip, String cmd)> sentCommands = [];
   final List<(String ip, String cmd)> sentRaw = [];
@@ -32,6 +41,7 @@ class FakeProtocolService extends PanasonicProtocolService {
     String cmd,
   ) async {
     sentCommands.add((ip, cmd));
+    await holdCommands[ip]?.future;
     return commandSucceeds[ip] ?? true;
   }
 
@@ -44,7 +54,7 @@ class FakeProtocolService extends PanasonicProtocolService {
     String cmd,
   ) async {
     sentRaw.add((ip, cmd));
-    return _raw(cmd);
+    return _raw(ip, cmd);
   }
 
   @override
@@ -56,10 +66,12 @@ class FakeProtocolService extends PanasonicProtocolService {
     String cmd,
   ) async {
     sentRaw.add((ip, cmd));
-    return _raw(cmd);
+    return _raw(ip, cmd);
   }
 
-  String? _raw(String cmd) {
+  String? _raw(String ip, String cmd) {
+    final perIp = rawResponsesByIp[ip];
+    if (perIp != null && perIp.containsKey(cmd)) return perIp[cmd];
     if (rawResponses.containsKey(cmd)) return rawResponses[cmd];
     // Writes (`VXX:KEY=value`) succeed and echo back unless scripted.
     if (cmd.contains('=')) return cmd.substring(4);
@@ -93,6 +105,7 @@ Map<String, dynamic> telemetry({
   String? exhaustTemp = '0041/0106',
   String? acVoltage = 'VMOI2=+00230',
   String? errors = 'ERRS2=',
+  String? testPattern = '00',
 }) => {
   'modelName': modelName,
   'serialNumber': serialNumber,
@@ -106,4 +119,5 @@ Map<String, dynamic> telemetry({
   'exhaustTemp': exhaustTemp,
   'acVoltage': acVoltage,
   'errors': errors,
+  'testPattern': testPattern,
 };

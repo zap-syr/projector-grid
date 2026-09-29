@@ -5,11 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../../domain/card_layout.dart';
 import '../../domain/dispatch_result.dart';
 import '../../domain/projector_node.dart';
 import '../../domain/projector_group.dart';
 import '../../domain/log_event.dart';
 import '../../domain/telemetry_parsing.dart';
+import '../../domain/test_patterns.dart';
 import '../../../../core/services/panasonic_protocol_service.dart';
 import '../../../../core/services/projector_web_status_service.dart';
 import 'app_settings_provider.dart';
@@ -159,6 +161,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
             errors: '-',
             input: '-',
             signal: '-',
+            testPattern: null,
           ),
         )
         .toList();
@@ -199,6 +202,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
           errors: live.errors,
           input: live.input,
           signal: live.signal,
+          testPattern: live.testPattern,
         );
       }
       return saved;
@@ -447,7 +451,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
     _startPolling(seconds: seconds);
   }
 
-  /// Caps how many of a single node's 10 telemetry queries run concurrently
+  /// Caps how many of a single node's 12 telemetry queries run concurrently
   /// (see [PanasonicProtocolService.pollProjectorTelemetry]). A flagship
   /// PT-RQ25KE sustains 2-3 concurrent NTCONTROL cycles indefinitely but at 5
   /// its throughput halves and p95 latency jumps ~10x; weaker models fare
@@ -463,7 +467,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
 
   /// Polls every node in batches of [_networkBatchSize] concurrently, rather
   /// than awaiting each node's full telemetry chain in sequence. A single
-  /// node's own poll (probe + up to 10 telemetry commands) still happens as
+  /// node's own poll (probe + up to 12 telemetry commands) still happens as
   /// one connect-per-command sequence internally — batching only overlaps
   /// *different* nodes' polls with each other, which is what keeps a full
   /// cycle from taking N-times-longer as the projector count grows.
@@ -755,6 +759,9 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
             exhaustTemp: exhaust,
             acVoltage: voltage,
             errors: errors,
+            testPattern:
+                parseTestPattern(telemetry['testPattern'] as String?) ??
+                n.testPattern,
             connectionStatus: targetStatus,
           );
         }
@@ -803,8 +810,8 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
     }
   }
 
-  static const double _cardWidth = 120;
-  static const double _cardHeight = 100;
+  static const double _cardWidth = kCardWidth;
+  static const double _cardHeight = kCardHeight;
   static const double _gridOriginX = 40;
   static const double _gridOriginY = 40;
   static const double _gridHGap = 20;
@@ -1163,8 +1170,18 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
     }
   }
 
+  /// Reflects a command another provider sent straight through the protocol
+  /// service (Alignment mode) the same way [_dispatchToNodes] does.
+  void noteCommandSent(String nodeId, String cmd) =>
+      _applyOptimisticUpdate(nodeId, cmd);
+
   void _applyOptimisticUpdate(String nodeId, String cmd) {
-    if (cmd == 'PON') {
+    if (cmd.startsWith('OTS:')) {
+      state = state
+          .map((n) => n.id == nodeId ? n.copyWith(testPattern: cmd) : n)
+          .toList();
+      _notifyStateChanged();
+    } else if (cmd == 'PON') {
       _startPowerTransitionTracking(
         nodeId,
         PowerStatus.turningOn,
@@ -1373,8 +1390,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
   void selectNodesInRect(Rect selectionRect, {bool append = false}) {
     final next = <String>{};
     for (final node in state) {
-      // Fixed size for cards for intersection logic (120x100 based on 6x5 grid cells)
-      final nodeRect = Rect.fromLTWH(node.x, node.y, 120, 100);
+      final nodeRect = Rect.fromLTWH(node.x, node.y, kCardWidth, kCardHeight);
       final isOverlapping = selectionRect.overlaps(nodeRect);
 
       if (append) {

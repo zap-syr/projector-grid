@@ -43,6 +43,10 @@ abstract class ProjectorNode with _$ProjectorNode {
     @Default('-') String errors,
     @Default('-') String input,
     @Default('-') String signal,
+
+    /// Active test pattern as its `OTS:xx` command (`OTS:00` = off); null
+    /// until first polled.
+    String? testPattern,
     String? groupId,
   }) = _ProjectorNode;
 }

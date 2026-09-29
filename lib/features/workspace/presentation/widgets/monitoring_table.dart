@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../providers/app_settings_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../../domain/projector_group.dart';
 import '../../domain/projector_node.dart';
+import '../../domain/test_patterns.dart';
 
 const double _kRowHeight = 40;
 const EdgeInsets _kCellPadding = EdgeInsets.symmetric(horizontal: 16);
@@ -366,6 +368,15 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
       cell: (_, n, _) => _CellText(n.signal),
     ),
     _Column(
+      id: 'testPattern',
+      label: 'Test Pattern',
+      defaultWidth: 170,
+      iconPad: 24,
+      text: (n, _) => _testPatternText(n),
+      sortKey: (n, _) => _testPatternText(n).toLowerCase(),
+      cell: (context, n, _) => _testPatternCell(context, n),
+    ),
+    _Column(
       id: 'runtime',
       label: 'Projector Runtime',
       defaultWidth: 150,
@@ -469,6 +480,41 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
   }
 
   // ── Static value helpers ────────────────────────────────────────────────
+
+  /// Name with the same pattern thumbnail as the control bar; Off and
+  /// not-yet-polled rows show the text alone.
+  static Widget _testPatternCell(BuildContext context, ProjectorNode n) {
+    final code = n.testPattern;
+    if (!isTestPatternActive(code)) return _CellText(_testPatternText(n));
+    final colorScheme = Theme.of(context).colorScheme;
+    final icon = kTestPatternIcons[code];
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 18,
+          height: 12,
+          decoration: BoxDecoration(
+            border: Border.all(color: colorScheme.outlineVariant, width: 0.5),
+          ),
+          child: icon != null
+              ? SvgPicture.asset(icon, fit: BoxFit.cover)
+              : Icon(
+                  Icons.grid_on,
+                  size: 10,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+        ),
+        _gap6,
+        Flexible(child: _CellText(_testPatternText(n))),
+      ],
+    );
+  }
+
+  static String _testPatternText(ProjectorNode n) {
+    final code = n.testPattern;
+    return code == null ? '-' : testPatternLabel(code);
+  }
 
   static ProjectorGroup? _groupOf(
     ProjectorNode n,

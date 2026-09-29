@@ -498,4 +498,22 @@ void main() {
       expect(fake.pollCount, 1);
     });
   });
+
+  group('test pattern', () {
+    test('polled from QTS and updated optimistically on OTS', () async {
+      final c = makeContainer(fake);
+      final ws = c.read(workspaceProvider.notifier);
+      fake.pollResults['10.0.0.1'] = (
+        ProbeResult.online,
+        telemetry(testPattern: '70'),
+      );
+      ws.setNodes([node('1')]);
+      await ws.refreshAll();
+      expect(c.read(workspaceProvider).single.testPattern, 'OTS:70');
+
+      c.read(selectionProvider.notifier).set({'1'});
+      await ws.sendCommandToSelected('OTS:00');
+      expect(c.read(workspaceProvider).single.testPattern, 'OTS:00');
+    });
+  });
 }
