@@ -8,18 +8,20 @@ import 'package:window_manager/window_manager.dart';
 import '../../domain/projector_node.dart';
 import '../../domain/projector_group.dart';
 import '../../domain/log_event.dart';
+import '../../domain/telemetry_parsing.dart';
 import '../../../../core/services/panasonic_protocol_service.dart';
 import '../../../../core/services/projector_web_status_service.dart';
 import 'app_settings_provider.dart';
 import 'event_log_provider.dart';
 import 'selection_provider.dart';
 import 'poll_status_provider.dart';
+import 'protocol_service_provider.dart';
 
 part 'workspace_provider.g.dart';
 
 @riverpod
 class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
-  final _protocolService = PanasonicProtocolService();
+  late PanasonicProtocolService _protocolService;
   final _webStatusService = ProjectorWebStatusService();
   Timer? _pollingTimer;
   int _pollingIntervalSeconds = AppSettings.defaultPollingIntervalSeconds;
@@ -55,6 +57,8 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
 
   @override
   List<ProjectorNode> build() {
+    _protocolService = ref.read(protocolServiceProvider);
+
     // Start polling when provider initializes, honouring the persisted interval
     // (build() otherwise defaulted to 60s until the user re-saved Preferences).
     _startPolling(
@@ -534,77 +538,8 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
     return true;
   }
 
-  /// Formats a raw `QTM` temperature reading for the Monitoring table. The
-  /// usual reply is a `<celsius>/<fahrenheit>` pair whose Celsius half carries
-  /// a 2-char prefix that gets stripped; some non-standard firmware sends a
-  /// single bare value. A transient `Timeout`, an `ERxxx` code, or an empty
-  /// reply renders as `-` rather than e.g. `Timeout°C`, and a Celsius segment
-  /// shorter than the prefix no longer throws a RangeError.
-  static String _formatTemp(String raw) {
-    final celsius = raw.contains('/') ? raw.split('/').first : raw;
-    final value = raw.contains('/') && celsius.length > 2
-        ? celsius.substring(2)
-        : celsius;
-    return RegExp(r'^-?\d+(\.\d+)?$').hasMatch(value) ? '$value°C' : '-';
-  }
-
-  /// Inserts thousands separators: `2185` → `2,185`. No `intl` dependency for
-  /// one call site.
-  static String _groupThousands(int n) => n.toString().replaceAllMapped(
-    RegExp(r'\B(?=(\d{3})+(?!\d))'),
-    (_) => ',',
-  );
-
-  static String _mapInputCode(String input) => switch (input) {
-    'HD1' => 'HDMI 1',
-    'HD2' => 'HDMI 2',
-    'SD1' => 'SDI 1',
-    'SD2' => 'SDI 2',
-    'DL1' => 'DIGITAL LINK',
-    'DVI' => 'DVI-D',
-    'DP1' => 'DISPLAY PORT',
-    'RG1' => 'COMPUTER 1',
-    'RG2' => 'COMPUTER 2',
-    'VID' => 'VIDEO',
-    'SVD' => 'Y/C',
-    _ => input,
-  };
-
-  /// Parses `QVX:POWI1`'s `POWI1=+0000N` reply into a [PowerStatus]. Returns
-  /// null for a transport failure (already filtered to null upstream) or any
-  /// unrecognized reply, so callers fall back to the last known status
-  /// instead of guessing one.
-  static PowerStatus? _parsePowerStatus(String? raw) {
-    final suffix = raw?.split('=').last.trim();
-    return switch (suffix) {
-      '+00001' => PowerStatus.standby,
-      '+00002' => PowerStatus.turningOn,
-      '+00003' => PowerStatus.on,
-      '+00004' => PowerStatus.cooling,
-      _ => null,
-    };
-  }
-
   static String _formatWebInput(WebSignalStatus webSignal, String fallback) =>
-      webSignal.input.isNotEmpty
-      ? _mapWebInputLabel(webSignal.input)
-      : fallback;
-
-  // The web status page uses its own compact spelling for INPUT — confirmed
-  // as `HDMI1` (see REMOTE_PREVIEW_PLAN.md §3.4), not NTCONTROL's short codes
-  // (`HD1`) that _mapInputCode handles, so that map's default case was
-  // passing it through unchanged — "HDMI1" in the Monitoring table right
-  // next to NTCONTROL-sourced rows reading "HDMI 1". Reuses _mapInputCode
-  // for the handful of names that do match verbatim (e.g. if a firmware
-  // variant reports NTCONTROL-style codes here too), then normalizes the
-  // common "LETTERSdigits" compact style into this app's "LETTERS digits"
-  // one used everywhere else.
-  static String _mapWebInputLabel(String input) {
-    final mapped = _mapInputCode(input);
-    if (mapped != input) return mapped;
-    final m = RegExp(r'^([A-Za-z]+)(\d+)$').firstMatch(input);
-    return m != null ? '${m.group(1)} ${m.group(2)}' : input;
-  }
+      webSignal.input.isNotEmpty ? mapWebInputLabel(webSignal.input) : fallback;
 
   // Resolution/frame-rate only, no frequency — matches NTCONTROL's own
   // format so Monitoring shows one consistent style regardless of source.
@@ -628,8 +563,12 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
     // as-is instead of NTCONTROL's own reading and instead of triggering the
     // Standby fallback fetch above. See [applyWebSignal]'s doc comment for why.
     WebSignalStatus? webSignalOverride,
+    // What the node was before a caller already flipped it optimistically
+    // (see _checkAndSetNodeStatus) — so status-transition log events still
+    // see the real transition, not the optimistic intermediate state.
+    ConnectionStatus? previousStatus,
   }) async {
-    final oldStatus = node.connectionStatus;
+    final oldStatus = previousStatus ?? node.connectionStatus;
     final oldErrors = node.errors;
 
     // pollProjectorTelemetry folds in what used to be a separate
@@ -715,14 +654,12 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
       // projector actually answering — treated the same as "unusable" so the
       // Standby web-status fallback still kicks in; the signal field itself
       // falls back to what's already displayed, not a guess (below).
-      final rawSignal = (telemetry['signal'] as String?)
-          ?.replaceAll('NSGS1=', '')
-          .trim();
+      final rawSignal = stripSignalKey(telemetry['signal'] as String?);
       final ntSignalUnusable = isUnusableSignalValue(rawSignal);
       // Likewise, a failed QVX:POWI1 query can't tell us the power state —
       // assume whatever was last known rather than defaulting to Standby.
       final powerRaw = telemetry['power'] as String?;
-      final powerStatus = _parsePowerStatus(powerRaw) ?? node.powerStatus;
+      final powerStatus = parsePowerStatus(powerRaw) ?? node.powerStatus;
       // No live signal in Standby *or* Cooling (no picture in either), so
       // the web-status fallback below covers both, not just Standby.
       final isStandbyLike =
@@ -764,12 +701,8 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
           // Otherwise, defer to a just-applied web value per-field only while
           // NTCONTROL's own reading still matches what it read before that
           // write (see withinWebSignalGrace / webSignalBaseline above).
-          final ntInput = _mapInputCode(telemetry['input'] ?? n.input);
-          final ntSignal = rawSignal == null
-              ? n.signal
-              : (rawSignal.isEmpty || rawSignal == 'ER401'
-                    ? 'NO SIGNAL'
-                    : rawSignal);
+          final ntInput = mapInputCode(telemetry['input'] ?? n.input);
+          final ntSignal = formatSignal(rawSignal, fallback: n.signal);
           final deferInput =
               withinWebSignalGrace && ntInput == webSignalBaseline.input;
           final deferSignal =
@@ -781,72 +714,30 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
               ? _formatWebSignal(webSignal)
               : (deferSignal ? n.signal : ntSignal);
 
-          // Parse Projector Runtime — QVX:RTMS1 replies "RTMS1=<hours>".
-          final runtimeRaw = (telemetry['runtime'] as String?)
-              ?.replaceAll('RTMS1=', '')
-              .trim();
-          String runtime;
-          if (runtimeRaw == null) {
-            runtime = n.runtime;
-          } else {
-            final runtimeHours = int.tryParse(runtimeRaw);
-            runtime = runtimeHours != null
-                ? '${_groupThousands(runtimeHours)}H'
-                : (runtimeRaw.isEmpty || runtimeRaw == 'ER401'
-                      ? '-'
-                      : '${runtimeRaw}H');
-          }
-
-          // Parse Light Runtime — the QVX:LRTS3=00 reply carries the
-          // light-source on-time in hours after the last ':', same unit as
-          // RTMS1 (e.g. "LRTS3=00:1577"). Lamp models answer ER401 (no ':')
-          // and timeouts have no digits → "-".
-          final lightRaw = (telemetry['lightRuntime'] as String?)?.trim();
-          String lightRuntime;
-          if (lightRaw == null) {
-            lightRuntime = n.lightRuntime;
-          } else {
-            final lightColon = lightRaw.lastIndexOf(':');
-            final lightHours = lightColon < 0
-                ? null
-                : int.tryParse(lightRaw.substring(lightColon + 1).trim());
-            lightRuntime = lightHours == null
-                ? '-'
-                : '${_groupThousands(lightHours)}H';
-          }
-
-          final intakeRaw = telemetry['intakeTemp'] as String?;
-          final intake = intakeRaw == null
-              ? n.intakeTemp
-              : _formatTemp(intakeRaw);
-          final exhaustRaw = telemetry['exhaustTemp'] as String?;
-          final exhaust = exhaustRaw == null
-              ? n.exhaustTemp
-              : _formatTemp(exhaustRaw);
-
-          // Parse Voltage
-          final voltageRaw = (telemetry['acVoltage'] as String?)
-              ?.replaceAll('VMOI2=', '')
-              .trim();
-          String voltage;
-          if (voltageRaw == null) {
-            voltage = n.acVoltage;
-          } else {
-            voltage = '-';
-            if (voltageRaw != 'ER401' && voltageRaw.length > 3) {
-              voltage = '${voltageRaw.substring(3)}V';
-            } else if (voltageRaw.length == 3) {
-              voltage = '${voltageRaw}V';
-            }
-          }
-
-          // Parse Errors
-          final errorsRaw = (telemetry['errors'] as String?)
-              ?.replaceAll('ERRS2=', '')
-              .trim();
-          final errors = errorsRaw == null
-              ? n.errors
-              : (errorsRaw.isEmpty ? 'NO ERRORS' : errorsRaw);
+          final runtime = formatRuntime(
+            telemetry['runtime'] as String?,
+            fallback: n.runtime,
+          );
+          final lightRuntime = formatLightRuntime(
+            telemetry['lightRuntime'] as String?,
+            fallback: n.lightRuntime,
+          );
+          final intake = formatTemperature(
+            telemetry['intakeTemp'] as String?,
+            fallback: n.intakeTemp,
+          );
+          final exhaust = formatTemperature(
+            telemetry['exhaustTemp'] as String?,
+            fallback: n.exhaustTemp,
+          );
+          final voltage = formatVoltage(
+            telemetry['acVoltage'] as String?,
+            fallback: n.acVoltage,
+          );
+          final errors = formatErrors(
+            telemetry['errors'] as String?,
+            fallback: n.errors,
+          );
 
           return n.copyWith(
             name: telemetry['modelName'] ?? n.name,
@@ -964,16 +855,32 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
     // Trigger an asynchronous ping for any newly added offline nodes
     for (var node in newNodes) {
       if (node.connectionStatus == ConnectionStatus.offline) {
-        _checkAndSetNodeStatus(node.id, node.ipAddress, node.port);
+        _checkAndSetNodeStatus(
+          node.id,
+          node.ipAddress,
+          node.port,
+          logCameOnline: false,
+        );
       } else if (node.connectionStatus != ConnectionStatus.unauthorized) {
         _pollSingleProjector(node, _telemetryConcurrencyFor(state.length));
       }
     }
   }
 
-  Future<void> _checkAndSetNodeStatus(String id, String ip, int port) async {
+  /// [logCameOnline] is false for the first check of a just-added node — it
+  /// was never actually offline, only not probed yet, so "Came online" there
+  /// would just be noise.
+  Future<void> _checkAndSetNodeStatus(
+    String id,
+    String ip,
+    int port, {
+    bool logCameOnline = true,
+  }) async {
     final isOnline = await _protocolService.checkConnection(ip, port);
     if (isOnline) {
+      final previousStatus = logCameOnline
+          ? state.where((n) => n.id == id).firstOrNull?.connectionStatus
+          : null;
       state = state.map((node) {
         if (node.id == id) {
           return node.copyWith(connectionStatus: ConnectionStatus.connected);
@@ -987,6 +894,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
       await _pollSingleProjector(
         targetNode,
         _telemetryConcurrencyFor(state.length),
+        previousStatus: previousStatus,
       );
     }
   }
@@ -1098,7 +1006,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
                 : ShutterStatus.open,
           );
         case 'QVX:POWI1':
-          final parsed = _parsePowerStatus(response);
+          final parsed = parsePowerStatus(response);
           return parsed == null ? n : n.copyWith(powerStatus: parsed);
         case 'QVX:NSGS1':
           final sig = response.replaceAll('NSGS1=', '').trim();

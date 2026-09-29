@@ -42,7 +42,7 @@ final class ScheduledTasksNotifierProvider
 }
 
 String _$scheduledTasksNotifierHash() =>
-    r'b0dabc772b639aed36858485895e5a92e9a41d34';
+    r'aa068924859a1ca413f12c04eede96af2866da0b';
 
 abstract class _$ScheduledTasksNotifier extends $Notifier<List<ScheduledTask>> {
   List<ScheduledTask> build();

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../domain/log_event.dart';
+import '../../domain/schedule_due.dart';
 import '../../domain/scheduled_task.dart';
 import 'event_log_provider.dart';
 import 'workspace_provider.dart';
@@ -27,8 +28,13 @@ class ScheduledTasksNotifier extends _$ScheduledTasksNotifier {
 
   void _scheduleNextTick() {
     final now = DateTime.now();
-    final nextMinute = DateTime(now.year, now.month, now.day, now.hour, now.minute)
-        .add(const Duration(minutes: 1));
+    final nextMinute = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      now.hour,
+      now.minute,
+    ).add(const Duration(minutes: 1));
     _schedulerTimer = Timer(nextMinute.difference(now), () {
       _scheduleNextTick();
       _checkAndExecuteTasks();
@@ -39,50 +45,9 @@ class ScheduledTasksNotifier extends _$ScheduledTasksNotifier {
     final now = DateTime.now();
     for (final task in List<ScheduledTask>.from(state)) {
       if (!task.enabled) continue;
-      if (!_isDue(task, now)) continue;
+      if (!isTaskDue(task, now)) continue;
       await _execute(task, now);
     }
-  }
-
-  bool _isDue(ScheduledTask task, DateTime now) {
-    switch (task.scheduleType) {
-      case ScheduleType.once:
-        if (task.oneTimeAt == null || task.lastRunAt != null) return false;
-        return now.isAfter(task.oneTimeAt!);
-
-      case ScheduleType.daily:
-        if (task.timeOfDay == null) return false;
-        final (dh, dm) = _parseTime(task.timeOfDay!);
-        return now.hour == dh &&
-            now.minute == dm &&
-            !_ranThisMinute(task.lastRunAt, now);
-
-      case ScheduleType.weekly:
-        if (task.timeOfDay == null ||
-            task.weekdays == null ||
-            task.weekdays!.isEmpty) {
-          return false;
-        }
-        if (!task.weekdays!.contains(now.weekday)) { return false; }
-        final (wh, wm) = _parseTime(task.timeOfDay!);
-        return now.hour == wh &&
-            now.minute == wm &&
-            !_ranThisMinute(task.lastRunAt, now);
-    }
-  }
-
-  (int, int) _parseTime(String timeOfDay) {
-    final parts = timeOfDay.split(':');
-    return (int.parse(parts[0]), int.parse(parts[1]));
-  }
-
-  bool _ranThisMinute(DateTime? lastRunAt, DateTime now) {
-    if (lastRunAt == null) return false;
-    return lastRunAt.year == now.year &&
-        lastRunAt.month == now.month &&
-        lastRunAt.day == now.day &&
-        lastRunAt.hour == now.hour &&
-        lastRunAt.minute == now.minute;
   }
 
   Future<void> _execute(ScheduledTask task, DateTime now) async {
@@ -95,12 +60,13 @@ class ScheduledTasksNotifier extends _$ScheduledTasksNotifier {
       await wsNotifier.sendCommandToGroup(task.targetGroupId!, task.command);
     }
 
-    logNotifier.log(LogEvent(
-      severity: LogSeverity.info,
-      type: LogEventType.command,
-      message:
-          '[Scheduler] "${task.name}"',
-    ));
+    logNotifier.log(
+      LogEvent(
+        severity: LogSeverity.info,
+        type: LogEventType.command,
+        message: '[Scheduler] "${task.name}"',
+      ),
+    );
 
     state = state.map((t) {
       if (t.id != task.id) return t;

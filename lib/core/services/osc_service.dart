@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:async';
+
 import 'package:osc/osc.dart';
 import 'package:flutter/foundation.dart';
 
@@ -218,7 +219,9 @@ class OscService {
         }
       });
 
-      debugPrint('OSC: Listening on ${bindAddress.address}:$receivePort → sending to $_sendIp:$_sendPort');
+      debugPrint(
+        'OSC: Listening on ${bindAddress.address}:$receivePort → sending to $_sendIp:$_sendPort',
+      );
     } catch (e) {
       debugPrint('OSC: Failed to start — $e');
       _isActive = false;
@@ -242,6 +245,11 @@ class OscService {
     }
   }
 
+  /// Routes [msg] exactly as if it had arrived on the socket, without binding
+  /// one.
+  @visibleForTesting
+  void processMessage(OSCMessage msg) => _processMessage(msg);
+
   void _processMessage(OSCMessage msg) {
     final address = msg.address;
 
@@ -258,16 +266,24 @@ class OscService {
         final slug = commandPath.substring('custom/'.length);
         final ntCmd = resolveCustomCommand?.call(slug);
         if (ntCmd != null && onCommand != null) {
-          unawaited(onCommand!(ntcontrolCmd: ntCmd, all: true)
-              .catchError((Object e) => debugPrint('OSC command error: $e')));
+          unawaited(
+            onCommand!(
+              ntcontrolCmd: ntCmd,
+              all: true,
+            ).catchError((Object e) => debugPrint('OSC command error: $e')),
+          );
         } else {
           debugPrint('OSC: Unknown custom command slug: $slug');
         }
       } else {
         final ntCmd = _oscCommandMap[commandPath];
         if (ntCmd != null && onCommand != null) {
-          unawaited(onCommand!(ntcontrolCmd: ntCmd, all: true)
-              .catchError((Object e) => debugPrint('OSC command error: $e')));
+          unawaited(
+            onCommand!(
+              ntcontrolCmd: ntCmd,
+              all: true,
+            ).catchError((Object e) => debugPrint('OSC command error: $e')),
+          );
         } else {
           debugPrint('OSC: Unknown command path: $commandPath');
         }
@@ -296,8 +312,13 @@ class OscService {
         final slug = commandPath.substring('custom/'.length);
         final ntCmd = resolveCustomCommand?.call(slug);
         if (ntCmd != null && onCommand != null) {
-          unawaited(onCommand!(ntcontrolCmd: ntCmd, groupId: groupId, all: false)
-              .catchError((Object e) => debugPrint('OSC command error: $e')));
+          unawaited(
+            onCommand!(
+              ntcontrolCmd: ntCmd,
+              groupId: groupId,
+              all: false,
+            ).catchError((Object e) => debugPrint('OSC command error: $e')),
+          );
         } else {
           debugPrint('OSC: Unknown custom command slug: $slug');
         }
@@ -308,8 +329,13 @@ class OscService {
           return;
         }
         if (onCommand != null) {
-          unawaited(onCommand!(ntcontrolCmd: ntCmd, groupId: groupId, all: false)
-              .catchError((Object e) => debugPrint('OSC command error: $e')));
+          unawaited(
+            onCommand!(
+              ntcontrolCmd: ntCmd,
+              groupId: groupId,
+              all: false,
+            ).catchError((Object e) => debugPrint('OSC command error: $e')),
+          );
         }
       }
       return;

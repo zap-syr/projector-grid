@@ -48,6 +48,7 @@ String commandLabel(String cmd) {
     'VXX:LNSI0=+00001': 'Lens Calibration',
   };
   if (labels.containsKey(cmd)) return labels[cmd]!;
+  if (cmd.startsWith('VXX:LNSI0')) return 'Lens Calibration';
   if (cmd.startsWith('VXX:LNSI3')) return 'Lens Shift V';
   if (cmd.startsWith('VXX:LNSI2')) return 'Lens Shift H';
   if (cmd.startsWith('VXX:LNSI4')) return 'Focus Adjust';

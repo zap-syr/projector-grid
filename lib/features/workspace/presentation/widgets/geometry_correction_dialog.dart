@@ -4,9 +4,12 @@ import 'dart:io' show Platform;
 import 'package:flutter/gestures.dart' show kDoubleTapTimeout;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../domain/geometry_values.dart';
 import '../../domain/projector_node.dart';
 import '../../../../core/services/panasonic_protocol_service.dart';
+import '../providers/protocol_service_provider.dart';
 import 'command_failure_notice.dart';
 import 'custom_tooltip.dart';
 import 'dialog_title_bar.dart';
@@ -75,47 +78,26 @@ class _CurvedState {
 }
 
 // ─── Dialog ─────────────────────────────────────────────────────────────────
-class GeometryCorrectionDialog extends StatefulWidget {
+class GeometryCorrectionDialog extends ConsumerStatefulWidget {
   final ProjectorNode node;
 
   const GeometryCorrectionDialog({super.key, required this.node});
 
   @override
-  State<GeometryCorrectionDialog> createState() =>
+  ConsumerState<GeometryCorrectionDialog> createState() =>
       _GeometryCorrectionDialogState();
 }
 
-class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
-  final _service = PanasonicProtocolService();
+class _GeometryCorrectionDialogState
+    extends ConsumerState<GeometryCorrectionDialog> {
+  late final PanasonicProtocolService _service = ref.read(
+    protocolServiceProvider,
+  );
 
   bool _loading = true;
   bool _modeLoading = false;
   _GeometryMode _mode = _GeometryMode.off;
   final Set<_GeometryMode> _loadedModes = {};
-
-  // Tier A — WUXGA-native panel → 3840x2400 Quad Pixel Drive canvas. Corner
-  // Correction inward limits confirmed live on PT-RQ25K: 960 H / 600 V
-  // (vs the WUXGA-class standard 480 H / 300 V). Outward limits (384/240)
-  // never change, on any model. Matched by numeric model code only (trailing
-  // lens/body-variant letters like K/K2/L stripped) — see
-  // plan/QUAD_PIXEL_DRIVE_CORNER_LIMITS.md for the full model survey.
-  static const _tierAModels = [
-    'PT-RQ25',
-    'PT-RQ45',
-    'PT-RQ35',
-    'PT-RQ18',
-    'PT-REQ15',
-    'PT-REQ12',
-    'PT-REQ10',
-    'PT-REQ80',
-  ];
-
-  // Tier B — WQXGA-native panel → 5120x3200 "4K+" canvas. Real Corner
-  // Correction limits are unconfirmed (no unit available to test), so these
-  // stay at the standard 480/300 limits rather than guess. They do have the
-  // QPDI1 register and still require it ON to enter a geometry mode, so they
-  // still get the auto-enable behavior below.
-  static const _tierBModels = ['PT-RQ32', 'PT-RQ22', 'PT-RQ13'];
 
   // Geometry correction modes require Quad Pixel Drive ON on models that
   // have it — the projector's own menu refuses to enter Keystone/Curved/
@@ -151,13 +133,13 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
     ]);
     if (!mounted) return;
 
-    final modeRaw = _parseValue(results[0], 'GMMI0');
+    final modeRaw = parseKeyedValue(results[0], 'GMMI0');
     if (modeRaw != null) _mode = _GeometryMode.fromProtocol(modeRaw);
 
     final model = results[1] ?? '';
-    _extendedCornerLimits = _tierAModels.any(model.contains);
-    _autoEnableQuadPixelDrive =
-        _extendedCornerLimits || _tierBModels.any(model.contains);
+    final tier = quadPixelTierFor(model);
+    _extendedCornerLimits = tier == QuadPixelTier.a;
+    _autoEnableQuadPixelDrive = tier != QuadPixelTier.none;
 
     setState(() => _loading = false);
     await _ensureModeLoaded(_mode);
@@ -231,7 +213,7 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
     }
     if (!mounted) return;
 
-    int parseAt(int i, String key) => _parseInt(results[i], key) ?? 0;
+    int parseAt(int i, String key) => parseKeyedInt(results[i], key) ?? 0;
 
     _corner
       ..gmfi1 = parseAt(0, 'GMFI1')
@@ -262,11 +244,11 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
     if (!mounted) return;
 
     _keystone
-      ..gmks0 = _parseDouble(results[0], 'GMKS0') ?? 1.5
-      ..gmki4 = _parseInt(results[1], 'GMKI4') ?? 0
-      ..gmki7 = _parseInt(results[2], 'GMKI7') ?? 0
-      ..gmks8 = _parseDouble(results[3], 'GMKS8') ?? 0.0
-      ..gmks9 = _parseDouble(results[4], 'GMKS9') ?? 0.0;
+      ..gmks0 = parseKeyedDouble(results[0], 'GMKS0') ?? 1.5
+      ..gmki4 = parseKeyedInt(results[1], 'GMKI4') ?? 0
+      ..gmki7 = parseKeyedInt(results[2], 'GMKI7') ?? 0
+      ..gmks8 = parseKeyedDouble(results[3], 'GMKS8') ?? 0.0
+      ..gmks9 = parseKeyedDouble(results[4], 'GMKS9') ?? 0.0;
   }
 
   Future<void> _loadCurved() async {
@@ -283,37 +265,14 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
     if (!mounted) return;
 
     _curved
-      ..gmcs0 = _parseDouble(results[0], 'GMCS0') ?? 1.5
-      ..gmci2 = _parseInt(results[1], 'GMCI2') ?? 0
-      ..gmci3 = _parseInt(results[2], 'GMCI3') ?? 0
-      ..gmci6 = _parseInt(results[3], 'GMCI6') ?? 0
-      ..gmci7 = _parseInt(results[4], 'GMCI7') ?? 0
-      ..gmcs8 = _parseDouble(results[5], 'GMCS8') ?? 0.0
-      ..gmcs9 = _parseDouble(results[6], 'GMCS9') ?? 0.0
-      ..gmcia = (_parseInt(results[7], 'GMCIA') ?? 0) == 1;
-  }
-
-  // ─── Response parsing ────────────────────────────────────────────────────
-  String? _parseValue(String? response, String key) {
-    if (response == null) return null;
-    final keyed = '$key=';
-    final idx = response.indexOf(keyed);
-    if (idx >= 0) return response.substring(idx + keyed.length).trim();
-    final eq = response.indexOf('=');
-    if (eq >= 0) return response.substring(eq + 1).trim();
-    return response.trim();
-  }
-
-  int? _parseInt(String? response, String key) {
-    final raw = _parseValue(response, key);
-    if (raw == null) return null;
-    return int.tryParse(raw.replaceAll('+', ''));
-  }
-
-  double? _parseDouble(String? response, String key) {
-    final raw = _parseValue(response, key);
-    if (raw == null) return null;
-    return double.tryParse(raw.replaceAll('+', ''));
+      ..gmcs0 = parseKeyedDouble(results[0], 'GMCS0') ?? 1.5
+      ..gmci2 = parseKeyedInt(results[1], 'GMCI2') ?? 0
+      ..gmci3 = parseKeyedInt(results[2], 'GMCI3') ?? 0
+      ..gmci6 = parseKeyedInt(results[3], 'GMCI6') ?? 0
+      ..gmci7 = parseKeyedInt(results[4], 'GMCI7') ?? 0
+      ..gmcs8 = parseKeyedDouble(results[5], 'GMCS8') ?? 0.0
+      ..gmcs9 = parseKeyedDouble(results[6], 'GMCS9') ?? 0.0
+      ..gmcia = (parseKeyedInt(results[7], 'GMCIA') ?? 0) == 1;
   }
 
   // ─── Formatters ──────────────────────────────────────────────────────────
@@ -321,20 +280,6 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
   static String _cleanStr(double v) {
     final r = v.roundToDouble();
     return v == r ? r.toInt().toString() : v.toStringAsFixed(1);
-  }
-
-  static String _fmtInt(int v) =>
-      '${v >= 0 ? '+' : '-'}${v.abs().toString().padLeft(5, '0')}';
-
-  static String _fmtDeg(double v) {
-    final clamped = double.parse(v.toStringAsFixed(1));
-    return '${clamped >= 0 ? '+' : '-'}${clamped.abs().toStringAsFixed(1)}';
-  }
-
-  static String _fmtThrow(double v) {
-    final clamped = double.parse(v.toStringAsFixed(1));
-    final body = clamped.toStringAsFixed(1).padLeft(4, '0');
-    return '+$body';
   }
 
   // ─── Senders ─────────────────────────────────────────────────────────────
@@ -356,7 +301,7 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
   }
 
   Future<void> _sendInt(String key, int v) async {
-    final cmd = 'VXX:$key=${_fmtInt(v)}';
+    final cmd = 'VXX:$key=${formatNtInt(v)}';
     final response = await _service.sendRawCommand(
       _ip,
       _port,
@@ -368,7 +313,7 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
   }
 
   Future<void> _sendDeg(String key, double v) async {
-    final cmd = 'VXX:$key=${_fmtDeg(v)}';
+    final cmd = 'VXX:$key=${formatNtDeg(v)}';
     final response = await _service.sendRawCommand(
       _ip,
       _port,
@@ -380,7 +325,7 @@ class _GeometryCorrectionDialogState extends State<GeometryCorrectionDialog> {
   }
 
   Future<void> _sendThrow(String key, double v) async {
-    final cmd = 'VXX:$key=${_fmtThrow(v)}';
+    final cmd = 'VXX:$key=${formatNtThrow(v)}';
     final response = await _service.sendRawCommand(
       _ip,
       _port,
@@ -1398,18 +1343,17 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
     _Corner.lr: Offset(400, 250),
   };
 
-  // 1 canvas pixel = 6 projector pixels (1920/320 = 1200/200 = 6.0).
-  // Protocol range ±480 H / ±300 V maps to ±80 / ±50 canvas pixels. This is
-  // the VISUAL scale and never changes with Quad Pixel Drive — QPD doubles
-  // the inward protocol-unit ceiling (480→960, 300→600) because it doubles
-  // the addressing resolution, not because the physical/visual inward reach
-  // gets any bigger. See _toCanvas/_toRaw for the doubled-precision inward
-  // conversion that keeps drag behavior visually identical across models.
-  static const double _scale = 6.0;
-
+  // Protocol range ±480 H / ±300 V maps to ±80 / ±50 canvas pixels at
+  // cornerCanvasScale. This is the VISUAL scale and never changes with Quad
+  // Pixel Drive — QPD doubles the inward protocol-unit ceiling (480→960,
+  // 300→600) because it doubles the addressing resolution, not because the
+  // physical/visual inward reach gets any bigger. See _toCanvas/_toRaw for
+  // the doubled-precision inward conversion that keeps drag behavior visually
+  // identical across models.
+  //
   // Fixed canvas-pixel bounds, same on every model regardless of Quad Pixel
   // Drive — visual reach doesn't change, only how many raw protocol units it
-  // takes to express it (see _scale comment above).
+  // takes to express it.
   static const Map<_Corner, Rect> _bounds = {
     // Left default X:80. Outward -64px → 16. Inward +80px → 160.
     // Top default Y:50.  Outward -40px → 10. Inward +50px → 100.
@@ -1428,22 +1372,19 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
   // reach expressed in twice-as-fine units, not a bigger reach. Outward
   // always uses the base scale — that limit is a fixed lens/mechanical
   // constraint, unaffected by QPD.
-  double _toCanvas(int raw, {required bool inwardIsPositive}) {
-    final isInward = inwardIsPositive ? raw >= 0 : raw <= 0;
-    final scale = (isInward && widget.extendedCornerLimits)
-        ? _scale * 2
-        : _scale;
-    return raw / scale;
-  }
+  double _toCanvas(int raw, {required bool inwardIsPositive}) => cornerToCanvas(
+    raw,
+    inwardIsPositive: inwardIsPositive,
+    extended: widget.extendedCornerLimits,
+  );
 
   // Inverse of _toCanvas — canvas-pixel delta back to a raw protocol value.
-  int _toRaw(double canvasDelta, {required bool inwardIsPositive}) {
-    final isInward = inwardIsPositive ? canvasDelta >= 0 : canvasDelta <= 0;
-    final scale = (isInward && widget.extendedCornerLimits)
-        ? _scale * 2
-        : _scale;
-    return (canvasDelta * scale).round();
-  }
+  int _toRaw(double canvasDelta, {required bool inwardIsPositive}) =>
+      cornerToRaw(
+        canvasDelta,
+        inwardIsPositive: inwardIsPositive,
+        extended: widget.extendedCornerLimits,
+      );
 
   // Absolute outward ceiling — union of all 4 corners' outward-facing edges.
   // Unlike _bounds, this never changes with Quad Pixel Drive, since outward
@@ -1515,25 +1456,49 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
   // ─── Arrow-key movement ───────────────────────────────────────────────────
   void _applyRawStep(int dh, int dv) {
     if (!mounted || _selected.isEmpty || (dh == 0 && dv == 0)) return;
-    final inwardH = widget.extendedCornerLimits ? 960 : 480;
-    final inwardV = widget.extendedCornerLimits ? 600 : 300;
+    final inwardH = cornerInwardH(extended: widget.extendedCornerLimits);
+    final inwardV = cornerInwardV(extended: widget.extendedCornerLimits);
     for (final c in _selected) {
       switch (c) {
         case _Corner.ul:
-          widget.state.gmfi6 = (widget.state.gmfi6 + dh).clamp(-384, inwardH);
-          widget.state.gmfi1 = (widget.state.gmfi1 + dv).clamp(-240, inwardV);
+          widget.state.gmfi6 = (widget.state.gmfi6 + dh).clamp(
+            -cornerOutwardH,
+            inwardH,
+          );
+          widget.state.gmfi1 = (widget.state.gmfi1 + dv).clamp(
+            -cornerOutwardV,
+            inwardV,
+          );
           break;
         case _Corner.ur:
-          widget.state.gmfi7 = (widget.state.gmfi7 + dh).clamp(-inwardH, 384);
-          widget.state.gmfi2 = (widget.state.gmfi2 + dv).clamp(-240, inwardV);
+          widget.state.gmfi7 = (widget.state.gmfi7 + dh).clamp(
+            -inwardH,
+            cornerOutwardH,
+          );
+          widget.state.gmfi2 = (widget.state.gmfi2 + dv).clamp(
+            -cornerOutwardV,
+            inwardV,
+          );
           break;
         case _Corner.ll:
-          widget.state.gmfi8 = (widget.state.gmfi8 + dh).clamp(-384, inwardH);
-          widget.state.gmfi3 = (widget.state.gmfi3 + dv).clamp(-inwardV, 240);
+          widget.state.gmfi8 = (widget.state.gmfi8 + dh).clamp(
+            -cornerOutwardH,
+            inwardH,
+          );
+          widget.state.gmfi3 = (widget.state.gmfi3 + dv).clamp(
+            -inwardV,
+            cornerOutwardV,
+          );
           break;
         case _Corner.lr:
-          widget.state.gmfi9 = (widget.state.gmfi9 + dh).clamp(-inwardH, 384);
-          widget.state.gmfi4 = (widget.state.gmfi4 + dv).clamp(-inwardV, 240);
+          widget.state.gmfi9 = (widget.state.gmfi9 + dh).clamp(
+            -inwardH,
+            cornerOutwardH,
+          );
+          widget.state.gmfi4 = (widget.state.gmfi4 + dv).clamp(
+            -inwardV,
+            cornerOutwardV,
+          );
           break;
       }
     }
@@ -1624,49 +1589,49 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
     // Defensive safety clamp against the true protocol range, in case of
     // rounding at the boundary — the canvas-pixel clamp above already keeps
     // values in range under normal operation.
-    final inwardH = widget.extendedCornerLimits ? 960 : 480;
-    final inwardV = widget.extendedCornerLimits ? 600 : 300;
+    final inwardH = cornerInwardH(extended: widget.extendedCornerLimits);
+    final inwardV = cornerInwardV(extended: widget.extendedCornerLimits);
 
     switch (which) {
       case _Corner.ul:
         widget.state.gmfi6 = _toRaw(
           dxCanvas,
           inwardIsPositive: true,
-        ).clamp(-384, inwardH);
+        ).clamp(-cornerOutwardH, inwardH);
         widget.state.gmfi1 = _toRaw(
           dyCanvas,
           inwardIsPositive: true,
-        ).clamp(-240, inwardV);
+        ).clamp(-cornerOutwardV, inwardV);
         break;
       case _Corner.ur:
         widget.state.gmfi7 = _toRaw(
           dxCanvas,
           inwardIsPositive: false,
-        ).clamp(-inwardH, 384);
+        ).clamp(-inwardH, cornerOutwardH);
         widget.state.gmfi2 = _toRaw(
           dyCanvas,
           inwardIsPositive: true,
-        ).clamp(-240, inwardV);
+        ).clamp(-cornerOutwardV, inwardV);
         break;
       case _Corner.ll:
         widget.state.gmfi8 = _toRaw(
           dxCanvas,
           inwardIsPositive: true,
-        ).clamp(-384, inwardH);
+        ).clamp(-cornerOutwardH, inwardH);
         widget.state.gmfi3 = _toRaw(
           dyCanvas,
           inwardIsPositive: false,
-        ).clamp(-inwardV, 240);
+        ).clamp(-inwardV, cornerOutwardV);
         break;
       case _Corner.lr:
         widget.state.gmfi9 = _toRaw(
           dxCanvas,
           inwardIsPositive: false,
-        ).clamp(-inwardH, 384);
+        ).clamp(-inwardH, cornerOutwardH);
         widget.state.gmfi4 = _toRaw(
           dyCanvas,
           inwardIsPositive: false,
-        ).clamp(-inwardV, 240);
+        ).clamp(-inwardV, cornerOutwardV);
         break;
     }
   }
