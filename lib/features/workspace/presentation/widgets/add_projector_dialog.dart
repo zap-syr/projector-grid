@@ -585,12 +585,12 @@ class _AutoDiscoveryTabState extends State<_AutoDiscoveryTab> {
             child: FilledButton.icon(
               onPressed: _isScanning ? _stopScan : _startScan,
               icon: _isScanning
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 16,
                       height: 16,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: Colors.white,
+                        color: theme.colorScheme.onPrimary,
                       ),
                     )
                   : const Icon(Icons.search),

@@ -137,16 +137,18 @@ class _SleekStepperInputState extends State<SleekStepperInput> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final dividerColor = colorScheme.outlineVariant;
     final borderColor = _hasFocus
-        ? Colors.blueAccent.withValues(alpha: 0.5)
-        : Colors.white.withValues(alpha: 0.1);
+        ? colorScheme.primary.withValues(alpha: 0.5)
+        : dividerColor;
 
     return Container(
       width: 60,
       height: 26,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.06),
+        color: colorScheme.onSurface.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(6),
         border: Border.all(color: borderColor),
       ),
@@ -174,7 +176,7 @@ class _SleekStepperInputState extends State<SleekStepperInput> {
             ),
           ),
           // Vertical divider between text field and stepper buttons.
-          Container(width: 1, color: Colors.white.withValues(alpha: 0.1)),
+          Container(width: 1, color: dividerColor),
           SizedBox(
             width: 16,
             child: Column(
@@ -189,10 +191,7 @@ class _SleekStepperInputState extends State<SleekStepperInput> {
                     ),
                   ),
                 ),
-                Container(
-                  height: 1,
-                  color: Colors.white.withValues(alpha: 0.1),
-                ),
+                Container(height: 1, color: dividerColor),
                 Expanded(
                   child: GestureDetector(
                     onTapDown: (_) => _startStepping(-1),
