@@ -136,6 +136,21 @@ dart format .
 flutter test
 ```
 
+### Testing Without Projectors
+
+`tool/projector_simulator.dart` runs fake NTCONTROL projectors on loopback addresses
+(127.0.0.1, 127.0.0.2, …, port 1024) and writes a matching project file:
+
+```bash
+dart run tool/projector_simulator.dart      # 6 projectors
+dart run tool/projector_simulator.dart 12   # any count up to 250
+```
+
+Open the printed `.pgrid` path via File → Open. The simulated projectors answer the
+poll cycle and track power, shutter, input, test pattern and shutter fade, so controls,
+Monitoring and Alignment mode all work. Commands they receive are printed; Ctrl+C stops
+them. On macOS, add loopback aliases first (see the script's header).
+
 ## Building for Release
 
 ```bash
