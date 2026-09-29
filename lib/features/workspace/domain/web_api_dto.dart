@@ -1,0 +1,163 @@
+/// JSON shapes of the Web UI API's data (session/login/error shapes live in
+/// `web_api.dart`). `web_ui/api/openapi.yaml` is the contract;
+/// `test/unit/web_api_dto_test.dart` writes these into golden fixtures that
+/// the web tests validate against it, so a field renamed on one side only
+/// fails CI.
+library;
+
+import '../../../core/services/web_api.dart' show Json;
+import '../../../core/services/web_auth.dart';
+import '../../../core/services/web_event_hub.dart';
+import '../../../core/theme/status_thresholds.dart';
+import 'card_layout.dart';
+import 'monitoring_columns.dart';
+import 'projector_group.dart';
+import 'projector_node.dart';
+import 'test_patterns.dart';
+
+/// SSE event names (`/api/events`).
+abstract final class WebEvents {
+  static const snapshot = 'snapshot';
+  static const projectors = 'projectors';
+  static const projector = 'projector';
+  static const groups = 'groups';
+  static const project = 'project';
+  static const signedOut = 'signedOut';
+}
+
+/// The Monitoring layout the app currently uses; seeds a browser's table on
+/// its first visit.
+typedef WebTableLayout = ({
+  List<String> columns,
+  Map<String, double> widths,
+  String sortColumn,
+  bool sortAscending,
+  String density,
+  bool fitToWidth,
+  bool groupBy,
+});
+
+/// Project file name without folder or `.pgrid`; "New Project" when unsaved,
+/// like the window title.
+String webProjectName(String? filePath) {
+  if (filePath == null) return 'New Project';
+  final name = filePath.split(RegExp(r'[/\\]')).last;
+  return name.toLowerCase().endsWith('.pgrid')
+      ? name.substring(0, name.length - '.pgrid'.length)
+      : name;
+}
+
+/// Everything the page shows; never the NTCONTROL login or password.
+Json projectorJson(ProjectorNode n) => {
+  'id': n.id,
+  'name': n.name,
+  'ip': n.ipAddress,
+  'groupId': n.groupId,
+  'x': n.x,
+  'y': n.y,
+  'connection': n.connectionStatus.name,
+  'power': n.powerStatus.name,
+  'shutter': n.shutterStatus.name,
+  'serial': n.serialNumber,
+  'input': n.input,
+  'signal': n.signal,
+  'testPattern': n.testPattern,
+  'runtime': n.runtime,
+  'lightRuntime': n.lightRuntime,
+  'intakeTemp': n.intakeTemp,
+  'exhaustTemp': n.exhaustTemp,
+  'acVoltage': n.acVoltage,
+  'errors': n.errors,
+};
+
+/// All projectors in layout order (left→right, top→bottom).
+List<Json> projectorsJson(Iterable<ProjectorNode> nodes) =>
+    layoutOrder(nodes).map(projectorJson).toList();
+
+Json groupJson(ProjectorGroup g) => {
+  'id': g.id,
+  'name': g.name,
+  'color':
+      '#${(g.color & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()}',
+};
+
+List<Json> groupsJson(Iterable<ProjectorGroup> groups) =>
+    groups.map(groupJson).toList();
+
+Json configJson({
+  required String projectName,
+  required WebRole role,
+  required WebTableLayout layout,
+}) => {
+  'projectName': projectName,
+  'role': role.name,
+  'columns': [
+    for (final c in kMonitoringColumns)
+      {'id': c.id, 'label': c.label, 'defaultWidth': c.defaultWidth},
+  ],
+  'defaultColumns': kMonitoringDefaultColumns,
+  'presets': [
+    for (final e in kMonitoringPresets.entries)
+      {'name': e.key, 'columns': e.value},
+    {
+      'name': 'Show all',
+      'columns': [for (final c in kMonitoringColumns) c.id],
+    },
+  ],
+  'minColumnWidth': kMonitoringMinColumnWidth,
+  'layout': {
+    'columns': resolveMonitoringColumns(layout.columns),
+    'widths': layout.widths,
+    'sortColumn': layout.sortColumn,
+    'sortAscending': layout.sortAscending,
+    'density': layout.density,
+    'fitToWidth': layout.fitToWidth,
+    'groupBy': layout.groupBy,
+  },
+  'thresholds': {
+    'intake': {
+      'warm': kIntakeTempThreshold.warm,
+      'hot': kIntakeTempThreshold.hot,
+    },
+    'exhaust': {
+      'warm': kExhaustTempThreshold.warm,
+      'hot': kExhaustTempThreshold.hot,
+    },
+  },
+  'testPatterns': [
+    for (final e in kTestPatternLabels.entries)
+      {'code': e.key, 'label': e.value},
+  ],
+};
+
+/// The first event on `/api/events`.
+Json snapshotJson({
+  required String projectName,
+  required List<Json> projectors,
+  required List<Json> groups,
+}) => {'projectName': projectName, 'projectors': projectors, 'groups': groups};
+
+/// Events that bring a page from [prev] to [next]: the whole list when
+/// projectors were added, removed or reordered, otherwise one `projector`
+/// event per changed projector — a telemetry tick sends only what changed.
+List<WebEvent> projectorEvents(List<Json> prev, List<Json> next) {
+  final sameOrder =
+      prev.length == next.length &&
+      Iterable.generate(prev.length)
+          .every((i) => prev[i]['id'] == next[i]['id']);
+  if (!sameOrder) return [(name: WebEvents.projectors, data: next)];
+  return [
+    for (var i = 0; i < next.length; i++)
+      if (!_sameJson(prev[i], next[i]))
+        (name: WebEvents.projector, data: next[i]),
+  ];
+}
+
+/// Flat maps of primitives, which is all [projectorJson] and [groupJson]
+/// produce.
+bool _sameJson(Json a, Json b) =>
+    a.length == b.length && a.keys.every((k) => a[k] == b[k]);
+
+bool sameGroupsJson(List<Json> a, List<Json> b) =>
+    a.length == b.length &&
+    Iterable.generate(a.length).every((i) => _sameJson(a[i], b[i]));

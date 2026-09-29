@@ -1,22 +1,56 @@
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shelf/shelf.dart';
 
+import '../../../../core/services/web_api.dart';
+import '../../../../core/services/web_auth.dart';
+import '../../../../core/services/web_event_hub.dart';
 import '../../../../core/services/web_server_service.dart';
 import '../../../../core/services/web_static_handler.dart';
 import '../../domain/log_event.dart';
+import '../../domain/web_api_dto.dart';
 import 'app_settings_provider.dart';
 import 'event_log_provider.dart';
+import 'project_provider.dart';
+import 'workspace_provider.dart';
 
 part 'web_server_provider.g.dart';
 
-/// Web Access server lifecycle; state = whether it's listening.
+/// Web Access server lifecycle; state = whether it's listening. Also the
+/// [WebApiSource] the routes read from, so the API reports exactly what the
+/// app's providers hold.
 @Riverpod(keepAlive: true)
-class WebServerNotifier extends _$WebServerNotifier {
+class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
   final WebServerService _service = WebServerService();
+  late final WebAuth _auth = WebAuth(
+    onLockout: (ip, lockout) => _log(
+      LogSeverity.warning,
+      'Web · $ip locked out for ${lockout.inSeconds} s after wrong PINs',
+    ),
+  );
+  late final WebEventHub _hub = WebEventHub(
+    onHeartbeat: (token) => _auth.touch(token) != null,
+  );
+
+  /// What the connected pages were last sent, to push only the changes.
+  List<Json> _sentProjectors = const [];
+  List<Json> _sentGroups = const [];
 
   @override
   bool build() {
-    ref.onDispose(_service.stop);
+    ref.onDispose(() {
+      _hub.closeAll();
+      _service.stop();
+    });
+    ref.listen(workspaceProvider, (_, nodes) => _pushWorkspace());
+    ref.listen(
+      projectStateProvider.select((s) => s.currentFilePath),
+      (_, path) => _hub.broadcast((
+        name: WebEvents.project,
+        data: {'name': webProjectName(path)},
+      )),
+    );
     // Fire-and-forget like OscNotifier.build(): every state write in start()
     // happens after an await, so none lands inside this build.
     if (ref.read(appSettingsProvider).webEnabled) start();
@@ -30,9 +64,12 @@ class WebServerNotifier extends _$WebServerNotifier {
         .listAssets()
         .where((k) => k.startsWith('$webAssetRoot/'))
         .toSet();
+    final api = WebApi(auth: _auth, hub: _hub, source: this).handler;
+    final static = webStaticHandler(rootBundle, assets);
     final ok = await _service.start(
       port: port,
-      handler: webStaticHandler(rootBundle, assets),
+      handler: (Request r) =>
+          r.url.path.startsWith('api/') ? api(r) : static(r),
     );
     state = ok;
     // Persist the outcome, not the request — same reasoning as OSC: a failed
@@ -48,6 +85,7 @@ class WebServerNotifier extends _$WebServerNotifier {
 
   Future<void> stop() async {
     final wasActive = _service.isActive;
+    _endAllSessions();
     await _service.stop();
     state = false;
     ref.read(appSettingsProvider.notifier).setWebEnabled(false);
@@ -55,9 +93,100 @@ class WebServerNotifier extends _$WebServerNotifier {
   }
 
   Future<void> restart() async {
+    _endAllSessions();
     await _service.stop();
     await start();
   }
+
+  /// Stores [pin] (hashed) as the Viewer PIN; every session ends, since
+  /// changing a PIN is how an operator locks people out.
+  void setViewerPin(String pin) {
+    ref.read(appSettingsProvider.notifier).setWebViewerPinHash(hashPin(pin));
+    signOutAll();
+  }
+
+  void signOutAll() {
+    final hadClients = _auth.sessions.isNotEmpty;
+    _endAllSessions();
+    if (hadClients) _log(LogSeverity.info, 'Web · all clients signed out');
+  }
+
+  void _endAllSessions() {
+    _auth.revokeAll();
+    _hub.closeAll(
+      last: (name: WebEvents.signedOut, data: const <String, Object?>{}),
+    );
+  }
+
+  void _pushWorkspace() {
+    // With no page connected there's nobody to diff for; the next page gets
+    // a full snapshot on connect.
+    if (_hub.clientCount == 0) return;
+    final projectors = this.projectors();
+    projectorEvents(_sentProjectors, projectors).forEach(_hub.broadcast);
+    _sentProjectors = projectors;
+    final groups = this.groups();
+    if (!sameGroupsJson(_sentGroups, groups)) {
+      _hub.broadcast((name: WebEvents.groups, data: groups));
+      _sentGroups = groups;
+    }
+  }
+
+  // ── WebApiSource ─────────────────────────────────────────────────────────
+
+  @override
+  String get projectName =>
+      webProjectName(ref.read(projectStateProvider).currentFilePath);
+
+  @override
+  String get viewerPinHash => ref.read(appSettingsProvider).webViewerPinHash!;
+
+  @override
+  Json config(WebRole role) {
+    final s = ref.read(appSettingsProvider);
+    return configJson(
+      projectName: projectName,
+      role: role,
+      layout: (
+        columns: s.monitoringColumns,
+        widths: s.monitoringColumnWidths,
+        sortColumn: s.monitoringSortColumnId,
+        sortAscending: s.monitoringSortAscending,
+        density: s.monitoringDensity.name,
+        fitToWidth: s.monitoringFitToWidth,
+        groupBy: s.monitoringGroupBy,
+      ),
+    );
+  }
+
+  @override
+  List<Json> projectors() => projectorsJson(ref.read(workspaceProvider));
+
+  @override
+  List<Json> groups() =>
+      groupsJson(ref.read(workspaceProvider.notifier).groups);
+
+  @override
+  List<WebEvent> snapshotEvents() {
+    _sentProjectors = projectors();
+    _sentGroups = groups();
+    return [
+      (
+        name: WebEvents.snapshot,
+        data: snapshotJson(
+          projectName: projectName,
+          projectors: _sentProjectors,
+          groups: _sentGroups,
+        ),
+      ),
+    ];
+  }
+
+  @override
+  void signedIn(WebSession session) => _log(
+    LogSeverity.info,
+    'Web · ${session.ip} · ${session.role.name} signed in',
+  );
 
   void _log(LogSeverity severity, String message) => ref
       .read(eventLogProvider.notifier)

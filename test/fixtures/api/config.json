@@ -1,0 +1,288 @@
+{
+  "projectName": "Main Hall",
+  "role": "viewer",
+  "columns": [
+    {
+      "id": "connection",
+      "label": "Connection",
+      "defaultWidth": 130.0
+    },
+    {
+      "id": "model",
+      "label": "Model",
+      "defaultWidth": 160.0
+    },
+    {
+      "id": "serial",
+      "label": "Serial Number",
+      "defaultWidth": 160.0
+    },
+    {
+      "id": "group",
+      "label": "Group",
+      "defaultWidth": 150.0
+    },
+    {
+      "id": "ip",
+      "label": "IP Address",
+      "defaultWidth": 130.0
+    },
+    {
+      "id": "power",
+      "label": "Power",
+      "defaultWidth": 130.0
+    },
+    {
+      "id": "shutter",
+      "label": "Shutter",
+      "defaultWidth": 110.0
+    },
+    {
+      "id": "input",
+      "label": "Input",
+      "defaultWidth": 90.0
+    },
+    {
+      "id": "signal",
+      "label": "Signal",
+      "defaultWidth": 140.0
+    },
+    {
+      "id": "testPattern",
+      "label": "Test Pattern",
+      "defaultWidth": 170.0
+    },
+    {
+      "id": "runtime",
+      "label": "Projector Runtime",
+      "defaultWidth": 150.0
+    },
+    {
+      "id": "lightRuntime",
+      "label": "Light Runtime",
+      "defaultWidth": 130.0
+    },
+    {
+      "id": "intake",
+      "label": "Intake Temp",
+      "defaultWidth": 130.0
+    },
+    {
+      "id": "exhaust",
+      "label": "Exhaust Temp",
+      "defaultWidth": 150.0
+    },
+    {
+      "id": "voltage",
+      "label": "AC Voltage",
+      "defaultWidth": 130.0
+    },
+    {
+      "id": "errors",
+      "label": "Errors",
+      "defaultWidth": 140.0
+    }
+  ],
+  "defaultColumns": [
+    "connection",
+    "model",
+    "serial",
+    "ip",
+    "power",
+    "shutter",
+    "input",
+    "signal",
+    "runtime",
+    "lightRuntime",
+    "intake",
+    "exhaust",
+    "voltage",
+    "errors"
+  ],
+  "presets": [
+    {
+      "name": "Essentials",
+      "columns": [
+        "connection",
+        "model",
+        "ip",
+        "power",
+        "shutter",
+        "input",
+        "errors"
+      ]
+    },
+    {
+      "name": "Thermal",
+      "columns": [
+        "connection",
+        "model",
+        "ip",
+        "intake",
+        "exhaust",
+        "runtime",
+        "voltage"
+      ]
+    },
+    {
+      "name": "Signal",
+      "columns": [
+        "connection",
+        "model",
+        "ip",
+        "input",
+        "signal",
+        "power",
+        "shutter"
+      ]
+    },
+    {
+      "name": "Show all",
+      "columns": [
+        "connection",
+        "model",
+        "serial",
+        "group",
+        "ip",
+        "power",
+        "shutter",
+        "input",
+        "signal",
+        "testPattern",
+        "runtime",
+        "lightRuntime",
+        "intake",
+        "exhaust",
+        "voltage",
+        "errors"
+      ]
+    }
+  ],
+  "minColumnWidth": 60.0,
+  "layout": {
+    "columns": [
+      "connection",
+      "model",
+      "serial",
+      "ip",
+      "power",
+      "shutter",
+      "input",
+      "signal",
+      "runtime",
+      "lightRuntime",
+      "intake",
+      "exhaust",
+      "voltage",
+      "errors"
+    ],
+    "widths": {
+      "model": 180.0
+    },
+    "sortColumn": "ip",
+    "sortAscending": true,
+    "density": "standard",
+    "fitToWidth": true,
+    "groupBy": false
+  },
+  "thresholds": {
+    "intake": {
+      "warm": 40.0,
+      "hot": 45.0
+    },
+    "exhaust": {
+      "warm": 55.0,
+      "hot": 65.0
+    }
+  },
+  "testPatterns": [
+    {
+      "code": "OTS:01",
+      "label": "White"
+    },
+    {
+      "code": "OTS:02",
+      "label": "Black"
+    },
+    {
+      "code": "OTS:22",
+      "label": "Red"
+    },
+    {
+      "code": "OTS:23",
+      "label": "Green"
+    },
+    {
+      "code": "OTS:24",
+      "label": "Blue"
+    },
+    {
+      "code": "OTS:28",
+      "label": "Cyan"
+    },
+    {
+      "code": "OTS:29",
+      "label": "Magenta"
+    },
+    {
+      "code": "OTS:30",
+      "label": "Yellow"
+    },
+    {
+      "code": "OTS:05",
+      "label": "Window"
+    },
+    {
+      "code": "OTS:06",
+      "label": "Reversed Window"
+    },
+    {
+      "code": "OTS:08",
+      "label": "Color Bar Vert"
+    },
+    {
+      "code": "OTS:51",
+      "label": "Color Bar Horiz"
+    },
+    {
+      "code": "OTS:78",
+      "label": "Focus"
+    },
+    {
+      "code": "OTS:59",
+      "label": "Aspect Frame"
+    },
+    {
+      "code": "OTS:07",
+      "label": "Cross Hatch"
+    },
+    {
+      "code": "OTS:70",
+      "label": "Cross Hatch Red"
+    },
+    {
+      "code": "OTS:71",
+      "label": "Cross Hatch Green"
+    },
+    {
+      "code": "OTS:72",
+      "label": "Cross Hatch Blue"
+    },
+    {
+      "code": "OTS:73",
+      "label": "Cross Hatch Cyan"
+    },
+    {
+      "code": "OTS:74",
+      "label": "Cross Hatch Magenta"
+    },
+    {
+      "code": "OTS:75",
+      "label": "Cross Hatch Yellow"
+    },
+    {
+      "code": "OTS:87",
+      "label": "Circle"
+    }
+  ]
+}

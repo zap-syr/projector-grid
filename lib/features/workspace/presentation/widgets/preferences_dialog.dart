@@ -17,7 +17,10 @@ class PreferencesDialog extends ConsumerStatefulWidget {
   ConsumerState<PreferencesDialog> createState() => _PreferencesDialogState();
 }
 
-class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
+class _PreferencesDialogState extends ConsumerState<PreferencesDialog>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
+
   // General
   late final TextEditingController _intervalController;
   late ThemeMode _selectedTheme;
@@ -32,6 +35,8 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
   // Web Access
   late bool _webEnabled;
   late final TextEditingController _webPortController;
+  final _webPinController = TextEditingController();
+  String? _webPinError;
   String? _webUrlIp;
 
   List<NetworkInterface>? _networkInterfaces;
@@ -39,6 +44,7 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 3, vsync: this);
     final settings = ref.read(appSettingsProvider);
     _intervalController = TextEditingController(
       text: settings.pollingIntervalSeconds.toString(),
@@ -88,6 +94,8 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
     _oscSendIpController.dispose();
     _oscSendPortController.dispose();
     _webPortController.dispose();
+    _webPinController.dispose();
+    _tabController.dispose();
     super.dispose();
   }
 
@@ -96,6 +104,19 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
     // connection parameters actually changed (needed to decide whether a
     // live socket needs rebinding, not just whether OSC was toggled).
     final oldSettings = ref.read(appSettingsProvider);
+
+    // Checked before anything is written, so a rejected PIN saves nothing.
+    final pin = _webPinController.text;
+    final pinError = pin.isNotEmpty && (pin.length < 4 || pin.length > 8)
+        ? '4–8 digits'
+        : _webEnabled && pin.isEmpty && oldSettings.webViewerPinHash == null
+        ? 'Required'
+        : null;
+    if (pinError != null) {
+      setState(() => _webPinError = pinError);
+      _tabController.animateTo(2);
+      return;
+    }
 
     // General
     final parsed = int.tryParse(_intervalController.text);
@@ -149,11 +170,12 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
       oscNotifier.restart();
     }
 
-    // Web Access — the port is saved first because start() reads it.
+    // Web Access — port and PIN are saved first because start() reads them.
     final webPort = int.tryParse(_webPortController.text);
     final webPortValid = webPort != null && webPort > 0 && webPort <= 65535;
     if (webPortValid) settingsNotifier.setWebPort(webPort);
     final webNotifier = ref.read(webServerProvider.notifier);
+    if (pin.isNotEmpty) webNotifier.setViewerPin(pin);
     if (_webEnabled && !oldSettings.webEnabled) {
       webNotifier.start();
     } else if (!_webEnabled && oldSettings.webEnabled) {
@@ -186,7 +208,13 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
 
   Widget _buildWebAccessTab(ThemeData theme) {
     final ip = _webUrlIp;
-    return Padding(
+    final running = ref.watch(webServerProvider);
+    const fieldDecoration = InputDecoration(
+      border: OutlineInputBorder(),
+      isDense: true,
+      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    );
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -202,24 +230,54 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
             ],
           ),
           const SizedBox(height: 16),
-          Text('Port', style: theme.textTheme.titleSmall),
-          const SizedBox(height: 8),
-          SizedBox(
-            width: 120,
-            child: TextField(
-              controller: _webPortController,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              onChanged: (_) => setState(() {}),
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                isDense: true,
-                contentPadding: EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 120,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Port', style: theme.textTheme.titleSmall),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _webPortController,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      onChanged: (_) => setState(() {}),
+                      decoration: fieldDecoration,
+                    ),
+                  ],
                 ),
               ),
-            ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Viewer PIN', style: theme.textTheme.titleSmall),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _webPinController,
+                      obscureText: true,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(8),
+                      ],
+                      onChanged: (_) {
+                        if (_webPinError != null) {
+                          setState(() => _webPinError = null);
+                        }
+                      },
+                      decoration: fieldDecoration.copyWith(
+                        errorText: _webPinError,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           Text('Address', style: theme.textTheme.titleSmall),
@@ -272,6 +330,25 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
               ],
             ),
           ],
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Plain HTTP — the PIN is sent unencrypted',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.hintColor,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: running
+                    ? ref.read(webServerProvider.notifier).signOutAll
+                    : null,
+                child: const Text('Sign out all clients'),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -286,130 +363,51 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
       child: SizedBox(
         width: 480,
         height: 480,
-        child: DefaultTabController(
-          length: 3,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const DialogTitleBar(title: 'Preferences'),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const DialogTitleBar(title: 'Preferences'),
 
-              // Tabs
-              TabBar(
-                tabs: const [
-                  Tab(text: 'General'),
-                  Tab(text: 'OSC'),
-                  Tab(text: 'Web Access'),
-                ],
-                labelStyle: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+            // Tabs
+            TabBar(
+              controller: _tabController,
+              tabs: const [
+                Tab(text: 'General'),
+                Tab(text: 'OSC'),
+                Tab(text: 'Web Access'),
+              ],
+              labelStyle: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.bold,
               ),
-              const Divider(height: 1),
+            ),
+            const Divider(height: 1),
 
-              // Tab content
-              Expanded(
-                child: TabBarView(
-                  children: [
-                    // ── General ──────────────────────────────────────────
-                    Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Update Interval',
-                            style: theme.textTheme.titleSmall,
-                          ),
-                          const SizedBox(height: 8),
-                          SizedBox(
-                            width: 120,
-                            child: TextField(
-                              controller: _intervalController,
-                              keyboardType: TextInputType.number,
-                              inputFormatters: [
-                                FilteringTextInputFormatter.digitsOnly,
-                              ],
-                              decoration: const InputDecoration(
-                                suffixText: 's',
-                                border: OutlineInputBorder(),
-                                isDense: true,
-                                contentPadding: EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 10,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'How often projectors are polled '
-                            '(${AppSettings.minPollingIntervalSeconds}-${AppSettings.maxPollingIntervalSeconds}s)',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.hintColor,
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          Text('Theme', style: theme.textTheme.titleSmall),
-                          const SizedBox(height: 8),
-                          SegmentedButton<ThemeMode>(
-                            segments: const [
-                              ButtonSegment(
-                                value: ThemeMode.light,
-                                label: Text('Light'),
-                                icon: Icon(Icons.light_mode),
-                              ),
-                              ButtonSegment(
-                                value: ThemeMode.dark,
-                                label: Text('Dark'),
-                                icon: Icon(Icons.dark_mode),
-                              ),
+            // Tab content
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  // ── General ──────────────────────────────────────────
+                  Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Update Interval',
+                          style: theme.textTheme.titleSmall,
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: 120,
+                          child: TextField(
+                            controller: _intervalController,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
                             ],
-                            selected: {_selectedTheme},
-                            showSelectedIcon: false,
-                            onSelectionChanged: (selection) {
-                              setState(() => _selectedTheme = selection.first);
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // ── OSC ──────────────────────────────────────────────
-                    Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Active toggle
-                          Row(
-                            children: [
-                              Text(
-                                'OSC Active',
-                                style: theme.textTheme.titleSmall,
-                              ),
-                              const Spacer(),
-                              Switch(
-                                value: _oscActive,
-                                onChanged: (value) {
-                                  setState(() => _oscActive = value);
-                                },
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-
-                          // Network device
-                          Text(
-                            'Network Device',
-                            style: theme.textTheme.titleSmall,
-                          ),
-                          const SizedBox(height: 8),
-                          DropdownMenu<String>(
-                            initialSelection: _selectedNetworkDevice,
-                            expandedInsets: EdgeInsets.zero,
-                            requestFocusOnTap: false,
-                            enableFilter: false,
-                            inputDecorationTheme: const InputDecorationTheme(
+                            decoration: const InputDecoration(
+                              suffixText: 's',
                               border: OutlineInputBorder(),
                               isDense: true,
                               contentPadding: EdgeInsets.symmetric(
@@ -417,130 +415,205 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
                                 vertical: 10,
                               ),
                             ),
-                            dropdownMenuEntries: _buildNetworkDeviceEntries(),
-                            onSelected: (value) {
-                              if (value != null) {
-                                setState(() => _selectedNetworkDevice = value);
-                              }
-                            },
                           ),
-                          const SizedBox(height: 16),
-
-                          // Receive port + Send IP + Send port
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Receive Port',
-                                      style: theme.textTheme.titleSmall,
-                                    ),
-                                    const SizedBox(height: 8),
-                                    TextField(
-                                      controller: _oscReceivePortController,
-                                      keyboardType: TextInputType.number,
-                                      inputFormatters: [
-                                        FilteringTextInputFormatter.digitsOnly,
-                                      ],
-                                      decoration: const InputDecoration(
-                                        border: OutlineInputBorder(),
-                                        isDense: true,
-                                        contentPadding: EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 10,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Send IP',
-                                      style: theme.textTheme.titleSmall,
-                                    ),
-                                    const SizedBox(height: 8),
-                                    TextField(
-                                      controller: _oscSendIpController,
-                                      decoration: const InputDecoration(
-                                        border: OutlineInputBorder(),
-                                        isDense: true,
-                                        contentPadding: EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 10,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Send Port',
-                                      style: theme.textTheme.titleSmall,
-                                    ),
-                                    const SizedBox(height: 8),
-                                    TextField(
-                                      controller: _oscSendPortController,
-                                      keyboardType: TextInputType.number,
-                                      inputFormatters: [
-                                        FilteringTextInputFormatter.digitsOnly,
-                                      ],
-                                      decoration: const InputDecoration(
-                                        border: OutlineInputBorder(),
-                                        isDense: true,
-                                        contentPadding: EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 10,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'How often projectors are polled '
+                          '(${AppSettings.minPollingIntervalSeconds}-${AppSettings.maxPollingIntervalSeconds}s)',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.hintColor,
                           ),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(height: 24),
+                        Text('Theme', style: theme.textTheme.titleSmall),
+                        const SizedBox(height: 8),
+                        SegmentedButton<ThemeMode>(
+                          segments: const [
+                            ButtonSegment(
+                              value: ThemeMode.light,
+                              label: Text('Light'),
+                              icon: Icon(Icons.light_mode),
+                            ),
+                            ButtonSegment(
+                              value: ThemeMode.dark,
+                              label: Text('Dark'),
+                              icon: Icon(Icons.dark_mode),
+                            ),
+                          ],
+                          selected: {_selectedTheme},
+                          showSelectedIcon: false,
+                          onSelectionChanged: (selection) {
+                            setState(() => _selectedTheme = selection.first);
+                          },
+                        ),
+                      ],
                     ),
+                  ),
 
-                    // ── Web Access ───────────────────────────────────────
-                    _buildWebAccessTab(theme),
-                  ],
-                ),
-              ),
+                  // ── OSC ──────────────────────────────────────────────
+                  Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Active toggle
+                        Row(
+                          children: [
+                            Text(
+                              'OSC Active',
+                              style: theme.textTheme.titleSmall,
+                            ),
+                            const Spacer(),
+                            Switch(
+                              value: _oscActive,
+                              onChanged: (value) {
+                                setState(() => _oscActive = value);
+                              },
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
 
-              // Footer
-              const Divider(height: 1),
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('Cancel'),
+                        // Network device
+                        Text(
+                          'Network Device',
+                          style: theme.textTheme.titleSmall,
+                        ),
+                        const SizedBox(height: 8),
+                        DropdownMenu<String>(
+                          initialSelection: _selectedNetworkDevice,
+                          expandedInsets: EdgeInsets.zero,
+                          requestFocusOnTap: false,
+                          enableFilter: false,
+                          inputDecorationTheme: const InputDecorationTheme(
+                            border: OutlineInputBorder(),
+                            isDense: true,
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                          ),
+                          dropdownMenuEntries: _buildNetworkDeviceEntries(),
+                          onSelected: (value) {
+                            if (value != null) {
+                              setState(() => _selectedNetworkDevice = value);
+                            }
+                          },
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Receive port + Send IP + Send port
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Receive Port',
+                                    style: theme.textTheme.titleSmall,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  TextField(
+                                    controller: _oscReceivePortController,
+                                    keyboardType: TextInputType.number,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly,
+                                    ],
+                                    decoration: const InputDecoration(
+                                      border: OutlineInputBorder(),
+                                      isDense: true,
+                                      contentPadding: EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 10,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Send IP',
+                                    style: theme.textTheme.titleSmall,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  TextField(
+                                    controller: _oscSendIpController,
+                                    decoration: const InputDecoration(
+                                      border: OutlineInputBorder(),
+                                      isDense: true,
+                                      contentPadding: EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 10,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Send Port',
+                                    style: theme.textTheme.titleSmall,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  TextField(
+                                    controller: _oscSendPortController,
+                                    keyboardType: TextInputType.number,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly,
+                                    ],
+                                    decoration: const InputDecoration(
+                                      border: OutlineInputBorder(),
+                                      isDense: true,
+                                      contentPadding: EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 10,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    FilledButton(onPressed: _save, child: const Text('Save')),
-                  ],
-                ),
+                  ),
+
+                  // ── Web Access ───────────────────────────────────────
+                  _buildWebAccessTab(theme),
+                ],
               ),
-            ],
-          ),
+            ),
+
+            // Footer
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(onPressed: _save, child: const Text('Save')),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

@@ -44,6 +44,10 @@ class AppSettings {
   final bool webEnabled;
   final int webPort;
 
+  /// Salted hash of the Viewer PIN (`hashPin`); null until one is set, and
+  /// Web Access can't be enabled without it.
+  final String? webViewerPinHash;
+
   /// Monitoring-table layout. `monitoringColumns` is the ordered list of
   /// *visible* column ids (see `MonitoringTable` for the id set); an empty list
   /// means "use the table's default set/order". `monitoringColumnWidths` holds
@@ -86,6 +90,7 @@ class AppSettings {
     this.isMonitoringView = false,
     this.webEnabled = false,
     this.webPort = defaultWebPort,
+    this.webViewerPinHash,
     this.monitoringColumns = const [],
     this.monitoringColumnWidths = const {},
     this.monitoringSortColumnId = 'ip',
@@ -113,6 +118,7 @@ class AppSettings {
     bool? isMonitoringView,
     bool? webEnabled,
     int? webPort,
+    String? webViewerPinHash,
     List<String>? monitoringColumns,
     Map<String, double>? monitoringColumnWidths,
     String? monitoringSortColumnId,
@@ -141,6 +147,7 @@ class AppSettings {
       isMonitoringView: isMonitoringView ?? this.isMonitoringView,
       webEnabled: webEnabled ?? this.webEnabled,
       webPort: webPort ?? this.webPort,
+      webViewerPinHash: webViewerPinHash ?? this.webViewerPinHash,
       monitoringColumns: monitoringColumns ?? this.monitoringColumns,
       monitoringColumnWidths:
           monitoringColumnWidths ?? this.monitoringColumnWidths,
@@ -176,6 +183,7 @@ class AppSettings {
     'isMonitoringView': isMonitoringView,
     'webEnabled': webEnabled,
     'webPort': webPort,
+    'webViewerPinHash': webViewerPinHash,
     'monitoringColumns': monitoringColumns,
     'monitoringColumnWidths': monitoringColumnWidths,
     'monitoringSortColumnId': monitoringSortColumnId,
@@ -212,6 +220,7 @@ class AppSettings {
     isMonitoringView: (json['isMonitoringView'] as bool?) ?? false,
     webEnabled: (json['webEnabled'] as bool?) ?? false,
     webPort: (json['webPort'] as int?) ?? defaultWebPort,
+    webViewerPinHash: json['webViewerPinHash'] as String?,
     monitoringColumns:
         (json['monitoringColumns'] as List?)?.cast<String>() ?? const [],
     monitoringColumnWidths:
@@ -332,6 +341,11 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
 
   void setWebPort(int port) {
     state = state.copyWith(webPort: port);
+    _save(state);
+  }
+
+  void setWebViewerPinHash(String hash) {
+    state = state.copyWith(webViewerPinHash: hash);
     _save(state);
   }
 

@@ -95,7 +95,7 @@ final class PreviewSignalStatusProvider
 }
 
 String _$previewSignalStatusHash() =>
-    r'cd995dacfb420f642ec137d2e218d7ce6c65f771';
+    r'0a49d5e0dba403b0b9f282b22eaa5f57139ee377';
 
 /// Live input/signal for one projector's Remote Preview, driven by the
 /// projector's web UI (`/cgi-bin/simple_status_hidden.cgi`) instead of
