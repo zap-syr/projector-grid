@@ -11,7 +11,7 @@ import { resolve } from 'node:path';
 
 import type { Plugin } from 'vite';
 
-import type { Group, Projector, Role } from '../src/lib/api/types.ts';
+import type { Action, ActionRequest, Group, Projector, Role } from '../src/lib/api/types.ts';
 
 const FIXTURES = resolve(import.meta.dirname, '../../test/fixtures/api');
 const VIEWER_PIN = '1234';
@@ -105,6 +105,56 @@ export function mockApi(): Plugin {
     for (const s of streams) sse(s, 'projector', p);
   }
 
+  /** Changes the mock projectors like a real command would and reports like the app. */
+  function applyAction(action: Action, targets: Projector[]) {
+    const reachable = targets.filter(
+      (p) => p.connection === 'connected' || p.connection === 'unprotected',
+    );
+    const skipped = targets.filter((p) => !reachable.includes(p));
+    let label = 'Lens Step';
+    for (const p of reachable) {
+      if ('power' in action) {
+        label = action.power === 'on' ? 'Power On' : 'Power Standby';
+        p.power = action.power === 'on' ? 'on' : 'standby';
+      } else if ('shutter' in action) {
+        label = action.shutter === 'open' ? 'Shutter Open' : 'Shutter Close';
+        p.shutter = action.shutter === 'open' ? 'open' : 'closed';
+      } else if ('testPattern' in action) {
+        label = action.testPattern === 'OTS:00' ? 'Test Pattern Off' : 'Test Pattern';
+        p.testPattern = action.testPattern;
+      } else if ('osd' in action) {
+        label = action.osd === 'on' ? 'OSD On' : 'OSD Off';
+      } else if ('input' in action) {
+        label = `Input: ${action.input.slice(4)}`;
+        p.input = action.input.slice(4);
+      } else if ('lensCalibration' in action) {
+        label = 'Lens Calibration';
+      } else if ('lensType' in action) {
+        label = 'Lens Type';
+      } else if (action.lens === 'home') {
+        label = 'Lens Home';
+      }
+      for (const s of streams) sse(s, 'projector', p);
+    }
+    const ref = (p: Projector) => ({ id: p.id, name: p.name });
+    const counts = [
+      `${reachable.length}/${targets.length} OK`,
+      ...(skipped.length ? [`${skipped.length} skipped`] : []),
+    ].join(' · ');
+    const skippedNames = skipped.length
+      ? `. Skipped: ${skipped.map((p) => p.name).join(', ')}`
+      : '';
+    return {
+      command: 'mock',
+      label,
+      ok: reachable.length,
+      total: targets.length,
+      failed: [],
+      skipped: skipped.map(ref),
+      summary: `${label} — ${counts}${skippedNames}`,
+    };
+  }
+
   async function handle(req: IncomingMessage, res: ServerResponse) {
     const path = req.url?.split('?')[0];
     const t = token(req) ?? '';
@@ -143,6 +193,17 @@ export function mockApi(): Plugin {
       case '/api/lock':
         sessions.set(t, 'viewer');
         return send(res, 200, { role: 'viewer', controlAllowed: true });
+      case '/api/actions': {
+        if (role !== 'operator') return send(res, 403, { error: 'forbidden' });
+        const body = JSON.parse((await readBody(req)) || '{}') as ActionRequest;
+        const targets =
+          body.targets === 'all'
+            ? projectors
+            : Array.isArray(body.targets)
+              ? projectors.filter((p) => (body.targets as string[]).includes(p.id))
+              : projectors.filter((p) => p.groupId === (body.targets as { group: string }).group);
+        return send(res, 200, applyAction(body.action, targets));
+      }
       case '/api/logout':
         sessions.delete(token(req) ?? '');
         return send(res, 204, undefined, { 'set-cookie': 'pg_session=; Path=/; Max-Age=0' });

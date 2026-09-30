@@ -43,7 +43,7 @@ components:
       properties:
         error:
           type: string
-          enum: [bad_request, invalid_pin, locked_out, unauthorized, not_found]
+          enum: [bad_request, invalid_pin, locked_out, unauthorized, forbidden, not_found]
         retryAfter:
           type: integer
           description: Seconds until the IP may try again (`locked_out` only).
@@ -260,6 +260,9 @@ components:
         - layout
         - thresholds
         - testPatterns
+        - inputs
+        - lensCalibrations
+        - lensTypes
       properties:
         projectName:
           type: string
@@ -310,16 +313,26 @@ components:
             exhaust:
               $ref: '#/components/schemas/TempThreshold'
         testPatterns:
-          type: array
-          items:
-            type: object
-            additionalProperties: false
-            required: [code, label]
-            properties:
-              code:
-                type: string
-              label:
-                type: string
+          $ref: '#/components/schemas/Options'
+        inputs:
+          $ref: '#/components/schemas/Options'
+        lensCalibrations:
+          $ref: '#/components/schemas/Options'
+        lensTypes:
+          $ref: '#/components/schemas/Options'
+
+    Options:
+      type: array
+      description: The app's choices for a control, in its order; `code` is what an action sends.
+      items:
+        type: object
+        additionalProperties: false
+        required: [code, label]
+        properties:
+          code:
+            type: string
+          label:
+            type: string
 
     Alerts:
       type: array
@@ -345,6 +358,147 @@ components:
       properties:
         name:
           type: string
+
+    Targets:
+      description: Explicit projector ids, one group, or every projector.
+      oneOf:
+        - type: array
+          minItems: 1
+          items:
+            type: string
+        - type: object
+          additionalProperties: false
+          required: [group]
+          properties:
+            group:
+              type: string
+        - type: string
+          const: all
+
+    LensAxis:
+      type: string
+      enum: [shiftH, shiftV, focus, zoom]
+
+    Action:
+      description: |
+        The fixed vocabulary the server maps to NTCONTROL (`web_actions.dart`).
+        Lens `dir`: `+` = right / up / far / in.
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [power]
+          properties:
+            power:
+              type: string
+              enum: ['on', 'off']
+        - type: object
+          additionalProperties: false
+          required: [shutter]
+          properties:
+            shutter:
+              type: string
+              enum: [open, close]
+        - type: object
+          additionalProperties: false
+          required: [testPattern]
+          properties:
+            testPattern:
+              type: string
+              description: An `OTS:xx` code from `Config.testPatterns`, or `OTS:00` for off.
+        - type: object
+          additionalProperties: false
+          required: [osd]
+          properties:
+            osd:
+              type: string
+              enum: ['on', 'off']
+        - type: object
+          additionalProperties: false
+          required: [input]
+          properties:
+            input:
+              type: string
+              description: A code from `Config.inputs`.
+        - type: object
+          additionalProperties: false
+          required: [lensCalibration]
+          properties:
+            lensCalibration:
+              type: string
+              description: A code from `Config.lensCalibrations`.
+        - type: object
+          additionalProperties: false
+          required: [lensType]
+          properties:
+            lensType:
+              type: string
+              description: A code from `Config.lensTypes`.
+        - type: object
+          additionalProperties: false
+          required: [lens]
+          properties:
+            lens:
+              type: string
+              const: home
+        - type: object
+          additionalProperties: false
+          required: [lens, dir, speed]
+          properties:
+            lens:
+              $ref: '#/components/schemas/LensAxis'
+            dir:
+              type: string
+              enum: ['+', '-']
+            speed:
+              type: string
+              enum: [slow, normal, fast]
+
+    ActionRequest:
+      type: object
+      additionalProperties: false
+      required: [targets, action]
+      properties:
+        targets:
+          $ref: '#/components/schemas/Targets'
+        action:
+          $ref: '#/components/schemas/Action'
+
+    ProjectorRef:
+      type: object
+      additionalProperties: false
+      required: [id, name]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+
+    DispatchResult:
+      type: object
+      additionalProperties: false
+      required: [command, label, ok, total, failed, skipped, summary]
+      properties:
+        command:
+          type: string
+        label:
+          type: string
+          description: Readable command name, e.g. "Shutter Close".
+        ok:
+          type: integer
+        total:
+          type: integer
+        failed:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectorRef'
+        skipped:
+          type: array
+          description: Not connected (offline / auth error) — never sent.
+          items:
+            $ref: '#/components/schemas/ProjectorRef'
+        summary:
+          type: string
+          description: The Event Log's line, e.g. "Shutter Close — 4/4 OK".
 
     SignedOutEvent:
       type: object
@@ -453,6 +607,47 @@ paths:
                 $ref: '#/components/schemas/Access'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: '*Allow control* is off.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/actions:
+    post:
+      summary: Send an action to projectors (operator only)
+      description: |
+        Only exists while *Allow control* is on (404 otherwise). A viewer session gets 403.
+        Lens steps to a projector whose previous step is still in flight are dropped.
+        Logged in the app's Event Log with the source ("Web · <ip> · operator").
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionRequest'
+      responses:
+        '200':
+          description: Sent; per-projector outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DispatchResult'
+        '400':
+          description: Not a valid action request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Viewer session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
           description: '*Allow control* is off.'
           content:

@@ -33,6 +33,26 @@ const SWATCHES: Record<string, string> = {
   'OTS:87': 'radial-gradient(circle,transparent 50%,#fff 51% 57%,transparent 58%),#000',
 };
 
+/**
+ * The control panel's always-visible swatches (white, black, RGB, cross
+ * hatches, colour bars, window, circle); *More patterns* shows the rest of the
+ * app's list.
+ */
+export const MAIN_PATTERNS = [
+  'OTS:01',
+  'OTS:02',
+  'OTS:22',
+  'OTS:23',
+  'OTS:24',
+  'OTS:07',
+  'OTS:70',
+  'OTS:71',
+  'OTS:72',
+  'OTS:08',
+  'OTS:05',
+  'OTS:87',
+];
+
 /** Null for codes without a swatch (patterns the app doesn't list). */
 export function patternSwatch(code: string): string | null {
   return SWATCHES[code] ?? null;

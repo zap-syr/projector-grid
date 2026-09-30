@@ -10,6 +10,8 @@ import { Ajv2020 } from 'ajv/dist/2020.js';
 import { describe, expect, test } from 'vitest';
 import { parse } from 'yaml';
 
+import { act } from '../src/lib/logic/actions';
+
 const FIXTURES = resolve(import.meta.dirname, '../../test/fixtures/api');
 const spec = parse(readFileSync(resolve(import.meta.dirname, '../api/openapi.yaml'), 'utf8'));
 
@@ -22,6 +24,7 @@ const schemaFor: Record<string, string> = {
   'session-signed-out': 'Session',
   login: 'LoginResponse',
   access: 'Access',
+  'dispatch-result': 'DispatchResult',
   error: 'Error',
   'error-locked-out': 'Error',
   'event-snapshot': 'SnapshotEvent',
@@ -46,6 +49,31 @@ describe('fixtures match openapi.yaml', () => {
   test('every fixture is checked', () => {
     const files = readdirSync(FIXTURES).map((f) => f.replace(/\.json$/, ''));
     expect(files.sort()).toEqual(Object.keys(schemaFor).sort());
+  });
+
+  test('every action the page builds is a valid ActionRequest', () => {
+    const validate = ajv.compile({ $ref: 'openapi.json#/components/schemas/ActionRequest' });
+    const actions = [
+      act.power(true),
+      act.power(false),
+      act.shutter(true),
+      act.shutter(false),
+      act.testPattern('OTS:07'),
+      act.lensHome(),
+      act.osd(true),
+      act.input('IIS:HD1'),
+      act.lensCalibration('VXX:LNSI0=+00001'),
+      act.lensType('VXX:LNEI1=+00001'),
+      act.lensStep('shiftH', true, 'slow'),
+      act.lensStep('zoom', false, 'fast'),
+    ];
+    for (const action of actions) {
+      for (const targets of [['a', 'b'], { group: 'g1' }, 'all']) {
+        expect(validate({ targets, action }), JSON.stringify(validate.errors)).toBe(true);
+      }
+    }
+    expect(validate({ targets: [], action: act.power(true) })).toBe(false);
+    expect(validate({ targets: 'all', action: { raw: 'VXX:RSTS1=+00001' } })).toBe(false);
   });
 
   test('extra fields are rejected', () => {

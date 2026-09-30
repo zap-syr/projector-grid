@@ -233,6 +233,79 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send an action to projectors (operator only)
+         * @description Only exists while *Allow control* is on (404 otherwise). A viewer session gets 403.
+         *     Lens steps to a projector whose previous step is still in flight are dropped.
+         *     Logged in the app's Event Log with the source ("Web · <ip> · operator").
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ActionRequest"];
+                };
+            };
+            responses: {
+                /** @description Sent; per-projector outcome. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DispatchResult"];
+                    };
+                };
+                /** @description Not a valid action request. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                /** @description Viewer session. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description *Allow control* is off. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/session": {
         parameters: {
             query?: never;
@@ -523,7 +596,7 @@ export interface components {
         Role: "viewer" | "operator";
         Error: {
             /** @enum {string} */
-            error: "bad_request" | "invalid_pin" | "locked_out" | "unauthorized" | "not_found";
+            error: "bad_request" | "invalid_pin" | "locked_out" | "unauthorized" | "forbidden" | "not_found";
             /** @description Seconds until the IP may try again (`locked_out` only). */
             retryAfter?: number;
         };
@@ -622,11 +695,16 @@ export interface components {
                 intake: components["schemas"]["TempThreshold"];
                 exhaust: components["schemas"]["TempThreshold"];
             };
-            testPatterns: {
-                code: string;
-                label: string;
-            }[];
+            testPatterns: components["schemas"]["Options"];
+            inputs: components["schemas"]["Options"];
+            lensCalibrations: components["schemas"]["Options"];
+            lensTypes: components["schemas"]["Options"];
         };
+        /** @description The app's choices for a control, in its order; `code` is what an action sends. */
+        Options: {
+            code: string;
+            label: string;
+        }[];
         /** @description Always empty until telemetry alerts (ROADMAP §4) exist. */
         Alerts: unknown[];
         SnapshotEvent: {
@@ -636,6 +714,67 @@ export interface components {
         };
         ProjectEvent: {
             name: string;
+        };
+        /** @description Explicit projector ids, one group, or every projector. */
+        Targets: string[] | {
+            group: string;
+        } | "all";
+        /** @enum {string} */
+        LensAxis: "shiftH" | "shiftV" | "focus" | "zoom";
+        /**
+         * @description The fixed vocabulary the server maps to NTCONTROL (`web_actions.dart`).
+         *     Lens `dir`: `+` = right / up / far / in.
+         */
+        Action: {
+            /** @enum {string} */
+            power: "on" | "off";
+        } | {
+            /** @enum {string} */
+            shutter: "open" | "close";
+        } | {
+            /** @description An `OTS:xx` code from `Config.testPatterns`, or `OTS:00` for off. */
+            testPattern: string;
+        } | {
+            /** @enum {string} */
+            osd: "on" | "off";
+        } | {
+            /** @description A code from `Config.inputs`. */
+            input: string;
+        } | {
+            /** @description A code from `Config.lensCalibrations`. */
+            lensCalibration: string;
+        } | {
+            /** @description A code from `Config.lensTypes`. */
+            lensType: string;
+        } | {
+            /** @constant */
+            lens: "home";
+        } | {
+            lens: components["schemas"]["LensAxis"];
+            /** @enum {string} */
+            dir: "+" | "-";
+            /** @enum {string} */
+            speed: "slow" | "normal" | "fast";
+        };
+        ActionRequest: {
+            targets: components["schemas"]["Targets"];
+            action: components["schemas"]["Action"];
+        };
+        ProjectorRef: {
+            id: string;
+            name: string;
+        };
+        DispatchResult: {
+            command: string;
+            /** @description Readable command name, e.g. "Shutter Close". */
+            label: string;
+            ok: number;
+            total: number;
+            failed: components["schemas"]["ProjectorRef"][];
+            /** @description Not connected (offline / auth error) — never sent. */
+            skipped: components["schemas"]["ProjectorRef"][];
+            /** @description The Event Log's line, e.g. "Shutter Close — 4/4 OK". */
+            summary: string;
         };
         SignedOutEvent: Record<string, never>;
     };

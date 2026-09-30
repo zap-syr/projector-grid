@@ -19,10 +19,31 @@
   import { live } from '../../state/live.svelte';
   import { tableLayout, type StoredLayout } from '../../state/tableLayout.svelte';
   import { view } from '../../state/view.svelte';
+  import {
+    draggedSelection,
+    isSelectable,
+    selectedRange,
+    toggledAll,
+    triState,
+  } from '../../logic/selection';
+  import { selection } from '../../state/selection.svelte';
+  import Checkbox from '../Checkbox.svelte';
   import Icon from '../Icon.svelte';
   import Cell from './Cell.svelte';
 
-  let { config, layout }: { config: Config; layout: StoredLayout } = $props();
+  let {
+    config,
+    layout,
+    operator,
+  }: {
+    config: Config;
+    layout: StoredLayout;
+    /** Adds the selection column; rows and group headers select on click. */
+    operator: boolean;
+  } = $props();
+
+  /** The pinned checkbox column in operator mode. */
+  const SELECT_W = 44;
 
   /** Row / header height and cell padding per density (`_densityMetrics`). */
   const DENSITY: Record<Density, { row: number; header: number; hpad: number }> = {
@@ -68,6 +89,87 @@
 
   const metrics = $derived(DENSITY[layout.density]);
   let viewport = $state(0);
+  /** What the data columns share once the checkbox column is taken out. */
+  const dataViewport = $derived(operator ? viewport - SELECT_W : viewport);
+
+  // ── Selection (operator) ────────────────────────────────────────────────
+  const rowOrder = $derived(entries.flatMap((e) => (e.kind === 'row' ? [e.projector] : [])));
+
+  function rowClick(e: MouseEvent, p: Projector) {
+    if (!operator || !isSelectable(p)) return;
+    if (e.shiftKey) {
+      selection.set(selectedRange(rowOrder, selection.anchor, p.id, selection.ids));
+    } else {
+      selection.toggle(p.id);
+    }
+  }
+
+  const rowIdAt = (x: number, y: number) =>
+    document.elementFromPoint(x, y)?.closest<HTMLElement>('tr[data-id]')?.dataset.id;
+
+  /**
+   * Pointer selection on rows — the row's checkbox is the keyboard path, so
+   * one delegated listener does. With a mouse the pressed row toggles right
+   * away on press, and dragging on sweeps every row passed the same way (in,
+   * or out when the pressed row was selected); Shift-click adds a range.
+   * Touch toggles on a tap instead, so a swipe still scrolls.
+   */
+  function rowPointer(tbody: HTMLElement) {
+    let sweep: { from: string; base: Set<string>; over: string } | null = null;
+    let tap: string | null = null;
+
+    const onMove = (e: PointerEvent) => {
+      if (!sweep) return;
+      const id = rowIdAt(e.clientX, e.clientY);
+      if (!id || id === sweep.over) return;
+      sweep.over = id;
+      selection.set(draggedSelection(rowOrder, sweep.base, sweep.from, id));
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      sweep = null;
+    };
+
+    const onDown = (e: PointerEvent) => {
+      if (!operator || e.button !== 0) return;
+      // The checkbox handles its own click (and would be toggled twice).
+      if ((e.target as Element).closest('button')) return;
+      const id = (e.target as Element).closest<HTMLElement>('tr[data-id]')?.dataset.id;
+      const p = id ? live.projectors.find((x) => x.id === id) : undefined;
+      if (!p || !isSelectable(p)) return;
+      if (e.pointerType !== 'mouse') {
+        tap = p.id;
+        return;
+      }
+      e.preventDefault(); // no text selection while sweeping
+      if (e.shiftKey) {
+        rowClick(e, p);
+        return;
+      }
+      sweep = { from: p.id, base: new Set(selection.ids), over: p.id };
+      // The pressed row changes now, so what the sweep does is visible at once.
+      selection.set(draggedSelection(rowOrder, sweep.base, p.id, p.id));
+      selection.anchor = p.id;
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    };
+    const onTapUp = (e: PointerEvent) => {
+      if (tap && rowIdAt(e.clientX, e.clientY) === tap) selection.toggle(tap);
+      tap = null;
+    };
+    const onTapCancel = () => (tap = null); // the finger scrolled instead
+
+    tbody.addEventListener('pointerdown', onDown);
+    tbody.addEventListener('pointerup', onTapUp);
+    tbody.addEventListener('pointercancel', onTapCancel);
+    return () => {
+      onUp();
+      tbody.removeEventListener('pointerdown', onDown);
+      tbody.removeEventListener('pointerup', onTapUp);
+      tbody.removeEventListener('pointercancel', onTapCancel);
+    };
+  }
 
   // ── Resize ──────────────────────────────────────────────────────────────
   let resizing = $state<{ col: ColumnId; x0: number; dx: number; start: ResizeStart } | null>(null);
@@ -78,7 +180,7 @@
         : (layout.widths[c] ?? defaultWidths.get(c) ?? 120),
     ),
   );
-  const sized = $derived(layoutWidths(baseWidths, viewport, layout.fitToWidth));
+  const sized = $derived(layoutWidths(baseWidths, dataViewport, layout.fitToWidth));
 
   function resizeDown(e: PointerEvent, i: number) {
     if (e.button !== 0) return;
@@ -95,7 +197,7 @@
       start: {
         startWidth: sized.widths[i] ?? 0,
         otherBase: total - (baseWidths[i] ?? 0),
-        viewport,
+        viewport: dataViewport,
         scaling: sized.scaling,
       },
     };
@@ -126,7 +228,7 @@
 
   function autoFit(col: ColumnId) {
     const th = table?.querySelector(`th[data-col="${col}"] .lbl`);
-    const td = table?.querySelector('tbody td') ?? th;
+    const td = table?.querySelector('tbody td.dc') ?? th;
     const cells = live.projectors.map(
       (p) => textWidth(cellText(col, p, groupMap, patternLabel), td) + (ICON_PAD[col] ?? 0) + 1,
     );
@@ -192,18 +294,26 @@
     bind:this={table}
     class={layout.density}
     class:resizing={resizing !== null}
-    style:width="{sized.tableWidth}px"
+    class:op={operator}
+    style:width="{sized.tableWidth + (operator ? SELECT_W : 0)}px"
+    style:--selw="{SELECT_W}px"
     style:--row="{metrics.row}px"
     style:--head="{metrics.header}px"
     style:--hpad="{metrics.hpad}px"
   >
     <colgroup>
+      {#if operator}
+        <col style:width="{SELECT_W}px" />
+      {/if}
       {#each cols as col, i (col)}
         <col style:width="{sized.widths[i]}px" />
       {/each}
     </colgroup>
     <thead>
       <tr>
+        {#if operator}
+          <th class="selc"><span class="sr">Select</span></th>
+        {/if}
         {#each cols as col, i (col)}
           <th
             data-col={col}
@@ -246,14 +356,22 @@
         {/each}
       </tr>
     </thead>
-    <tbody>
+    <tbody {@attach rowPointer}>
       {#each entries as entry (entry.kind === 'group' ? `g:${entry.key}` : entry.projector.id)}
         {#if entry.kind === 'group'}
           {@const open = !layout.collapsed.includes(entry.key)}
           {@const worst = worstStatus(entry.members)}
           <tr class="grp" style:--gcolor={entry.group?.color ?? 'var(--line-strong)'}>
-            <td colspan={cols.length}>
+            <td colspan={cols.length + (operator ? 1 : 0)}>
               <div class="grpcell">
+                {#if operator}
+                  <Checkbox
+                    state={triState(entry.members, selection.ids)}
+                    label="Select {entry.group?.name ?? 'Ungrouped'}"
+                    disabled={!entry.members.some(isSelectable)}
+                    onclick={() => selection.set(toggledAll(entry.members, selection.ids))}
+                  />
+                {/if}
                 <button
                   class="chev"
                   class:closed={!open}
@@ -276,9 +394,27 @@
           </tr>
         {:else}
           {@const p = entry.projector}
-          <tr class="row" class:stripe={entry.stripe} class:offline={p.connection === 'offline'}>
+          {@const selected = selection.ids.has(p.id)}
+          <tr
+            class="row"
+            class:stripe={entry.stripe}
+            class:offline={p.connection === 'offline'}
+            class:sel={operator && selected}
+            class:pick={operator && isSelectable(p)}
+            data-id={p.id}
+          >
+            {#if operator}
+              <td class="selc">
+                <Checkbox
+                  state={selected}
+                  label="Select {p.name}"
+                  disabled={!isSelectable(p)}
+                  onclick={(e) => rowClick(e, p)}
+                />
+              </td>
+            {/if}
             {#each cols as col (col)}
-              <td>
+              <td class="dc">
                 <Cell
                   column={col}
                   {p}
@@ -292,7 +428,7 @@
         {/if}
       {:else}
         <tr>
-          <td class="empty" colspan={cols.length}>
+          <td class="empty" colspan={cols.length + (operator ? 1 : 0)}>
             {live.projectors.length === 0 ? 'No projectors in this project' : 'No projectors match'}
           </td>
         </tr>
@@ -353,9 +489,48 @@
     z-index: 3;
   }
 
+  /* Operator mode: the checkbox column and the first data column stay pinned. */
+  .op th:nth-child(2),
+  .op tr.row td:nth-child(2) {
+    position: sticky;
+    left: var(--selw);
+  }
+
+  .op th:nth-child(2) {
+    z-index: 3;
+  }
+
+  .op tr.row td:nth-child(2) {
+    z-index: 1;
+    background: var(--row-bg);
+  }
+
+  .selc {
+    padding: 0;
+    text-align: center;
+  }
+
+  .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  tr.row.pick {
+    cursor: pointer;
+  }
+
+  tr.row.sel td.selc {
+    box-shadow: inset 3px 0 0 var(--accent);
+  }
+
+  /* Pinned cells paint the row's colour themselves: it must be opaque, or
+     cells scrolled underneath show through. */
   tr.row td:first-child {
     z-index: 1;
-    background: inherit;
+    background: var(--row-bg);
   }
 
   .thc {
@@ -449,16 +624,27 @@
     overflow: hidden;
   }
 
+  /* Every row colour is opaque (see the pinned cells above). Selection comes
+     last so it wins over the stripe on every row. */
   tr.row {
-    background: var(--surface);
+    --row-bg: var(--surface);
+    background: var(--row-bg);
   }
 
   tr.row.stripe {
-    background: var(--surface-2);
+    --row-bg: var(--surface-2);
   }
 
   tr.row:hover {
-    background: var(--hover);
+    --row-bg: var(--hover);
+  }
+
+  tr.row.sel {
+    --row-bg: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  }
+
+  tr.row.sel:hover {
+    --row-bg: color-mix(in srgb, var(--accent) 20%, var(--surface));
   }
 
   tr.row.offline td {
@@ -466,18 +652,25 @@
   }
 
   tr.grp td {
+    /* A clipping cell becomes the sticky group label's scroll box, and the
+       label would scroll away with the table instead of staying at the left. */
+    overflow: visible;
+    height: var(--row);
     padding: 0;
     background: var(--app);
-    box-shadow: inset 3px 0 0 var(--gcolor);
   }
 
+  /* Pinned with the label, the group's colour bar stays at the left edge too. */
   .grpcell {
     position: sticky;
     left: 0;
     display: inline-flex;
     align-items: center;
     gap: 8px;
+    min-height: var(--row);
     padding: 0 var(--hpad) 0 calc(var(--hpad) - 6px);
+    box-shadow: inset 3px 0 0 var(--gcolor);
+    vertical-align: middle;
   }
 
   .grpcell b {

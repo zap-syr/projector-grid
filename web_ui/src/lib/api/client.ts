@@ -1,7 +1,9 @@
 import type {
   Access,
+  ActionRequest,
   ApiErrorBody,
   Config,
+  DispatchResult,
   Group,
   LoginResponse,
   Projector,
@@ -38,6 +40,7 @@ export const api = {
   logout: () => request<undefined>('POST', '/api/logout'),
   unlock: (pin: string) => request<Access>('POST', '/api/unlock', { pin }),
   lock: () => request<Access>('POST', '/api/lock'),
+  act: (req: ActionRequest) => request<DispatchResult>('POST', '/api/actions', req),
   config: () => request<Config>('GET', '/api/config'),
   projectors: () => request<Projector[]>('GET', '/api/projectors'),
   groups: () => request<Group[]>('GET', '/api/groups'),
