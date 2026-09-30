@@ -118,7 +118,7 @@
     <span class="count"><b>{shown.length}</b>/{live.projectors.length}</span>
   {:else}
     <span class="count"
-      ><b>{shown.length}</b> of {live.projectors.length}<span class="sl"> shown</span></span
+      ><b>{shown.length}</b> of {live.projectors.length}<span class="sl">&nbsp;shown</span></span
     >
     {@render desktopTools()}
   {/if}
@@ -141,19 +141,28 @@
       {/if}
     </div>
   {/if}
-  {#if !device.cardsOnly}
+  {#if device.mapAllowed}
+    <!-- Upright tablets have no table: just Cards / Map. -->
     <div class="seg" role="group" aria-label="View">
-      <button
-        aria-pressed={listMode.value === 'table'}
-        title="Table"
-        onclick={() => listMode.set('table')}
-        ><Icon name="table" size={15} /><span class="sl">Table</span></button
-      >
+      {#if !device.cardsOnly}
+        <button
+          aria-pressed={listMode.value === 'table'}
+          title="Table"
+          onclick={() => listMode.set('table')}
+          ><Icon name="table" size={15} /><span class="sl">Table</span></button
+        >
+      {/if}
       <button
         aria-pressed={listMode.value === 'cards'}
         title="Cards"
         onclick={() => listMode.set('cards')}
         ><Icon name="cards" size={15} /><span class="sl">Cards</span></button
+      >
+      <button
+        aria-pressed={listMode.value === 'map'}
+        title="Map"
+        onclick={() => listMode.set('map')}
+        ><Icon name="map" size={15} /><span class="sl">Map</span></button
       >
     </div>
   {/if}

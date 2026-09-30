@@ -27,6 +27,9 @@ export interface Screen {
 /** Phones and portrait tablets always show cards; the rest can pick. */
 export const cardsOnly = (s: Screen): boolean => s.phone || s.short || (s.touch && !s.wide);
 
+/** Map needs a tablet's room; phones, either way up, don't get it. */
+export const mapAllowed = (s: Screen): boolean => !s.phone && !s.short;
+
 /**
  * A bottom sheet on phones and portrait tablets, a right-hand sheet on a
  * phone held sideways (too short for a bottom one), the side panel otherwise.
@@ -50,6 +53,7 @@ class DeviceState implements Screen {
   reduceMotion = $state(false);
 
   readonly cardsOnly = $derived(cardsOnly(this));
+  readonly mapAllowed = $derived(mapAllowed(this));
   readonly control: ControlPlacement = $derived(controlPlacement(this));
 
   constructor() {

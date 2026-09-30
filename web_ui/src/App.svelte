@@ -1,5 +1,6 @@
 <script lang="ts">
   import ControlPanel from './lib/components/control/ControlPanel.svelte';
+  import MapView from './lib/components/map/MapView.svelte';
   import CardList from './lib/components/phone/CardList.svelte';
   import SelectBar from './lib/components/phone/SelectBar.svelte';
   import Sheet from './lib/components/phone/Sheet.svelte';
@@ -55,6 +56,8 @@
           <div class="table">
             {#if listMode.value === 'cards'}
               <CardList config={config.value} layout={tableLayout.value} {operator} />
+            {:else if listMode.value === 'map'}
+              <MapView config={config.value} {operator} />
             {:else}
               <DataTable config={config.value} layout={tableLayout.value} {operator} />
             {/if}
