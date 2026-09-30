@@ -13,7 +13,6 @@ import '../../domain/projector_group.dart';
 import '../../domain/test_patterns.dart';
 import '../providers/alignment_provider.dart';
 import '../providers/selection_provider.dart';
-import 'custom_tooltip.dart';
 
 /// How strongly a grouped card's background is tinted with its group's
 /// color. Applied via [Color.alphaBlend] over the card's normal surface
@@ -182,10 +181,9 @@ class _ProjectorCardState extends ConsumerState<ProjectorCard> {
                   ),
                 ),
               ),
-              // A pattern behind a closed shutter isn't on screen, so it
-              // isn't shown either.
-              if (isTestPatternActive(node.testPattern) &&
-                  node.shutterStatus == ShutterStatus.open)
+              // Shown whatever the shutter: the pattern is still set on the
+              // projector and appears as soon as the shutter opens.
+              if (isTestPatternActive(node.testPattern))
                 _TestPatternThumb(code: node.testPattern!),
             ],
           ),
@@ -470,18 +468,15 @@ class _TestPatternThumb extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final icon = kTestPatternIcons[code];
-    return CustomTooltip(
-      message: 'Test pattern: ${testPatternLabel(code)}',
-      child: Container(
-        width: 16,
-        height: 10,
-        decoration: BoxDecoration(
-          border: Border.all(color: colorScheme.outlineVariant, width: 0.5),
-        ),
-        child: icon != null
-            ? SvgPicture.asset(icon, fit: BoxFit.cover)
-            : Icon(Icons.grid_on, size: 9, color: colorScheme.onSurfaceVariant),
+    return Container(
+      width: 16,
+      height: 10,
+      decoration: BoxDecoration(
+        border: Border.all(color: colorScheme.outlineVariant, width: 0.5),
       ),
+      child: icon != null
+          ? SvgPicture.asset(icon, fit: BoxFit.cover)
+          : Icon(Icons.grid_on, size: 9, color: colorScheme.onSurfaceVariant),
     );
   }
 }
