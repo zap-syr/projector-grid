@@ -85,7 +85,7 @@ test/fixtures/api/              # golden JSON written by Dart tests, read by web
 | Vite | dev server, proxy, production build |
 | TypeScript `strict` + `svelte-check` | types; no `any`. Pinned to 5.9: `svelte-check`, `typescript-eslint` and `openapi-typescript` don't accept TS 7 yet |
 | `openapi-typescript` | generates `types.gen.ts` from `api/openapi.yaml` |
-| TanStack Table (`@tanstack/svelte-table` 9, the official Svelte 5 adapter) | headless column visibility / order / sizing / sorting / grouping; installed at step 3 |
+| ~~TanStack Table~~ | dropped at step 3 (owner, 2026-09-30): the table must match the app's Dart logic exactly (sort keys, `_resizeBaseFor`, group sections, reorder rule), so it's ported as small pure functions in `lib/logic/` instead of wrapped in a table library |
 | Vitest + `@testing-library/svelte` | unit + component tests |
 | ESLint (`eslint-plugin-svelte`) + Prettier (`prettier-plugin-svelte`) | lint / format |
 | `@fontsource-variable/geist` + `geist-mono` | self-hosted fonts (bundled by Vite; no `src/fonts/`) |
@@ -228,8 +228,10 @@ Then the existing `build_runner → format → analyze → flutter test`. The re
    - `/api/config`, `/api/projectors`, `/api/groups`, `/api/alerts` (returns `[]` until
      ROADMAP §4), `/api/events`;
    - `mocks/` + `dev:mock`.
-3. `[ ]` **Viewer desktop table:** columns, sort, show/hide, presets, reorder, resize,
-   auto-fit, fit-to-width, density, group-by; status colours; filters + search.
+3. `[x]` **Viewer desktop table:** columns, sort, show/hide, presets, reorder, resize,
+   auto-fit, fit-to-width, density, group-by; status colours; filters + search. Reorder is by dragging headers
+   only, like the app — the Columns popover has no drag list. Group sections collapse and
+   show the app's worst-status pill.
 4. `[ ]` **Alerts rail / drawer** (needs ROADMAP §4 alerts provider; show an empty rail until
    then).
 5. `[ ]` **Operator auth:** *Allow control* + Operator PIN, operator role on sessions,
@@ -245,6 +247,5 @@ Then the existing `build_runner → format → analyze → flutter test`. The re
 
 ## 11. Open points
 
-- ~~TanStack Table adapter~~ — decided at step 1: the official `@tanstack/svelte-table` 9
-  (stable, Svelte 5).
+- ~~TanStack Table adapter~~ — not used; see §4.
 - ~~Precompressed assets~~ — not doing: the bundle is small and it's a LAN.

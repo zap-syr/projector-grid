@@ -609,11 +609,11 @@ describe what the column shows.
 | Show / hide columns (View ▸ Monitoring Table), last column can't be hidden, re-shown column returns to its canonical slot (`toggledColumn`) | **Columns** popover: checklist, same rules |
 | Presets *Essentials / Thermal / Signal / Show all* | Preset buttons in the popover + *Reset* |
 | Click header to sort, again to reverse; default `ip` ascending | Same; arrow on the sorted header, `aria-sort` |
-| Drag a header to reorder | Drag headers (drop marker left/right); also drag in the popover list |
+| Drag a header to reorder | Same: drag the header, the target header highlights, same landing rule (`_reorderColumn`). No drag list in the popover (owner, 2026-09-30) |
 | Drag a header's right edge to resize; double-click it to auto-fit | Same; the edge shows a hairline on hover. Auto-fit measures the widest cell, like `onAutoFit` |
 | Fit to width (`monitoringFitToWidth`), with the `_resizeBaseFor` maths so a resized column lands where dragged | Same switch and the same formula; floor 60 px (`_minColWidth`); sideways scroll only when floors push past the viewport |
 | Density compact / standard / comfortable (row 32 / 40 / 52 px) | Same three options |
-| Group-by (`monitoringGroupBy`); the Group column is hidden while grouping | Same switch (disabled when the project has no groups); collapsible group sections with an online / warnings / offline summary |
+| Group-by (`monitoringGroupBy`); the Group column is hidden while grouping | Same switch (disabled when the project has no groups); group sections like the app's (count + worst-status pill), plus collapsible |
 
 - **Where the layout is saved:** per browser (`localStorage`), not in the app's settings, so a
   phone and a booth laptop can differ. The first visit starts from the app's current layout
