@@ -5,6 +5,7 @@ import 'package:projector_grid/core/services/web_auth.dart';
 
 void main() {
   final pinHash = hashPin('1234', random: Random(1));
+  final operatorHash = hashPin('9876', random: Random(2));
 
   group('PIN hashing', () {
     test('verifies the right PIN only', () {
@@ -33,8 +34,16 @@ void main() {
       );
     });
 
-    LoginResult login(String pin, {String ip = '10.0.0.5'}) =>
-        auth.login(ip: ip, pin: pin, viewerPinHash: pinHash);
+    LoginResult login(
+      String pin, {
+      String ip = '10.0.0.5',
+      bool controlAllowed = true,
+    }) => auth.login(
+      ip: ip,
+      pin: pin,
+      viewerPinHash: pinHash,
+      operatorPinHash: controlAllowed ? operatorHash : null,
+    );
 
     test('the right PIN opens a viewer session', () {
       final result = login('1234');
@@ -116,6 +125,61 @@ void main() {
       expect(auth.touch(b), isNotNull);
       auth.revokeAll();
       expect(auth.touch(b), isNull);
+    });
+
+    group('operator', () {
+      test('the Operator PIN logs in as operator, only while allowed', () {
+        final ok = login('9876') as LoginOk;
+        expect(ok.session.role, WebRole.operator);
+        expect(login('9876', controlAllowed: false), isA<LoginInvalidPin>());
+        expect(
+          (login('1234') as LoginOk).session.role,
+          WebRole.viewer,
+          reason: 'the Viewer PIN still gives a viewer',
+        );
+      });
+
+      test('unlock upgrades the same session; lock drops it back', () {
+        final session = (login('1234') as LoginOk).session;
+        expect(
+          auth.unlock(session, '1234', operatorHash),
+          isA<LoginInvalidPin>(),
+        );
+        expect(session.role, WebRole.viewer);
+
+        expect(auth.unlock(session, '9876', operatorHash), isA<LoginOk>());
+        expect(session.role, WebRole.operator);
+        expect(auth.touch(session.token)?.role, WebRole.operator);
+
+        auth.lock(session);
+        expect(session.role, WebRole.viewer);
+      });
+
+      test('wrong unlock PINs count towards the IP lockout', () {
+        final session = (login('1234') as LoginOk).session;
+        for (var i = 0; i < 3; i++) {
+          auth.unlock(session, '0000', operatorHash);
+        }
+        login('0000');
+        expect(
+          auth.unlock(session, '0000', operatorHash),
+          isA<LoginLockedOut>(),
+        );
+        expect(
+          auth.unlock(session, '9876', operatorHash),
+          isA<LoginLockedOut>(),
+        );
+        expect(session.role, WebRole.viewer);
+      });
+
+      test('demoteOperators drops every operator to viewer', () {
+        final op = (login('9876') as LoginOk).session;
+        final viewer = (login('1234') as LoginOk).session;
+        expect(auth.demoteOperators(), [op]);
+        expect(op.role, WebRole.viewer);
+        expect(viewer.role, WebRole.viewer);
+        expect(auth.touch(op.token), isNotNull, reason: 'still signed in');
+      });
     });
   });
 }

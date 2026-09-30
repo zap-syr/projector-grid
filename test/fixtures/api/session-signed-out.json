@@ -1,4 +1,5 @@
 {
   "projectName": "Main Hall",
-  "authenticated": false
+  "authenticated": false,
+  "controlAllowed": false
 }

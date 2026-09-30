@@ -46,7 +46,9 @@ List<int> _pbkdf2(List<int> password, List<int> salt, int iterations) {
 
 class WebSession {
   final String token;
-  final WebRole role;
+
+  /// Viewer, or operator after an operator-PIN login or *Unlock control*.
+  WebRole role;
   final String ip;
   DateTime lastSeen;
 
@@ -94,11 +96,49 @@ class WebAuth {
   final _attempts = <String, _Attempts>{};
   final _random = Random.secure();
 
+  /// The role follows from which PIN matches; [operatorPinHash] is null
+  /// while *Allow control* is off, so only the Viewer PIN works then.
   LoginResult login({
     required String ip,
     required String pin,
     required String viewerPinHash,
-  }) {
+    required String? operatorPinHash,
+  }) => _attempt(ip, () {
+    final WebRole role;
+    if (operatorPinHash != null && verifyPin(pin, operatorPinHash)) {
+      role = WebRole.operator;
+    } else if (verifyPin(pin, viewerPinHash)) {
+      role = WebRole.viewer;
+    } else {
+      return null;
+    }
+    final token = base64Url
+        .encode(List<int>.generate(32, (_) => _random.nextInt(256)))
+        .replaceAll('=', '');
+    return _sessions[token] = WebSession(token, role, ip, _now());
+  });
+
+  /// *Unlock control*: upgrades [session] to operator with the Operator PIN.
+  /// Wrong PINs count towards the same per-IP lockout as logins.
+  LoginResult unlock(WebSession session, String pin, String operatorPinHash) =>
+      _attempt(session.ip, () {
+        if (!verifyPin(pin, operatorPinHash)) return null;
+        session.role = WebRole.operator;
+        return session;
+      });
+
+  /// *Lock*: back to viewer, same session.
+  void lock(WebSession session) => session.role = WebRole.viewer;
+
+  /// *Allow control* turned off: every operator drops to viewer. Returns the
+  /// sessions that changed.
+  List<WebSession> demoteOperators() => [
+    for (final s in _sessions.values)
+      if (s.role == WebRole.operator) s..role = WebRole.viewer,
+  ];
+
+  /// Runs [check] unless [ip] is locked out; a null result is a wrong PIN.
+  LoginResult _attempt(String ip, WebSession? Function() check) {
     final now = _now();
     final attempts = _attempts.putIfAbsent(ip, _Attempts.new);
     final lockedUntil = attempts.lockedUntil;
@@ -106,13 +146,9 @@ class WebAuth {
       return LoginLockedOut(lockedUntil.difference(now));
     }
 
-    if (verifyPin(pin, viewerPinHash)) {
+    final session = check();
+    if (session != null) {
       _attempts.remove(ip);
-      final token = base64Url
-          .encode(List<int>.generate(32, (_) => _random.nextInt(256)))
-          .replaceAll('=', '');
-      final session = WebSession(token, WebRole.viewer, ip, now);
-      _sessions[token] = session;
       return LoginOk(session);
     }
 

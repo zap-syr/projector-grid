@@ -10,13 +10,32 @@ import 'web_event_hub.dart';
 
 typedef Json = Map<String, Object?>;
 
-Json sessionJson({required String projectName, WebRole? role}) => {
+Json sessionJson({
+  required String projectName,
+  required bool controlAllowed,
+  WebRole? role,
+}) => {
   'projectName': projectName,
   'authenticated': role != null,
   'role': ?role?.name,
+  'controlAllowed': controlAllowed,
 };
 
-Json loginJson(WebSession s) => {'token': s.token, 'role': s.role.name};
+Json loginJson(WebSession s, {required bool controlAllowed}) => {
+  'token': s.token,
+  'role': s.role.name,
+  'controlAllowed': controlAllowed,
+};
+
+/// A session's role and whether *Unlock control* is available: the reply to
+/// unlock / lock, and the `access` event when either changes.
+Json accessJson(WebRole role, {required bool controlAllowed}) => {
+  'role': role.name,
+  'controlAllowed': controlAllowed,
+};
+
+/// SSE event name for [accessJson], sent to one session's pages.
+const accessEvent = 'access';
 
 Json errorJson(String error, {int? retryAfter}) => {
   'error': error,
@@ -28,6 +47,9 @@ Json errorJson(String error, {int? retryAfter}) => {
 abstract interface class WebApiSource {
   String get projectName;
   String get viewerPinHash;
+
+  /// Null while *Allow control* is off: no operator login, no unlock.
+  String? get operatorPinHash;
   Json config(WebRole role);
   List<Json> projectors();
   List<Json> groups();
@@ -36,6 +58,9 @@ abstract interface class WebApiSource {
   List<WebEvent> snapshotEvents();
 
   void signedIn(WebSession session);
+
+  /// After *Unlock control* or *Lock*.
+  void roleChanged(WebSession session);
 }
 
 /// `/api/*` routes: PIN login, session check on everything else, read-only
@@ -55,6 +80,8 @@ class WebApi {
           ..post('/api/login', _login)
           ..get('/api/session', _session)
           ..post('/api/logout', _authed((r, s) => _logout(s)))
+          ..post('/api/unlock', _authed(_unlock))
+          ..post('/api/lock', _authed((_, s) => _lock(s)))
           ..get(
             '/api/config',
             _authed((_, s) => _json(200, source.config(s.role))),
@@ -78,49 +105,91 @@ class WebApi {
     return router.call;
   }
 
-  Future<Response> _login(Request request) async {
-    final Object? body;
+  bool get _controlAllowed => source.operatorPinHash != null;
+
+  /// `{"pin": "<string>"}` → the PIN; null for anything else.
+  static Future<String?> _readPin(Request request) async {
     try {
-      body = jsonDecode(await request.readAsString());
+      final body = jsonDecode(await request.readAsString());
+      final pin = body is Map ? body['pin'] : null;
+      return pin is String ? pin : null;
     } on FormatException {
-      return _json(400, errorJson('bad_request'));
+      return null;
     }
-    final pin = body is Map ? body['pin'] : null;
-    if (pin is! String) return _json(400, errorJson('bad_request'));
+  }
+
+  Future<Response> _login(Request request) async {
+    final pin = await _readPin(request);
+    if (pin == null) return _json(400, errorJson('bad_request'));
 
     final result = auth.login(
       ip: _clientIp(request),
       pin: pin,
       viewerPinHash: source.viewerPinHash,
+      operatorPinHash: source.operatorPinHash,
     );
-    switch (result) {
-      case LoginOk(:final session):
-        source.signedIn(session);
-        return _json(
-          200,
-          loginJson(session),
-          headers: {
-            'set-cookie':
-                '$cookieName=${session.token}; Path=/; HttpOnly; SameSite=Strict',
-          },
-        );
-      case LoginInvalidPin():
-        return _json(401, errorJson('invalid_pin'));
-      case LoginLockedOut(:final retryAfter):
-        final seconds = (retryAfter.inMilliseconds / 1000).ceil();
-        return _json(
-          429,
-          errorJson('locked_out', retryAfter: seconds),
-          headers: {'retry-after': '$seconds'},
-        );
-    }
+    if (result is! LoginOk) return _pinRefused(result);
+    final session = result.session;
+    source.signedIn(session);
+    return _json(
+      200,
+      loginJson(session, controlAllowed: _controlAllowed),
+      headers: {
+        'set-cookie':
+            '$cookieName=${session.token}; Path=/; HttpOnly; SameSite=Strict',
+      },
+    );
+  }
+
+  Future<Response> _unlock(Request request, WebSession session) async {
+    // With Allow control off the route doesn't exist.
+    final operatorPinHash = source.operatorPinHash;
+    if (operatorPinHash == null) return _json(404, errorJson('not_found'));
+    final pin = await _readPin(request);
+    if (pin == null) return _json(400, errorJson('bad_request'));
+
+    final result = auth.unlock(session, pin, operatorPinHash);
+    if (result is! LoginOk) return _pinRefused(result);
+    return _roleChanged(session);
+  }
+
+  Response _lock(WebSession session) {
+    if (!_controlAllowed) return _json(404, errorJson('not_found'));
+    auth.lock(session);
+    return _roleChanged(session);
+  }
+
+  /// Tells the session's other tabs, logs it, and replies with the new access.
+  Response _roleChanged(WebSession session) {
+    final access = accessJson(session.role, controlAllowed: _controlAllowed);
+    hub.sendTo(session.token, (name: accessEvent, data: access));
+    source.roleChanged(session);
+    return _json(200, access);
+  }
+
+  static Response _pinRefused(LoginResult result) => switch (result) {
+    LoginLockedOut(:final retryAfter) => _lockedOut(retryAfter),
+    _ => _json(401, errorJson('invalid_pin')),
+  };
+
+  static Response _lockedOut(Duration retryAfter) {
+    final seconds = (retryAfter.inMilliseconds / 1000).ceil();
+    return _json(
+      429,
+      errorJson('locked_out', retryAfter: seconds),
+      headers: {'retry-after': '$seconds'},
+    );
   }
 
   Response _session(Request request) {
     final session = auth.touch(_token(request));
     return _json(
       200,
-      sessionJson(projectName: source.projectName, role: session?.role),
+      sessionJson(
+        projectName: source.projectName,
+        controlAllowed: _controlAllowed,
+        role: session?.role,
+      ),
     );
   }
 

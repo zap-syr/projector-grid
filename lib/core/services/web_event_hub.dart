@@ -50,6 +50,14 @@ class WebEventHub {
     }
   }
 
+  /// Sends [event] to [token]'s pages only (every tab sharing that session).
+  void sendTo(String token, WebEvent event) {
+    final bytes = encodeSseEvent(event);
+    for (final c in _clients.where((c) => c.token == token)) {
+      c.controller.add(bytes);
+    }
+  }
+
   /// Ends the streams of [token]'s pages, after sending [last] if given.
   void close(String token, {WebEvent? last}) =>
       _closeWhere((c) => c.token == token, last);

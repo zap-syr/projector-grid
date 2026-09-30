@@ -18,13 +18,23 @@ class _Conn implements HttpConnectionInfo {
   int get localPort => 8080;
 }
 
+final _operatorHash = hashPin('9876', random: Random(2));
+
 class _Source implements WebApiSource {
   final signedInSessions = <WebSession>[];
+  final roleChanges = <WebRole>[];
+
+  /// *Allow control*; on by default here.
+  bool controlAllowed = true;
 
   @override
   String get projectName => 'Main Hall';
   @override
   final String viewerPinHash = hashPin('1234', random: Random(1));
+  @override
+  String? get operatorPinHash => controlAllowed ? _operatorHash : null;
+  @override
+  void roleChanged(WebSession session) => roleChanges.add(session.role);
   @override
   Json config(WebRole role) => {'role': role.name};
   @override
@@ -84,6 +94,7 @@ void main() {
       expect(r.statusCode, 200);
       final body = (await jsonOf(r)) as Map;
       expect(body['role'], 'viewer');
+      expect(body['controlAllowed'], isTrue);
       expect(
         r.headers['set-cookie'],
         '${WebApi.cookieName}=${body['token']}; Path=/; HttpOnly; SameSite=Strict',
@@ -121,6 +132,7 @@ void main() {
     expect(await jsonOf(await send('GET', '/api/session')), {
       'projectName': 'Main Hall',
       'authenticated': false,
+      'controlAllowed': true,
     });
     final token = await loginToken();
     expect(
@@ -131,8 +143,87 @@ void main() {
           headers: {'cookie': 'other=1; ${WebApi.cookieName}=$token'},
         ),
       ),
-      {'projectName': 'Main Hall', 'authenticated': true, 'role': 'viewer'},
+      {
+        'projectName': 'Main Hall',
+        'authenticated': true,
+        'role': 'viewer',
+        'controlAllowed': true,
+      },
     );
+  });
+
+  group('operator access', () {
+    Future<Response> unlock(String token, String pin) => send(
+      'POST',
+      '/api/unlock',
+      body: {'pin': pin},
+      headers: {'authorization': 'Bearer $token'},
+    );
+
+    test('the Operator PIN logs straight in as operator', () async {
+      final r = await send('POST', '/api/login', body: {'pin': '9876'});
+      expect(((await jsonOf(r)) as Map)['role'], 'operator');
+    });
+
+    test('unlock → operator, lock → viewer, other tabs are told', () async {
+      final token = await loginToken();
+      final events = <String>[];
+      final sub = hub
+          .subscribe(token, const [])
+          .map(utf8.decode)
+          .listen(events.add);
+
+      final wrong = await unlock(token, '1234');
+      expect(wrong.statusCode, 401);
+      expect(await jsonOf(wrong), {'error': 'invalid_pin'});
+
+      final ok = await unlock(token, '9876');
+      expect(await jsonOf(ok), {'role': 'operator', 'controlAllowed': true});
+      final locked = await send(
+        'POST',
+        '/api/lock',
+        headers: {'authorization': 'Bearer $token'},
+      );
+      expect(await jsonOf(locked), {'role': 'viewer', 'controlAllowed': true});
+
+      await pumpEventQueue();
+      expect(
+        events.where((e) => e.startsWith('event: $accessEvent')),
+        hasLength(2),
+      );
+      expect(source.roleChanges, [WebRole.operator, WebRole.viewer]);
+      await sub.cancel();
+    });
+
+    test(
+      'with Allow control off: no operator login, no unlock/lock routes',
+      () async {
+        source.controlAllowed = false;
+        expect(
+          (await send('POST', '/api/login', body: {'pin': '9876'})).statusCode,
+          401,
+        );
+        final token = await loginToken();
+        expect((await unlock(token, '9876')).statusCode, 404);
+        expect(
+          (await send(
+            'POST',
+            '/api/lock',
+            headers: {'authorization': 'Bearer $token'},
+          )).statusCode,
+          404,
+        );
+        final session = await jsonOf(await send('GET', '/api/session'));
+        expect((session as Map)['controlAllowed'], isFalse);
+      },
+    );
+
+    test('unlock needs a session', () async {
+      expect(
+        (await send('POST', '/api/unlock', body: {'pin': '9876'})).statusCode,
+        401,
+      );
+    });
   });
 
   group('authenticated routes', () {

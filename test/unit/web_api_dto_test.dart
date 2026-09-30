@@ -123,15 +123,26 @@ void main() {
     test('session, login and errors', () {
       expectFixture(
         'session-signed-out',
-        sessionJson(projectName: 'Main Hall'),
+        sessionJson(projectName: 'Main Hall', controlAllowed: false),
       );
       expectFixture(
         'session-signed-in',
-        sessionJson(projectName: 'Main Hall', role: WebRole.viewer),
+        sessionJson(
+          projectName: 'Main Hall',
+          controlAllowed: true,
+          role: WebRole.viewer,
+        ),
       );
       expectFixture(
         'login',
-        loginJson(WebSession('tok', WebRole.viewer, '10.0.0.5', DateTime(0))),
+        loginJson(
+          WebSession('tok', WebRole.operator, '10.0.0.5', DateTime(0)),
+          controlAllowed: true,
+        ),
+      );
+      expectFixture(
+        'access',
+        accessJson(WebRole.operator, controlAllowed: true),
       );
       expectFixture('error', errorJson('invalid_pin'));
       expectFixture(

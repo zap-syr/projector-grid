@@ -1,5 +1,6 @@
 {
   "projectName": "Main Hall",
   "authenticated": true,
-  "role": "viewer"
+  "role": "viewer",
+  "controlAllowed": true
 }
