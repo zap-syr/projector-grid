@@ -164,11 +164,13 @@ class AlignmentNotifier extends _$AlignmentNotifier {
 
   /// Scope is the selection when two or more cards are selected, otherwise
   /// every projector. The focused projector is the first selected one in
-  /// layout order, or the first overall.
-  Future<void> enter() async {
+  /// layout order, or the first overall. [selection] replaces the app's
+  /// selection (the web page has its own).
+  Future<void> enter({Set<String>? selection}) async {
     if (state.active || state.busy) return;
     final nodes = ref.read(workspaceProvider);
-    final selected = ref.read(selectionProvider);
+    final appSelection = ref.read(selectionProvider);
+    final selected = selection ?? appSelection;
     final scopeNodes = selected.length >= 2
         ? nodes.where((n) => selected.contains(n.id)).toList()
         : nodes;

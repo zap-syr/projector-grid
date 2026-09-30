@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:projector_grid/core/services/web_api.dart';
 import 'package:projector_grid/core/services/web_auth.dart';
+import 'package:projector_grid/features/workspace/domain/alignment.dart';
 import 'package:projector_grid/features/workspace/domain/dispatch_result.dart';
 import 'package:projector_grid/features/workspace/domain/monitoring_columns.dart';
 import 'package:projector_grid/features/workspace/domain/projector_group.dart';
@@ -162,6 +163,43 @@ void main() {
         ),
       );
       expectFixture('event-project', {'name': 'Main Hall'});
+    });
+
+    test('alignment', () {
+      expectFixture(
+        'alignment',
+        alignmentJson(
+          active: true,
+          busy: false,
+          focusedId: 'n2',
+          roles: const {
+            'n1': AlignmentRole.shown,
+            'n2': AlignmentRole.focused,
+            'n4': AlignmentRole.closed,
+          },
+          preset: AlignmentPreset.geometry,
+          focusedPattern: 'OTS:07',
+          othersPattern: 'OTS:70',
+          showNeighbours: true,
+          includeDiagonals: false,
+          showAll: false,
+        ),
+      );
+      expectFixture(
+        'alignment-off',
+        alignmentJson(
+          active: false,
+          busy: false,
+          focusedId: null,
+          roles: const {},
+          preset: AlignmentPreset.color,
+          focusedPattern: 'OTS:01',
+          othersPattern: null,
+          showNeighbours: false,
+          includeDiagonals: false,
+          showAll: false,
+        ),
+      );
     });
 
     test('dispatch result', () {

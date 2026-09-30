@@ -1,0 +1,12 @@
+{
+  "active": false,
+  "busy": false,
+  "focusedId": null,
+  "roles": {},
+  "preset": "color",
+  "focusedPattern": "OTS:01",
+  "othersPattern": null,
+  "showNeighbours": false,
+  "includeDiagonals": false,
+  "showAll": false
+}

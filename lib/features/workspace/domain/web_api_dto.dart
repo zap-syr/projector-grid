@@ -9,6 +9,7 @@ import '../../../core/services/web_api.dart' show Json;
 import '../../../core/services/web_auth.dart';
 import '../../../core/services/web_event_hub.dart';
 import '../../../core/theme/status_thresholds.dart';
+import 'alignment.dart';
 import 'card_layout.dart';
 import 'control_options.dart';
 import 'dispatch_result.dart';
@@ -25,6 +26,7 @@ abstract final class WebEvents {
   static const projector = 'projector';
   static const groups = 'groups';
   static const project = 'project';
+  static const alignment = 'alignment';
   static const signedOut = 'signedOut';
 }
 
@@ -131,6 +133,37 @@ Json configJson({
   'inputs': _options(kInputOptions),
   'lensCalibrations': _options(kLensCalibrationOptions),
   'lensTypes': _options(kLensTypeOptions),
+  'alignmentPresets': [
+    for (final p in AlignmentPreset.values)
+      {'id': p.name, 'label': p.label, 'patterns': p.patterns},
+  ],
+};
+
+/// Alignment mode as the banner sees it. `roles` covers the mode's scope,
+/// in no particular order — the page orders it by the projectors' layout
+/// order.
+Json alignmentJson({
+  required bool active,
+  required bool busy,
+  required String? focusedId,
+  required Map<String, AlignmentRole> roles,
+  required AlignmentPreset preset,
+  required String focusedPattern,
+  required String? othersPattern,
+  required bool showNeighbours,
+  required bool includeDiagonals,
+  required bool showAll,
+}) => {
+  'active': active,
+  'busy': busy,
+  'focusedId': focusedId,
+  'roles': {for (final e in roles.entries) e.key: e.value.name},
+  'preset': preset.name,
+  'focusedPattern': focusedPattern,
+  'othersPattern': othersPattern,
+  'showNeighbours': showNeighbours,
+  'includeDiagonals': includeDiagonals,
+  'showAll': showAll,
 };
 
 List<Json> _options(Map<String, String> byCode) => [

@@ -44,6 +44,17 @@ class _Source implements WebApiSource {
     return body is Map && body.containsKey('bad') ? null : {'ok': 1};
   }
 
+  /// (op, body) pairs [alignmentOp] was handed; the op `bad` counts as invalid.
+  final alignmentOps = <(String, Object?)>[];
+  @override
+  Json alignment() => {'active': alignmentOps.isNotEmpty};
+  @override
+  Future<Json?> alignmentOp(String op, Object? body, WebSession session) async {
+    if (op == 'bad') return null;
+    alignmentOps.add((op, body));
+    return alignment();
+  }
+
   @override
   Json config(WebRole role) => {'role': role.name};
   @override
@@ -270,6 +281,58 @@ void main() {
       });
     });
 
+    group('/api/alignment', () {
+      Future<Response> op(String token, String name, {Object? body}) => send(
+        'POST',
+        '/api/alignment/$name',
+        body: body,
+        headers: {'authorization': 'Bearer $token'},
+      );
+
+      test('anyone signed in reads the state', () async {
+        final r = await send(
+          'GET',
+          '/api/alignment',
+          headers: {'authorization': 'Bearer ${await loginToken()}'},
+        );
+        expect(await jsonOf(r), {'active': false});
+      });
+
+      test('operators only: a viewer gets 403, nothing happens', () async {
+        final r = await op(await loginToken(), 'enter');
+        expect(r.statusCode, 403);
+        expect(source.alignmentOps, isEmpty);
+      });
+
+      test('an operator\'s op runs, with or without a body', () async {
+        final token = await loginToken();
+        await unlock(token, '9876');
+        final r = await op(token, 'next');
+        expect(r.statusCode, 200);
+        expect(await jsonOf(r), {'active': true});
+        await op(token, 'focus', body: {'id': 'b'});
+        expect(source.alignmentOps.map((o) => o.$1), ['next', 'focus']);
+        expect(source.alignmentOps.map((o) => o.$2), [
+          null,
+          {'id': 'b'},
+        ]);
+      });
+
+      test('invalid ops and bodies → 400', () async {
+        final token = await loginToken();
+        await unlock(token, '9876');
+        expect((await op(token, 'bad')).statusCode, 400);
+        expect((await op(token, 'focus', body: 'not json {')).statusCode, 400);
+      });
+
+      test('no route at all while Allow control is off', () async {
+        final token = await loginToken();
+        await unlock(token, '9876');
+        source.controlAllowed = false;
+        expect((await op(token, 'exit')).statusCode, 404);
+      });
+    });
+
     test('unlock needs a session', () async {
       expect(
         (await send('POST', '/api/unlock', body: {'pin': '9876'})).statusCode,
@@ -286,6 +349,7 @@ void main() {
         '/api/projectors/a',
         '/api/groups',
         '/api/alerts',
+        '/api/alignment',
         '/api/events',
       ]) {
         final r = await send('GET', path);

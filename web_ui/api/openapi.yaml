@@ -263,6 +263,7 @@ components:
         - inputs
         - lensCalibrations
         - lensTypes
+        - alignmentPresets
       properties:
         projectName:
           type: string
@@ -320,6 +321,77 @@ components:
           $ref: '#/components/schemas/Options'
         lensTypes:
           $ref: '#/components/schemas/Options'
+        alignmentPresets:
+          type: array
+          description: Alignment mode's tasks and the patterns each one offers (Custom = all).
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, label, patterns]
+            properties:
+              id:
+                $ref: '#/components/schemas/AlignmentPresetId'
+              label:
+                type: string
+              patterns:
+                type: array
+                items:
+                  type: string
+
+    AlignmentPresetId:
+      type: string
+      enum: [geometry, color, custom]
+
+    AlignmentRole:
+      type: string
+      description: |
+        `focused` — shutter open, Focused pattern; `shown` — open with the Others
+        pattern (a neighbour, or everyone under Show All); `closed` — shutter closed.
+      enum: [focused, shown, closed]
+
+    Alignment:
+      type: object
+      additionalProperties: false
+      required:
+        - active
+        - busy
+        - focusedId
+        - roles
+        - preset
+        - focusedPattern
+        - othersPattern
+        - showNeighbours
+        - includeDiagonals
+        - showAll
+      description: |
+        The app's Alignment mode — one shared session, driven from the app or any page.
+        Preset, patterns and the neighbour options persist while the mode is off.
+      properties:
+        active:
+          type: boolean
+        busy:
+          type: boolean
+          description: Entry (reading projectors) or exit (restoring them) in progress.
+        focusedId:
+          type: [string, 'null']
+        roles:
+          type: object
+          description: The mode's scope, projector id → role; empty while off.
+          additionalProperties:
+            $ref: '#/components/schemas/AlignmentRole'
+        preset:
+          $ref: '#/components/schemas/AlignmentPresetId'
+        focusedPattern:
+          type: string
+        othersPattern:
+          type: [string, 'null']
+          description: null = same as focused.
+        showNeighbours:
+          type: boolean
+        includeDiagonals:
+          type: boolean
+        showAll:
+          type: boolean
 
     Options:
       type: array
@@ -655,6 +727,88 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /api/alignment:
+    get:
+      summary: Alignment mode's state
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Alignment'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/alignment/{op}:
+    post:
+      summary: Drive Alignment mode (operator only)
+      description: |
+        Only exists while *Allow control* is on (404 otherwise). A viewer session gets 403.
+        Each op calls the app's own Alignment mode, so the app's banner follows.
+
+        | `op` | Body | Does |
+        |---|---|---|
+        | `enter` | none, or `{"targets": [ids]}` — the page's selection | scope = the selection when it has 2+ projectors, else all; waits while projectors are read |
+        | `exit` | none | restores shutters, patterns and shutter fades; waits until done |
+        | `next` / `prev` | none | step in layout order, wrapping |
+        | `focus` | `{"id": "…"}` | focus one projector in the scope |
+        | `neighbours` / `diagonals` / `showAll` | none | flip the toggle |
+        | `preset` | `{"preset": "geometry" \| "color" \| "custom"}` | switch the task (its default patterns, Custom keeps them) |
+        | `focusedPattern` | `{"code": "OTS:xx"}` | a pattern the current preset offers |
+        | `othersPattern` | `{"code": "OTS:xx" \| null}` | null = same as focused |
+      parameters:
+        - name: op
+          in: path
+          required: true
+          schema:
+            type: string
+            enum:
+              - enter
+              - exit
+              - next
+              - prev
+              - focus
+              - neighbours
+              - diagonals
+              - showAll
+              - preset
+              - focusedPattern
+              - othersPattern
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Done; the new state (every page also gets an `alignment` event).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Alignment'
+        '400':
+          description: Unknown op, or a body it doesn't take.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Viewer session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: '*Allow control* is off.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /api/session:
     get:
       security: []
@@ -757,6 +911,7 @@ paths:
         | `projector` | `Projector` | one projector changed |
         | `groups` | `Groups` | groups changed |
         | `project` | `ProjectEvent` | another project was opened or saved under a new name |
+        | `alignment` | `Alignment` | after `snapshot`, and whenever Alignment mode changes (from the app or any page) |
         | `access` | `Access` | this session was unlocked / locked (in another tab too), or *Allow control* was switched |
         | `signedOut` | `SignedOutEvent` | the session ended (PIN changed, *Sign out all clients*, Web Access off); the stream then closes |
       responses:

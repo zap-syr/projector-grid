@@ -165,6 +165,17 @@ void main() {
     expect(sentTo('10.0.0.1'), isEmpty);
   });
 
+  test('a given selection (the web page\'s) replaces the app\'s', () async {
+    final c = setUpRow();
+    c.read(selectionProvider.notifier).set({'1', '2'});
+    await c.read(alignmentProvider.notifier).enter(selection: {'2', '3'});
+    await settle();
+    expect(c.read(alignmentProvider).scope, {'2', '3'});
+    expect(c.read(alignmentProvider).focusedId, '2');
+    // The app's selection follows the focus, as for an entry from the app.
+    expect(c.read(selectionProvider), {'2'});
+  });
+
   test('offline projectors are left out', () async {
     final c = makeContainer(fake);
     c.read(workspaceProvider.notifier).setNodes([

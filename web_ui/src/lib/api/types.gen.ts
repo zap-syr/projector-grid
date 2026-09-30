@@ -306,6 +306,128 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/alignment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Alignment mode's state */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Alignment"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/alignment/{op}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Drive Alignment mode (operator only)
+         * @description Only exists while *Allow control* is on (404 otherwise). A viewer session gets 403.
+         *     Each op calls the app's own Alignment mode, so the app's banner follows.
+         *
+         *     | `op` | Body | Does |
+         *     |---|---|---|
+         *     | `enter` | none, or `{"targets": [ids]}` — the page's selection | scope = the selection when it has 2+ projectors, else all; waits while projectors are read |
+         *     | `exit` | none | restores shutters, patterns and shutter fades; waits until done |
+         *     | `next` / `prev` | none | step in layout order, wrapping |
+         *     | `focus` | `{"id": "…"}` | focus one projector in the scope |
+         *     | `neighbours` / `diagonals` / `showAll` | none | flip the toggle |
+         *     | `preset` | `{"preset": "geometry" \| "color" \| "custom"}` | switch the task (its default patterns, Custom keeps them) |
+         *     | `focusedPattern` | `{"code": "OTS:xx"}` | a pattern the current preset offers |
+         *     | `othersPattern` | `{"code": "OTS:xx" \| null}` | null = same as focused |
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    op: "enter" | "exit" | "next" | "prev" | "focus" | "neighbours" | "diagonals" | "showAll" | "preset" | "focusedPattern" | "othersPattern";
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            responses: {
+                /** @description Done; the new state (every page also gets an `alignment` event). */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Alignment"];
+                    };
+                };
+                /** @description Unknown op, or a body it doesn't take. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                /** @description Viewer session. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description *Allow control* is off. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/session": {
         parameters: {
             query?: never;
@@ -556,6 +678,7 @@ export interface paths {
          *     | `projector` | `Projector` | one projector changed |
          *     | `groups` | `Groups` | groups changed |
          *     | `project` | `ProjectEvent` | another project was opened or saved under a new name |
+         *     | `alignment` | `Alignment` | after `snapshot`, and whenever Alignment mode changes (from the app or any page) |
          *     | `access` | `Access` | this session was unlocked / locked (in another tab too), or *Allow control* was switched |
          *     | `signedOut` | `SignedOutEvent` | the session ended (PIN changed, *Sign out all clients*, Web Access off); the stream then closes |
          */
@@ -699,6 +822,41 @@ export interface components {
             inputs: components["schemas"]["Options"];
             lensCalibrations: components["schemas"]["Options"];
             lensTypes: components["schemas"]["Options"];
+            /** @description Alignment mode's tasks and the patterns each one offers (Custom = all). */
+            alignmentPresets: {
+                id: components["schemas"]["AlignmentPresetId"];
+                label: string;
+                patterns: string[];
+            }[];
+        };
+        /** @enum {string} */
+        AlignmentPresetId: "geometry" | "color" | "custom";
+        /**
+         * @description `focused` — shutter open, Focused pattern; `shown` — open with the Others
+         *     pattern (a neighbour, or everyone under Show All); `closed` — shutter closed.
+         * @enum {string}
+         */
+        AlignmentRole: "focused" | "shown" | "closed";
+        /**
+         * @description The app's Alignment mode — one shared session, driven from the app or any page.
+         *     Preset, patterns and the neighbour options persist while the mode is off.
+         */
+        Alignment: {
+            active: boolean;
+            /** @description Entry (reading projectors) or exit (restoring them) in progress. */
+            busy: boolean;
+            focusedId: string | null;
+            /** @description The mode's scope, projector id → role; empty while off. */
+            roles: {
+                [key: string]: components["schemas"]["AlignmentRole"];
+            };
+            preset: components["schemas"]["AlignmentPresetId"];
+            focusedPattern: string;
+            /** @description null = same as focused. */
+            othersPattern: string | null;
+            showNeighbours: boolean;
+            includeDiagonals: boolean;
+            showAll: boolean;
         };
         /** @description The app's choices for a control, in its order; `code` is what an action sends. */
         Options: {

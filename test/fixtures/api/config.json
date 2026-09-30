@@ -398,5 +398,62 @@
       "code": "VXX:LNEI1=+00008",
       "label": "ET-D75LE90"
     }
+  ],
+  "alignmentPresets": [
+    {
+      "id": "geometry",
+      "label": "Geometry",
+      "patterns": [
+        "OTS:07",
+        "OTS:70",
+        "OTS:71",
+        "OTS:72",
+        "OTS:73",
+        "OTS:74",
+        "OTS:75"
+      ]
+    },
+    {
+      "id": "color",
+      "label": "Color",
+      "patterns": [
+        "OTS:01",
+        "OTS:02",
+        "OTS:22",
+        "OTS:23",
+        "OTS:24",
+        "OTS:28",
+        "OTS:29",
+        "OTS:30"
+      ]
+    },
+    {
+      "id": "custom",
+      "label": "Custom",
+      "patterns": [
+        "OTS:01",
+        "OTS:02",
+        "OTS:22",
+        "OTS:23",
+        "OTS:24",
+        "OTS:28",
+        "OTS:29",
+        "OTS:30",
+        "OTS:05",
+        "OTS:06",
+        "OTS:08",
+        "OTS:51",
+        "OTS:78",
+        "OTS:59",
+        "OTS:07",
+        "OTS:70",
+        "OTS:71",
+        "OTS:72",
+        "OTS:73",
+        "OTS:74",
+        "OTS:75",
+        "OTS:87"
+      ]
+    }
   ]
 }

@@ -1,0 +1,16 @@
+{
+  "active": true,
+  "busy": false,
+  "focusedId": "n2",
+  "roles": {
+    "n1": "shown",
+    "n2": "focused",
+    "n4": "closed"
+  },
+  "preset": "geometry",
+  "focusedPattern": "OTS:07",
+  "othersPattern": "OTS:70",
+  "showNeighbours": true,
+  "includeDiagonals": false,
+  "showAll": false
+}

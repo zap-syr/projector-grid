@@ -29,6 +29,8 @@ const schemaFor: Record<string, string> = {
   'error-locked-out': 'Error',
   'event-snapshot': 'SnapshotEvent',
   'event-project': 'ProjectEvent',
+  alignment: 'Alignment',
+  'alignment-off': 'Alignment',
 };
 
 // OpenAPI keywords (description, enum on $ref siblings…) aren't all JSON Schema.

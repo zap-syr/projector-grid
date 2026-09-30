@@ -65,6 +65,14 @@ abstract interface class WebApiSource {
   /// `POST /api/actions` from an operator: [body] is the decoded JSON. Null
   /// when it isn't a valid action request, else the dispatch summary.
   Future<Json?> dispatch(Object? body, WebSession session);
+
+  /// Alignment mode's state (`GET /api/alignment`).
+  Json alignment();
+
+  /// `POST /api/alignment/{op}` from an operator: [body] is the decoded JSON
+  /// (null when empty). Null when the op or its body is invalid, else the
+  /// new state.
+  Future<Json?> alignmentOp(String op, Object? body, WebSession session);
 }
 
 /// `/api/*` routes: PIN login, session check on everything else, read-only
@@ -87,6 +95,15 @@ class WebApi {
           ..post('/api/unlock', _authed(_unlock))
           ..post('/api/lock', _authed((_, s) => _lock(s)))
           ..post('/api/actions', _authed(_actions))
+          ..get(
+            '/api/alignment',
+            _authed((_, _) => _json(200, source.alignment())),
+          )
+          ..post(
+            '/api/alignment/<op>',
+            (Request r, String op) =>
+                _authed((r, s) => _alignment(r, s, op))(r),
+          )
           ..get(
             '/api/config',
             _authed((_, s) => _json(200, source.config(s.role))),
@@ -165,18 +182,38 @@ class WebApi {
   }
 
   /// Operator-only; the server enforces it, hidden buttons aren't the guard.
-  Future<Response> _actions(Request request, WebSession session) async {
+  Future<Response> _actions(Request request, WebSession session) =>
+      _operatorPost(request, session, (body) => source.dispatch(body, session));
+
+  Future<Response> _alignment(Request request, WebSession session, String op) =>
+      _operatorPost(
+        request,
+        session,
+        (body) => source.alignmentOp(op, body, session),
+        allowEmpty: true,
+      );
+
+  /// The guards every control route shares: no route while *Allow control*
+  /// is off, 403 for a viewer, 400 for a body that isn't JSON or that
+  /// [handle] rejects (null). [allowEmpty] lets a body-less op through as null.
+  Future<Response> _operatorPost(
+    Request request,
+    WebSession session,
+    Future<Json?> Function(Object? body) handle, {
+    bool allowEmpty = false,
+  }) async {
     if (!_controlAllowed) return _json(404, errorJson('not_found'));
     if (session.role != WebRole.operator) {
       return _json(403, errorJson('forbidden'));
     }
+    final text = await request.readAsString();
     final Object? body;
     try {
-      body = jsonDecode(await request.readAsString());
+      body = allowEmpty && text.trim().isEmpty ? null : jsonDecode(text);
     } on FormatException {
       return _json(400, errorJson('bad_request'));
     }
-    final result = await source.dispatch(body, session);
+    final result = await handle(body);
     return result == null
         ? _json(400, errorJson('bad_request'))
         : _json(200, result);

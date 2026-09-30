@@ -10,7 +10,9 @@ import '../../../../core/services/web_server_service.dart';
 import '../../../../core/services/web_static_handler.dart';
 import '../../domain/log_event.dart';
 import '../../domain/web_actions.dart';
+import '../../domain/web_alignment.dart';
 import '../../domain/web_api_dto.dart';
+import 'alignment_provider.dart';
 import 'app_settings_provider.dart';
 import 'event_log_provider.dart';
 import 'project_provider.dart';
@@ -45,6 +47,11 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
       _service.stop();
     });
     ref.listen(workspaceProvider, (_, nodes) => _pushWorkspace());
+    // Entering or leaving from the app or any page shows on every page.
+    ref.listen(
+      alignmentProvider,
+      (_, _) => _hub.broadcast((name: WebEvents.alignment, data: alignment())),
+    );
     ref.listen(
       projectStateProvider.select((s) => s.currentFilePath),
       (_, path) => _hub.broadcast((
@@ -207,7 +214,67 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
           groups: _sentGroups,
         ),
       ),
+      (name: WebEvents.alignment, data: alignment()),
     ];
+  }
+
+  @override
+  Json alignment() {
+    final s = ref.read(alignmentProvider);
+    return alignmentJson(
+      active: s.active,
+      busy: s.busy,
+      focusedId: s.active ? s.focusedId : null,
+      roles: s.roles,
+      preset: s.preset,
+      focusedPattern: s.focusedPattern,
+      othersPattern: s.othersPattern,
+      showNeighbours: s.showNeighbours,
+      includeDiagonals: s.includeDiagonals,
+      showAll: s.showAll,
+    );
+  }
+
+  @override
+  Future<Json?> alignmentOp(String op, Object? body, WebSession session) async {
+    final notifier = ref.read(alignmentProvider.notifier);
+    final parsed = parseWebAlignmentOp(
+      op,
+      body,
+      preset: ref.read(alignmentProvider).preset,
+    );
+    if (parsed == null) return null;
+    final source = 'Web · ${session.ip} · ${session.role.name}';
+    switch (parsed) {
+      case WebAlignmentEnter(:final selection):
+        _log(LogSeverity.info, '$source · Alignment mode');
+        await notifier.enter(selection: selection);
+      case WebAlignmentSimple(:final command):
+        switch (command) {
+          case WebAlignmentCommand.exit:
+            _log(LogSeverity.info, '$source · Alignment mode exit');
+            await notifier.exit();
+          case WebAlignmentCommand.next:
+            notifier.next();
+          case WebAlignmentCommand.prev:
+            notifier.previous();
+          case WebAlignmentCommand.neighbours:
+            notifier.toggleNeighbours();
+          case WebAlignmentCommand.diagonals:
+            notifier.toggleDiagonals();
+          case WebAlignmentCommand.showAll:
+            notifier.toggleShowAll();
+        }
+      case WebAlignmentFocus(:final id):
+        notifier.focus(id);
+      case WebAlignmentPreset(:final preset):
+        notifier.setPreset(preset);
+      case WebAlignmentFocusedPattern(:final code):
+        notifier.setFocusedPattern(code);
+      case WebAlignmentOthersPattern(:final code):
+        notifier.setOthersPattern(code);
+    }
+    return alignment();
   }
 
   @override
