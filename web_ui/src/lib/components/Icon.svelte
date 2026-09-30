@@ -17,6 +17,12 @@
     cards:
       '<rect x="3" y="4" width="7.5" height="7" rx="1.5"/><rect x="13.5" y="4" width="7.5" height="7" rx="1.5"/><rect x="3" y="13" width="7.5" height="7" rx="1.5"/><rect x="13.5" y="13" width="7.5" height="7" rx="1.5"/>',
     map: '<rect x="2.5" y="4" width="6" height="5" rx="1"/><rect x="11" y="6" width="6" height="5" rx="1"/><rect x="5" y="14" width="6" height="5" rx="1"/><rect x="15.5" y="13" width="6" height="5" rx="1"/>',
+    target:
+      '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>',
+    neighbours: '<rect x="8.5" y="6" width="7" height="12" rx="1.5"/><path d="M5 8v8M19 8v8"/>',
+    diagonal:
+      '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><path d="M10 10l4 4"/>',
+    all: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
     plus: '<path d="M12 5v14M5 12h14"/>',
     minus: '<path d="M5 12h14"/>',
     panel: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/>',

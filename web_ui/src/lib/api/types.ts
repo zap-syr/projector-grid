@@ -19,3 +19,18 @@ export type TableLayout = Schemas['TableLayout'];
 export type Density = Schemas['Density'];
 export type SnapshotEvent = Schemas['SnapshotEvent'];
 export type ProjectEvent = Schemas['ProjectEvent'];
+export type Alignment = Schemas['Alignment'];
+export type AlignmentRole = Schemas['AlignmentRole'];
+export type AlignmentPresetId = Schemas['AlignmentPresetId'];
+export type AlignmentOp =
+  | 'enter'
+  | 'exit'
+  | 'next'
+  | 'prev'
+  | 'focus'
+  | 'neighbours'
+  | 'diagonals'
+  | 'showAll'
+  | 'preset'
+  | 'focusedPattern'
+  | 'othersPattern';

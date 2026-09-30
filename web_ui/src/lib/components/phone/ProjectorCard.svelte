@@ -4,7 +4,7 @@
   The operator taps the card to select it, the viewer to open the details.
 -->
 <script lang="ts">
-  import type { ColumnId, Config, Group, Projector } from '../../api/types';
+  import type { AlignmentRole, ColumnId, Config, Group, Projector } from '../../api/types';
   import { cellText } from '../../logic/cells';
   import { isPatternActive, patternSwatch } from '../../logic/patterns';
   import { isSelectable } from '../../logic/selection';
@@ -22,6 +22,9 @@
     expanded,
     onselect,
     onexpand,
+    role = null,
+    outside = false,
+    onfocus,
   }: {
     p: Projector;
     config: Config;
@@ -32,9 +35,16 @@
     expanded: boolean;
     onselect: () => void;
     onexpand: () => void;
+    /** Alignment mode: the card's ring or the closed scrim, as in the app. */
+    role?: AlignmentRole | null;
+    /** Alignment mode is on but this projector isn't in it. */
+    outside?: boolean;
+    /** Alignment mode: the operator's tap focuses this projector. */
+    onfocus?: () => void;
   } = $props();
 
-  const selectable = $derived(isSelectable(p));
+  const aligning = $derived(role !== null || outside);
+  const selectable = $derived(aligning ? role !== null : isSelectable(p));
   const online = $derived(p.connection === 'connected' || p.connection === 'unprotected');
   const hasErrors = $derived(p.errors !== '-' && p.errors !== 'NO ERRORS' && p.errors !== '');
   const cell = (column: ColumnId) => cellText(column, p, groups, patternLabel);
@@ -43,7 +53,9 @@
 
   function primary() {
     if (!operator) onexpand();
-    else if (selectable) onselect();
+    else if (aligning) {
+      if (role) onfocus?.();
+    } else if (selectable) onselect();
   }
 </script>
 
@@ -52,13 +64,14 @@
 {/snippet}
 
 <article
-  class="card"
-  class:sel={operator && selected}
+  class="card {role ?? ''}"
+  class:sel={operator && selected && !aligning}
   class:open={expanded}
+  class:outside
   class:offline={p.connection === 'offline'}
 >
   <div class="head">
-    {#if operator}
+    {#if operator && !aligning}
       <span class="cb">
         <Checkbox
           state={selected}
@@ -71,7 +84,7 @@
     <button
       class="main"
       disabled={operator && !selectable}
-      aria-pressed={operator ? selected : undefined}
+      aria-pressed={operator ? (aligning ? role === 'focused' : selected) : undefined}
       aria-expanded={operator ? undefined : expanded}
       onclick={primary}
     >
@@ -84,26 +97,29 @@
         {#if hasErrors}
           <span class="warn" title={p.errors}><Icon name="warn" size={15} /></span>
         {/if}
-        <span class="ip">
-          {#if showPattern}
-            <span
-              class="tp"
-              role="img"
-              aria-label="Test pattern: {cell('testPattern')}"
-              title="Test pattern: {cell('testPattern')}"
-              style:background={patternSwatch(p.testPattern ?? '') ?? 'var(--hover)'}
-            ></span>
-          {/if}
-          {p.ip}
-        </span>
+        <span class="ip">{p.ip}</span>
       </span>
       {#if online}
         <span class="sum">
-          {@render value('power')}
-          {@render value('shutter')}
-          <span class="sig">{cell('signal')}</span>
-          <span class="temps">
-            {@render value('intake')}<span class="sep">/</span>{@render value('exhaust')}
+          <!-- The pattern sits with the shutter, pinned right: the title row
+               has no room for it beside a warning and the IP on a narrow card. -->
+          <span class="l1"
+            >{@render value('power')}{@render value('shutter')}
+            {#if showPattern}
+              <span
+                class="tp"
+                role="img"
+                aria-label="Test pattern: {cell('testPattern')}"
+                title="Test pattern: {cell('testPattern')}"
+                style:background={patternSwatch(p.testPattern ?? '') ?? 'var(--hover)'}
+              ></span>
+            {/if}
+          </span>
+          <span class="l2">
+            <span class="sig" title={cell('signal')}>{cell('signal')}</span>
+            <span class="temps">
+              {@render value('intake')}<span class="sep">/</span>{@render value('exhaust')}
+            </span>
           </span>
         </span>
         {#if hasErrors}
@@ -149,7 +165,34 @@
     box-shadow: 0 0 0 1px var(--accent);
   }
 
+  /* Alignment rings with a 2 px gap, like the app's canvas card. */
+  .card.focused {
+    border-color: var(--align);
+    box-shadow:
+      0 0 0 2px var(--app),
+      0 0 0 5px var(--align),
+      0 0 14px 5px color-mix(in srgb, var(--align) 45%, transparent);
+  }
+
+  .card.shown {
+    box-shadow:
+      0 0 0 2px var(--app),
+      0 0 0 4px var(--align-2);
+  }
+
+  .card.closed,
+  .card.outside {
+    opacity: 0.5;
+  }
+
+  .card.outside {
+    border-style: dashed;
+  }
+
+  /* The chevron sits in the top-right corner over the title row, so the
+     status lines below run the card's full width. */
   .head {
+    position: relative;
     display: flex;
     align-items: flex-start;
   }
@@ -165,7 +208,7 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
-    padding: 12px 4px 12px 12px;
+    padding: 12px;
     border: 0;
     background: none;
     text-align: left;
@@ -176,11 +219,23 @@
     cursor: default;
   }
 
+  /* One line, clear of the chevron. The IP wraps onto a clipped second line
+     — i.e. disappears — when a narrow card can't fit it whole beside the
+     name and icons; the details strip still has it. */
   .title {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 7px;
+    column-gap: 7px;
     min-width: 0;
+    height: 22px;
+    overflow: hidden;
+    /* The chevron's icon, not its whole 44 px hit area. */
+    padding-right: 30px;
+  }
+
+  .title > * {
+    line-height: 22px;
   }
 
   .title b {
@@ -193,17 +248,11 @@
 
   .ip {
     margin-left: auto;
-    padding-left: 8px;
     font-family: var(--mono);
     font-size: 12px;
     color: var(--faint);
     white-space: nowrap;
-  }
-
-  .ip {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
+    flex: none;
   }
 
   /* Test-pattern thumbnail, bordered so white / black fields don't vanish. */
@@ -211,6 +260,7 @@
     width: 24px;
     height: 16px;
     flex: none;
+    margin-left: auto;
     border-radius: 3px;
     box-shadow: inset 0 0 0 1px var(--line-strong);
   }
@@ -240,12 +290,32 @@
     color: var(--warn);
   }
 
+  /* Two lines with a fixed shape whatever the values, so nothing reflows
+     when a label or reading changes length (every step in Alignment mode,
+     every degree of drift): power · shutter, then the signal with the
+     temperatures pinned right. Nothing follows the shutter on its line, so
+     OPEN ↔ CLOSED moves nothing; the signal takes whatever is left and
+     ellipsizes only when a card is really narrow. */
   .sum {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    font-size: 13px;
+  }
+
+  .l1 {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 4px 12px;
-    font-size: 13px;
+  }
+
+  .l2 {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
   }
 
   .state {
@@ -258,7 +328,10 @@
   }
 
   .sig {
+    overflow: hidden;
     color: var(--muted);
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .temps {
@@ -271,14 +344,19 @@
     color: var(--faint);
   }
 
+  /* A long error code ellipsizes (Cell's own rule) instead of pushing past the card. */
   .errline {
+    display: flex;
+    min-width: 0;
     font-size: 13px;
   }
 
   .chev {
+    position: absolute;
+    top: 1px;
+    right: 1px;
     width: 44px;
     height: 44px;
-    flex: none;
     display: flex;
     align-items: center;
     justify-content: center;

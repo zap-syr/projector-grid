@@ -8,6 +8,7 @@
     toggledAll,
     triState,
   } from '../../logic/selection';
+  import { alignment } from '../../state/alignment.svelte';
   import { control } from '../../state/control.svelte';
   import { device } from '../../state/device.svelte';
   import { listMode } from '../../state/listMode.svelte';
@@ -26,6 +27,10 @@
   const shown = $derived(
     live.projectors.filter((p) => matchesFilter(p, view.filter) && matchesSearch(p, view.search)),
   );
+
+  /** Tablets: finger-sized controls in one row, matching the touch Alignment banner. */
+  const touch = $derived(device.touch && !device.phone);
+  const iconSize = $derived(touch ? 18 : 15);
 
   let menu = $state<'columns' | 'select' | null>(null);
   let columnsWrap = $state<HTMLElement>();
@@ -61,8 +66,16 @@
   }}
 />
 
-<div class="toolbar" class:phone={device.phone}>
-  {#if operator}
+<div class="toolbar" class:phone={device.phone} class:touch>
+  {#if alignment.active}
+    <!-- The selection is pinned to the focused projector, so the bulk
+         selector gives way to what the rings mean. -->
+    <div class="legend" aria-label="Alignment roles">
+      <span><i class="mk focused"></i>Focused</span>
+      <span><i class="mk shown"></i>Shown</span>
+      <span><i class="mk closed"></i>Closed</span>
+    </div>
+  {:else if operator}
     <!-- The bulk selector (PatternFly): the box selects all shown, or clears
          any selection with one tap; the count and the Select ▾ presets share
          one fixed-width control, so nothing beside it moves. -->
@@ -109,13 +122,16 @@
     <Icon name="search" size={15} />
     <input
       type="search"
-      placeholder={device.phone ? 'Search' : 'Name, IP or serial'}
+      placeholder={device.phone || touch ? 'Search' : 'Name, IP or serial'}
       aria-label="Search"
       bind:value={view.search}
     />
   </label>
   {#if device.phone}
     <span class="count"><b>{shown.length}</b>/{live.projectors.length}</span>
+  {:else if touch}
+    <span class="count"><b>{shown.length}</b>/{live.projectors.length}</span>
+    {@render desktopTools()}
   {:else}
     <span class="count"
       ><b>{shown.length}</b> of {live.projectors.length}<span class="sl">&nbsp;shown</span></span
@@ -132,9 +148,11 @@
       <button
         class="btn"
         aria-expanded={menu === 'columns'}
+        aria-label="Columns"
+        title="Columns"
         onclick={() => (menu = menu === 'columns' ? null : 'columns')}
       >
-        <Icon name="columns" size={15} /> Columns
+        <Icon name="columns" size={iconSize} /><span class="bl">Columns</span>
       </button>
       {#if menu === 'columns'}
         <ColumnsMenu {config} {layout} />
@@ -149,31 +167,32 @@
           aria-pressed={listMode.value === 'table'}
           title="Table"
           onclick={() => listMode.set('table')}
-          ><Icon name="table" size={15} /><span class="sl">Table</span></button
+          ><Icon name="table" size={iconSize} /><span class="sl">Table</span></button
         >
       {/if}
       <button
         aria-pressed={listMode.value === 'cards'}
         title="Cards"
         onclick={() => listMode.set('cards')}
-        ><Icon name="cards" size={15} /><span class="sl">Cards</span></button
+        ><Icon name="cards" size={iconSize} /><span class="sl">Cards</span></button
       >
       <button
         aria-pressed={listMode.value === 'map'}
         title="Map"
         onclick={() => listMode.set('map')}
-        ><Icon name="map" size={15} /><span class="sl">Map</span></button
+        ><Icon name="map" size={iconSize} /><span class="sl">Map</span></button
       >
     </div>
   {/if}
   {#if operator && device.control === 'side'}
     <button
-      class="btn"
+      class="btn ctl"
       aria-pressed={panel.open}
+      aria-label="Control"
       title={panel.open ? 'Hide control panel' : 'Show control panel'}
       onclick={() => panel.toggle()}
     >
-      <Icon name="panel" size={15} /> Control
+      <Icon name="panel" size={iconSize} /><span class="bl">Control</span>
     </button>
   {/if}
 {/snippet}
@@ -311,6 +330,105 @@
     }
   }
 
+  /* Tablets: the touch Alignment banner's sizes (44 px controls, a 60 px
+     bar) and always one row — Columns and Control turn into icons below
+     1280 px, like the view switch. */
+  .touch {
+    flex-wrap: nowrap;
+    min-height: 60px;
+    gap: 10px;
+    padding: 8px 16px;
+  }
+
+  .touch .search {
+    flex: 1 1 140px;
+    height: 44px;
+    border-radius: 10px;
+  }
+
+  .touch .search input {
+    font-size: 16px; /* smaller text makes iPadOS Safari zoom in on focus */
+  }
+
+  .touch .count {
+    flex: none;
+    font-size: 14px;
+  }
+
+  .touch .bulk {
+    flex: none;
+    height: 44px;
+    border-radius: 10px;
+  }
+
+  .touch .bcb {
+    padding: 0 13px;
+  }
+
+  .touch .bmenu {
+    padding: 0 10px 0 12px;
+    border-radius: 0 10px 10px 0;
+    font-size: 14px;
+  }
+
+  .touch .legend {
+    flex: none;
+    height: 44px;
+    font-size: 13.5px;
+  }
+
+  .touch .btn {
+    flex: none;
+    justify-content: center;
+    min-width: 44px;
+    height: 44px;
+    padding: 0 14px;
+    border-radius: 10px;
+    font-size: 14px;
+  }
+
+  .touch .seg {
+    flex: none;
+    padding: 3px;
+    border-radius: 10px;
+  }
+
+  .touch .seg button {
+    min-width: 44px;
+    height: 38px;
+    justify-content: center;
+    padding: 0 12px;
+    border-radius: 8px;
+    font-size: 14px;
+  }
+
+  @media (max-width: 1279px) {
+    .touch .bl {
+      display: none;
+    }
+
+    .touch .btn {
+      width: 44px;
+      padding: 0;
+    }
+
+    .touch .seg button {
+      padding: 0;
+    }
+
+    /* Control as an icon: in the accent colour, so it doesn't read as one
+       more view switch; filled while its panel is open. */
+    .touch .ctl {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .touch .ctl[aria-pressed='true'] {
+      background: var(--accent);
+      color: var(--on-accent);
+    }
+  }
+
   .seg button[aria-pressed='true'] {
     background: var(--surface);
     color: var(--text);
@@ -429,5 +547,39 @@
     height: 10px;
     border-radius: 50%;
     flex: none;
+  }
+
+  .legend {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    height: 32px;
+    font-size: 12.5px;
+    color: var(--muted);
+  }
+
+  .legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* The table's role markers (focused filled, shown ring, closed faint). */
+  .mk {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+  }
+
+  .mk.focused {
+    background: var(--align);
+  }
+
+  .mk.shown {
+    box-shadow: inset 0 0 0 2.5px var(--align-2);
+  }
+
+  .mk.closed {
+    box-shadow: inset 0 0 0 1.5px var(--line-strong);
   }
 </style>

@@ -4,7 +4,7 @@
   chip. Sized in canvas px; MapView scales the whole wall.
 -->
 <script lang="ts">
-  import type { Group, Projector } from '../../api/types';
+  import type { AlignmentRole, Group, Projector } from '../../api/types';
   import { CARD_H, CARD_W, chipText } from '../../logic/map';
   import { isPatternActive, patternSwatch } from '../../logic/patterns';
   import Icon from '../Icon.svelte';
@@ -18,6 +18,8 @@
     selected,
     dim,
     compact,
+    role = null,
+    outside = false,
   }: {
     p: Projector;
     group: Group | undefined;
@@ -30,7 +32,13 @@
     dim: boolean;
     /** Zoomed far out: dot and name only. */
     compact: boolean;
+    /** Alignment mode: the app card's rings — focused, shown — or the closed scrim. */
+    role?: AlignmentRole | null;
+    /** Alignment mode is on but this projector isn't in it (offline on entry, or out of scope). */
+    outside?: boolean;
   } = $props();
+
+  const aligning = $derived(role !== null || outside);
 
   const online = $derived(p.connection === 'connected' || p.connection === 'unprotected');
   const hasErrors = $derived(p.errors !== '-' && p.errors !== 'NO ERRORS' && p.errors !== '');
@@ -45,14 +53,15 @@
   style:width="{CARD_W}px"
 >
   <button
-    class="card"
-    class:sel={operator && selected}
+    class="card {role ?? ''}"
+    class:sel={operator && selected && !aligning}
+    class:outside
     class:compact
     data-id={p.id}
     style:height="{CARD_H}px"
     style:--tint={group?.color}
-    aria-label={p.name}
-    aria-pressed={operator ? selected : undefined}
+    aria-label={role ? `${p.name}, ${role}` : p.name}
+    aria-pressed={operator ? (aligning ? role === 'focused' : selected) : undefined}
     aria-haspopup={operator ? undefined : 'dialog'}
   >
     {#if compact}
@@ -97,12 +106,14 @@
 </div>
 
 <style>
+  /* The chip sits below the widest Alignment ring (3 + 5 px), as in the app,
+     so it never covers a ring and doesn't move when the mode starts. */
   .tile {
     position: absolute;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 3px;
+    gap: 8px;
   }
 
   .tile.dim {
@@ -144,6 +155,36 @@
     border-radius: 7px;
     box-shadow: inset 0 0 0 1px var(--accent);
     pointer-events: none;
+  }
+
+  /* Alignment rings, outside the card with a 2 px gap in the surface colour
+     (the app's projector_card.dart): focused 3 px + glow, shown 2 px paler. */
+  .card.focused {
+    box-shadow:
+      0 0 0 2px var(--surface),
+      0 0 0 5px var(--align),
+      0 0 14px 5px color-mix(in srgb, var(--align) 50%, transparent);
+  }
+
+  .card.shown {
+    box-shadow:
+      0 0 0 2px var(--surface),
+      0 0 0 4px var(--align-2);
+  }
+
+  /* Kept closed by the mode: an opaque scrim, like the dark projectors on the wall. */
+  .card.closed::after,
+  .card.outside::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: color-mix(in srgb, var(--surface) 60%, transparent);
+    pointer-events: none;
+  }
+
+  .card.outside {
+    border-style: dashed;
+    cursor: default;
   }
 
   .bar {

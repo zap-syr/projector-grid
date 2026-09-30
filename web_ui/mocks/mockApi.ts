@@ -11,7 +11,15 @@ import { resolve } from 'node:path';
 
 import type { Plugin } from 'vite';
 
-import type { Action, ActionRequest, Group, Projector, Role } from '../src/lib/api/types.ts';
+import type {
+  Action,
+  ActionRequest,
+  Alignment,
+  AlignmentPresetId,
+  Group,
+  Projector,
+  Role,
+} from '../src/lib/api/types.ts';
 
 const FIXTURES = resolve(import.meta.dirname, '../../test/fixtures/api');
 const VIEWER_PIN = '1234';
@@ -53,6 +61,9 @@ function wall(): Projector[] {
     if (i === 10)
       Object.assign(p, { connection: 'unauthorized', power: 'standby', shutter: 'closed' });
     if (i === 14) Object.assign(p, { shutter: 'closed', signal: 'NO SIGNAL' });
+    // The longest labels side by side, to check the cards' layout.
+    if (i === 16) Object.assign(p, { power: 'standby', shutter: 'closed', signal: 'NO SIGNAL' });
+    if (i === 17) Object.assign(p, { power: 'turningOn', shutter: 'closed', signal: 'NO SIGNAL' });
     if (i === 20 || i === 23) {
       Object.assign(p, {
         connection: 'offline',
@@ -73,10 +84,170 @@ function wall(): Projector[] {
   });
 }
 
+const CARD_W = 120;
+const CARD_H = 100;
+
+/** `neighbours()` from `card_layout.dart`: per side the nearest card ≤ 60 px away, overlapping ≥ 50 %. */
+function neighbours(f: Projector, all: Projector[], diagonals: boolean): Set<string> {
+  const best = new Map<string, [string, number]>();
+  const offer = (key: string, id: string, d: number) => {
+    const cur = best.get(key);
+    if (!cur || d < cur[1]) best.set(key, [id, d]);
+  };
+  for (const n of all) {
+    if (n.id === f.id) continue;
+    const hGap = Math.max(n.x - (f.x + CARD_W), f.x - (n.x + CARD_W));
+    const vGap = Math.max(n.y - (f.y + CARD_H), f.y - (n.y + CARD_H));
+    const hOverlap = Math.min(n.x, f.x) + CARD_W - Math.max(n.x, f.x);
+    const vOverlap = Math.min(n.y, f.y) + CARD_H - Math.max(n.y, f.y);
+    const right = n.x > f.x;
+    const below = n.y > f.y;
+    if (hGap <= 60 && vOverlap >= CARD_H / 2 && hGap >= vGap) {
+      offer(right ? 'r' : 'l', n.id, hGap);
+    } else if (vGap <= 60 && hOverlap >= CARD_W / 2 && vGap > hGap) {
+      offer(below ? 'b' : 't', n.id, vGap);
+    } else if (diagonals && hGap >= 0 && vGap >= 0 && hGap <= 60 && vGap <= 60) {
+      offer(`${below ? 'b' : 't'}${right ? 'r' : 'l'}`, n.id, hGap + vGap);
+    }
+  }
+  return new Set([...best.values()].map(([id]) => id));
+}
+
+const PRESET_DEFAULTS: Record<AlignmentPresetId, [string | null, string | null]> = {
+  geometry: ['OTS:07', 'OTS:70'],
+  color: ['OTS:01', null],
+  custom: [null, null],
+};
+
 export function mockApi(): Plugin {
   const sessions = new Map<string, Role>();
   const streams = new Set<ServerResponse>();
   const projectors = wall();
+
+  // ── Alignment mode, like alignment_provider.dart ──────────────────────
+  const alignment: Alignment = {
+    active: false,
+    busy: false,
+    focusedId: null,
+    roles: {},
+    preset: 'geometry',
+    focusedPattern: 'OTS:07',
+    othersPattern: 'OTS:70',
+    showNeighbours: false,
+    includeDiagonals: false,
+    showAll: false,
+  };
+  /** Shutter and pattern on entry, put back on exit. */
+  const saved = new Map<string, [Projector['shutter'], string | null]>();
+
+  function applyRoles() {
+    if (alignment.active) {
+      const scope = projectors.filter((p) => saved.has(p.id));
+      const focused = scope.find((p) => p.id === alignment.focusedId);
+      const open =
+        focused && alignment.showNeighbours && !alignment.showAll
+          ? neighbours(focused, scope, alignment.includeDiagonals)
+          : new Set<string>();
+      alignment.roles = Object.fromEntries(
+        scope.map((p) => [
+          p.id,
+          p.id === alignment.focusedId
+            ? 'focused'
+            : alignment.showAll || open.has(p.id)
+              ? 'shown'
+              : 'closed',
+        ]),
+      );
+      for (const p of scope) {
+        const role = alignment.roles[p.id];
+        if (role === 'closed') p.shutter = 'closed';
+        else {
+          p.shutter = 'open';
+          p.testPattern =
+            role === 'focused'
+              ? alignment.focusedPattern
+              : (alignment.othersPattern ?? alignment.focusedPattern);
+        }
+        for (const s of streams) sse(s, 'projector', p);
+      }
+    }
+    for (const s of streams) sse(s, 'alignment', alignment);
+  }
+
+  async function alignmentOp(op: string, body: Record<string, unknown>) {
+    const order = projectors.filter((p) => saved.has(p.id));
+    const step = (d: number) => {
+      const i = order.findIndex((p) => p.id === alignment.focusedId);
+      alignment.focusedId = order[(i + d + order.length) % order.length]?.id ?? null;
+    };
+    switch (op) {
+      case 'enter': {
+        if (alignment.active) break;
+        const targets = (body.targets as string[] | undefined) ?? [];
+        const online = projectors.filter(
+          (p) =>
+            (p.connection === 'connected' || p.connection === 'unprotected') &&
+            (targets.length < 2 || targets.includes(p.id)),
+        );
+        alignment.busy = true;
+        applyRoles();
+        await new Promise((r) => setTimeout(r, 900));
+        for (const p of online) saved.set(p.id, [p.shutter, p.testPattern]);
+        alignment.focusedId = (online.find((p) => targets.includes(p.id)) ?? online[0])?.id ?? null;
+        Object.assign(alignment, { active: true, busy: false, showAll: false });
+        break;
+      }
+      case 'exit':
+        Object.assign(alignment, { active: false, busy: true, roles: {} });
+        applyRoles();
+        await new Promise((r) => setTimeout(r, 700));
+        for (const p of projectors) {
+          const s = saved.get(p.id);
+          if (!s) continue;
+          [p.shutter, p.testPattern] = s;
+          for (const st of streams) sse(st, 'projector', p);
+        }
+        saved.clear();
+        Object.assign(alignment, { busy: false, focusedId: null });
+        break;
+      case 'next':
+        step(1);
+        break;
+      case 'prev':
+        step(-1);
+        break;
+      case 'focus':
+        if (saved.has(body.id as string)) alignment.focusedId = body.id as string;
+        break;
+      case 'neighbours':
+        alignment.showNeighbours = !alignment.showNeighbours;
+        break;
+      case 'diagonals':
+        alignment.includeDiagonals = !alignment.includeDiagonals;
+        break;
+      case 'showAll':
+        if (alignment.active) alignment.showAll = !alignment.showAll;
+        break;
+      case 'preset': {
+        const preset = body.preset as AlignmentPresetId;
+        const [f, o] = PRESET_DEFAULTS[preset];
+        alignment.preset = preset;
+        alignment.focusedPattern = f ?? alignment.focusedPattern;
+        if (preset !== 'custom') alignment.othersPattern = o;
+        break;
+      }
+      case 'focusedPattern':
+        alignment.focusedPattern = body.code as string;
+        break;
+      case 'othersPattern':
+        alignment.othersPattern = body.code as string | null;
+        break;
+      default:
+        return null;
+    }
+    applyRoles();
+    return alignment;
+  }
 
   const send = (res: ServerResponse, status: number, body?: unknown, headers = {}) => {
     res.writeHead(status, { 'content-type': 'application/json', ...headers });
@@ -185,7 +356,16 @@ export function mockApi(): Plugin {
     }
     if (!role) return send(res, 401, { error: 'unauthorized' });
 
+    if (req.method === 'POST' && path?.startsWith('/api/alignment/')) {
+      if (role !== 'operator') return send(res, 403, { error: 'forbidden' });
+      const body = JSON.parse((await readBody(req)) || '{}') as Record<string, unknown>;
+      const result = await alignmentOp(path.slice('/api/alignment/'.length), body);
+      return result ? send(res, 200, result) : send(res, 400, { error: 'bad_request' });
+    }
+
     switch (path) {
+      case '/api/alignment':
+        return send(res, 200, alignment);
       case '/api/unlock':
         if ((await readPin()) !== OPERATOR_PIN) return send(res, 401, { error: 'invalid_pin' });
         sessions.set(t, 'operator');
@@ -223,6 +403,7 @@ export function mockApi(): Plugin {
           projectors,
           groups: GROUPS,
         });
+        sse(res, 'alignment', alignment);
         streams.add(res);
         req.on('close', () => streams.delete(res));
         return;

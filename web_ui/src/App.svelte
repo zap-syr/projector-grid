@@ -1,4 +1,6 @@
 <script lang="ts">
+  import AlignScreen from './lib/components/alignment/AlignScreen.svelte';
+  import Banner from './lib/components/alignment/Banner.svelte';
   import ControlPanel from './lib/components/control/ControlPanel.svelte';
   import MapView from './lib/components/map/MapView.svelte';
   import CardList from './lib/components/phone/CardList.svelte';
@@ -10,6 +12,7 @@
   import Toast from './lib/components/shell/Toast.svelte';
   import Toolbar from './lib/components/shell/Toolbar.svelte';
   import DataTable from './lib/components/table/DataTable.svelte';
+  import { alignment } from './lib/state/alignment.svelte';
   import { config } from './lib/state/config.svelte';
   import { device } from './lib/state/device.svelte';
   import { listMode } from './lib/state/listMode.svelte';
@@ -38,16 +41,55 @@
     if (!operator) selection.clear();
   });
 
-  // The Control sheet only exists on touch layouts, for an operator.
+  // The Control sheet only exists on touch layouts, for an operator; the
+  // Alignment screen has its own lens block.
   $effect(() => {
-    if (!operator || device.control === 'side') panel.sheet = false;
+    if (!operator || device.control === 'side' || aligning) panel.sheet = false;
   });
+
+  const aligning = $derived(alignment.active || alignment.busy);
+
+  // Alignment mode: the selection is the focused projector, as in the app,
+  // so the Control panel's lens acts on it. Anything else snaps back.
+  $effect(() => {
+    const focused = alignment.focused?.id;
+    if (!operator || !focused) return;
+    if (selection.ids.size !== 1 || !selection.ids.has(focused)) {
+      selection.set(new Set([focused]));
+    }
+  });
+
+  const inField = (e: KeyboardEvent) =>
+    e.target instanceof HTMLInputElement ||
+    e.target instanceof HTMLTextAreaElement ||
+    e.target instanceof HTMLSelectElement;
+
+  /** The app's Alignment keys: `,` / `.` (or `<` / `>`) step, `A` Show all, `N` Neighbours. */
+  function alignmentKeys(e: KeyboardEvent) {
+    if (!operator || !alignment.active || inField(e) || e.ctrlKey || e.metaKey || e.altKey) return;
+    const key = e.key.toLowerCase();
+    if (key === ',' || key === '<') alignment.prev();
+    else if (key === '.' || key === '>') alignment.next();
+    else if (key === 'a') alignment.toggle('showAll');
+    else if (key === 'n') alignment.toggle('neighbours');
+    else return;
+    e.preventDefault();
+  }
 </script>
 
+<svelte:window onkeydown={alignmentKeys} />
+
 {#if session.status === 'signedIn'}
-  <div class="app">
-    <Header />
-    {#if config.value && tableLayout.value}
+  <div class="app" class:aligning={aligning && device.control === 'side'}>
+    <Header {operator} />
+    {#if config.value && tableLayout.value && aligning && device.control === 'side'}
+      <Banner config={config.value} {operator} />
+    {/if}
+    {#if config.value && tableLayout.value && aligning && device.control !== 'side'}
+      <div class="table">
+        <AlignScreen config={config.value} {operator} />
+      </div>
+    {:else if config.value && tableLayout.value}
       {@const sheetLayout = device.control !== 'side'}
       {@const sidePanel = operator && panel.open && !sheetLayout}
       <div class="work" class:op={sidePanel}>
@@ -97,6 +139,11 @@
        the column would grow to the table and the scroller would never shrink. */
     grid-template-columns: minmax(0, 1fr);
     min-height: 0;
+  }
+
+  /* Header · Alignment banner · the rest. */
+  .app.aligning {
+    grid-template-rows: auto auto 1fr;
   }
 
   .work {

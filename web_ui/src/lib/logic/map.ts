@@ -4,8 +4,8 @@ import { isSelectable } from './selection';
 /** The app's card size on the Controls canvas (`card_layout.dart`). */
 export const CARD_W = 120;
 export const CARD_H = 100;
-/** Room under a card for its group chip. */
-export const CHIP_H = 22;
+/** Room under a card for its group chip (below the Alignment ring). */
+export const CHIP_H = 26;
 /** Margin around the wall, in canvas px. */
 export const PAD = 20;
 /** The app's canvas zooms 0.5–2; fitting a big wall may go below. */

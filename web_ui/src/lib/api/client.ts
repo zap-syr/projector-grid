@@ -1,6 +1,8 @@
 import type {
   Access,
   ActionRequest,
+  Alignment,
+  AlignmentOp,
   ApiErrorBody,
   Config,
   DispatchResult,
@@ -44,4 +46,6 @@ export const api = {
   config: () => request<Config>('GET', '/api/config'),
   projectors: () => request<Projector[]>('GET', '/api/projectors'),
   groups: () => request<Group[]>('GET', '/api/groups'),
+  alignment: (op: AlignmentOp, body?: Record<string, unknown>) =>
+    request<Alignment>('POST', `/api/alignment/${op}`, body),
 };

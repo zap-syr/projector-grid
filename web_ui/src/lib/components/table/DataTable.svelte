@@ -26,6 +26,7 @@
     toggledAll,
     triState,
   } from '../../logic/selection';
+  import { alignment } from '../../state/alignment.svelte';
   import { selection } from '../../state/selection.svelte';
   import Checkbox from '../Checkbox.svelte';
   import Icon from '../Icon.svelte';
@@ -89,8 +90,13 @@
 
   const metrics = $derived(DENSITY[layout.density]);
   let viewport = $state(0);
-  /** What the data columns share once the checkbox column is taken out. */
-  const dataViewport = $derived(operator ? viewport - SELECT_W : viewport);
+  /**
+   * The pinned first column: the operator's checkboxes, or in Alignment mode
+   * everyone's role markers (focused filled, shown ring, closed faint).
+   */
+  const lead = $derived(operator || alignment.active);
+  /** What the data columns share once the lead column is taken out. */
+  const dataViewport = $derived(lead ? viewport - SELECT_W : viewport);
 
   // ── Selection (operator) ────────────────────────────────────────────────
   const rowOrder = $derived(entries.flatMap((e) => (e.kind === 'row' ? [e.projector] : [])));
@@ -136,6 +142,14 @@
       // The checkbox handles its own click (and would be toggled twice).
       if ((e.target as Element).closest('button')) return;
       const id = (e.target as Element).closest<HTMLElement>('tr[data-id]')?.dataset.id;
+      // Alignment mode: a row in the mode takes the focus, nothing else (on
+      // touch at the tap's end, so a swipe still scrolls).
+      if (alignment.active) {
+        if (!id || !alignment.role(id)) return;
+        if (e.pointerType === 'mouse') alignment.focus(id);
+        else tap = id;
+        return;
+      }
       const p = id ? live.projectors.find((x) => x.id === id) : undefined;
       if (!p || !isSelectable(p)) return;
       if (e.pointerType !== 'mouse') {
@@ -155,7 +169,10 @@
       window.addEventListener('pointerup', onUp);
     };
     const onTapUp = (e: PointerEvent) => {
-      if (tap && rowIdAt(e.clientX, e.clientY) === tap) selection.toggle(tap);
+      if (tap && rowIdAt(e.clientX, e.clientY) === tap) {
+        if (alignment.active) alignment.focus(tap);
+        else selection.toggle(tap);
+      }
       tap = null;
     };
     const onTapCancel = () => (tap = null); // the finger scrolled instead
@@ -294,15 +311,15 @@
     bind:this={table}
     class={layout.density}
     class:resizing={resizing !== null}
-    class:op={operator}
-    style:width="{sized.tableWidth + (operator ? SELECT_W : 0)}px"
+    class:op={lead}
+    style:width="{sized.tableWidth + (lead ? SELECT_W : 0)}px"
     style:--selw="{SELECT_W}px"
     style:--row="{metrics.row}px"
     style:--head="{metrics.header}px"
     style:--hpad="{metrics.hpad}px"
   >
     <colgroup>
-      {#if operator}
+      {#if lead}
         <col style:width="{SELECT_W}px" />
       {/if}
       {#each cols as col, i (col)}
@@ -311,8 +328,8 @@
     </colgroup>
     <thead>
       <tr>
-        {#if operator}
-          <th class="selc"><span class="sr">Select</span></th>
+        {#if lead}
+          <th class="selc"><span class="sr">{alignment.active ? 'Role' : 'Select'}</span></th>
         {/if}
         {#each cols as col, i (col)}
           <th
@@ -362,9 +379,9 @@
           {@const open = !layout.collapsed.includes(entry.key)}
           {@const worst = worstStatus(entry.members)}
           <tr class="grp" style:--gcolor={entry.group?.color ?? 'var(--line-strong)'}>
-            <td colspan={cols.length + (operator ? 1 : 0)}>
+            <td colspan={cols.length + (lead ? 1 : 0)}>
               <div class="grpcell">
-                {#if operator}
+                {#if operator && !alignment.active}
                   <Checkbox
                     state={triState(entry.members, selection.ids)}
                     label="Select {entry.group?.name ?? 'Ungrouped'}"
@@ -395,15 +412,27 @@
         {:else}
           {@const p = entry.projector}
           {@const selected = selection.ids.has(p.id)}
+          {@const role = alignment.role(p.id)}
           <tr
-            class="row"
+            class="row {role ?? ''}"
             class:stripe={entry.stripe}
             class:offline={p.connection === 'offline'}
-            class:sel={operator && selected}
-            class:pick={operator && isSelectable(p)}
+            class:outside={alignment.active && !role}
+            class:sel={operator && selected && !alignment.active}
+            class:pick={operator && (alignment.active ? role !== null : isSelectable(p))}
             data-id={p.id}
           >
-            {#if operator}
+            {#if alignment.active}
+              <td class="selc">
+                <span
+                  class="mk {role ?? 'none'}"
+                  role="img"
+                  aria-label={role
+                    ? `${role[0]?.toUpperCase()}${role.slice(1)}`
+                    : 'Not in the mode'}
+                ></span>
+              </td>
+            {:else if operator}
               <td class="selc">
                 <Checkbox
                   state={selected}
@@ -428,7 +457,7 @@
         {/if}
       {:else}
         <tr>
-          <td class="empty" colspan={cols.length + (operator ? 1 : 0)}>
+          <td class="empty" colspan={cols.length + (lead ? 1 : 0)}>
             {live.projectors.length === 0 ? 'No projectors in this project' : 'No projectors match'}
           </td>
         </tr>
@@ -649,6 +678,47 @@
 
   tr.row.offline td {
     color: var(--faint);
+  }
+
+  /* Alignment mode: the focused row tinted, closed and out-of-mode rows dimmed. */
+  tr.row.focused {
+    --row-bg: color-mix(in srgb, var(--align) 16%, var(--surface));
+  }
+
+  tr.row.focused td.selc {
+    box-shadow: inset 3px 0 0 var(--align);
+  }
+
+  tr.row.closed td.dc,
+  tr.row.outside td.dc {
+    opacity: 0.45;
+  }
+
+  .mk {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    vertical-align: middle;
+  }
+
+  .mk.focused {
+    background: var(--align);
+  }
+
+  .mk.shown {
+    box-shadow: inset 0 0 0 2.5px var(--align-2);
+  }
+
+  .mk.closed {
+    box-shadow: inset 0 0 0 1.5px var(--line-strong);
+  }
+
+  .mk.none {
+    width: 10px;
+    height: 2px;
+    border-radius: 1px;
+    background: var(--line-strong);
   }
 
   tr.grp td {

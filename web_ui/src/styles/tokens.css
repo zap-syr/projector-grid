@@ -26,6 +26,11 @@
   --warn-soft: #fef3e0;
   --err: #c5221f;
   --err-soft: #fce8e6;
+  /* Alignment mode (AppTheme.alignmentAccent / alignmentNeighbour). */
+  --align: #e8710a;
+  --align-2: #f7b77e;
+  --align-soft: rgba(232, 113, 10, 0.12);
+  --on-align: #231200;
   --scrim: rgba(16, 24, 40, 0.42);
   --sh-1: 0 1px 2px rgba(16, 24, 40, 0.06);
   --sh-2: 0 8px 24px -6px rgba(16, 24, 40, 0.18);
@@ -62,6 +67,9 @@
     --warn-soft: rgba(251, 188, 4, 0.12);
     --err: #f28b82;
     --err-soft: rgba(242, 139, 130, 0.13);
+    --align: #ff9e40;
+    --align-2: #ffddb3;
+    --align-soft: rgba(255, 158, 64, 0.14);
     --scrim: rgba(0, 0, 0, 0.6);
     --sh-1: 0 1px 2px rgba(0, 0, 0, 0.4);
     --sh-2: 0 8px 24px -6px rgba(0, 0, 0, 0.6);
@@ -92,6 +100,9 @@
   --warn-soft: rgba(251, 188, 4, 0.12);
   --err: #f28b82;
   --err-soft: rgba(242, 139, 130, 0.13);
+  --align: #ff9e40;
+  --align-2: #ffddb3;
+  --align-soft: rgba(255, 158, 64, 0.14);
   --scrim: rgba(0, 0, 0, 0.6);
   --sh-1: 0 1px 2px rgba(0, 0, 0, 0.4);
   --sh-2: 0 8px 24px -6px rgba(0, 0, 0, 0.6);

@@ -1,5 +1,5 @@
 import { connectEvents } from '../api/events';
-import type { Group, Projector } from '../api/types';
+import type { Alignment, Group, Projector } from '../api/types';
 import { session } from './session.svelte';
 
 type Connection = 'connecting' | 'live' | 'reconnecting';
@@ -11,6 +11,8 @@ type Connection = 'connecting' | 'live' | 'reconnecting';
 class LiveState {
   projectors = $state<Projector[]>([]);
   groups = $state<Group[]>([]);
+  /** The app's Alignment mode; null until the stream sends it. */
+  alignment = $state<Alignment | null>(null);
   connection = $state<Connection>('connecting');
   #close: (() => void) | null = null;
 
@@ -31,6 +33,7 @@ class LiveState {
       },
       groups: (d) => (this.groups = d),
       project: (d) => (session.projectName = d.name),
+      alignment: (d) => (this.alignment = d),
       access: (d) => session.applyAccess(d),
       signedOut: () => void session.ended(),
       reconnecting: () => (this.connection = 'reconnecting'),

@@ -8,6 +8,7 @@
   import { act, type LensSpeed } from '../../logic/actions';
   import { testPatternLabel } from '../../logic/cells';
   import { MAIN_PATTERNS, patternSwatch } from '../../logic/patterns';
+  import { alignment } from '../../state/alignment.svelte';
   import { control } from '../../state/control.svelte';
   import { device } from '../../state/device.svelte';
   import { selection } from '../../state/selection.svelte';
@@ -20,14 +21,20 @@
     config,
     sheet = false,
     columns = false,
+    embedded = false,
     onclose,
   }: {
     config: Config;
     sheet?: boolean;
     /** A tablet's bottom sheet: the lens in a second column. */
     columns?: boolean;
+    /** Inside the phone's Alignment screen: no header of its own. */
+    embedded?: boolean;
     onclose: () => void;
   } = $props();
+
+  /** Alignment mode: the mode owns shutters and patterns, so only the lens is left, on the focused projector. */
+  const lensOnly = $derived(alignment.active);
 
   /** Touch screens get the big lens block; the app's 40 px buttons need a mouse. */
   const touchLens = $derived(device.phone || device.touch);
@@ -105,22 +112,30 @@
   />
 {/snippet}
 
-<aside class="panel" class:sheet aria-label="Control">
-  <header>
-    <!-- The toolbar's bulk selector shows the count. -->
-    <h3>Control</h3>
-    <button
-      class="x"
-      aria-label={sheet ? 'Close' : 'Hide control panel'}
-      title={sheet ? 'Close' : 'Hide'}
-      onclick={onclose}
-    >
-      <Icon name="close" size={15} />
-    </button>
-  </header>
+<aside class="panel" class:sheet class:embedded aria-label={lensOnly ? 'Lens' : 'Control'}>
+  {#if !embedded}
+    <header>
+      <!-- The toolbar's bulk selector shows the count. -->
+      {#if lensOnly}
+        <h3 class="lens">Lens · {alignment.focused?.ip ?? '—'}</h3>
+      {:else}
+        <h3>Control</h3>
+      {/if}
+      <button
+        class="x"
+        aria-label={sheet ? 'Close' : 'Hide control panel'}
+        title={sheet ? 'Close' : 'Hide'}
+        onclick={onclose}
+      >
+        <Icon name="close" size={15} />
+      </button>
+    </header>
+  {/if}
 
-  <div class="body" class:columns>
-    {#if columns}
+  <div class="body" class:columns={columns && !lensOnly}>
+    {#if lensOnly}
+      {@render lens()}
+    {:else if columns}
       <div class="col">
         {@render basics()}
         {@render patterns()}
@@ -313,6 +328,21 @@
   .sheet header {
     border-bottom: 0;
     padding-top: 0;
+  }
+
+  .panel.embedded {
+    width: 100%;
+    border-left: 0;
+    background: none;
+  }
+
+  .embedded .body {
+    overflow: visible;
+    padding: 0;
+  }
+
+  h3.lens {
+    color: var(--align);
   }
 
   header {

@@ -50,16 +50,16 @@ class ControlState {
       if (!(e instanceof ApiError)) throw e;
       // 403/404: control was locked or switched off meanwhile; the access
       // event updates the page, this just explains why nothing happened.
-      this.#show({ text: 'Not sent — control is locked', ok: false });
+      this.notify({ text: 'Not sent — control is locked', ok: false });
       return;
     }
     const allOk = result.failed.length === 0 && result.skipped.length === 0;
     // A held lens button fires every few hundred ms; only a problem is worth a toast.
     if (isLensStep(action) && allOk) return;
-    this.#show({ text: result.summary, ok: allOk });
+    this.notify({ text: result.summary, ok: allOk });
   }
 
-  #show(t: Toast): void {
+  notify(t: Toast): void {
     this.toast = t;
     clearTimeout(this.#toastTimer);
     this.#toastTimer = setTimeout(() => (this.toast = null), t.ok ? 3500 : 7000);

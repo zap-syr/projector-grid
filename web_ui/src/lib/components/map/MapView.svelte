@@ -24,6 +24,7 @@
   } from '../../logic/map';
   import { matchesFilter, matchesSearch } from '../../logic/rows';
   import { live } from '../../state/live.svelte';
+  import { alignment } from '../../state/alignment.svelte';
   import { selection } from '../../state/selection.svelte';
   import { view } from '../../state/view.svelte';
   import Icon from '../Icon.svelte';
@@ -221,14 +222,16 @@
       el.setPointerCapture(e.pointerId);
       swallowClick = true;
       closeDetails();
-      gesture = operator
-        ? {
-            kind: 'marquee',
-            from: toCanvas(g.start.x, g.start.y),
-            mode: g.touch ? 'add' : g.toggle ? 'toggle' : 'replace',
-            base: new Set(selection.ids),
-          }
-        : { kind: 'pan', start: g.start, left: el.scrollLeft, top: el.scrollTop };
+      // In Alignment mode there's nothing to marquee: the selection is the focus.
+      gesture =
+        operator && !alignment.active
+          ? {
+              kind: 'marquee',
+              from: toCanvas(g.start.x, g.start.y),
+              mode: g.touch ? 'add' : g.toggle ? 'toggle' : 'replace',
+              base: new Set(selection.ids),
+            }
+          : { kind: 'pan', start: g.start, left: el.scrollLeft, top: el.scrollTop };
     }
     const now = gesture;
     if (now?.kind === 'marquee') {
@@ -262,7 +265,7 @@
     if (id === null) {
       // Empty space: the app clears the selection; a finger that just missed
       // a tile shouldn't.
-      if (operator && !touch) selection.clear();
+      if (operator && !touch && !alignment.active) selection.clear();
       return;
     }
     const p = live.projectors.find((x) => x.id === id);
@@ -270,6 +273,11 @@
     if (!operator) {
       if (openId === id) closeDetails();
       else openDetails(id);
+      return;
+    }
+    // Alignment mode: a tile in the mode takes the focus, like a card click in the app.
+    if (alignment.active) {
+      if (alignment.role(id)) alignment.focus(id);
       return;
     }
     selection.set(tileSelection(p, selection.ids, touch || e.ctrlKey || e.metaKey || e.shiftKey));
@@ -330,6 +338,8 @@
               selected={selection.ids.has(p.id)}
               dim={!shownIds.has(p.id)}
               compact={zoom < COMPACT_BELOW}
+              role={alignment.role(p.id)}
+              outside={alignment.active && !alignment.role(p.id)}
             />
           {/each}
         </div>

@@ -1,4 +1,4 @@
-import type { Access, Group, ProjectEvent, Projector, SnapshotEvent } from './types';
+import type { Access, Alignment, Group, ProjectEvent, Projector, SnapshotEvent } from './types';
 
 /** `/api/events` handlers, one per event in openapi.yaml, plus connection state. */
 export interface EventHandlers {
@@ -7,6 +7,7 @@ export interface EventHandlers {
   projector(data: Projector): void;
   groups(data: Group[]): void;
   project(data: ProjectEvent): void;
+  alignment(data: Alignment): void;
   access(data: Access): void;
   signedOut(): void;
   /** The browser is retrying on its own (network blip, app restarting). */
@@ -26,6 +27,7 @@ export function connectEvents(h: EventHandlers): () => void {
   on<Projector>('projector', h.projector);
   on<Group[]>('groups', h.groups);
   on<ProjectEvent>('project', h.project);
+  on<Alignment>('alignment', h.alignment);
   on<Access>('access', h.access);
   source.addEventListener('signedOut', () => {
     source.close();

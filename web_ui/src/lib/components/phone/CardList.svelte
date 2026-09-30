@@ -15,6 +15,7 @@
     worstStatus,
   } from '../../logic/rows';
   import { isSelectable, toggledAll, triState } from '../../logic/selection';
+  import { alignment } from '../../state/alignment.svelte';
   import { live } from '../../state/live.svelte';
   import { selection } from '../../state/selection.svelte';
   import { tableLayout, type StoredLayout } from '../../state/tableLayout.svelte';
@@ -78,7 +79,7 @@
       {@const worst = worstStatus(entry.members)}
       {@const name = entry.group?.name ?? 'Ungrouped'}
       <div class="grp" style:--gcolor={entry.group?.color ?? 'var(--line-strong)'}>
-        {#if operator}
+        {#if operator && !alignment.active}
           <span class="cb">
             <Checkbox
               state={triState(entry.members, selection.ids)}
@@ -114,6 +115,9 @@
         expanded={openId === p.id}
         onselect={() => selection.toggle(p.id)}
         onexpand={() => toggleOpen(p.id)}
+        role={alignment.role(p.id)}
+        outside={alignment.active && !alignment.role(p.id)}
+        onfocus={() => alignment.focus(p.id)}
       />
     {/if}
   {:else}
@@ -125,7 +129,9 @@
 
 <style>
   /* As many columns as fit at 300 px; touch screens stop at three, so a
-     sideways tablet or phone reads like the owner's 3-column layout. */
+     sideways tablet reads like the owner's 3-column layout. Under 280 px
+     the longest statuses (STANDBY · CLOSED, the pattern, a warning and the
+     IP) no longer fit, so an upright iPad gets two columns, not three. */
   .list {
     --card-min: 300px;
     height: 100%;
@@ -140,7 +146,7 @@
 
   @media (pointer: coarse) {
     .list {
-      --card-min: max(250px, (100% - 16px) / 3);
+      --card-min: max(280px, (100% - 16px) / 3);
     }
   }
 

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { statusSummary } from '../../logic/status';
+  import { alignment } from '../../state/alignment.svelte';
   import { live } from '../../state/live.svelte';
   import { session } from '../../state/session.svelte';
   import { device } from '../../state/device.svelte';
@@ -7,6 +8,8 @@
   import Icon from '../Icon.svelte';
   import AppLogo from './AppLogo.svelte';
   import UnlockDialog from './UnlockDialog.svelte';
+
+  let { operator }: { operator: boolean } = $props();
 
   let unlocking = $state(false);
   /** Phones and portrait tablets: short labels, icons for the rest. */
@@ -28,7 +31,7 @@
   ] as const;
 </script>
 
-<header class="hdr" class:phone={device.phone} class:compact>
+<header class="hdr" class:phone={device.phone} class:compact class:op={operator}>
   <AppLogo size={32} />
   <div class="proj">
     <b>{session.projectName}</b>
@@ -44,6 +47,18 @@
     {/each}
   </div>
   <div class="grow"></div>
+  {#if operator}
+    <!-- The app's Alignment mode toggle: the same session the app's banner drives. -->
+    <button
+      class="align"
+      aria-pressed={alignment.active}
+      disabled={alignment.busy}
+      title={alignment.active ? 'Exit Alignment mode' : 'Alignment mode'}
+      onclick={() => (alignment.active ? alignment.exit() : alignment.enter())}
+    >
+      <Icon name="target" size={16} /><span class="at">Alignment</span>
+    </button>
+  {/if}
   <span class="live" class:off={live.connection !== 'live'} title={liveText}>
     <span class="dot"></span>
     <span class="lt">{liveText}</span>
@@ -91,6 +106,11 @@
     padding: 8px 12px;
   }
 
+  /* The operator's Alignment button takes one more column. */
+  .hdr.phone.op {
+    grid-template-columns: auto minmax(0, 1fr) auto auto auto auto;
+  }
+
   .phone .filters {
     order: 1;
     grid-column: 1 / -1;
@@ -117,8 +137,44 @@
   .phone .grow,
   .compact .proj span,
   .compact .lt,
-  .compact .rt {
+  .compact .rt,
+  .compact .at {
     display: none;
+  }
+
+  .align {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 34px;
+    padding: 0 12px;
+    border: 1px solid var(--line-strong);
+    border-radius: 9px;
+    background: var(--surface);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .align:hover:not(:disabled) {
+    border-color: var(--align);
+  }
+
+  .align[aria-pressed='true'] {
+    border-color: var(--align);
+    background: var(--align);
+    color: var(--on-align);
+  }
+
+  .align:disabled {
+    opacity: 0.6;
+    cursor: progress;
+  }
+
+  .compact .align {
+    width: 36px;
+    padding: 0;
+    justify-content: center;
   }
 
   .compact .proj b {
