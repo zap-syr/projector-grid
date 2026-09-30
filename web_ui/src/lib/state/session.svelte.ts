@@ -1,12 +1,23 @@
 import { api, ApiError } from '../api/client';
-import type { Role } from '../api/types';
+import type { Access, Role } from '../api/types';
 
 type Status = 'loading' | 'signedOut' | 'signedIn';
+
+/** The message under a PIN field for a refused login / unlock. */
+function pinRefused(e: unknown, fallback: string): string {
+  if (!(e instanceof ApiError)) throw e;
+  if (e.body?.error === 'locked_out') {
+    return `Too many attempts — try again in ${e.body.retryAfter} s`;
+  }
+  return e.body?.error === 'invalid_pin' ? 'Wrong PIN' : fallback;
+}
 
 class SessionState {
   status = $state<Status>('loading');
   projectName = $state('');
   role = $state<Role | null>(null);
+  /** *Allow control* is on in the app, so *Unlock control* is offered. */
+  controlAllowed = $state(false);
   /** Shown on the login page after the server ended the session. */
   notice = $state<string | null>(null);
 
@@ -14,6 +25,7 @@ class SessionState {
     const s = await api.session();
     this.projectName = s.projectName;
     this.role = s.role ?? null;
+    this.controlAllowed = s.controlAllowed;
     this.status = s.authenticated ? 'signedIn' : 'signedOut';
   }
 
@@ -21,17 +33,33 @@ class SessionState {
   async login(pin: string): Promise<string | null> {
     try {
       const res = await api.login(pin);
-      this.role = res.role;
+      this.applyAccess(res);
       this.notice = null;
       this.status = 'signedIn';
       return null;
     } catch (e) {
-      if (!(e instanceof ApiError)) throw e;
-      if (e.body?.error === 'locked_out') {
-        return `Too many attempts — try again in ${e.body.retryAfter} s`;
-      }
-      return e.body?.error === 'invalid_pin' ? 'Wrong PIN' : 'Sign-in failed';
+      return pinRefused(e, 'Sign-in failed');
     }
+  }
+
+  /** *Unlock control* with the Operator PIN; null on success, else the message. */
+  async unlock(pin: string): Promise<string | null> {
+    try {
+      this.applyAccess(await api.unlock(pin));
+      return null;
+    } catch (e) {
+      return pinRefused(e, 'Unlock failed');
+    }
+  }
+
+  async lock(): Promise<void> {
+    this.applyAccess(await api.lock());
+  }
+
+  /** From our own unlock / lock, or the `access` event (another tab, the app's settings). */
+  applyAccess(a: Access): void {
+    this.role = a.role;
+    this.controlAllowed = a.controlAllowed;
   }
 
   async logout(): Promise<void> {

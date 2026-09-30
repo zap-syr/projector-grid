@@ -21,6 +21,7 @@ const schemaFor: Record<string, string> = {
   'session-signed-in': 'Session',
   'session-signed-out': 'Session',
   login: 'LoginResponse',
+  access: 'Access',
   error: 'Error',
   'error-locked-out': 'Error',
   'event-snapshot': 'SnapshotEvent',

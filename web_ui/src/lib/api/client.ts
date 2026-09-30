@@ -1,4 +1,12 @@
-import type { ApiErrorBody, Config, Group, LoginResponse, Projector, Session } from './types';
+import type {
+  Access,
+  ApiErrorBody,
+  Config,
+  Group,
+  LoginResponse,
+  Projector,
+  Session,
+} from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -28,6 +36,8 @@ export const api = {
   session: () => request<Session>('GET', '/api/session'),
   login: (pin: string) => request<LoginResponse>('POST', '/api/login', { pin }),
   logout: () => request<undefined>('POST', '/api/logout'),
+  unlock: (pin: string) => request<Access>('POST', '/api/unlock', { pin }),
+  lock: () => request<Access>('POST', '/api/lock'),
   config: () => request<Config>('GET', '/api/config'),
   projectors: () => request<Projector[]>('GET', '/api/projectors'),
   groups: () => request<Group[]>('GET', '/api/groups'),

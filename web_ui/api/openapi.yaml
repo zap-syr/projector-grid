@@ -59,17 +59,19 @@ components:
     LoginResponse:
       type: object
       additionalProperties: false
-      required: [token, role]
+      required: [token, role, controlAllowed]
       properties:
         token:
           type: string
         role:
           $ref: '#/components/schemas/Role'
+        controlAllowed:
+          type: boolean
 
     Session:
       type: object
       additionalProperties: false
-      required: [projectName, authenticated]
+      required: [projectName, authenticated, controlAllowed]
       properties:
         projectName:
           type: string
@@ -77,6 +79,20 @@ components:
           type: boolean
         role:
           $ref: '#/components/schemas/Role'
+        controlAllowed:
+          type: boolean
+          description: '*Allow control* is on: operator PIN login and *Unlock control* work.'
+
+    Access:
+      type: object
+      additionalProperties: false
+      required: [role, controlAllowed]
+      description: This session's role, and whether *Unlock control* is available.
+      properties:
+        role:
+          $ref: '#/components/schemas/Role'
+        controlAllowed:
+          type: boolean
 
     Projector:
       type: object
@@ -382,6 +398,68 @@ paths:
         '204':
           description: Signed out; the cookie is cleared.
 
+  /api/unlock:
+    post:
+      summary: Unlock control — upgrade this session to operator with the Operator PIN
+      description: Only exists while *Allow control* is on (404 otherwise). Wrong PINs count towards the same per-IP lockout as logins.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Now operator. The session's other tabs get an `access` event.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Access'
+        '400':
+          description: 'Body isn''t `{"pin": "<string>"}`.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Wrong PIN, or no session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: '*Allow control* is off.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Too many wrong PINs from this IP; see `Retry-After`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/lock:
+    post:
+      summary: Lock — back to viewer, same session
+      description: Only exists while *Allow control* is on (404 otherwise).
+      responses:
+        '200':
+          description: Now viewer. The session's other tabs get an `access` event.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Access'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: '*Allow control* is off.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /api/session:
     get:
       security: []
@@ -484,6 +562,7 @@ paths:
         | `projector` | `Projector` | one projector changed |
         | `groups` | `Groups` | groups changed |
         | `project` | `ProjectEvent` | another project was opened or saved under a new name |
+        | `access` | `Access` | this session was unlocked / locked (in another tab too), or *Allow control* was switched |
         | `signedOut` | `SignedOutEvent` | the session ended (PIN changed, *Sign out all clients*, Web Access off); the stream then closes |
       responses:
         '200':

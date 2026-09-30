@@ -31,6 +31,7 @@ class LiveState {
       },
       groups: (d) => (this.groups = d),
       project: (d) => (session.projectName = d.name),
+      access: (d) => session.applyAccess(d),
       signedOut: () => void session.ended(),
       reconnecting: () => (this.connection = 'reconnecting'),
       closed: () => void session.ended(),

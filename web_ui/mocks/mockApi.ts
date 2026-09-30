@@ -1,7 +1,8 @@
 /**
  * Dev-only fake of the app's API (`npm run dev:mock`), built on the same
- * golden fixtures the contract test checks. PIN: 1234. Every 2 s one online
- * projector's intake temperature drifts, so live updates are visible.
+ * golden fixtures the contract test checks. Viewer PIN 1234, Operator PIN
+ * 5678 (*Allow control* on). Every 2 s one online projector's intake
+ * temperature drifts, so live updates are visible.
  */
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -10,10 +11,11 @@ import { resolve } from 'node:path';
 
 import type { Plugin } from 'vite';
 
-import type { Group, Projector } from '../src/lib/api/types.ts';
+import type { Group, Projector, Role } from '../src/lib/api/types.ts';
 
 const FIXTURES = resolve(import.meta.dirname, '../../test/fixtures/api');
-const PIN = '1234';
+const VIEWER_PIN = '1234';
+const OPERATOR_PIN = '5678';
 
 const load = <T>(name: string): T =>
   JSON.parse(readFileSync(resolve(FIXTURES, `${name}.json`), 'utf8')) as T;
@@ -72,7 +74,7 @@ function wall(): Projector[] {
 }
 
 export function mockApi(): Plugin {
-  const sessions = new Set<string>();
+  const sessions = new Map<string, Role>();
   const streams = new Set<ServerResponse>();
   const projectors = wall();
 
@@ -105,30 +107,42 @@ export function mockApi(): Plugin {
 
   async function handle(req: IncomingMessage, res: ServerResponse) {
     const path = req.url?.split('?')[0];
-    const signedIn = sessions.has(token(req) ?? '');
+    const t = token(req) ?? '';
+    const role = sessions.get(t);
+    const readPin = async () =>
+      (JSON.parse((await readBody(req)) || '{}') as { pin?: unknown }).pin;
 
     if (req.method === 'POST' && path === '/api/login') {
-      const pin = (JSON.parse((await readBody(req)) || '{}') as { pin?: unknown }).pin;
-      if (pin !== PIN) return send(res, 401, { error: 'invalid_pin' });
-      const t = randomUUID();
-      sessions.add(t);
+      const pin = await readPin();
+      const newRole = pin === OPERATOR_PIN ? 'operator' : pin === VIEWER_PIN ? 'viewer' : null;
+      if (!newRole) return send(res, 401, { error: 'invalid_pin' });
+      const newToken = randomUUID();
+      sessions.set(newToken, newRole);
       return send(
         res,
         200,
-        { token: t, role: 'viewer' },
-        { 'set-cookie': `pg_session=${t}; Path=/; HttpOnly; SameSite=Strict` },
+        { token: newToken, role: newRole, controlAllowed: true },
+        { 'set-cookie': `pg_session=${newToken}; Path=/; HttpOnly; SameSite=Strict` },
       );
     }
     if (path === '/api/session') {
       return send(res, 200, {
         projectName: 'Main Hall (mock)',
-        authenticated: signedIn,
-        ...(signedIn ? { role: 'viewer' } : {}),
+        authenticated: role !== undefined,
+        ...(role ? { role } : {}),
+        controlAllowed: true,
       });
     }
-    if (!signedIn) return send(res, 401, { error: 'unauthorized' });
+    if (!role) return send(res, 401, { error: 'unauthorized' });
 
     switch (path) {
+      case '/api/unlock':
+        if ((await readPin()) !== OPERATOR_PIN) return send(res, 401, { error: 'invalid_pin' });
+        sessions.set(t, 'operator');
+        return send(res, 200, { role: 'operator', controlAllowed: true });
+      case '/api/lock':
+        sessions.set(t, 'viewer');
+        return send(res, 200, { role: 'viewer', controlAllowed: true });
       case '/api/logout':
         sessions.delete(token(req) ?? '');
         return send(res, 204, undefined, { 'set-cookie': 'pg_session=; Path=/; Max-Age=0' });

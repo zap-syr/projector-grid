@@ -11,6 +11,7 @@
     arrow: '<path d="M12 19V5M6 11l6-6 6 6"/>',
     search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
     columns: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 4v16"/>',
+    close: '<path d="M6 6l12 12M18 6L6 18"/>',
   } as const;
 
   export type IconName = keyof typeof PATHS;

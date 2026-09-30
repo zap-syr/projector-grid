@@ -6,6 +6,7 @@ export type Role = Schemas['Role'];
 export type ApiErrorBody = Schemas['Error'];
 export type LoginResponse = Schemas['LoginResponse'];
 export type Session = Schemas['Session'];
+export type Access = Schemas['Access'];
 export type Projector = Schemas['Projector'];
 export type Group = Schemas['Group'];
 export type Config = Schemas['Config'];

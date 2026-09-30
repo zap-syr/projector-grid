@@ -105,6 +105,134 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/unlock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unlock control — upgrade this session to operator with the Operator PIN
+         * @description Only exists while *Allow control* is on (404 otherwise). Wrong PINs count towards the same per-IP lockout as logins.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["LoginRequest"];
+                };
+            };
+            responses: {
+                /** @description Now operator. The session's other tabs get an `access` event. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Access"];
+                    };
+                };
+                /** @description Body isn't `{"pin": "<string>"}`. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Wrong PIN, or no session. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description *Allow control* is off. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Too many wrong PINs from this IP; see `Retry-After`. */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Lock — back to viewer, same session
+         * @description Only exists while *Allow control* is on (404 otherwise).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Now viewer. The session's other tabs get an `access` event. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Access"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                /** @description *Allow control* is off. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/session": {
         parameters: {
             query?: never;
@@ -355,6 +483,7 @@ export interface paths {
          *     | `projector` | `Projector` | one projector changed |
          *     | `groups` | `Groups` | groups changed |
          *     | `project` | `ProjectEvent` | another project was opened or saved under a new name |
+         *     | `access` | `Access` | this session was unlocked / locked (in another tab too), or *Allow control* was switched |
          *     | `signedOut` | `SignedOutEvent` | the session ended (PIN changed, *Sign out all clients*, Web Access off); the stream then closes |
          */
         get: {
@@ -404,11 +533,19 @@ export interface components {
         LoginResponse: {
             token: string;
             role: components["schemas"]["Role"];
+            controlAllowed: boolean;
         };
         Session: {
             projectName: string;
             authenticated: boolean;
             role?: components["schemas"]["Role"];
+            /** @description *Allow control* is on: operator PIN login and *Unlock control* work. */
+            controlAllowed: boolean;
+        };
+        /** @description This session's role, and whether *Unlock control* is available. */
+        Access: {
+            role: components["schemas"]["Role"];
+            controlAllowed: boolean;
         };
         /** @description Display strings are exactly what the app shows ('-' = not polled yet). */
         Projector: {

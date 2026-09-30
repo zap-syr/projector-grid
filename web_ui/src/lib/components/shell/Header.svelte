@@ -2,6 +2,10 @@
   import { statusSummary } from '../../logic/status';
   import { live } from '../../state/live.svelte';
   import { session } from '../../state/session.svelte';
+  import Icon from '../Icon.svelte';
+  import UnlockDialog from './UnlockDialog.svelte';
+
+  let unlocking = $state(false);
   import { view } from '../../state/view.svelte';
   import AppLogo from './AppLogo.svelte';
 
@@ -38,9 +42,23 @@
         ? 'Reconnecting'
         : 'Connecting'}
   </span>
-  <span class="role">{session.role}</span>
+  <div class="who" class:op={session.role === 'operator'}>
+    <span class="role">
+      <Icon name={session.role === 'operator' ? 'unlock' : 'lock'} size={13} />
+      {session.role === 'operator' ? 'Operator' : 'Viewer'}
+    </span>
+    {#if session.role === 'operator'}
+      <button class="small" onclick={() => session.lock()}>Lock</button>
+    {:else if session.controlAllowed}
+      <button class="small" onclick={() => (unlocking = true)}>Unlock control</button>
+    {/if}
+  </div>
   <button class="quiet" onclick={() => session.logout()}>Sign out</button>
 </header>
+
+{#if unlocking}
+  <UnlockDialog onclose={() => (unlocking = false)} />
+{/if}
 
 <style>
   .hdr {
@@ -149,12 +167,49 @@
     background: currentColor;
   }
 
+  .who {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 34px;
+    padding: 0 4px 0 10px;
+    border-radius: 9px;
+    border: 1px solid var(--line);
+  }
+
+  .who.op {
+    border-color: var(--accent-line);
+    background: var(--accent-soft);
+  }
+
   .role {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     font-size: 12px;
     font-weight: 650;
     letter-spacing: 0.05em;
     text-transform: uppercase;
     color: var(--muted);
+  }
+
+  .who.op .role {
+    color: var(--accent);
+  }
+
+  .small {
+    height: 26px;
+    padding: 0 10px;
+    border-radius: 6px;
+    border: 1px solid var(--line-strong);
+    background: var(--surface);
+    font-size: 12.5px;
+    font-weight: 550;
+    cursor: pointer;
+  }
+
+  .small:hover {
+    background: var(--hover);
   }
 
   .quiet {
