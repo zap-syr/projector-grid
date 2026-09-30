@@ -10,7 +10,7 @@ import { resolve } from 'node:path';
 
 import type { Plugin } from 'vite';
 
-import type { Projector } from '../src/lib/api/types.ts';
+import type { Group, Projector } from '../src/lib/api/types.ts';
 
 const FIXTURES = resolve(import.meta.dirname, '../../test/fixtures/api');
 const PIN = '1234';
@@ -18,10 +18,63 @@ const PIN = '1234';
 const load = <T>(name: string): T =>
   JSON.parse(readFileSync(resolve(FIXTURES, `${name}.json`), 'utf8')) as T;
 
+const GROUPS: Group[] = [...load<Group[]>('groups'), { id: 'g3', name: 'Lobby', color: '#12B5CB' }];
+
+/**
+ * A 6×4 wall of 24 projectors (Stage, Balcony, Lobby, one row ungrouped)
+ * cloned from the fixture's healthy projector, with a spread of states so
+ * sorting, filters and group summaries have something to show.
+ */
+function wall(): Projector[] {
+  const template = load<Projector[]>('projectors').find((p) => p.id === 'n2') as Projector;
+  const rowGroup = ['g1', 'g2', 'g3', null];
+  return Array.from({ length: 24 }, (_, i) => {
+    const row = Math.floor(i / 6);
+    const n = String(i + 1).padStart(2, '0');
+    const p: Projector = {
+      ...template,
+      id: `m${n}`,
+      name: `PJ-${n}`,
+      ip: `192.168.0.${110 + i}`,
+      serial: `SH42130${n}`,
+      groupId: rowGroup[row] ?? null,
+      x: 20 + (i % 6) * 140,
+      y: 40 + row * 140,
+      runtime: `${8200 + i * 37}H`,
+      lightRuntime: `${1400 + i * 11}H`,
+      intakeTemp: `${30 + (i % 9)}°C`,
+      exhaustTemp: `${42 + (i % 7) * 3}°C`,
+      testPattern: ['OTS:07', 'OTS:00', 'OTS:70', 'OTS:00', 'OTS:01', 'OTS:87'][i % 6] ?? null,
+    };
+    if (i === 3) Object.assign(p, { power: 'cooling', shutter: 'closed' });
+    if (i === 8) p.errors = '000100000000';
+    if (i === 10)
+      Object.assign(p, { connection: 'unauthorized', power: 'standby', shutter: 'closed' });
+    if (i === 14) Object.assign(p, { shutter: 'closed', signal: 'NO SIGNAL' });
+    if (i === 20 || i === 23) {
+      Object.assign(p, {
+        connection: 'offline',
+        power: 'standby',
+        shutter: 'closed',
+        input: '-',
+        signal: '-',
+        testPattern: null,
+        runtime: '-',
+        lightRuntime: '-',
+        intakeTemp: '-',
+        exhaustTemp: '-',
+        acVoltage: '-',
+        errors: '-',
+      });
+    }
+    return p;
+  });
+}
+
 export function mockApi(): Plugin {
   const sessions = new Set<string>();
   const streams = new Set<ServerResponse>();
-  const projectors = load<Projector[]>('projectors');
+  const projectors = wall();
 
   const send = (res: ServerResponse, status: number, body?: unknown, headers = {}) => {
     res.writeHead(status, { 'content-type': 'application/json', ...headers });
@@ -84,7 +137,7 @@ export function mockApi(): Plugin {
       case '/api/projectors':
         return send(res, 200, projectors);
       case '/api/groups':
-        return send(res, 200, load('groups'));
+        return send(res, 200, GROUPS);
       case '/api/alerts':
         return send(res, 200, []);
       case '/api/events':
@@ -93,7 +146,7 @@ export function mockApi(): Plugin {
         sse(res, 'snapshot', {
           projectName: 'Main Hall (mock)',
           projectors,
-          groups: load('groups'),
+          groups: GROUPS,
         });
         streams.add(res);
         req.on('close', () => streams.delete(res));
