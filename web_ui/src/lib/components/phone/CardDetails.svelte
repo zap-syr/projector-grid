@@ -8,7 +8,7 @@
 
   import type { ColumnId, Config, Group, Projector } from '../../api/types';
   import { device } from '../../state/device.svelte';
-  import Cell from '../table/Cell.svelte';
+  import DetailFields from '../DetailFields.svelte';
   import Icon from '../Icon.svelte';
 
   let {
@@ -32,7 +32,6 @@
 
   /** Shown on the card itself (ProjectorCard's summary). */
   const SUMMARY: readonly ColumnId[] = ['model', 'power', 'shutter', 'signal', 'intake', 'exhaust'];
-  const fields = $derived(config.columns.filter((c) => !SUMMARY.includes(c.id)));
 
   /** The pointer sits under the middle of the card (grid gap 8 px). */
   const notch = $derived(
@@ -54,16 +53,7 @@
         <Icon name="close" size={16} />
       </button>
     </header>
-    <dl>
-      {#each fields as c (c.id)}
-        <div class="f">
-          <dt>{c.label}</dt>
-          <dd>
-            <Cell column={c.id} {p} {groups} thresholds={config.thresholds} {patternLabel} />
-          </dd>
-        </div>
-      {/each}
-    </dl>
+    <DetailFields {p} {config} {groups} {patternLabel} skip={SUMMARY} />
   </div>
 </section>
 
@@ -132,31 +122,5 @@
   .x:hover {
     background: var(--hover);
     color: var(--text);
-  }
-
-  dl {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-    gap: 10px 20px;
-    margin: 0;
-    padding: 6px 16px 14px;
-    font-size: 13px;
-  }
-
-  .f {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    min-width: 0;
-  }
-
-  dt {
-    font-size: 11.5px;
-    color: var(--faint);
-  }
-
-  dd {
-    margin: 0;
-    min-width: 0;
   }
 </style>
