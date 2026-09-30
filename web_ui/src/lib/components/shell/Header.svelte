@@ -2,9 +2,16 @@
   import { statusSummary } from '../../logic/status';
   import { live } from '../../state/live.svelte';
   import { session } from '../../state/session.svelte';
+  import { view } from '../../state/view.svelte';
   import AppLogo from './AppLogo.svelte';
 
   const counts = $derived(statusSummary(live.projectors));
+  const filters = [
+    { id: 'all', label: 'All', count: 'total', tone: '' },
+    { id: 'online', label: 'Online', count: 'online', tone: 'ok' },
+    { id: 'offline', label: 'Offline', count: 'offline', tone: 'err' },
+    { id: 'warnings', label: 'Warnings', count: 'warnings', tone: 'warn' },
+  ] as const;
 </script>
 
 <header class="hdr">
@@ -13,11 +20,14 @@
     <b>{session.projectName}</b>
     <span>Projector Grid</span>
   </div>
-  <div class="stats" aria-label="Status">
-    <span class="stat">All <b>{counts.total}</b></span>
-    <span class="stat ok">Online <b>{counts.online}</b></span>
-    <span class="stat err">Offline <b>{counts.offline}</b></span>
-    <span class="stat warn">Warnings <b>{counts.warnings}</b></span>
+  <div class="filters" role="group" aria-label="Filter">
+    {#each filters as f (f.id)}
+      <button
+        class="flt {f.tone}"
+        aria-pressed={view.filter === f.id}
+        onclick={() => view.toggleFilter(f.id)}>{f.label} <b>{counts[f.count]}</b></button
+      >
+    {/each}
   </div>
   <div class="grow"></div>
   <span class="live" class:off={live.connection !== 'live'}>
@@ -61,30 +71,53 @@
     color: var(--faint);
   }
 
-  .stats {
+  .filters {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px 14px;
-    font-size: 13px;
-    color: var(--muted);
+    gap: 4px;
   }
 
-  .stat b {
+  .flt {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 32px;
+    padding: 0 11px;
+    border: 0;
+    border-radius: 8px;
+    background: none;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 550;
+    cursor: pointer;
+  }
+
+  .flt:hover {
+    background: var(--hover);
+    color: var(--text);
+  }
+
+  .flt b {
     font-weight: 650;
     color: var(--text);
     font-variant-numeric: tabular-nums;
   }
 
-  .stat.ok b {
+  .flt.ok b {
     color: var(--ok);
   }
 
-  .stat.err b {
+  .flt.err b {
     color: var(--err);
   }
 
-  .stat.warn b {
+  .flt.warn b {
     color: var(--warn);
+  }
+
+  .flt[aria-pressed='true'] {
+    background: var(--accent-soft);
+    color: var(--accent);
   }
 
   .grow {
