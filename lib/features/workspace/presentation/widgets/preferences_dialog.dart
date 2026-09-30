@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../domain/web_pins.dart';
 import '../providers/app_settings_provider.dart';
 import '../providers/osc_provider.dart';
 import '../providers/web_server_provider.dart';
@@ -37,6 +38,9 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog>
   late final TextEditingController _webPortController;
   final _webPinController = TextEditingController();
   String? _webPinError;
+  late bool _webAllowControl;
+  final _webOperatorPinController = TextEditingController();
+  String? _webOperatorPinError;
   String? _webUrlIp;
 
   List<NetworkInterface>? _networkInterfaces;
@@ -60,6 +64,7 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog>
       text: settings.oscSendPort.toString(),
     );
     _webEnabled = settings.webEnabled;
+    _webAllowControl = settings.webAllowControl;
     _webPortController = TextEditingController(
       text: settings.webPort.toString(),
     );
@@ -95,6 +100,7 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog>
     _oscSendPortController.dispose();
     _webPortController.dispose();
     _webPinController.dispose();
+    _webOperatorPinController.dispose();
     _tabController.dispose();
     super.dispose();
   }
@@ -107,13 +113,20 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog>
 
     // Checked before anything is written, so a rejected PIN saves nothing.
     final pin = _webPinController.text;
-    final pinError = pin.isNotEmpty && (pin.length < 4 || pin.length > 8)
-        ? '4–8 digits'
-        : _webEnabled && pin.isEmpty && oldSettings.webViewerPinHash == null
-        ? 'Required'
-        : null;
-    if (pinError != null) {
-      setState(() => _webPinError = pinError);
+    final operatorPin = _webOperatorPinController.text;
+    final pinErrors = validateWebPins(
+      viewerPin: pin,
+      operatorPin: operatorPin,
+      enabled: _webEnabled,
+      allowControl: _webAllowControl,
+      viewerHash: oldSettings.webViewerPinHash,
+      operatorHash: oldSettings.webOperatorPinHash,
+    );
+    if (pinErrors.viewer != null || pinErrors.operator != null) {
+      setState(() {
+        _webPinError = pinErrors.viewer;
+        _webOperatorPinError = pinErrors.operator;
+      });
       _tabController.animateTo(2);
       return;
     }
@@ -176,6 +189,10 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog>
     if (webPortValid) settingsNotifier.setWebPort(webPort);
     final webNotifier = ref.read(webServerProvider.notifier);
     if (pin.isNotEmpty) webNotifier.setViewerPin(pin);
+    if (operatorPin.isNotEmpty) webNotifier.setOperatorPin(operatorPin);
+    if (_webAllowControl != oldSettings.webAllowControl) {
+      webNotifier.setAllowControl(_webAllowControl);
+    }
     if (_webEnabled && !oldSettings.webEnabled) {
       webNotifier.start();
     } else if (!_webEnabled && oldSettings.webEnabled) {
@@ -272,6 +289,57 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog>
                       },
                       decoration: fieldDecoration.copyWith(
                         errorText: _webPinError,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 120,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Allow control', style: theme.textTheme.titleSmall),
+                    const SizedBox(height: 4),
+                    Switch(
+                      value: _webAllowControl,
+                      onChanged: (value) => setState(() {
+                        _webAllowControl = value;
+                        _webOperatorPinError = null;
+                      }),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Operator PIN', style: theme.textTheme.titleSmall),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _webOperatorPinController,
+                      enabled: _webAllowControl,
+                      obscureText: true,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(8),
+                      ],
+                      onChanged: (_) {
+                        if (_webOperatorPinError != null) {
+                          setState(() => _webOperatorPinError = null);
+                        }
+                      },
+                      decoration: fieldDecoration.copyWith(
+                        errorText: _webOperatorPinError,
                       ),
                     ),
                   ],

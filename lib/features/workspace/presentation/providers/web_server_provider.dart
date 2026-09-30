@@ -105,6 +105,27 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
     signOutAll();
   }
 
+  /// Stores [pin] (hashed) as the Operator PIN; every session ends, as for
+  /// the Viewer PIN.
+  void setOperatorPin(String pin) {
+    ref.read(appSettingsProvider.notifier).setWebOperatorPinHash(hashPin(pin));
+    signOutAll();
+  }
+
+  /// *Allow control*. Turning it off drops every operator to viewer; either
+  /// way each open page learns whether *Unlock control* is available.
+  void setAllowControl(bool allow) {
+    ref.read(appSettingsProvider.notifier).setWebAllowControl(allow);
+    if (!allow) _auth.demoteOperators();
+    for (final s in _auth.sessions) {
+      _hub.sendTo(s.token, (
+        name: accessEvent,
+        data: accessJson(s.role, controlAllowed: allow),
+      ));
+    }
+    _log(LogSeverity.info, 'Web · control ${allow ? 'allowed' : 'off'}');
+  }
+
   void signOutAll() {
     final hadClients = _auth.sessions.isNotEmpty;
     _endAllSessions();
@@ -140,6 +161,12 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
 
   @override
   String get viewerPinHash => ref.read(appSettingsProvider).webViewerPinHash!;
+
+  @override
+  String? get operatorPinHash {
+    final s = ref.read(appSettingsProvider);
+    return s.webAllowControl ? s.webOperatorPinHash : null;
+  }
 
   @override
   Json config(WebRole role) {
@@ -186,6 +213,13 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
   void signedIn(WebSession session) => _log(
     LogSeverity.info,
     'Web · ${session.ip} · ${session.role.name} signed in',
+  );
+
+  @override
+  void roleChanged(WebSession session) => _log(
+    LogSeverity.info,
+    'Web · ${session.ip} · '
+    '${session.role == WebRole.operator ? 'control unlocked' : 'locked'}',
   );
 
   void _log(LogSeverity severity, String message) => ref

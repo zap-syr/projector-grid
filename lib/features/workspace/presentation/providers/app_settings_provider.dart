@@ -48,6 +48,11 @@ class AppSettings {
   /// Web Access can't be enabled without it.
   final String? webViewerPinHash;
 
+  /// *Allow control*: operators may log in / unlock. Can't be on without an
+  /// Operator PIN (salted hash, like the Viewer PIN's).
+  final bool webAllowControl;
+  final String? webOperatorPinHash;
+
   /// Monitoring-table layout. `monitoringColumns` is the ordered list of
   /// *visible* column ids (see `MonitoringTable` for the id set); an empty list
   /// means "use the table's default set/order". `monitoringColumnWidths` holds
@@ -91,6 +96,8 @@ class AppSettings {
     this.webEnabled = false,
     this.webPort = defaultWebPort,
     this.webViewerPinHash,
+    this.webAllowControl = false,
+    this.webOperatorPinHash,
     this.monitoringColumns = const [],
     this.monitoringColumnWidths = const {},
     this.monitoringSortColumnId = 'ip',
@@ -119,6 +126,8 @@ class AppSettings {
     bool? webEnabled,
     int? webPort,
     String? webViewerPinHash,
+    bool? webAllowControl,
+    String? webOperatorPinHash,
     List<String>? monitoringColumns,
     Map<String, double>? monitoringColumnWidths,
     String? monitoringSortColumnId,
@@ -148,6 +157,8 @@ class AppSettings {
       webEnabled: webEnabled ?? this.webEnabled,
       webPort: webPort ?? this.webPort,
       webViewerPinHash: webViewerPinHash ?? this.webViewerPinHash,
+      webAllowControl: webAllowControl ?? this.webAllowControl,
+      webOperatorPinHash: webOperatorPinHash ?? this.webOperatorPinHash,
       monitoringColumns: monitoringColumns ?? this.monitoringColumns,
       monitoringColumnWidths:
           monitoringColumnWidths ?? this.monitoringColumnWidths,
@@ -184,6 +195,8 @@ class AppSettings {
     'webEnabled': webEnabled,
     'webPort': webPort,
     'webViewerPinHash': webViewerPinHash,
+    'webAllowControl': webAllowControl,
+    'webOperatorPinHash': webOperatorPinHash,
     'monitoringColumns': monitoringColumns,
     'monitoringColumnWidths': monitoringColumnWidths,
     'monitoringSortColumnId': monitoringSortColumnId,
@@ -221,6 +234,8 @@ class AppSettings {
     webEnabled: (json['webEnabled'] as bool?) ?? false,
     webPort: (json['webPort'] as int?) ?? defaultWebPort,
     webViewerPinHash: json['webViewerPinHash'] as String?,
+    webAllowControl: (json['webAllowControl'] as bool?) ?? false,
+    webOperatorPinHash: json['webOperatorPinHash'] as String?,
     monitoringColumns:
         (json['monitoringColumns'] as List?)?.cast<String>() ?? const [],
     monitoringColumnWidths:
@@ -346,6 +361,16 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
 
   void setWebViewerPinHash(String hash) {
     state = state.copyWith(webViewerPinHash: hash);
+    _save(state);
+  }
+
+  void setWebAllowControl(bool allow) {
+    state = state.copyWith(webAllowControl: allow);
+    _save(state);
+  }
+
+  void setWebOperatorPinHash(String hash) {
+    state = state.copyWith(webOperatorPinHash: hash);
     _save(state);
   }
 
