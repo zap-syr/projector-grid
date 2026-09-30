@@ -12,7 +12,11 @@
 
 <svelte:window
   onkeydown={(e) => {
-    if (e.key === 'Escape') control.cancel();
+    // Marked handled, so the sheet and the toolbar leave this Esc alone.
+    if (e.key === 'Escape' && p) {
+      e.preventDefault();
+      control.cancel();
+    }
   }}
 />
 
