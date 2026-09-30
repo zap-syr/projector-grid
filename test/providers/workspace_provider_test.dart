@@ -260,6 +260,23 @@ void main() {
       c.dispose();
     });
 
+    testWidgets('sendCommandToNodes reaches those ids and logs the source', (
+      tester,
+    ) async {
+      final c = makeContainer(fake);
+      final ws = c.read(workspaceProvider.notifier);
+      ws.setNodes([node('1'), node('2'), node('3')]);
+      await ws.sendCommandToNodes(['1', '3'], 'OOS:1', source: 'Web · x');
+      expect(fake.sentCommands, [('10.0.0.1', 'OOS:1'), ('10.0.0.3', 'OOS:1')]);
+      expect(logMessages(c), [
+        'OSD On — 2/2 OK (Web · x)',
+        'Sent: OSD On (Web · x)',
+        'Sent: OSD On (Web · x)',
+      ]);
+      // Cancels the poll/power-transition timers before the pending-timer check.
+      c.dispose();
+    });
+
     testWidgets('PON shows turningOn, then settles on the real state', (
       tester,
     ) async {

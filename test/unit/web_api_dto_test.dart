@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:projector_grid/core/services/web_api.dart';
 import 'package:projector_grid/core/services/web_auth.dart';
+import 'package:projector_grid/features/workspace/domain/dispatch_result.dart';
 import 'package:projector_grid/features/workspace/domain/monitoring_columns.dart';
 import 'package:projector_grid/features/workspace/domain/projector_group.dart';
 import 'package:projector_grid/features/workspace/domain/projector_node.dart';
@@ -161,6 +162,20 @@ void main() {
         ),
       );
       expectFixture('event-project', {'name': 'Main Hall'});
+    });
+
+    test('dispatch result', () {
+      expectFixture(
+        'dispatch-result',
+        dispatchResultJson(
+          DispatchResult(
+            command: 'OSH:1',
+            ok: 2,
+            failed: [_nodes[2]],
+            skipped: [_nodes[3]],
+          ),
+        ),
+      );
     });
   });
 

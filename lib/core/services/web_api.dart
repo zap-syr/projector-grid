@@ -61,6 +61,10 @@ abstract interface class WebApiSource {
 
   /// After *Unlock control* or *Lock*.
   void roleChanged(WebSession session);
+
+  /// `POST /api/actions` from an operator: [body] is the decoded JSON. Null
+  /// when it isn't a valid action request, else the dispatch summary.
+  Future<Json?> dispatch(Object? body, WebSession session);
 }
 
 /// `/api/*` routes: PIN login, session check on everything else, read-only
@@ -82,6 +86,7 @@ class WebApi {
           ..post('/api/logout', _authed((r, s) => _logout(s)))
           ..post('/api/unlock', _authed(_unlock))
           ..post('/api/lock', _authed((_, s) => _lock(s)))
+          ..post('/api/actions', _authed(_actions))
           ..get(
             '/api/config',
             _authed((_, s) => _json(200, source.config(s.role))),
@@ -157,6 +162,24 @@ class WebApi {
     if (!_controlAllowed) return _json(404, errorJson('not_found'));
     auth.lock(session);
     return _roleChanged(session);
+  }
+
+  /// Operator-only; the server enforces it, hidden buttons aren't the guard.
+  Future<Response> _actions(Request request, WebSession session) async {
+    if (!_controlAllowed) return _json(404, errorJson('not_found'));
+    if (session.role != WebRole.operator) {
+      return _json(403, errorJson('forbidden'));
+    }
+    final Object? body;
+    try {
+      body = jsonDecode(await request.readAsString());
+    } on FormatException {
+      return _json(400, errorJson('bad_request'));
+    }
+    final result = await source.dispatch(body, session);
+    return result == null
+        ? _json(400, errorJson('bad_request'))
+        : _json(200, result);
   }
 
   /// Tells the session's other tabs, logs it, and replies with the new access.

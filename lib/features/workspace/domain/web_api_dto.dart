@@ -10,6 +10,9 @@ import '../../../core/services/web_auth.dart';
 import '../../../core/services/web_event_hub.dart';
 import '../../../core/theme/status_thresholds.dart';
 import 'card_layout.dart';
+import 'control_options.dart';
+import 'dispatch_result.dart';
+import 'log_event.dart';
 import 'monitoring_columns.dart';
 import 'projector_group.dart';
 import 'projector_node.dart';
@@ -124,11 +127,30 @@ Json configJson({
       'hot': kExhaustTempThreshold.hot,
     },
   },
-  'testPatterns': [
-    for (final e in kTestPatternLabels.entries)
-      {'code': e.key, 'label': e.value},
-  ],
+  'testPatterns': _options(kTestPatternLabels),
+  'inputs': _options(kInputOptions),
+  'lensCalibrations': _options(kLensCalibrationOptions),
+  'lensTypes': _options(kLensTypeOptions),
 };
+
+List<Json> _options(Map<String, String> byCode) => [
+  for (final e in byCode.entries) {'code': e.key, 'label': e.value},
+];
+
+/// The reply to `POST /api/actions` — the §10 summary, with the Event Log's
+/// one-line text for the page's toast.
+Json dispatchResultJson(DispatchResult r) {
+  Json ref(ProjectorNode n) => {'id': n.id, 'name': n.name};
+  return {
+    'command': r.command,
+    'label': commandLabel(r.command),
+    'ok': r.ok,
+    'total': r.total,
+    'failed': r.failed.map(ref).toList(),
+    'skipped': r.skipped.map(ref).toList(),
+    'summary': dispatchSummary(r),
+  };
+}
 
 /// The first event on `/api/events`.
 Json snapshotJson({

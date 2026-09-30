@@ -284,5 +284,119 @@
       "code": "OTS:87",
       "label": "Circle"
     }
+  ],
+  "inputs": [
+    {
+      "code": "IIS:HD1",
+      "label": "HDMI 1"
+    },
+    {
+      "code": "IIS:HD2",
+      "label": "HDMI 2"
+    },
+    {
+      "code": "IIS:DP1",
+      "label": "DisplayPort"
+    },
+    {
+      "code": "IIS:DVI",
+      "label": "DVI-D"
+    },
+    {
+      "code": "IIS:SD1",
+      "label": "SDI 1"
+    },
+    {
+      "code": "IIS:SD2",
+      "label": "SDI 2"
+    },
+    {
+      "code": "IIS:DL1",
+      "label": "Digital Link"
+    },
+    {
+      "code": "IIS:RG1",
+      "label": "Computer 1"
+    },
+    {
+      "code": "IIS:RG2",
+      "label": "Computer 2"
+    },
+    {
+      "code": "IIS:VID",
+      "label": "Video"
+    },
+    {
+      "code": "IIS:SVD",
+      "label": "Y/C"
+    }
+  ],
+  "lensCalibrations": [
+    {
+      "code": "VXX:LNSI0=+00001",
+      "label": "All"
+    },
+    {
+      "code": "VXX:LNSI0=+00011",
+      "label": "Shift"
+    },
+    {
+      "code": "VXX:LNSI0=+00012",
+      "label": "Focus"
+    },
+    {
+      "code": "VXX:LNSI0=+00013",
+      "label": "Zoom"
+    },
+    {
+      "code": "VXX:LNSI0=+00021",
+      "label": "Shift/Focus"
+    },
+    {
+      "code": "VXX:LNSI0=+00022",
+      "label": "Shift/Zoom"
+    },
+    {
+      "code": "VXX:LNSI0=+00023",
+      "label": "Focus/Zoom"
+    }
+  ],
+  "lensTypes": [
+    {
+      "code": "VXX:LNEI1=+00001",
+      "label": "ET-D75LE6"
+    },
+    {
+      "code": "VXX:LNEI1=+00002",
+      "label": "ET-D75LE10"
+    },
+    {
+      "code": "VXX:LNEI1=+00003",
+      "label": "ET-D75LE20"
+    },
+    {
+      "code": "VXX:LNEI1=+00004",
+      "label": "ET-D75LE30"
+    },
+    {
+      "code": "VXX:LNEI1=+00005",
+      "label": "ET-D75LE40"
+    },
+    {
+      "code": "VXX:LNEI1=+00009",
+      "label": "ET-D75LE50"
+    },
+    {
+      "code": "VXX:LNEI1=+00006",
+      "label": "ET-D75LE8"
+    },
+    {
+      "code": "VXX:LNEI1=+00007",
+      "label": "ET-D75LE95"
+    },
+    {
+      "code": "VXX:LNEI1=+00008",
+      "label": "ET-D75LE90"
+    }
   ]
 }

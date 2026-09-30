@@ -9,6 +9,7 @@ import '../../../../core/services/web_event_hub.dart';
 import '../../../../core/services/web_server_service.dart';
 import '../../../../core/services/web_static_handler.dart';
 import '../../domain/log_event.dart';
+import '../../domain/web_actions.dart';
 import '../../domain/web_api_dto.dart';
 import 'app_settings_provider.dart';
 import 'event_log_provider.dart';
@@ -214,6 +215,44 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
     LogSeverity.info,
     'Web · ${session.ip} · ${session.role.name} signed in',
   );
+
+  /// Projectors with a lens step from the web still in flight.
+  final Set<String> _lensBusy = {};
+
+  @override
+  Future<Json?> dispatch(Object? body, WebSession session) async {
+    final request = parseWebActionRequest(body);
+    if (request == null) return null;
+    final nodes = ref.read(workspaceProvider);
+    var ids = switch (request.targets) {
+      WebTargetIds(:final ids) => ids,
+      WebTargetGroup(:final groupId) => [
+        for (final n in nodes)
+          if (n.groupId == groupId) n.id,
+      ],
+      WebTargetAll() => [for (final n in nodes) n.id],
+    };
+    // Same rule as the control bar's _throttledSend (drop a step while the
+    // last one is still going), but per projector, so a laggy phone
+    // repeating a held button can't queue up a burst.
+    final lens = request.action.isLensStep;
+    if (lens) {
+      ids = ids.where((id) => !_lensBusy.contains(id)).toList();
+      _lensBusy.addAll(ids);
+    }
+    try {
+      final result = await ref
+          .read(workspaceProvider.notifier)
+          .sendCommandToNodes(
+            ids,
+            request.action.command,
+            source: 'Web · ${session.ip} · ${session.role.name}',
+          );
+      return dispatchResultJson(result);
+    } finally {
+      if (lens) _lensBusy.removeAll(ids);
+    }
+  }
 
   @override
   void roleChanged(WebSession session) => _log(

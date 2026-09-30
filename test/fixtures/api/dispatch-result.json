@@ -1,0 +1,19 @@
+{
+  "command": "OSH:1",
+  "label": "Shutter Close",
+  "ok": 2,
+  "total": 4,
+  "failed": [
+    {
+      "id": "n3",
+      "name": "PJ-03"
+    }
+  ],
+  "skipped": [
+    {
+      "id": "n4",
+      "name": "PJ-04"
+    }
+  ],
+  "summary": "Shutter Close — 2/4 OK · 1 failed · 1 skipped. Failed: PJ-03. Skipped: PJ-04"
+}

@@ -912,6 +912,22 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
     return _dispatchToNodes(state.where((n) => selected.contains(n.id)), cmd);
   }
 
+  /// Sends [cmd] to the projectors with [ids] (the Web API's targets).
+  /// [source] is appended to the Event Log lines, e.g. "Web · 10.0.0.5 ·
+  /// operator", so remote commands are told apart from the app's own.
+  Future<DispatchResult> sendCommandToNodes(
+    Iterable<String> ids,
+    String cmd, {
+    String? source,
+  }) {
+    final wanted = ids.toSet();
+    return _dispatchToNodes(
+      state.where((n) => wanted.contains(n.id)),
+      cmd,
+      source: source,
+    );
+  }
+
   // Caps how many TCP connections _dispatchToNodes and _pollAllProjectors
   // open at once. Firing every node in one Future.wait would open one socket
   // per target with no ceiling — fine for a handful of projectors, but large
@@ -928,8 +944,10 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
   /// glance instead of only as 30 per-node entries.
   Future<DispatchResult> _dispatchToNodes(
     Iterable<ProjectorNode> nodes,
-    String cmd,
-  ) async {
+    String cmd, {
+    String? source,
+  }) async {
+    final from = source == null ? '' : ' ($source)';
     final all = nodes.toList();
     final targets = <ProjectorNode>[];
     final skipped = <ProjectorNode>[];
@@ -962,8 +980,8 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
               severity: success ? LogSeverity.info : LogSeverity.error,
               type: LogEventType.command,
               message: success
-                  ? 'Sent: ${commandLabel(cmd)}'
-                  : 'Failed: ${commandLabel(cmd)}',
+                  ? 'Sent: ${commandLabel(cmd)}$from'
+                  : 'Failed: ${commandLabel(cmd)}$from',
               projectorIp: node.ipAddress,
               projectorName: node.name,
             ),
@@ -993,7 +1011,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
         LogEvent(
           severity: result.allOk ? LogSeverity.info : LogSeverity.warning,
           type: LogEventType.command,
-          message: dispatchSummary(result),
+          message: '${dispatchSummary(result)}$from',
         ),
       );
     }

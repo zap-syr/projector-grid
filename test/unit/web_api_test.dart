@@ -35,6 +35,15 @@ class _Source implements WebApiSource {
   String? get operatorPinHash => controlAllowed ? _operatorHash : null;
   @override
   void roleChanged(WebSession session) => roleChanges.add(session.role);
+
+  /// Bodies [dispatch] was handed; `{"bad": …}` counts as invalid.
+  final dispatched = <Object?>[];
+  @override
+  Future<Json?> dispatch(Object? body, WebSession session) async {
+    dispatched.add(body);
+    return body is Map && body.containsKey('bad') ? null : {'ok': 1};
+  }
+
   @override
   Json config(WebRole role) => {'role': role.name};
   @override
@@ -217,6 +226,49 @@ void main() {
         expect((session as Map)['controlAllowed'], isFalse);
       },
     );
+
+    group('/api/actions', () {
+      Future<Response> act(String token, Object body) => send(
+        'POST',
+        '/api/actions',
+        body: body,
+        headers: {'authorization': 'Bearer $token'},
+      );
+      const request = {
+        'targets': 'all',
+        'action': {'power': 'on'},
+      };
+
+      test('operators only: a viewer gets 403, nothing is sent', () async {
+        final r = await act(await loginToken(), request);
+        expect(r.statusCode, 403);
+        expect(await jsonOf(r), {'error': 'forbidden'});
+        expect(source.dispatched, isEmpty);
+      });
+
+      test('an operator\'s request is dispatched', () async {
+        final token = await loginToken();
+        await unlock(token, '9876');
+        final r = await act(token, request);
+        expect(r.statusCode, 200);
+        expect(await jsonOf(r), {'ok': 1});
+        expect(source.dispatched, [request]);
+      });
+
+      test('invalid requests → 400', () async {
+        final token = await loginToken();
+        await unlock(token, '9876');
+        expect((await act(token, {'bad': 1})).statusCode, 400);
+        expect((await act(token, 'not json {')).statusCode, 400);
+      });
+
+      test('no route at all while Allow control is off', () async {
+        final token = await loginToken();
+        await unlock(token, '9876');
+        source.controlAllowed = false;
+        expect((await act(token, request)).statusCode, 404);
+      });
+    });
 
     test('unlock needs a session', () async {
       expect(
