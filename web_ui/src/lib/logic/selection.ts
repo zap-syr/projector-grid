@@ -15,12 +15,16 @@ export function triState(rows: readonly Projector[], selected: ReadonlySet<strin
   return n === selectable.length ? 'all' : 'some';
 }
 
-/** Clicking a tri-state box: all selected → clear them, otherwise select them all. */
+/**
+ * Clicking a tri-state box (PatternFly's bulk selector, Gmail): none selected
+ * → select them all; some or all → clear them. So the box is also the one-tap
+ * way to drop a selection on a touch screen, where there's no Esc.
+ */
 export function toggledAll(rows: readonly Projector[], selected: ReadonlySet<string>): Set<string> {
   const next = new Set(selected);
   const ids = rows.filter(isSelectable).map((p) => p.id);
-  if (triState(rows, selected) === 'all') ids.forEach((id) => next.delete(id));
-  else ids.forEach((id) => next.add(id));
+  if (triState(rows, selected) === 'none') ids.forEach((id) => next.add(id));
+  else ids.forEach((id) => next.delete(id));
   return next;
 }
 
@@ -76,11 +80,7 @@ export function draggedSelection(
 
 /** The toolbar's Select ▾ menu (the app's own group entries follow the fixed ones). */
 export type SelectPreset =
-  | { kind: 'all' }
-  | { kind: 'warnings' }
-  | { kind: 'invert' }
-  | { kind: 'group'; group: Group }
-  | { kind: 'clear' };
+  { kind: 'all' } | { kind: 'warnings' } | { kind: 'invert' } | { kind: 'group'; group: Group };
 
 export function presetSelection(
   preset: SelectPreset,
@@ -98,7 +98,5 @@ export function presetSelection(
       return pick((p) => !selected.has(p.id));
     case 'group':
       return pick((p) => p.groupId === preset.group.id);
-    case 'clear':
-      return new Set();
   }
 }

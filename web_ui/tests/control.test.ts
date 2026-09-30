@@ -53,8 +53,9 @@ describe('selection', () => {
     expect(triState(rows, new Set(['1', '3', '5']))).toBe('all');
   });
 
-  test('toggledAll selects every selectable row, or clears them when all are', () => {
-    expect(ids(toggledAll(rows, new Set(['1'])))).toEqual(['1', '3', '5']);
+  test('toggledAll selects every selectable row, or clears them when any is', () => {
+    expect(ids(toggledAll(rows, new Set()))).toEqual(['1', '3', '5']);
+    expect(ids(toggledAll(rows, new Set(['1', 'x'])))).toEqual(['x']);
     expect(ids(toggledAll(rows, new Set(['1', '3', '5', 'x'])))).toEqual(['x']);
   });
 
@@ -71,7 +72,6 @@ describe('selection', () => {
     expect(ids(presetSelection({ kind: 'warnings' }, rows, new Set()))).toEqual(['3']);
     expect(ids(presetSelection({ kind: 'invert' }, rows, new Set(['1'])))).toEqual(['3', '5']);
     expect(ids(presetSelection({ kind: 'group', group }, rows, new Set()))).toEqual(['1', '3']);
-    expect(ids(presetSelection({ kind: 'clear' }, rows, new Set(['1'])))).toEqual([]);
   });
 });
 

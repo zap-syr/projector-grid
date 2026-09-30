@@ -1,8 +1,12 @@
 const KEY = 'pg.controlPanel.v1';
 
-/** Whether the operator's Control panel is shown; remembered per browser. */
+/**
+ * Whether the operator's Control panel is shown; remembered per browser. On a
+ * phone it's a bottom sheet instead, opened from the select bar each time.
+ */
 class PanelState {
   open = $state(true);
+  sheet = $state(false);
 
   constructor() {
     try {

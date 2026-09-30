@@ -1,7 +1,7 @@
 <!--
   Operator control panel, in the app's control-bar order: Power, Shutter, OSD,
   Input, Lens, Test pattern. Acts on the selection; disabled while nothing is
-  selected.
+  selected. A side panel on desktop, the content of a bottom sheet on a phone.
 -->
 <script lang="ts">
   import type { Action, Config, LensAxis } from '../../api/types';
@@ -10,14 +10,27 @@
   import { MAIN_PATTERNS, patternSwatch } from '../../logic/patterns';
   import { control } from '../../state/control.svelte';
   import { device } from '../../state/device.svelte';
-  import { panel } from '../../state/panel.svelte';
   import { selection } from '../../state/selection.svelte';
   import Icon from '../Icon.svelte';
   import HoldButton from './HoldButton.svelte';
   import LensIcon, { type LensDirection } from './LensIcon.svelte';
   import OptionRow from './OptionRow.svelte';
 
-  let { config }: { config: Config } = $props();
+  let {
+    config,
+    sheet = false,
+    columns = false,
+    onclose,
+  }: {
+    config: Config;
+    sheet?: boolean;
+    /** A tablet's bottom sheet: the lens in a second column. */
+    columns?: boolean;
+    onclose: () => void;
+  } = $props();
+
+  /** Touch screens get the big lens block; the app's 40 px buttons need a mouse. */
+  const touchLens = $derived(device.phone || device.touch);
 
   const count = $derived(selection.projectors.length);
   const none = $derived(count === 0);
@@ -39,7 +52,7 @@
   const current = $derived(count === 1 ? (selection.projectors[0]?.testPattern ?? null) : null);
 
   let showMore = $state(false);
-  /** Phone layout only: desktop has a button per speed, like the app. */
+  /** Touch lens block only: the mouse layout has a button per speed, like the app. */
   let speed = $state<LensSpeed>('normal');
   const speeds: LensSpeed[] = ['slow', 'normal', 'fast'];
   const FAST_TO_SLOW: LensSpeed[] = ['fast', 'normal', 'slow'];
@@ -92,167 +105,191 @@
   />
 {/snippet}
 
-<aside class="panel" aria-label="Control">
+<aside class="panel" class:sheet aria-label="Control">
   <header>
+    <!-- The toolbar's bulk selector shows the count. -->
     <h3>Control</h3>
-    <span class="count"><b>{count}</b> selected</span>
-    <button class="x" aria-label="Hide control panel" title="Hide" onclick={() => panel.toggle()}>
+    <button
+      class="x"
+      aria-label={sheet ? 'Close' : 'Hide control panel'}
+      title={sheet ? 'Close' : 'Hide'}
+      onclick={onclose}
+    >
       <Icon name="close" size={15} />
     </button>
   </header>
 
-  <div class="body">
-    <section>
-      <h6>Power</h6>
-      <div class="pair">
-        <button class="btn" disabled={none} onclick={() => send(act.power(true))}>On</button>
-        <button class="btn" disabled={none} onclick={() => send(act.power(false))}>Standby</button>
+  <div class="body" class:columns>
+    {#if columns}
+      <div class="col">
+        {@render basics()}
+        {@render patterns()}
       </div>
-    </section>
-
-    <section>
-      <h6>Shutter</h6>
-      <div class="pair">
-        <button class="btn" disabled={none} onclick={() => send(act.shutter(true))}>Open</button>
-        <button class="btn" disabled={none} onclick={() => send(act.shutter(false))}>Close</button>
-      </div>
-    </section>
-
-    <section>
-      <h6>OSD</h6>
-      <div class="pair">
-        <button class="btn" disabled={none} onclick={() => send(act.osd(true))}>On</button>
-        <button class="btn" disabled={none} onclick={() => send(act.osd(false))}>Off</button>
-      </div>
-    </section>
-
-    <section>
-      <h6>Input</h6>
-      <OptionRow
-        label="Input"
-        options={config.inputs}
-        disabled={none}
-        onset={(code) => send(act.input(code))}
-      />
-    </section>
-
-    {#if device.phone}
-      <!-- Phone: one speed switch and single-step buttons, to fit the width. -->
-      <section>
-        <h6>Lens</h6>
-        <div class="seg" role="group" aria-label="Lens speed">
-          {#each speeds as s (s)}
-            <button aria-pressed={speed === s} onclick={() => (speed = s)}>{cap(s)}</button>
-          {/each}
-        </div>
-        <div class="dpad">
-          <span></span>
-          <HoldButton label="Shift up" disabled={none} onstep={step('shiftV', true, speed)}
-            ><Icon name="up" size={18} /></HoldButton
-          >
-          <span></span>
-          <HoldButton label="Shift left" disabled={none} onstep={step('shiftH', false, speed)}
-            ><Icon name="left" size={18} /></HoldButton
-          >
-          <span class="hub">SHIFT</span>
-          <HoldButton label="Shift right" disabled={none} onstep={step('shiftH', true, speed)}
-            ><Icon name="right" size={18} /></HoldButton
-          >
-          <span></span>
-          <HoldButton label="Shift down" disabled={none} onstep={step('shiftV', false, speed)}
-            ><Icon name="down" size={18} /></HoldButton
-          >
-          <span></span>
-        </div>
-        {@render lensSettings()}
-        {#each axes as a (a.axis)}
-          <div class="axis">
-            <span class="lab"><b>{a.label}</b><span>{a.minus} / {a.plus}</span></span>
-            <div class="ab">
-              <HoldButton
-                label="{a.label} {a.minus}"
-                disabled={none}
-                onstep={step(a.axis, false, speed)}>−</HoldButton
-              >
-            </div>
-            <div class="ab">
-              <HoldButton
-                label="{a.label} {a.plus}"
-                disabled={none}
-                onstep={step(a.axis, true, speed)}>+</HoldButton
-              >
-            </div>
-          </div>
-        {/each}
-      </section>
+      <div class="col">{@render lens()}</div>
     {:else}
-      <!-- Desktop: the app's control bar — each arrow has fast / normal / slow. -->
-      <section>
-        <h6>Lens shift</h6>
-        <div class="shift">
-          {#each FAST_TO_SLOW as s (s)}
-            <div class="lb">{@render lensButton('up', 'shiftV', true, s)}</div>
-          {/each}
-          <div class="shiftrow">
-            {#each FAST_TO_SLOW as s (s)}
-              <div class="lb">{@render lensButton('left', 'shiftH', false, s)}</div>
-            {/each}
-            <span class="gap"></span>
-            {#each SLOW_TO_FAST as s (s)}
-              <div class="lb">{@render lensButton('right', 'shiftH', true, s)}</div>
-            {/each}
-          </div>
-          {#each SLOW_TO_FAST as s (s)}
-            <div class="lb">{@render lensButton('down', 'shiftV', false, s)}</div>
-          {/each}
-        </div>
-        {@render lensSettings()}
-      </section>
-
-      {#each axes as a (a.axis)}
-        <section>
-          <h6>{a.label}</h6>
-          <div class="linear">
-            {#each FAST_TO_SLOW as s (s)}
-              <div class="lb">{@render lensButton('left', a.axis, false, s, a.minus)}</div>
-            {/each}
-            <span class="spacer"></span>
-            {#each SLOW_TO_FAST as s (s)}
-              <div class="lb">{@render lensButton('right', a.axis, true, s, a.plus)}</div>
-            {/each}
-          </div>
-        </section>
-      {/each}
+      {@render basics()}
+      {@render lens()}
+      {@render patterns()}
     {/if}
-
-    <section>
-      <h6>Test pattern</h6>
-      <button
-        class="btn wide"
-        class:cur={current === 'OTS:00'}
-        disabled={none}
-        onclick={() => send(act.testPattern('OTS:00'))}>Off</button
-      >
-      <div class="tpgrid">
-        {#each showMore ? [...MAIN_PATTERNS, ...morePatterns] : MAIN_PATTERNS as code (code)}
-          <button
-            class="tp"
-            class:cur={current === code}
-            disabled={none}
-            title={codeLabel(code)}
-            onclick={() => send(act.testPattern(code))}
-          >
-            <span class="img" style:background={patternSwatch(code) ?? 'var(--hover)'}></span>
-            <span class="nm">{codeLabel(code)}</span>
-          </button>
-        {/each}
-      </div>
-      <button class="link" onclick={() => (showMore = !showMore)}>
-        {showMore ? 'Fewer patterns' : 'More patterns'}
-      </button>
-    </section>
   </div>
 </aside>
+
+{#snippet basics()}
+  <section>
+    <h6>Power</h6>
+    <div class="pair">
+      <button class="btn" disabled={none} onclick={() => send(act.power(true))}>On</button>
+      <button class="btn" disabled={none} onclick={() => send(act.power(false))}>Standby</button>
+    </div>
+  </section>
+
+  <section>
+    <h6>Shutter</h6>
+    <div class="pair">
+      <button class="btn" disabled={none} onclick={() => send(act.shutter(true))}>Open</button>
+      <button class="btn" disabled={none} onclick={() => send(act.shutter(false))}>Close</button>
+    </div>
+  </section>
+
+  <section>
+    <h6>OSD</h6>
+    <div class="pair">
+      <button class="btn" disabled={none} onclick={() => send(act.osd(true))}>On</button>
+      <button class="btn" disabled={none} onclick={() => send(act.osd(false))}>Off</button>
+    </div>
+  </section>
+
+  <section>
+    <h6>Input</h6>
+    <OptionRow
+      label="Input"
+      options={config.inputs}
+      disabled={none}
+      onset={(code) => send(act.input(code))}
+    />
+  </section>
+{/snippet}
+
+{#snippet lens()}
+  {#if touchLens}
+    <!-- Touch: one speed switch and big single-step buttons, well apart, so
+           a finger can't hit Focus for Zoom. The rarely used settings go last. -->
+    <section>
+      <h6>Lens</h6>
+      <div class="seg" role="group" aria-label="Lens speed">
+        {#each speeds as s (s)}
+          <button aria-pressed={speed === s} onclick={() => (speed = s)}>{cap(s)}</button>
+        {/each}
+      </div>
+      <div class="dpad">
+        <span></span>
+        <HoldButton label="Shift up" disabled={none} onstep={step('shiftV', true, speed)}
+          ><Icon name="up" size={24} /></HoldButton
+        >
+        <span></span>
+        <HoldButton label="Shift left" disabled={none} onstep={step('shiftH', false, speed)}
+          ><Icon name="left" size={24} /></HoldButton
+        >
+        <span class="hub">SHIFT</span>
+        <HoldButton label="Shift right" disabled={none} onstep={step('shiftH', true, speed)}
+          ><Icon name="right" size={24} /></HoldButton
+        >
+        <span></span>
+        <HoldButton label="Shift down" disabled={none} onstep={step('shiftV', false, speed)}
+          ><Icon name="down" size={24} /></HoldButton
+        >
+        <span></span>
+      </div>
+    </section>
+    {#each axes as a (a.axis)}
+      <section>
+        <h6>{a.label}</h6>
+        <div class="big">
+          <HoldButton
+            label="{a.label} {a.minus}"
+            disabled={none}
+            onstep={step(a.axis, false, speed)}
+            ><span class="bl"><Icon name="left" size={20} />{a.minus}</span></HoldButton
+          >
+          <HoldButton label="{a.label} {a.plus}" disabled={none} onstep={step(a.axis, true, speed)}
+            ><span class="bl">{a.plus}<Icon name="right" size={20} /></span></HoldButton
+          >
+        </div>
+      </section>
+    {/each}
+    <section>
+      <h6>Lens settings</h6>
+      {@render lensSettings()}
+    </section>
+  {:else}
+    <!-- Desktop: the app's control bar — each arrow has fast / normal / slow. -->
+    <section>
+      <h6>Lens shift</h6>
+      <div class="shift">
+        {#each FAST_TO_SLOW as s (s)}
+          <div class="lb">{@render lensButton('up', 'shiftV', true, s)}</div>
+        {/each}
+        <div class="shiftrow">
+          {#each FAST_TO_SLOW as s (s)}
+            <div class="lb">{@render lensButton('left', 'shiftH', false, s)}</div>
+          {/each}
+          <span class="gap"></span>
+          {#each SLOW_TO_FAST as s (s)}
+            <div class="lb">{@render lensButton('right', 'shiftH', true, s)}</div>
+          {/each}
+        </div>
+        {#each SLOW_TO_FAST as s (s)}
+          <div class="lb">{@render lensButton('down', 'shiftV', false, s)}</div>
+        {/each}
+      </div>
+      {@render lensSettings()}
+    </section>
+
+    {#each axes as a (a.axis)}
+      <section>
+        <h6>{a.label}</h6>
+        <div class="linear">
+          {#each FAST_TO_SLOW as s (s)}
+            <div class="lb">{@render lensButton('left', a.axis, false, s, a.minus)}</div>
+          {/each}
+          <span class="spacer"></span>
+          {#each SLOW_TO_FAST as s (s)}
+            <div class="lb">{@render lensButton('right', a.axis, true, s, a.plus)}</div>
+          {/each}
+        </div>
+      </section>
+    {/each}
+  {/if}
+{/snippet}
+
+{#snippet patterns()}
+  <section>
+    <h6>Test pattern</h6>
+    <button
+      class="btn wide"
+      class:cur={current === 'OTS:00'}
+      disabled={none}
+      onclick={() => send(act.testPattern('OTS:00'))}>Off</button
+    >
+    <div class="tpgrid">
+      {#each showMore ? [...MAIN_PATTERNS, ...morePatterns] : MAIN_PATTERNS as code (code)}
+        <button
+          class="tp"
+          class:cur={current === code}
+          disabled={none}
+          title={codeLabel(code)}
+          onclick={() => send(act.testPattern(code))}
+        >
+          <span class="img" style:background={patternSwatch(code) ?? 'var(--hover)'}></span>
+          <span class="nm">{codeLabel(code)}</span>
+        </button>
+      {/each}
+    </div>
+    <button class="link" onclick={() => (showMore = !showMore)}>
+      {showMore ? 'Fewer patterns' : 'More patterns'}
+    </button>
+  </section>
+{/snippet}
 
 <style>
   .panel {
@@ -264,6 +301,18 @@
     flex-direction: column;
     background: var(--surface);
     border-left: 1px solid var(--line);
+  }
+
+  .panel.sheet {
+    width: 100%;
+    flex: 1;
+    border-left: 0;
+    background: none;
+  }
+
+  .sheet header {
+    border-bottom: 0;
+    padding-top: 0;
   }
 
   header {
@@ -280,18 +329,8 @@
     font-weight: 650;
   }
 
-  .count {
-    margin-left: auto;
-    font-size: 13px;
-    color: var(--muted);
-  }
-
-  .count b {
-    color: var(--text);
-    font-weight: 650;
-  }
-
   .x {
+    margin-left: auto;
     width: 30px;
     height: 30px;
     display: flex;
@@ -478,12 +517,12 @@
   }
 
   .seg button {
-    height: 28px;
+    height: 38px;
     border: 0;
     border-radius: 6px;
     background: none;
     color: var(--muted);
-    font-size: 12.5px;
+    font-size: 14px;
     font-weight: 550;
     cursor: pointer;
   }
@@ -494,12 +533,14 @@
     box-shadow: var(--sh-1);
   }
 
+  /* Touch lens block: 64 px arrows 10 px apart, an inert centre. */
   .dpad {
     align-self: center;
     display: grid;
-    grid-template-columns: repeat(3, 46px);
-    grid-template-rows: repeat(3, 46px);
-    gap: 5px;
+    grid-template-columns: repeat(3, 64px);
+    grid-template-rows: repeat(3, 64px);
+    gap: 10px;
+    margin-top: 4px;
   }
 
   .hub {
@@ -509,35 +550,35 @@
     border: 1px dashed var(--line-strong);
     border-radius: 9px;
     color: var(--faint);
-    font-size: 10px;
+    font-size: 10.5px;
     font-weight: 700;
     letter-spacing: 0.04em;
   }
 
-  .axis {
+  .big {
     display: grid;
-    grid-template-columns: 1fr 46px 46px;
-    align-items: center;
-    gap: 6px;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    height: 56px;
   }
 
-  .lab {
+  .bl {
     display: flex;
-    flex-direction: column;
-    line-height: 1.2;
-  }
-
-  .lab b {
-    font-size: 13.5px;
+    align-items: center;
+    gap: 8px;
+    font-size: 15px;
     font-weight: 600;
   }
 
-  .lab span {
-    font-size: 11.5px;
-    color: var(--faint);
+  /* Tablet bottom sheet: the lens beside the rest. */
+  .body.columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+    gap: 0 28px;
   }
 
-  .ab {
-    height: 36px;
+  .col {
+    min-width: 0;
   }
 </style>

@@ -52,6 +52,19 @@
     border-color: var(--accent);
   }
 
+  /* A finger needs ~40 px; the box stays small, the hit area grows. */
+  @media (pointer: coarse) {
+    .cb {
+      position: relative;
+    }
+
+    .cb::before {
+      content: '';
+      position: absolute;
+      inset: -12px;
+    }
+  }
+
   .cb.all,
   .cb.some {
     background: var(--accent);

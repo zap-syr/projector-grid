@@ -68,6 +68,40 @@ export function buildEntries(
   return entries;
 }
 
+export type CardEntry =
+  Entry | { kind: 'details'; projector: Projector; column: number; key: string };
+
+/**
+ * The card grid with the open card's details: a full-width strip after the
+ * last card of the open card's row, so no row grows ragged. Rows restart
+ * under each group header. [column] is where the strip's pointer goes; the
+ * key follows the row, so switching cards within it keeps the same strip.
+ */
+export function withDetails(
+  entries: readonly Entry[],
+  openId: string | null,
+  columns: number,
+): CardEntry[] {
+  const open = entries.findIndex((e) => e.kind === 'row' && e.projector.id === openId);
+  const card = entries[open];
+  if (!card || card.kind !== 'row') return [...entries];
+
+  let start = open;
+  while (start > 0 && entries[start - 1]?.kind === 'row') start--;
+  let end = open;
+  while (entries[end + 1]?.kind === 'row') end++;
+
+  const pos = open - start;
+  const rowEnd = Math.min(start + (Math.floor(pos / columns) + 1) * columns - 1, end);
+  const last = entries[rowEnd];
+  const key = last?.kind === 'row' ? `d:${last.projector.id}` : 'd';
+  return [
+    ...entries.slice(0, rowEnd + 1),
+    { kind: 'details', projector: card.projector, column: pos % columns, key },
+    ...entries.slice(rowEnd + 1),
+  ];
+}
+
 /** Collapse key of the trailing "Ungrouped" section. */
 export const UNGROUPED = '__ungrouped__';
 

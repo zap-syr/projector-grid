@@ -1,4 +1,5 @@
 import type { ColumnId, Config, Density } from '../api/types';
+import { device } from './device.svelte';
 
 /** Per-browser table layout, so a phone and a booth laptop can differ. */
 export interface StoredLayout {
@@ -50,9 +51,17 @@ function write(layout: StoredLayout): void {
   }
 }
 
-/** The app's current Monitoring layout — the first visit's starting point. */
+/**
+ * The app's current Monitoring layout — the first visit's starting point.
+ * Touch screens start with comfortable rows, big enough for a finger.
+ */
 function seed(config: Config): StoredLayout {
-  return { ...config.layout, widths: { ...config.layout.widths }, collapsed: [] };
+  return {
+    ...config.layout,
+    widths: { ...config.layout.widths },
+    density: device.touch ? 'comfortable' : config.layout.density,
+    collapsed: [],
+  };
 }
 
 class TableLayoutState {

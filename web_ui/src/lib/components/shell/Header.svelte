@@ -2,14 +2,24 @@
   import { statusSummary } from '../../logic/status';
   import { live } from '../../state/live.svelte';
   import { session } from '../../state/session.svelte';
+  import { device } from '../../state/device.svelte';
+  import { view } from '../../state/view.svelte';
   import Icon from '../Icon.svelte';
+  import AppLogo from './AppLogo.svelte';
   import UnlockDialog from './UnlockDialog.svelte';
 
   let unlocking = $state(false);
-  import { view } from '../../state/view.svelte';
-  import AppLogo from './AppLogo.svelte';
+  /** Phones and portrait tablets: short labels, icons for the rest. */
+  const compact = $derived(device.cardsOnly);
 
   const counts = $derived(statusSummary(live.projectors));
+  const liveText = $derived(
+    live.connection === 'live'
+      ? 'Live'
+      : live.connection === 'reconnecting'
+        ? 'Reconnecting'
+        : 'Connecting',
+  );
   const filters = [
     { id: 'all', label: 'All', count: 'total', tone: '' },
     { id: 'online', label: 'Online', count: 'online', tone: 'ok' },
@@ -18,7 +28,7 @@
   ] as const;
 </script>
 
-<header class="hdr">
+<header class="hdr" class:phone={device.phone} class:compact>
   <AppLogo size={32} />
   <div class="proj">
     <b>{session.projectName}</b>
@@ -34,26 +44,26 @@
     {/each}
   </div>
   <div class="grow"></div>
-  <span class="live" class:off={live.connection !== 'live'}>
+  <span class="live" class:off={live.connection !== 'live'} title={liveText}>
     <span class="dot"></span>
-    {live.connection === 'live'
-      ? 'Live'
-      : live.connection === 'reconnecting'
-        ? 'Reconnecting'
-        : 'Connecting'}
+    <span class="lt">{liveText}</span>
   </span>
   <div class="who" class:op={session.role === 'operator'}>
-    <span class="role">
+    <span class="role" title={session.role === 'operator' ? 'Operator' : 'Viewer'}>
       <Icon name={session.role === 'operator' ? 'unlock' : 'lock'} size={13} />
-      {session.role === 'operator' ? 'Operator' : 'Viewer'}
+      <span class="rt">{session.role === 'operator' ? 'Operator' : 'Viewer'}</span>
     </span>
     {#if session.role === 'operator'}
       <button class="small" onclick={() => session.lock()}>Lock</button>
     {:else if session.controlAllowed}
-      <button class="small" onclick={() => (unlocking = true)}>Unlock control</button>
+      <button class="small" onclick={() => (unlocking = true)}
+        >{compact ? 'Unlock' : 'Unlock control'}</button
+      >
     {/if}
   </div>
-  <button class="quiet" onclick={() => session.logout()}>Sign out</button>
+  <button class="quiet" aria-label="Sign out" title="Sign out" onclick={() => session.logout()}>
+    {#if compact}<Icon name="logout" size={18} />{:else}Sign out{/if}
+  </button>
 </header>
 
 {#if unlocking}
@@ -70,6 +80,59 @@
     padding: 10px 16px;
     background: var(--surface);
     border-bottom: 1px solid var(--line);
+  }
+
+  /* Phone: project, live, role and sign-out in one row; the filters below. */
+  .hdr.phone {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+    gap: 8px;
+    min-height: 0;
+    padding: 8px 12px;
+  }
+
+  .phone .filters {
+    order: 1;
+    grid-column: 1 / -1;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    margin: 0 -4px;
+  }
+
+  /* Phone held sideways: everything in one short row. */
+  .hdr.compact:not(.phone) {
+    flex-wrap: nowrap;
+    min-height: 0;
+    padding: 6px 12px;
+  }
+
+  .compact:not(.phone) .proj {
+    min-width: 0;
+  }
+
+  .compact .flt {
+    flex: none;
+  }
+
+  .phone .grow,
+  .compact .proj span,
+  .compact .lt,
+  .compact .rt {
+    display: none;
+  }
+
+  .compact .proj b {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .compact .live {
+    padding: 0 9px;
+  }
+
+  .compact .who {
+    padding-left: 8px;
   }
 
   .proj {
@@ -213,6 +276,9 @@
   }
 
   .quiet {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     height: 32px;
     padding: 0 10px;
     border: 0;
