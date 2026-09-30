@@ -7,7 +7,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../core/services/app_config_dir.dart';
+import '../../domain/control_options.dart';
 import '../../domain/custom_command.dart';
+import '../../domain/lens_commands.dart';
 import '../../domain/test_patterns.dart';
 import '../providers/custom_commands_provider.dart';
 import '../providers/workspace_provider.dart';
@@ -46,44 +48,14 @@ class _ControlBarState extends ConsumerState<ControlBar> {
   final List<String?> _favorites = List.filled(4, null);
 
   // ── Data ──────────────────────────────────────────────────────────────────
-  static const Map<String, String> _lensOptions = {
-    'VXX:LNEI1=+00001': 'ET-D75LE6',
-    'VXX:LNEI1=+00002': 'ET-D75LE10',
-    'VXX:LNEI1=+00003': 'ET-D75LE20',
-    'VXX:LNEI1=+00004': 'ET-D75LE30',
-    'VXX:LNEI1=+00005': 'ET-D75LE40',
-    'VXX:LNEI1=+00009': 'ET-D75LE50',
-    'VXX:LNEI1=+00006': 'ET-D75LE8',
-    'VXX:LNEI1=+00007': 'ET-D75LE95',
-    'VXX:LNEI1=+00008': 'ET-D75LE90',
-  };
-
-  static const Map<String, String> _lensCalibrationOptions = {
-    'VXX:LNSI0=+00001': 'All',
-    'VXX:LNSI0=+00011': 'Shift',
-    'VXX:LNSI0=+00012': 'Focus',
-    'VXX:LNSI0=+00013': 'Zoom',
-    'VXX:LNSI0=+00021': 'Shift/Focus',
-    'VXX:LNSI0=+00022': 'Shift/Zoom',
-    'VXX:LNSI0=+00023': 'Focus/Zoom',
-  };
+  static const Map<String, String> _lensOptions = kLensTypeOptions;
+  static const Map<String, String> _lensCalibrationOptions =
+      kLensCalibrationOptions;
 
   static const Map<String, String> _testPatternIcons = kTestPatternIcons;
   static const Map<String, String> _testPatternOptions = kTestPatternLabels;
 
-  static const Map<String, String> _inputOptions = {
-    'IIS:HD1': 'HDMI 1',
-    'IIS:HD2': 'HDMI 2',
-    'IIS:DP1': 'DisplayPort',
-    'IIS:DVI': 'DVI-D',
-    'IIS:SD1': 'SDI 1',
-    'IIS:SD2': 'SDI 2',
-    'IIS:DL1': 'Digital Link',
-    'IIS:RG1': 'Computer 1',
-    'IIS:RG2': 'Computer 2',
-    'IIS:VID': 'Video',
-    'IIS:SVD': 'Y/C',
-  };
+  static const Map<String, String> _inputOptions = kInputOptions;
 
   static const Map<String, String> _pictureModeOptions = {
     'VPM:DYN': 'Dynamic',
@@ -271,15 +243,26 @@ class _ControlBarState extends ConsumerState<ControlBar> {
     );
   }
 
+  /// A lens-shift step for the D-pad; `plus` = right / up.
+  static String _shift(LensAxis axis, bool plus, LensSpeed speed) =>
+      lensStepCommand(axis, plus: plus, speed: speed);
+
+  /// A lens step for the D-pad / linear controls (`lens_commands.dart`).
+  VoidCallback? _lensStep(
+    bool enabled,
+    LensAxis axis, {
+    required bool plus,
+    required LensSpeed speed,
+  }) => enabled
+      ? () => _throttledSend(lensStepCommand(axis, plus: plus, speed: speed))
+      : null;
+
   /// Six motor-control buttons (fast/normal/slow in each direction) for a
-  /// single linear axis such as Focus or Zoom.
-  ///
-  /// [cmdBase] is the NTCONTROL command prefix, e.g. `VXX:LNSI4`.
-  /// Suffix pattern: `=+SSSSSD` where SSS = speed (200/100/000) and D = direction
-  /// (1 = left/near/out, 0 = right/far/in).
+  /// single linear axis such as Focus or Zoom; left = near / out, right =
+  /// far / in.
   Widget _buildLinearControl(
     String title,
-    String cmdBase, {
+    LensAxis axis, {
     required bool enabled,
   }) {
     return Column(
@@ -292,40 +275,58 @@ class _ControlBarState extends ConsumerState<ControlBar> {
           children: [
             _SvgBtn(
               assetPath: 'assets/icons/lens_shift/left_fast.svg',
-              onPressed: enabled
-                  ? () => _throttledSend('$cmdBase=+00201')
-                  : null,
+              onPressed: _lensStep(
+                enabled,
+                axis,
+                plus: false,
+                speed: LensSpeed.fast,
+              ),
             ),
             _SvgBtn(
               assetPath: 'assets/icons/lens_shift/left_normal.svg',
-              onPressed: enabled
-                  ? () => _throttledSend('$cmdBase=+00101')
-                  : null,
+              onPressed: _lensStep(
+                enabled,
+                axis,
+                plus: false,
+                speed: LensSpeed.normal,
+              ),
             ),
             _SvgBtn(
               assetPath: 'assets/icons/lens_shift/left_slow.svg',
-              onPressed: enabled
-                  ? () => _throttledSend('$cmdBase=+00001')
-                  : null,
+              onPressed: _lensStep(
+                enabled,
+                axis,
+                plus: false,
+                speed: LensSpeed.slow,
+              ),
             ),
             const Spacer(),
             _SvgBtn(
               assetPath: 'assets/icons/lens_shift/right_slow.svg',
-              onPressed: enabled
-                  ? () => _throttledSend('$cmdBase=+00000')
-                  : null,
+              onPressed: _lensStep(
+                enabled,
+                axis,
+                plus: true,
+                speed: LensSpeed.slow,
+              ),
             ),
             _SvgBtn(
               assetPath: 'assets/icons/lens_shift/right_normal.svg',
-              onPressed: enabled
-                  ? () => _throttledSend('$cmdBase=+00100')
-                  : null,
+              onPressed: _lensStep(
+                enabled,
+                axis,
+                plus: true,
+                speed: LensSpeed.normal,
+              ),
             ),
             _SvgBtn(
               assetPath: 'assets/icons/lens_shift/right_fast.svg',
-              onPressed: enabled
-                  ? () => _throttledSend('$cmdBase=+00200')
-                  : null,
+              onPressed: _lensStep(
+                enabled,
+                axis,
+                plus: true,
+                speed: LensSpeed.fast,
+              ),
             ),
           ],
         ),
@@ -433,7 +434,13 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                             _SvgBtn(
                               assetPath: 'assets/icons/lens_shift/up_fast.svg',
                               onPressed: hasSelection
-                                  ? () => _throttledSend('VXX:LNSI3=+00200')
+                                  ? () => _throttledSend(
+                                      _shift(
+                                        LensAxis.shiftV,
+                                        true,
+                                        LensSpeed.fast,
+                                      ),
+                                    )
                                   : null,
                             ),
                             const SizedBox(height: _spacingXs),
@@ -441,14 +448,26 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                               assetPath:
                                   'assets/icons/lens_shift/up_normal.svg',
                               onPressed: hasSelection
-                                  ? () => _throttledSend('VXX:LNSI3=+00100')
+                                  ? () => _throttledSend(
+                                      _shift(
+                                        LensAxis.shiftV,
+                                        true,
+                                        LensSpeed.normal,
+                                      ),
+                                    )
                                   : null,
                             ),
                             const SizedBox(height: _spacingXs),
                             _SvgBtn(
                               assetPath: 'assets/icons/lens_shift/up_slow.svg',
                               onPressed: hasSelection
-                                  ? () => _throttledSend('VXX:LNSI3=+00000')
+                                  ? () => _throttledSend(
+                                      _shift(
+                                        LensAxis.shiftV,
+                                        true,
+                                        LensSpeed.slow,
+                                      ),
+                                    )
                                   : null,
                             ),
                             Row(
@@ -458,7 +477,13 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                                   assetPath:
                                       'assets/icons/lens_shift/left_fast.svg',
                                   onPressed: hasSelection
-                                      ? () => _throttledSend('VXX:LNSI2=+00201')
+                                      ? () => _throttledSend(
+                                          _shift(
+                                            LensAxis.shiftH,
+                                            false,
+                                            LensSpeed.fast,
+                                          ),
+                                        )
                                       : null,
                                 ),
                                 const SizedBox(width: _spacingXs),
@@ -466,7 +491,13 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                                   assetPath:
                                       'assets/icons/lens_shift/left_normal.svg',
                                   onPressed: hasSelection
-                                      ? () => _throttledSend('VXX:LNSI2=+00101')
+                                      ? () => _throttledSend(
+                                          _shift(
+                                            LensAxis.shiftH,
+                                            false,
+                                            LensSpeed.normal,
+                                          ),
+                                        )
                                       : null,
                                 ),
                                 const SizedBox(width: _spacingXs),
@@ -474,7 +505,13 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                                   assetPath:
                                       'assets/icons/lens_shift/left_slow.svg',
                                   onPressed: hasSelection
-                                      ? () => _throttledSend('VXX:LNSI2=+00001')
+                                      ? () => _throttledSend(
+                                          _shift(
+                                            LensAxis.shiftH,
+                                            false,
+                                            LensSpeed.slow,
+                                          ),
+                                        )
                                       : null,
                                 ),
                                 const SizedBox(width: _lensShiftCenterGap),
@@ -482,14 +519,26 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                                   assetPath:
                                       'assets/icons/lens_shift/right_slow.svg',
                                   onPressed: hasSelection
-                                      ? () => _throttledSend('VXX:LNSI2=+00000')
+                                      ? () => _throttledSend(
+                                          _shift(
+                                            LensAxis.shiftH,
+                                            true,
+                                            LensSpeed.slow,
+                                          ),
+                                        )
                                       : null,
                                 ),
                                 const SizedBox(width: _spacingXs),
                                 _SvgBtn(
                                   assetPath: 'assets/icons/lens_shift/right_normal.svg',
                                   onPressed: hasSelection
-                                      ? () => _throttledSend('VXX:LNSI2=+00100')
+                                      ? () => _throttledSend(
+                                          _shift(
+                                            LensAxis.shiftH,
+                                            true,
+                                            LensSpeed.normal,
+                                          ),
+                                        )
                                       : null,
                                 ),
                                 const SizedBox(width: _spacingXs),
@@ -497,7 +546,13 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                                   assetPath:
                                       'assets/icons/lens_shift/right_fast.svg',
                                   onPressed: hasSelection
-                                      ? () => _throttledSend('VXX:LNSI2=+00200')
+                                      ? () => _throttledSend(
+                                          _shift(
+                                            LensAxis.shiftH,
+                                            true,
+                                            LensSpeed.fast,
+                                          ),
+                                        )
                                       : null,
                                 ),
                               ],
@@ -506,7 +561,13 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                               assetPath:
                                   'assets/icons/lens_shift/down_slow.svg',
                               onPressed: hasSelection
-                                  ? () => _throttledSend('VXX:LNSI3=+00001')
+                                  ? () => _throttledSend(
+                                      _shift(
+                                        LensAxis.shiftV,
+                                        false,
+                                        LensSpeed.slow,
+                                      ),
+                                    )
                                   : null,
                             ),
                             const SizedBox(height: _spacingXs),
@@ -514,7 +575,13 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                               assetPath:
                                   'assets/icons/lens_shift/down_normal.svg',
                               onPressed: hasSelection
-                                  ? () => _throttledSend('VXX:LNSI3=+00101')
+                                  ? () => _throttledSend(
+                                      _shift(
+                                        LensAxis.shiftV,
+                                        false,
+                                        LensSpeed.normal,
+                                      ),
+                                    )
                                   : null,
                             ),
                             const SizedBox(height: _spacingXs),
@@ -522,7 +589,13 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                               assetPath:
                                   'assets/icons/lens_shift/down_fast.svg',
                               onPressed: hasSelection
-                                  ? () => _throttledSend('VXX:LNSI3=+00201')
+                                  ? () => _throttledSend(
+                                      _shift(
+                                        LensAxis.shiftV,
+                                        false,
+                                        LensSpeed.fast,
+                                      ),
+                                    )
                                   : null,
                             ),
                           ],
@@ -537,7 +610,7 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                           onPressed: hasSelection
                               ? () => ref
                                     .read(workspaceProvider.notifier)
-                                    .sendCommandToSelected('VXX:LNSI1=+00001')
+                                    .sendCommandToSelected(kLensHomeCommand)
                               : null,
                           child: const FittedBox(child: Text('Home Position')),
                         ),
@@ -580,7 +653,7 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                       // Focus
                       _buildLinearControl(
                         'Focus',
-                        'VXX:LNSI4',
+                        LensAxis.focus,
                         enabled: hasSelection,
                       ),
                       const SizedBox(height: _spacingMd),
@@ -588,7 +661,7 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                       // Zoom
                       _buildLinearControl(
                         'Zoom',
-                        'VXX:LNSI5',
+                        LensAxis.zoom,
                         enabled: hasSelection,
                       ),
                       const SizedBox(height: _spacingMd),
