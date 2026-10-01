@@ -35,6 +35,19 @@ jobs:
       - name: Generate code
         run: dart run build_runner build --delete-conflicting-outputs
 
+      # The Web Access page is bundled from assets/web/, which git doesn't keep.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web_ui/package-lock.json
+
+      - name: Build Web UI
+        working-directory: web_ui
+        run: |
+          npm ci
+          npm run build
+
       - name: Build Windows
         run: flutter build windows --release --build-name=${{ steps.version.outputs.VERSION }}
 
@@ -75,6 +88,19 @@ jobs:
 
       - name: Generate code
         run: dart run build_runner build --delete-conflicting-outputs
+
+      # The Web Access page is bundled from assets/web/, which git doesn't keep.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web_ui/package-lock.json
+
+      - name: Build Web UI
+        working-directory: web_ui
+        run: |
+          npm ci
+          npm run build
 
       - name: Build macOS
         run: flutter build macos --release --build-name=${{ steps.version.outputs.VERSION }}

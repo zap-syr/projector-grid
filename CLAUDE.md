@@ -27,6 +27,19 @@ flutter build windows --release
 flutter build macos --release
 ```
 
+```bash
+# Web Access page (web_ui/, Svelte 5 + Vite; Node 24.15+) — run inside web_ui/
+npm ci
+npm run dev:mock      # page + fake API from mocks/, no app needed (PINs 1234 / 5678)
+npm run dev           # /api proxied to the running app on :8080
+npm run gen:api       # after editing api/openapi.yaml → src/lib/api/types.gen.ts
+npm run check && npm run lint && npm test   # all must pass before committing
+npm run build         # → ../assets/web/ (gitignored; the app bundles it)
+
+# After changing a Web API JSON shape: rewrite the golden fixtures the web contract test reads
+flutter test --update-goldens test/unit/web_api_dto_test.dart
+```
+
 Code generation is mandatory: every `@riverpod` provider and every `@freezed` model has a generated
 `.g.dart` / `.freezed.dart` sibling. **Never edit generated files.** If a build fails right after pulling,
 re-run `build_runner` first.
@@ -47,7 +60,9 @@ re-run `build_runner` first.
   debug app (see below) — a batch of "did not complete" tests with no error. Rerun, or use
   `flutter test --concurrency=1`.
 - CI (`.github/workflows/ci.yml`) runs codegen, `dart format --set-exit-if-changed lib test`,
-  `flutter analyze lib test` and `flutter test` on Windows and macOS.
+  `flutter analyze lib test` and `flutter test` on Windows and macOS, and a `web` job that
+  checks `types.gen.ts` matches `openapi.yaml`, then `check`, `lint`, `test` and `build`
+  in `web_ui/`. The release workflow builds `web_ui/` before the Flutter build.
 
 ### Standalone protocol scripts (`tool/`)
 

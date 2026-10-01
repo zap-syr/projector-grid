@@ -37,3 +37,41 @@ jobs:
 
       - name: Test
         run: flutter test --coverage
+
+  # The Web UI (web_ui/): its own toolchain, so its own job. The contract test
+  # reads the golden fixtures the Flutter tests write, from test/fixtures/api/.
+  web:
+    name: Web UI
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web_ui
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web_ui/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # types.gen.ts is committed; a contract change without `npm run gen:api` fails here.
+      - name: Check API types are generated
+        run: |
+          npm run gen:api
+          git diff --exit-code src/lib/api/types.gen.ts
+
+      - name: Type check
+        run: npm run check
+
+      - name: Lint and formatting
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build

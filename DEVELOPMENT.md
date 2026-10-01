@@ -6,6 +6,7 @@ This document covers how to set up the development environment, understand the c
 
 - [Flutter SDK](https://docs.flutter.dev/get-started/install) - stable channel (requires Dart SDK `^3.11.1`, bundled with Flutter)
 - A desktop target: Windows or macOS
+- [Node.js](https://nodejs.org/) 24.15 or newer - only to build the Web Access page (`web_ui/`)
 
 Verify your setup:
 
@@ -25,6 +26,10 @@ flutter pub get
 
 # Run code generation (required on first clone)
 dart run build_runner build --delete-conflicting-outputs
+
+# Build the Web Access page into assets/web/ (git doesn't keep it; without it
+# Web Access serves a "not built" notice)
+cd web_ui && npm ci && npm run build && cd ..
 
 # Run the app in debug mode
 flutter run -d windows   # or macos
@@ -151,9 +156,32 @@ poll cycle and track power, shutter, input, test pattern and shutter fade, so co
 Monitoring and Alignment mode all work. Commands they receive are printed; Ctrl+C stops
 them. On macOS, add loopback aliases first (see the script's header).
 
+### Web Access page (`web_ui/`)
+
+The page phones and laptops open when Web Access is on: Svelte 5 + TypeScript, built
+with Vite into `assets/web/`, which the app bundles and serves. The API between them is
+`web_ui/api/openapi.yaml`; the Flutter tests write golden fixtures to
+`test/fixtures/api/` and the web tests check them against it, so a field changed on one
+side only fails CI. Run these in `web_ui/`:
+
+```bash
+npm ci                # install (first time, or after package-lock.json changes)
+npm run dev:mock      # page + a fake API (no app needed) - Viewer PIN 1234, Operator 5678
+npm run dev           # page with /api proxied to the running app on port 8080
+npm run gen:api       # regenerate src/lib/api/types.gen.ts after editing openapi.yaml
+npm run check         # svelte-check, warnings fail
+npm run lint          # ESLint + Prettier check (npm run format fixes formatting)
+npm test              # Vitest, including the contract test
+npm run build         # into ../assets/web/; rerun the app, it bundles them when built
+```
+
+After changing what the API returns, regenerate the fixtures:
+`flutter test --update-goldens test/unit/web_api_dto_test.dart`.
+
 ## Building for Release
 
 ```bash
+(cd web_ui && npm ci && npm run build)   # first: the Web Access page
 flutter build windows --release
 flutter build macos --release
 ```
@@ -172,6 +200,7 @@ For new PRs, please go through the following checklist:
 
 - [ ] `flutter analyze` reports no issues.
 - [ ] `dart format .` has been run and all changed files are formatted.
+- [ ] If `web_ui/` changed: `npm run check`, `npm run lint` and `npm test` pass there.
 - [ ] The branch is clean: commits are logically separated and have descriptive messages.
 - [ ] The PR body describes what changed and why.
 
