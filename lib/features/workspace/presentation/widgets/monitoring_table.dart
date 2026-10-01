@@ -4,6 +4,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import '../providers/app_settings_provider.dart';
 import '../providers/workspace_provider.dart';
+import 'remote_preview_dialog.dart';
 import '../../../../core/theme/status_thresholds.dart';
 import '../../domain/monitoring_columns.dart';
 import '../../domain/projector_group.dart';
@@ -43,12 +44,17 @@ class _Column {
   )
   cell;
 
+  /// False for button-only columns: the header ignores clicks and the
+  /// column is never used as the sort key.
+  final bool sortable;
+
   const _Column({
     required this.spec,
     required this.text,
     required this.sortKey,
     required this.cell,
     this.iconPad = 0,
+    this.sortable = true,
   });
 }
 
@@ -248,6 +254,14 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
       text: (n, _) => n.serialNumber,
       sortKey: (n, _) => n.serialNumber.toLowerCase(),
       cell: (_, n, _) => _CellText(n.serialNumber),
+    ),
+    _Column(
+      spec: kColPreview,
+      iconPad: 28,
+      text: (_, _) => '',
+      sortKey: (_, _) => 0,
+      sortable: false,
+      cell: (context, n, groups) => _previewCell(context, n, groups),
     ),
     _Column(
       spec: kColGroup,
@@ -802,6 +816,18 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
     );
   }
 
+  // Tight 28 px target so it fits the Compact row and a narrow column.
+  static Widget _previewCell(
+    BuildContext context,
+    ProjectorNode node,
+    Map<String, ProjectorGroup> groups,
+  ) => IconButton(
+    icon: const Icon(Icons.cast, size: 18),
+    padding: EdgeInsets.zero,
+    constraints: const BoxConstraints.tightFor(width: 28, height: 28),
+    onPressed: () => showRemotePreviewDialog(context, [node], groups: groups),
+  );
+
   static Widget _errorsCell(ProjectorNode node) {
     if (node.errors == '-') return const _CellText('-');
     final ok = _errorsOk(node.errors);
@@ -843,14 +869,14 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
       child: Row(
         children: List.generate(cols.length, (i) {
           final col = cols[i];
-          final isSorted = sortId == col.id;
+          final isSorted = col.sortable && sortId == col.id;
           final isDragOver = _dragOverColId == col.id;
 
           final headerContent = MouseRegion(
-            cursor: SystemMouseCursors.click,
+            cursor: col.sortable ? SystemMouseCursors.click : MouseCursor.defer,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: () => _onHeaderTap(col.id),
+              onTap: col.sortable ? () => _onHeaderTap(col.id) : null,
               child: Container(
                 width: widths[i],
                 height: _headerHeight,
@@ -987,8 +1013,9 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
       if (withoutGroup.isNotEmpty) cols = withoutGroup;
     }
     final sortCol = cols.firstWhere(
-      (c) => c.id == sortId,
-      orElse: () => cols.first,
+      (c) => c.id == sortId && c.sortable,
+      orElse: () =>
+          cols.firstWhere((c) => c.sortable, orElse: () => cols.first),
     );
     final sortedNodes = _getOrSortNodes(nodes, sortCol, sortAsc, groups);
     final entries = _buildEntries(sortedNodes, groupList, groupBy);

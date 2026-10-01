@@ -15,6 +15,9 @@ class MonitoringColumnSpec {
 const kColConnection = MonitoringColumnSpec('connection', 'Connection', 130);
 const kColModel = MonitoringColumnSpec('model', 'Model', 160);
 const kColSerial = MonitoringColumnSpec('serial', 'Serial Number', 160);
+
+/// A button per row that opens Remote Preview; not sortable.
+const kColPreview = MonitoringColumnSpec('preview', 'Preview', 92);
 const kColGroup = MonitoringColumnSpec('group', 'Group', 150);
 const kColIp = MonitoringColumnSpec('ip', 'IP Address', 130);
 const kColPower = MonitoringColumnSpec('power', 'Power', 130);
@@ -42,6 +45,7 @@ const List<MonitoringColumnSpec> kMonitoringColumns = [
   kColConnection,
   kColModel,
   kColSerial,
+  kColPreview,
   kColGroup,
   kColIp,
   kColPower,
@@ -62,6 +66,7 @@ const List<String> kMonitoringDefaultColumns = [
   'connection',
   'model',
   'serial',
+  'preview',
   'ip',
   'power',
   'shutter',
@@ -101,6 +106,7 @@ const Map<String, List<String>> kMonitoringPresets = {
     'ip',
     'input',
     'signal',
+    'preview',
     'power',
     'shutter',
   ],

@@ -18,6 +18,11 @@
       "defaultWidth": 160.0
     },
     {
+      "id": "preview",
+      "label": "Preview",
+      "defaultWidth": 92.0
+    },
+    {
       "id": "group",
       "label": "Group",
       "defaultWidth": 150.0
@@ -87,6 +92,7 @@
     "connection",
     "model",
     "serial",
+    "preview",
     "ip",
     "power",
     "shutter",
@@ -132,6 +138,7 @@
         "ip",
         "input",
         "signal",
+        "preview",
         "power",
         "shutter"
       ]
@@ -142,6 +149,7 @@
         "connection",
         "model",
         "serial",
+        "preview",
         "group",
         "ip",
         "power",
@@ -164,6 +172,7 @@
       "connection",
       "model",
       "serial",
+      "preview",
       "ip",
       "power",
       "shutter",

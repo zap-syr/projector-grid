@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:projector_grid/app/app.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/protocol_service_provider.dart';
@@ -13,8 +14,9 @@ const windowManagerChannel = MethodChannel('window_manager');
 /// `window_manager` channel. Returns the method names the app invoked on it.
 Future<List<String>> pumpApp(
   WidgetTester tester,
-  FakeProtocolService fake,
-) async {
+  FakeProtocolService fake, {
+  List<Override> overrides = const [],
+}) async {
   tester.view.physicalSize = const Size(1920, 1080);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
@@ -36,7 +38,10 @@ Future<List<String>> pumpApp(
 
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [protocolServiceProvider.overrideWithValue(fake)],
+      overrides: [
+        protocolServiceProvider.overrideWithValue(fake),
+        ...overrides,
+      ],
       child: const MyApp(),
     ),
   );

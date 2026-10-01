@@ -967,7 +967,7 @@ export interface components {
             hot: number;
         };
         /** @enum {string} */
-        ColumnId: "connection" | "model" | "serial" | "group" | "ip" | "power" | "shutter" | "input" | "signal" | "testPattern" | "runtime" | "lightRuntime" | "intake" | "exhaust" | "voltage" | "errors";
+        ColumnId: "connection" | "model" | "serial" | "preview" | "group" | "ip" | "power" | "shutter" | "input" | "signal" | "testPattern" | "runtime" | "lightRuntime" | "intake" | "exhaust" | "voltage" | "errors";
         /** @enum {string} */
         Density: "compact" | "standard" | "comfortable";
         TableLayout: {
