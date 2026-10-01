@@ -4,6 +4,7 @@
   import ControlPanel from './lib/components/control/ControlPanel.svelte';
   import MapView from './lib/components/map/MapView.svelte';
   import CardList from './lib/components/phone/CardList.svelte';
+  import PreviewDialog from './lib/components/preview/PreviewDialog.svelte';
   import SelectBar from './lib/components/phone/SelectBar.svelte';
   import Sheet from './lib/components/phone/Sheet.svelte';
   import ConfirmDialog from './lib/components/shell/ConfirmDialog.svelte';
@@ -18,6 +19,7 @@
   import { listMode } from './lib/state/listMode.svelte';
   import { live } from './lib/state/live.svelte';
   import { panel } from './lib/state/panel.svelte';
+  import { preview } from './lib/state/preview.svelte';
   import { selection } from './lib/state/selection.svelte';
   import { session } from './lib/state/session.svelte';
   import { tableLayout } from './lib/state/tableLayout.svelte';
@@ -33,7 +35,10 @@
       if (config.value) tableLayout.init(config.value);
     });
     live.connect();
-    return () => live.disconnect();
+    return () => {
+      live.disconnect();
+      preview.close();
+    };
   });
 
   // Locking (or losing control) drops the selection with the controls.
@@ -124,6 +129,9 @@
       {/if}
     {/if}
   </div>
+  {#if preview.id && config.value}
+    <PreviewDialog config={config.value} {operator} />
+  {/if}
   <ConfirmDialog />
   <Toast />
 {:else if session.status === 'signedOut'}

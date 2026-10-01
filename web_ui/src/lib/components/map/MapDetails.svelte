@@ -6,6 +6,7 @@
   import type { Config, Group, Projector } from '../../api/types';
   import DetailFields from '../DetailFields.svelte';
   import Icon from '../Icon.svelte';
+  import PreviewButton from '../preview/PreviewButton.svelte';
 
   let {
     p,
@@ -14,6 +15,7 @@
     patternLabel,
     anchor,
     onclose,
+    onpreview,
   }: {
     p: Projector;
     config: Config;
@@ -22,6 +24,8 @@
     /** The tile's box on screen. */
     anchor: DOMRect;
     onclose: () => void;
+    /** Opens Remote Preview; none in Alignment mode. */
+    onpreview?: () => void;
   } = $props();
 
   const WIDTH = 340;
@@ -72,6 +76,10 @@
   <header>
     <b>{p.name}</b>
     <span class="ip">{p.ip}</span>
+    <span class="grow"></span>
+    {#if onpreview}
+      <PreviewButton onclick={onpreview} />
+    {/if}
     <button class="x" aria-label="Close details" onclick={onclose}>
       <Icon name="close" size={16} />
     </button>
@@ -112,6 +120,10 @@
     color: var(--faint);
   }
 
+  .grow {
+    flex: 1;
+  }
+
   .x {
     width: 36px;
     height: 36px;
@@ -119,7 +131,6 @@
     flex: none;
     align-items: center;
     justify-content: center;
-    margin-left: auto;
     border: 0;
     border-radius: var(--r-sm);
     background: none;

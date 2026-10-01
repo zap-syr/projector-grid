@@ -1,11 +1,12 @@
-import type { ColumnId, Config, Density } from '../api/types';
+import type { ColumnId, Config, Density, TableColumn } from '../api/types';
+import { PREVIEW_COLUMN } from '../logic/columns';
 import { device } from './device.svelte';
 
 /** Per-browser table layout, so a phone and a booth laptop can differ. */
 export interface StoredLayout {
   /** Visible columns in order; Group stays in here while grouping hides it. */
-  columns: ColumnId[];
-  widths: Partial<Record<ColumnId, number>>;
+  columns: TableColumn[];
+  widths: Partial<Record<TableColumn, number>>;
   sortColumn: ColumnId;
   sortAscending: boolean;
   density: Density;
@@ -15,7 +16,9 @@ export interface StoredLayout {
   collapsed: string[];
 }
 
-const KEY = 'pg.table.v1';
+const KEY = 'pg.table.v2';
+/** Before the Preview column: read once, Preview added at the end. */
+const V1 = 'pg.table.v1';
 
 function isStoredLayout(v: unknown): v is StoredLayout {
   if (typeof v !== 'object' || v === null) return false;
@@ -33,15 +36,26 @@ function isStoredLayout(v: unknown): v is StoredLayout {
   );
 }
 
-function read(): StoredLayout | null {
+function readKey(key: string): StoredLayout | null {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(key);
     const parsed: unknown = raw === null ? null : JSON.parse(raw);
     return isStoredLayout(parsed) ? parsed : null;
   } catch {
     return null;
   }
 }
+
+function read(): StoredLayout | null {
+  const current = readKey(KEY);
+  if (current) return current;
+  const old = readKey(V1);
+  return old && { ...old, columns: withPreviewColumn(old.columns) };
+}
+
+/** Empty means the default set, which already has Preview. */
+const withPreviewColumn = (columns: TableColumn[]): TableColumn[] =>
+  columns.length === 0 ? [] : [...columns, PREVIEW_COLUMN.id];
 
 function write(layout: StoredLayout): void {
   try {
@@ -58,6 +72,7 @@ function write(layout: StoredLayout): void {
 function seed(config: Config): StoredLayout {
   return {
     ...config.layout,
+    columns: withPreviewColumn(config.layout.columns),
     widths: { ...config.layout.widths },
     density: device.touch ? 'comfortable' : config.layout.density,
     collapsed: [],
@@ -90,7 +105,7 @@ class TableLayoutState {
     });
   }
 
-  setWidth(column: ColumnId, width: number): void {
+  setWidth(column: TableColumn, width: number): void {
     if (this.value) this.update({ widths: { ...this.value.widths, [column]: width } });
   }
 

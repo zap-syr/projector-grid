@@ -8,6 +8,7 @@ import type {
   DispatchResult,
   Group,
   LoginResponse,
+  PreShowRequest,
   Projector,
   Session,
 } from './types';
@@ -48,4 +49,8 @@ export const api = {
   groups: () => request<Group[]>('GET', '/api/groups'),
   alignment: (op: AlignmentOp, body?: Record<string, unknown>) =>
     request<Alignment>('POST', `/api/alignment/${op}`, body),
+  previewRetry: (id: string) =>
+    request<undefined>('POST', `/api/preview/${encodeURIComponent(id)}/retry`),
+  previewPreShow: (id: string, on: boolean) =>
+    request<PreShowRequest>('POST', `/api/preview/${encodeURIComponent(id)}/preshow`, { on }),
 };

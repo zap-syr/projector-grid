@@ -17,6 +17,7 @@
   import { isSelectable, toggledAll, triState } from '../../logic/selection';
   import { alignment } from '../../state/alignment.svelte';
   import { live } from '../../state/live.svelte';
+  import { preview } from '../../state/preview.svelte';
   import { selection } from '../../state/selection.svelte';
   import { tableLayout, type StoredLayout } from '../../state/tableLayout.svelte';
   import { view } from '../../state/view.svelte';
@@ -58,6 +59,8 @@
       columns,
     ),
   );
+  /** Preview's ◀ ▶: the cards as shown (filtered, collapsed groups left out). */
+  const order = $derived(entries.flatMap((e) => (e.kind === 'row' ? [e.projector.id] : [])));
   const entryKey = (e: CardEntry) =>
     e.kind === 'group' ? `g:${e.key}` : e.kind === 'details' ? e.key : e.projector.id;
 </script>
@@ -73,6 +76,7 @@
         column={entry.column}
         {columns}
         onclose={() => (openId = null)}
+        onpreview={alignment.active ? undefined : () => preview.open(order, entry.projector.id)}
       />
     {:else if entry.kind === 'group'}
       {@const open = !layout.collapsed.includes(entry.key)}

@@ -23,6 +23,8 @@
     diagonal:
       '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><path d="M10 10l4 4"/>',
     all: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+    preview:
+      '<rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 21h8M12 17v4M10 8.5v4l3.5-2z"/>',
     plus: '<path d="M12 5v14M5 12h14"/>',
     minus: '<path d="M5 12h14"/>',
     panel: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/>',

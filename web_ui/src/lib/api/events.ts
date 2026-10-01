@@ -1,4 +1,13 @@
-import type { Access, Alignment, Group, ProjectEvent, Projector, SnapshotEvent } from './types';
+import type {
+  Access,
+  Alignment,
+  Group,
+  PreviewFrame,
+  PreviewStatus,
+  ProjectEvent,
+  Projector,
+  SnapshotEvent,
+} from './types';
 
 /** `/api/events` handlers, one per event in openapi.yaml, plus connection state. */
 export interface EventHandlers {
@@ -37,5 +46,24 @@ export function connectEvents(h: EventHandlers): () => void {
     if (source.readyState === EventSource.CLOSED) h.closed();
     else h.reconnecting();
   };
+  return () => source.close();
+}
+
+/** `/api/preview/{id}` handlers. */
+export interface PreviewHandlers {
+  status(data: PreviewStatus): void;
+  frame(data: PreviewFrame): void;
+  /** The stream dropped: [refused] when the browser won't retry on its own. */
+  lost(refused: boolean): void;
+}
+
+/** Opens one projector's preview stream; returns a function that closes it. */
+export function connectPreview(id: string, h: PreviewHandlers): () => void {
+  const source = new EventSource(`/api/preview/${encodeURIComponent(id)}`);
+  const on = <T>(name: string, handler: (data: T) => void) =>
+    source.addEventListener(name, (e) => handler(JSON.parse((e as MessageEvent<string>).data)));
+  on<PreviewStatus>('status', h.status);
+  on<PreviewFrame>('frame', h.frame);
+  source.onerror = () => h.lost(source.readyState === EventSource.CLOSED);
   return () => source.close();
 }

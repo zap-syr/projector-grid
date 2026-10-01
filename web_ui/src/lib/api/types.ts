@@ -22,6 +22,11 @@ export type ProjectEvent = Schemas['ProjectEvent'];
 export type Alignment = Schemas['Alignment'];
 export type AlignmentRole = Schemas['AlignmentRole'];
 export type AlignmentPresetId = Schemas['AlignmentPresetId'];
+export type PreviewStatus = Schemas['PreviewStatus'];
+export type PreviewFrame = Schemas['PreviewFrame'];
+export type PreShowRequest = Schemas['PreShowRequest'];
+/** The table's columns: the app's catalogue plus the page's own Preview. */
+export type TableColumn = ColumnId | 'preview';
 export type AlignmentOp =
   | 'enter'
   | 'exit'

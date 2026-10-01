@@ -11,6 +11,8 @@ import { resolve } from 'node:path';
 
 import type { Plugin } from 'vite';
 
+import { mockPreview } from './mockPreview.ts';
+
 import type {
   Action,
   ActionRequest,
@@ -123,6 +125,7 @@ export function mockApi(): Plugin {
   const sessions = new Map<string, Role>();
   const streams = new Set<ServerResponse>();
   const projectors = wall();
+  const previews = mockPreview(projectors);
 
   // ── Alignment mode, like alignment_provider.dart ──────────────────────
   const alignment: Alignment = {
@@ -355,6 +358,23 @@ export function mockApi(): Plugin {
       });
     }
     if (!role) return send(res, 401, { error: 'unauthorized' });
+
+    const pv = /^\/api\/preview\/([^/]+)(?:\/(retry|preshow))?$/.exec(path ?? '');
+    if (pv) {
+      const id = decodeURIComponent(pv[1] ?? '');
+      if (pv[2] === 'retry') {
+        return previews.retry(id) ? send(res, 204) : send(res, 404, { error: 'not_found' });
+      }
+      if (pv[2] === 'preshow') {
+        if (role !== 'operator') return send(res, 403, { error: 'forbidden' });
+        const on = (JSON.parse((await readBody(req)) || '{}') as { on?: unknown }).on;
+        return typeof on === 'boolean' && previews.preShow(id, on)
+          ? send(res, 200, { on })
+          : send(res, 400, { error: 'bad_request' });
+      }
+      if (!previews.stream(req, res, id)) send(res, 404, { error: 'not_found' });
+      return;
+    }
 
     if (req.method === 'POST' && path?.startsWith('/api/alignment/')) {
       if (role !== 'operator') return send(res, 403, { error: 'forbidden' });

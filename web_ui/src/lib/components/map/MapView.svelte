@@ -25,6 +25,7 @@
   import { matchesFilter, matchesSearch } from '../../logic/rows';
   import { live } from '../../state/live.svelte';
   import { alignment } from '../../state/alignment.svelte';
+  import { preview } from '../../state/preview.svelte';
   import { selection } from '../../state/selection.svelte';
   import { view } from '../../state/view.svelte';
   import Icon from '../Icon.svelte';
@@ -129,6 +130,17 @@
   }
 
   const closeDetails = () => (openId = null);
+
+  /** ◀ ▶ in reading order — the API's layout order — over the tiles not dimmed. */
+  function openPreview() {
+    const id = openId;
+    if (!id) return;
+    closeDetails();
+    preview.open(
+      shown.map((p) => p.id),
+      id,
+    );
+  }
 
   // --- Pointer gestures ---
   type Point = { x: number; y: number };
@@ -374,6 +386,7 @@
       {patternLabel}
       {anchor}
       onclose={closeDetails}
+      onpreview={alignment.active ? undefined : openPreview}
     />
   {/if}
 </div>

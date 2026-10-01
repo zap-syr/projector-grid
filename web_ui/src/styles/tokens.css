@@ -129,6 +129,9 @@ body {
   font-size: 14px;
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
+  /* The browser's own tap flash paints over everything, even a dialog the
+     tap just opened; the page's controls show their own pressed state. */
+  -webkit-tap-highlight-color: transparent;
 }
 
 button,

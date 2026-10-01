@@ -1,17 +1,42 @@
-import type { ColumnId } from '../api/types';
+import type { ColumnId, Config, TableColumn } from '../api/types';
+
+/**
+ * The page's own column: a button that opens Remote Preview. Not in the app's
+ * table, so it's added to the app's catalogue here; hidden and moved like
+ * any other.
+ */
+export const PREVIEW_COLUMN = { id: 'preview', label: 'Preview', defaultWidth: 92 } as const;
+
+export interface ColumnInfo {
+  id: TableColumn;
+  label: string;
+  defaultWidth: number;
+}
+
+/** The app's columns, then Preview. */
+export const tableCatalogue = (config: Config): ColumnInfo[] => [...config.columns, PREVIEW_COLUMN];
+
+export const tableDefaults = (config: Config): TableColumn[] => [
+  ...config.defaultColumns,
+  PREVIEW_COLUMN.id,
+];
+
+/** An app preset (it has no Preview) keeps Preview at the end while it's shown. */
+export const withPreview = (columns: readonly ColumnId[], shown: boolean): TableColumn[] =>
+  shown ? [...columns, PREVIEW_COLUMN.id] : [...columns];
 
 /**
  * Column list rules, ported from the app's `MonitoringTable` statics and
  * `monitoring_columns.dart`. `saved` is the stored visible order; empty or
  * all-unknown means the default set.
  */
-export function resolveColumns(
+export function resolveColumns<C extends string>(
   saved: readonly string[],
-  catalogue: readonly ColumnId[],
-  defaults: readonly ColumnId[],
-): ColumnId[] {
+  catalogue: readonly C[],
+  defaults: readonly C[],
+): C[] {
   const ids = saved.length === 0 ? defaults : saved;
-  const known = ids.filter((id): id is ColumnId => catalogue.includes(id as ColumnId));
+  const known = ids.filter((id): id is C => catalogue.includes(id as C));
   return known.length === 0 ? [...defaults] : known;
 }
 
@@ -19,11 +44,11 @@ export function resolveColumns(
  * Shows or hides [id]. A re-shown column goes back to its canonical slot among
  * the visible ones; null when it would hide the last column (`toggledColumn`).
  */
-export function toggledColumn(
-  visible: readonly ColumnId[],
-  id: ColumnId,
-  catalogue: readonly ColumnId[],
-): ColumnId[] | null {
+export function toggledColumn<C extends string>(
+  visible: readonly C[],
+  id: C,
+  catalogue: readonly C[],
+): C[] | null {
   if (visible.includes(id)) {
     return visible.length === 1 ? null : visible.filter((c) => c !== id);
   }
@@ -40,11 +65,7 @@ export function toggledColumn(
  * the target and a right→left drop before it. Runs on the full visible list
  * (Group included even while grouping hides it) so Group keeps its place.
  */
-export function reorderColumn(
-  columns: readonly ColumnId[],
-  dragged: ColumnId,
-  target: ColumnId,
-): ColumnId[] {
+export function reorderColumn<C extends string>(columns: readonly C[], dragged: C, target: C): C[] {
   const from = columns.indexOf(dragged);
   const to = columns.indexOf(target);
   if (dragged === target || from < 0 || to < 0) return [...columns];
@@ -55,7 +76,7 @@ export function reorderColumn(
 }
 
 /** What the table renders: Group is redundant under group headers. */
-export function renderedColumns(visible: readonly ColumnId[], groupBy: boolean): ColumnId[] {
+export function renderedColumns<C extends string>(visible: readonly C[], groupBy: boolean): C[] {
   if (!groupBy) return [...visible];
   const withoutGroup = visible.filter((c) => c !== 'group');
   return withoutGroup.length === 0 ? [...visible] : withoutGroup;
