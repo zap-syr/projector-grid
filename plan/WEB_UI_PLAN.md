@@ -65,6 +65,8 @@ web_ui/                         # the Svelte project (own package.json)
       shell/                    # Header, Toolbar, AlertsRail, Toast, ConfirmDialog
       table/                    # DataTable, HeaderCell (sort/drag/resize), ColumnsMenu, cells/
       control/                  # ControlPanel, PowerShutter, PatternGrid, LensBlock
+      map/                      # MapView, MapTile (Map view; tiles reused by WallMap)
+      preview/                  # PreviewDialog (Remote Preview)
       alignment/                # Banner, PatternPicker, WallMap
       phone/                    # CardList, ProjectorCard, BottomSheet, PinPad
     styles/tokens.css           # colour/type/spacing tokens from the mockup (light + dark)
@@ -134,7 +136,7 @@ Vite copies `public/` into the output on every build, and the committed copies i
 
 - `web_ui/api/openapi.yaml` is the single description of every endpoint and JSON shape from
   ROADMAP §5 (`/api/login`, `/api/config`, `/api/projectors`, `/api/actions`,
-  `/api/alignment/*`, `/api/events` event types).
+  `/api/alignment/*`, `/api/preview/{id}`, `/api/events` event types).
 - **TS side:** `npm run gen:api` generates the types, so components never hand-write response
   shapes.
 - **Dart side:** hand-written `toJson` (project convention: plain Dart for DTOs, no codegen
@@ -167,8 +169,8 @@ Vite copies `public/` into the output on every build, and the committed copies i
 
 ## 8. Front-end conventions
 
-- **One app, two layouts:** the desktop table vs the phone cards, switched by a width
-  breakpoint (≈ 900 px) with media/container queries. Same state underneath.
+- **One app, three views:** the table, the cards and the Map, offered per screen (width,
+  height and touch, `state/device.svelte.ts`; see steps 8 and 9). Same state underneath.
 - **State:** `lib/state/*.svelte.ts` modules export rune-based classes/objects.
   - The SSE handler is the only writer of server data.
   - Components read from state modules and call `api.*` for actions. They never `fetch`
@@ -192,7 +194,10 @@ Vite copies `public/` into the output on every build, and the committed copies i
   - `role="checkbox"` + `aria-checked="mixed"` for tri-state;
   - focus-visible rings;
   - `prefers-reduced-motion`.
-- **Browser support:** current Chrome / Edge / Firefox / Safari, iOS Safari 16+.
+- **Browser support:** current Chrome / Edge / Firefox / Safari; the floor is `color-mix()` —
+  iPadOS / iOS Safari 16.2+, Chrome / Edge 111+, Firefox 113+, Samsung Internet 22+. Older
+  iPads (e.g. iPad Air 1, iOS 12) aren't supported, and there's no fallback page (owner,
+  2026-09-30).
 - **Commits:** same prefixes as the app (`feat(web): …`, `fix(web): …`).
 
 ## 9. CI
@@ -232,18 +237,159 @@ Then the existing `build_runner → format → analyze → flutter test`. The re
    auto-fit, fit-to-width, density, group-by; status colours; filters + search. Reorder is by dragging headers
    only, like the app — the Columns popover has no drag list. Group sections collapse and
    show the app's worst-status pill.
-4. `[ ]` **Alerts rail / drawer** (needs ROADMAP §4 alerts provider; show an empty rail until
-   then).
-5. `[ ]` **Operator auth:** *Allow control* + Operator PIN, operator role on sessions,
-   *Unlock control* / *Lock*, phone PIN pad.
-6. `[ ]` **Operator controls:** selection model, control panel, confirmations, toasts with
-   the §10 result summary, `/api/actions`.
-7. `[ ]` **Alignment on the web:** banner, presets Geometry / Color / Custom, pattern
-   pickers, read-only banner for viewers. No Identify until ROADMAP §3.1 exists in the app.
-8. `[ ]` **Phone layout:** cards, expand, select bar, control / alerts / pattern sheets,
-   wall map.
-9. `[ ]` **CI + docs:** workflow steps; add the `web_ui` commands to `DEVELOPMENT.md`
+4. `[later]` **Alerts rail / drawer** — skipped for now (owner, 2026-09-30): pointless
+   before ROADMAP §4 alerts exist; build it together with F5.
+5. `[x]` **Operator auth:** *Allow control* + Operator PIN, operator role on sessions,
+   *Unlock control* / *Lock*, phone PIN pad. `dev:mock`: Viewer PIN 1234, Operator PIN
+   5678. Notes: `POST /api/unlock` / `/api/lock` return
+   404 while *Allow control* is off; an `access` SSE event tells a session's other tabs
+   about unlock / lock and every page when *Allow control* is switched; switching it off
+   drops operators to viewer without signing anyone out; the PIN pad shows at ≤ 600 px or
+   on touch screens.
+6. `[x]` **Operator controls:** selection model, control panel, confirmations, toasts with
+   the §10 result summary, `/api/actions`. Notes: auth-error projectors can't be selected either (they'd only be skipped), so the
+   Select ▾ menu has no separate *All online*; lens steps only toast on failure; the lens
+   encoding moved to `domain/lens_commands.dart` and the control bar uses it too; web
+   commands carry "(Web · IP · operator)" in the Event Log. After the owner's review
+   (2026-09-30): press-and-drag across rows sweeps them in (or out, if the press was on a
+   selected row); the panel follows the app's order and adds OSD, Input, Lens calibration
+   and Lens type (lists from `domain/control_options.dart` via `/api/config`); input asks
+   for >1 projector, calibration and lens type always; the panel can be hidden (per
+   browser); no "moves N lenses" warning. Second review: block titles styled like the app's
+   group headers; desktop lens controls are the app's (Lens shift D-pad and separate Focus /
+   Zoom rows with fast / normal / slow buttons, its lens_shift icons), the phone width keeps
+   a speed switch with single-step buttons; confirm dialogs ask a question ("Close the
+   shutter on 5 projectors?") instead of listing names; group names stay pinned when the
+   table scrolls sideways.
+7. `[x]` **Alignment on the web:** banner, presets Geometry / Color / Custom, pattern
+   pickers, read-only banner for viewers; on the phone the pattern sheets and the wall
+   mini-map. No Identify until ROADMAP §3.1 exists in the app. Skipped for now (owner,
+   2026-09-30) — done after steps 8 and 9; the phone wall mini-map reuses step 9's Map tiles.
+   Step 10 (Remote Preview) follows it.
+   - **API:**
+     - `GET /api/alignment`, `POST /api/alignment/{op}` (operator only, 404 without
+       *Allow control*);
+     - an `alignment` SSE event after the snapshot and on every change;
+     - `Config.alignmentPresets`;
+     - each op calls `AlignmentNotifier`;
+     - `enter` takes the page's selection (`enter({selection})`), so a web entry scopes
+       like the app.
+   - **Screens:**
+     - Where the side panel lives (desktop, sideways tablet): the orange banner under the
+       header, the toolbar's bulk selector turns into a role legend, and the table / cards /
+       Map show the app's rings and markers.
+     - On touch layouts (phone, upright tablet) the list gives way to an Alignment screen:
+       big ◀ ▶, the toggles, the wall mini-map, the preset switch, Focused / Others rows with
+       swatch sheets, the lens and *Exit alignment*.
+     - Viewers get the same screens read-only.
+   - **Operator:**
+     - A click or tap on a projector in the mode focuses it.
+     - The selection is pinned to the focused projector, so the Control panel turns into
+       *Lens · PJ-xx*.
+     - Keys: `,` / `.` (`<` / `>`) step, `A` Show all, `N` Neighbours.
+     - Deliberately **no Esc to exit** on the web: Esc already closes popovers and sheets, and
+       a stray one would restore the whole wall.
+   - The app's *Ctrl+click* manual neighbours and *Adjust ▾* stay app-only.
+   - **Owner's review (2026-09-30):**
+     - The banner has no projector name (the ring names it), and the pattern pickers show
+       only the swatch. The lens panel is titled with the IP.
+     - A toggle that's on keeps its dark pill (hover only with a mouse). The phone's ◀ ▶
+       bar is pinned while the lens is scrolled to.
+     - Touch screens get a 60 px banner and toolbar with 44–48 px controls in one row.
+       Below 1280 px, Columns and Control turn into icons, and the Control icon is in the
+       accent colour.
+     - Cards keep a fixed two-line summary (power · shutter + pattern, then signal ·
+       temperatures), with the chevron in the top-right corner. The touch minimum width is
+       280 px (upright iPads get 2 columns), so no status reflows or overflows.
+8. `[x]` **Phone and tablet layouts:** cards, expand, select bar, control sheet, Table /
+   Cards switch. Layout per screen (owner, 2026-09-30; `device.svelte.ts`):
+
+   | Screen | List | Control |
+   |---|---|---|
+   | Phone upright (≤ 600 px) | cards, 1 column | bottom sheet |
+   | Phone sideways (touch, height ≤ 500 px) | cards, up to 3 columns | right-hand sheet |
+   | Tablet upright (touch, < 1024 px) | cards, 2 columns | bottom sheet, lens in a second column |
+   | Tablet sideways (touch, ≥ 1024 px) | Table / Cards switch, cards by default (3 columns) | side panel |
+   | Desktop (mouse) | Table / Cards switch, table by default | side panel |
+
+   Notes: the switch is remembered per browser (`pg.listMode.v1`), apart from the table
+   layout; a narrow desktop window keeps its choice. Cards follow layout order in one
+   section per group (collapse shared with the table), a plain grid without groups; the
+   operator taps a card to select it, the viewer to open its details, the chevron does it
+   for both. Details open one at a time as a full-width strip under the card's row
+   (sliding in, with a pointer at the card), so the grid never goes ragged
+   (`withDetails` in `logic/rows.ts`). Selection follows PatternFly's bulk selector on
+   every screen (owner, 2026-09-30): one fixed-width control first in the toolbar —
+   `[box │ "3 selected" ▾]` — whose box selects all shown when none are, and clears
+   the selection when some or all are (touch screens have no Esc; group-header boxes
+   act the same within the group). No separate count or *Clear* anywhere else: the
+   Select ▾ menu keeps only the presets, the Control panel header shows no count, and
+   the touch layouts' bar under the list is just the *Control* button. *Columns* sits
+   left of the Table / Cards switch so the switch doesn't move. Touch screens get the big lens block — 64 px shift arrows 10 px apart around an
+   inert centre, a speed switch, separate Focus / Zoom blocks with 56 px Near / Far and
+   Out / In buttons, Lens settings (Home, calibration, type) last — plus comfortable rows
+   on the first visit and 40 px checkbox hit areas; the app's fast / normal / slow buttons
+   stay for the mouse. Phones and upright tablets fold the header (icons, short labels).
+   Esc closes the confirm dialog, then the sheet, then clears the selection. The alerts
+   sheet waits for step 4, the pattern sheets and wall map moved to step 7.
+9. `[x]` **Map view** (owner, 2026-09-30; ROADMAP §5 *Map*): the project's card layout as
+   a third view, on tablets and desktop only.
+   - **Switch:** `listMode` gains `'map'`. The switch shows *Table / Cards / Map*, or
+     *Cards / Map* on upright tablets. On a phone a stored `'map'` falls back to cards.
+   - **Data:** no API change, because `x` / `y` are already in `/api/projectors`.
+   - **Logic in `lib/logic/map.ts`,** unit-tested:
+     - the layout bounds;
+     - the fit scale;
+     - the tile rectangle at a zoom;
+     - the marquee hit test.
+   - **Components in `components/map/`:** `MapView` with absolutely positioned HTML tiles
+     (clicks, focus and a11y come for free), and `MapTile`, which the step 7 wall mini-map
+     reuses.
+   - **Zoom:** *− / + / Fit*, a two-finger pan and pinch on touch, Ctrl + wheel with the
+     mouse. Zoomed far out, tiles show only the dot and name.
+   - **Filters and search** dim the tiles that don't match.
+   - **Selection:** as ROADMAP §5 *Map* describes. The mouse behaves like the app's canvas,
+     and on touch one finger draws the marquee and two fingers move the map. Details open in
+     a popover: the viewer taps a tile; the operator right-clicks it or long-presses it.
+10. `[x]` **Remote Preview** (owner, 2026-09-30; ROADMAP §5 *Remote Preview on the web*),
+    done after step 7. One projector, for both roles; Pre-show for operators only.
+    Owner's review (2026-10-01): power moved into the header after the IP, no shutter
+    status under the image (the frame's colour says it); the browser's tap highlight is
+    off page-wide, since it painted a tapped row over the dialog. Not yet tried against a
+    real projector's image.
+    - **App side:**
+      - `GET /api/preview/{id}` as SSE, with `frame` (base64 JPEG) and `status` events;
+      - one shared `RemotePreviewController` per projector, via the existing
+        `remotePreviewProvider`, kept alive while a web or app watcher exists, and closed a
+        few seconds after the last one leaves;
+      - Pre-show as `POST /api/preview/{id}/preshow` (operators only) and *Retry* as
+        `POST /api/preview/{id}/retry` (anyone watching). Not an `/api/actions` action: it
+        goes over the shared preview socket, not NTCONTROL, and needs that feed open. Its
+        state moved from the app's dialog into `preShowProvider`, so the app and the pages
+        show the same pre-show;
+      - the contract in `openapi.yaml`, with golden fixtures for the events.
+    - **Web side:** `components/preview/PreviewDialog` (a dialog on desktop, a full-screen
+      sheet on phones).
+      - The shutter-coloured frame and the overlays match the app's `preview_viewport.dart`.
+      - *Retry*, and *Pre-show* (Standby only).
+      - Entry points (owner, 2026-10-01): the card details strip, the Map popover (tap,
+        right-click, long press), and a *Preview* column in the table with an icon button
+        per row (hideable and draggable like any other column). Not in the Control panel,
+        not in Alignment mode.
+      - ◀ ▶ in the window step to the neighbouring projector, in the order of the view it
+        was opened from: the table's / cards' sort, filters and search; the Map in reading
+        order (left to right, top to bottom). Filtered-out projectors are skipped, offline
+        ones stay. The order is frozen when the window opens (a temperature sort mustn't
+        reshuffle it), wraps at the ends, and shows "3 / 24". Selection doesn't change.
+        Keys ← → and Esc; a swipe on phones. Only one stream at a time.
+    - **Mock:** `dev:mock` streams generated frames.
+    - Multiview is left for later.
+11. `[x]` **CI + docs:** workflow steps; add the `web_ui` commands to `DEVELOPMENT.md`
    and CLAUDE.md *Commands*.
+   - `ci.yml`: a `web` job (Node 24, Ubuntu) — `types.gen.ts` regenerated and diffed
+     against the committed one, then `check`, `lint`, `test`, `build`.
+   - `release.yml`: both platforms build `web_ui/` before the Flutter build, since
+     `assets/web/` isn't in git and a release would otherwise ship without the page.
 
 ## 11. Open points
 

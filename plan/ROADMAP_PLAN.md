@@ -197,8 +197,8 @@ button and Identify has no shortcut yet (`N` went to Neighbours, see below).
 
 Done:
 - **Test-pattern indicator (§3.3)** — `QTS` is the 12th poll query; `ProjectorNode.testPattern`
-  is polled and set optimistically on every `OTS:xx`; card thumbnail on the IP row (open
-  shutter only); opt-in *Test Pattern* column (icon + name) in Monitoring. Pattern list and
+  is polled and set optimistically on every `OTS:xx`; card thumbnail on the IP row (any
+  shutter state, no tooltip); opt-in *Test Pattern* column (icon + name) in Monitoring. Pattern list and
   icons shared in `domain/test_patterns.dart`.
 - **Alignment mode (§3.2)** — `alignment_provider.dart` (state, entry capture of shutter /
   pattern / fade, per-projector command loops, restore on exit, pending fade restores in app
@@ -398,9 +398,10 @@ uses ~74 px, so a fourth status icon there would be cramped and hard to scan.
 - A 16×10 px mini thumbnail drawn from the existing `assets/icons/test_patterns/*.svg`
   (same icons as the control bar) — white field, red crosshatch, colour bars are recognisable
   at that size; thin `outlineVariant` border so white/black fields don't vanish into the card.
-- Shown only when a test pattern is active (`OTS` ≠ `00`) **and the shutter is open** (a
-  pattern behind a closed shutter isn't on screen); normal show cards look exactly as today.
-- Tooltip on the thumbnail: "Test pattern: Cross Hatch Red".
+- Shown whenever a test pattern is active (`OTS` ≠ `00`), **whatever the shutter** — the
+  pattern stays set on the projector and is on screen as soon as the shutter opens (owner,
+  2026-09-30; first shipped as open-shutter-only). Normal show cards look exactly as today.
+- No tooltip on the thumbnail (owner, 2026-09-30).
 - Monitoring table: optional "Test pattern" column (text) via the existing column chooser.
 - Alignment mode reuses it, so the card itself shows who has which pattern — no extra labels.
 
@@ -535,7 +536,9 @@ Two roles, each with its own PIN:
 - A viewer can press **Unlock control** and enter the operator PIN to upgrade the same session;
   **Lock** drops it back to viewer.
 - The two PINs must differ (the settings tab refuses equal values). 4–8 digits.
-- With *Allow control* off, only the Viewer PIN exists and the server has no write routes at all.
+- With *Allow control* off, only the Viewer PIN exists and the server has no write routes at all
+  (`/api/unlock` / `/api/lock` answer 404). Switching it off drops every operator back to
+  viewer; nobody is signed out.
 - **Sessions:** a successful PIN returns a random session token in an `HttpOnly` cookie
   (browsers) or in the JSON reply (scripts). It expires after 12 h idle. Changing either PIN
   or pressing *Sign out all clients* in the settings tab invalidates every session.
@@ -579,7 +582,7 @@ Taken from `projector_card.dart` / `monitoring_table.dart` so the web and the ap
 | Intake temp | amber ≥ 40 °C, red ≥ 45 °C (`_intakeWarmC` / `_intakeHotC`) |
 | Exhaust temp | amber ≥ 55 °C, red ≥ 65 °C (`_exhaustWarmC` / `_exhaustHotC`) |
 | Signal | plain text, like the app's table (`NO SIGNAL` isn't tinted there) |
-| Test pattern | mini swatch + name when a pattern is on **and** the shutter is open (§3.3) |
+| Test pattern | mini swatch + name whenever a pattern is on, shutter open or closed (owner, 2026-09-30 — the app card will follow); web cards show the swatch beside the IP |
 | Group | group colour dot + name (`_groupCell`) |
 The thresholds are served by the API (`/api/config`), not hard-coded in the page, so a later
 change in the app (or the §4 alert thresholds) applies to both.
@@ -625,6 +628,42 @@ describe what the column shows.
   *Essentials* fits cleanly.
 - **Phone:** cards show a fixed summary (power, shutter, signal, temps, errors). Tapping a card
   expands it to every field (IP, serial, runtimes, voltage, test pattern, group).
+
+#### Map — the project's card layout (owner, 2026-09-30)
+A third view beside Table and Cards that draws the projectors where they sit on the app's
+Controls canvas, so the page reads like the wall.
+- **Where:** tablets and desktop only. The switch is *Table / Cards / Map* where the table is
+  offered and *Cards / Map* on upright tablets. Phones have no Map. Table / Cards defaults stay
+  as they are, and Map is only ever picked by hand.
+- **Data:** `x` / `y` from `/api/projectors` (already served), with the app's 120×100 card size.
+  A card moved in the app moves on the page over SSE. The page never moves cards, because the
+  layout is edited only in the app.
+- **View:** fit to the area on open, then *− / + / Fit*. Touch pans and zooms with two
+  fingers. The mouse zooms with Ctrl + wheel and scrolls with the wheel.
+- **Tile:** a copy of the app's card.
+  - The status bar has power, shutter, the warning triangle, the lock and the connection dot.
+  - Below it are the name and the IP, with the test-pattern thumbnail.
+  - A group tints the tile's background and adds its chip under the tile.
+
+  Zoomed far out, a tile keeps only the dot and name.
+- **Filters and search** dim the tiles that don't match rather than hiding them, so the wall
+  keeps its shape.
+- **Operator selection** (owner, 2026-09-30). Offline and auth-error tiles can't be selected,
+  and a marquee skips the tiles the filter dims.
+  - **Mouse:** the same as the app's canvas.
+    - A click selects only that tile, and Ctrl / Cmd / Shift + click adds or removes it.
+    - A drag draws a marquee that replaces the selection, or toggles the tiles it covers
+      with Ctrl / Cmd / Shift.
+    - A click on empty space clears the selection.
+  - **Touch:** there are no modifier keys.
+    - A tap adds or removes a tile.
+    - One finger draws a marquee that adds to the selection. Two fingers pan and pinch-zoom
+      (as in Figma on iPad).
+    - A tap on empty space doesn't clear the selection, so a near miss can't lose it; the
+      toolbar box clears it.
+  - **Details:** the operator opens a tile's details with a right-click or a long press. The
+    viewer taps (or clicks) the tile, and a viewer's one-finger or mouse drag pans the map.
+  - Selection and the Control panel are shared with the other views.
 
 **Alerts on request:** a 52 px **rail** at the far right, for both roles:
 - a bell with the active count, coloured by the worst severity;
@@ -701,6 +740,34 @@ Only one alignment session exists at a time; a second client entering joins the 
 - *Adjust ▾* (geometry / colour dialogs) stays app-only.
 - Exit from the web restores shutters, patterns and shutter fades exactly like Exit in the app.
 
+#### Remote Preview on the web (owner, 2026-09-30)
+The app's Remote Preview (`REMOTE_PREVIEW_PLAN.md`) for **one projector at a time**. Multiview
+may come later as a separate step.
+- **Who:** operators and viewers can watch. The **Pre-show** toggle changes the projector, so
+  only operators get it.
+- **Transport:** the browser never opens the projector's socket itself, because it may sit on
+  another network and a direct socket would skip the PIN and roles. The app relays instead.
+  - `GET /api/preview/{id}` is an SSE stream with `frame` events (the JPEG, base64) and
+    `status` events (no signal / preview unavailable / closed, pre-show, signal tag).
+  - It sits behind the same auth as the rest of `/api/*`.
+  - The app keeps **one** `RemotePreviewController` per projector, shared by every browser
+    and the app's own preview window.
+  - The socket opens when the first watcher arrives and closes a few seconds after the last
+    one leaves.
+- **Where** (owner, 2026-10-01): a *Preview* button in the details (card strip, Map popover,
+  which right-click and long press also open) and a *Preview* column in the table (hideable
+  and draggable like the rest). Not in the Control panel and not in Alignment mode.
+- **◀ ▶** step to the neighbouring projector in the order of the view it was opened from
+  (sort, filters, search; the Map in reading order), frozen when the window opens, wrapping
+  at the ends ("3 / 24"). Selection isn't touched; ← → keys, a swipe on phones.
+- **Window:** a dialog on desktop and a full-screen sheet on phones.
+  - The 16:9 image sits in a frame coloured by the shutter, as in the app.
+  - The same overlays as the app: *No signal*, *Preview not available*, the signal tag and
+    `PRE-SHOW`.
+  - *Retry*, and *Pre-show* (operators only, enabled only in Standby, as in the app).
+  - Pre-show is sent through the app (`POST /api/preview/{id}/preshow`), which logs it as a
+    web command; the app's dialog and the pages share one pre-show state.
+
 - The app shows a small "Web access on · 3 clients (1 operator)" indicator in the status bar.
 - Live updates via **Server-Sent Events** (simpler than WebSocket, auto-reconnect in browsers).
 
@@ -709,6 +776,8 @@ Only one alignment session exists at a time; a second client entering joins the 
 |---|---|---|
 | POST | `/api/login` | `{ "pin": "…" }` → session token + role; no auth needed |
 | POST | `/api/logout` | ends the session |
+| POST | `/api/unlock` | `{ "pin": "…" }` (Operator PIN) → this session becomes operator; only while *Allow control* is on |
+| POST | `/api/lock` | this session back to viewer |
 | GET | `/api/session` | project name + whether this client is signed in; no auth needed (the login page shows the project name) |
 | GET | `/api/config` | project name, role, status-colour thresholds, test-pattern list |
 | GET | `/api/projectors` | all nodes + telemetry, in layout order (JSON) |
@@ -717,8 +786,11 @@ Only one alignment session exists at a time; a second client entering joins the 
 | GET | `/api/alerts` | active alerts; returns `[]` until F5 (§4) lands |
 | GET | `/api/alignment` | alignment state: active, focused, roles, preset, toggles |
 | GET | `/api/events` | SSE stream: node changes, alerts, alignment state, command results |
+| GET | `/api/preview/{id}` | SSE stream of one projector's Remote Preview: `status` and `frame` (base64 JPEG) events |
+| POST | `/api/preview/{id}/retry` | reconnect a watched feed (any role) |
+| POST | `/api/preview/{id}/preshow` | `{ "on": bool }` — operators only, Standby with the feed up |
 | POST | `/api/actions` | `{ "targets": [ids] \| {"group": id} \| "all", "action": … }` — see below |
-| POST | `/api/alignment/{op}` | `enter`, `exit`, `next`, `prev`, `focus/{id}`, `neighbours`, `showAll`, `preset/{name}` |
+| POST | `/api/alignment/{op}` | `enter` (`{"targets": [ids]}` — the page's selection), `exit`, `next`, `prev`, `focus` (`{"id"}`), `neighbours`, `diagonals`, `showAll`, `preset` (`{"preset"}`), `focusedPattern` / `othersPattern` (`{"code"}`); replies with the new state |
 
 Not in the first version (owner, 2026-09-29): `POST /api/cues/{id}/fire` is added together
 with F3 (§2); `identify` is added when §3.1 exists in the app.
