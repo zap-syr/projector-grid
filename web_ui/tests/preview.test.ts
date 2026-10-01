@@ -8,7 +8,6 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import type { Config, PreviewStatus, Projector } from '../src/lib/api/types';
 import PreviewDialog from '../src/lib/components/preview/PreviewDialog.svelte';
 import DataTable from '../src/lib/components/table/DataTable.svelte';
-import { tableDefaults, withPreview } from '../src/lib/logic/columns';
 import { cornerTag, frameColor, preShowReady, stepped } from '../src/lib/logic/preview';
 import { live } from '../src/lib/state/live.svelte';
 import { preview } from '../src/lib/state/preview.svelte';
@@ -94,10 +93,11 @@ describe('preview logic', () => {
 });
 
 describe('Preview column', () => {
-  test('on by default; an app preset keeps it while it is shown', () => {
-    expect(tableDefaults(config).at(-1)).toBe('preview');
-    expect(withPreview(['model', 'ip'], true)).toEqual(['model', 'ip', 'preview']);
-    expect(withPreview(['model', 'ip'], false)).toEqual(['model', 'ip']);
+  test('comes from the app, on by default after Serial Number', () => {
+    const at = config.defaultColumns.indexOf('serial');
+    expect(config.defaultColumns[at + 1]).toBe('preview');
+    expect(config.columns.filter((c) => c.id === 'preview')).toHaveLength(1);
+    expect(config.presets.find((p) => p.name === 'Signal')?.columns).toContain('preview');
   });
 
   test('a layout saved before it gains it at the end', () => {

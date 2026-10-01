@@ -4,16 +4,9 @@
   edge to auto-fit; fit-to-width, density and group-by from the Columns menu.
 -->
 <script lang="ts">
-  import type { ColumnId, Config, Density, Projector, TableColumn } from '../../api/types';
+  import type { ColumnId, Config, DataColumn, Density, Projector } from '../../api/types';
   import { cellText, testPatternLabel } from '../../logic/cells';
-  import {
-    PREVIEW_COLUMN,
-    renderedColumns,
-    reorderColumn,
-    resolveColumns,
-    tableCatalogue,
-    tableDefaults,
-  } from '../../logic/columns';
+  import { renderedColumns, reorderColumn, resolveColumns } from '../../logic/columns';
   import {
     buildEntries,
     matchesFilter,
@@ -71,28 +64,27 @@
     errors: 20,
   };
 
-  const columns = $derived(tableCatalogue(config));
-  const catalogue = $derived(columns.map((c) => c.id));
-  const labels = $derived(new Map(columns.map((c) => [c.id, c.label])));
-  const defaultWidths = $derived(new Map(columns.map((c) => [c.id, c.defaultWidth])));
+  const catalogue = $derived(config.columns.map((c) => c.id));
+  const labels = $derived(new Map(config.columns.map((c) => [c.id, c.label])));
+  const defaultWidths = $derived(new Map(config.columns.map((c) => [c.id, c.defaultWidth])));
   const patterns = $derived(new Map(config.testPatterns.map((t) => [t.code, t.label])));
   const groupMap = $derived(new Map(live.groups.map((g) => [g.id, g])));
   const patternLabel = (code: string) => testPatternLabel(code, patterns);
   const patternText = (p: Projector) =>
     p.testPattern === null ? '-' : patternLabel(p.testPattern);
 
-  const visible = $derived(resolveColumns(layout.columns, catalogue, tableDefaults(config)));
+  const visible = $derived(resolveColumns(layout.columns, catalogue, config.defaultColumns));
   const groupBy = $derived(layout.groupBy && live.groups.length > 0);
   // No Remote Preview in Alignment mode.
   const cols = $derived(
     renderedColumns(visible, groupBy).filter(
-      (c) => !alignment.active || c !== PREVIEW_COLUMN.id || visible.length === 1,
+      (c) => !alignment.active || c !== 'preview' || visible.length === 1,
     ),
   );
-  const sortable = (c: TableColumn): c is ColumnId => c !== PREVIEW_COLUMN.id;
+  const sortable = (c: ColumnId): c is DataColumn => c !== 'preview';
   // A sort column that's hidden falls back to the first shown, like the app.
   const sortColumn = $derived(
-    cols.includes(layout.sortColumn) ? layout.sortColumn : cols.find(sortable),
+    cols.filter(sortable).find((c) => c === layout.sortColumn) ?? cols.find(sortable),
   );
 
   const shown = $derived(
@@ -206,9 +198,7 @@
   }
 
   // ── Resize ──────────────────────────────────────────────────────────────
-  let resizing = $state<{ col: TableColumn; x0: number; dx: number; start: ResizeStart } | null>(
-    null,
-  );
+  let resizing = $state<{ col: ColumnId; x0: number; dx: number; start: ResizeStart } | null>(null);
   const baseWidths = $derived(
     cols.map((c) =>
       resizing?.col === c
@@ -262,7 +252,7 @@
     return ctx.measureText(text).width;
   }
 
-  function autoFit(col: TableColumn) {
+  function autoFit(col: ColumnId) {
     const th = table?.querySelector(`th[data-col="${col}"] .lbl`);
     const td = table?.querySelector('tbody td.dc') ?? th;
     // Preview's cells are all one small button; its label decides.
@@ -283,12 +273,12 @@
   }
 
   // ── Reorder (drag a header) ─────────────────────────────────────────────
-  let press: { col: TableColumn; x: number; y: number } | null = null;
-  let dragging = $state<{ col: TableColumn; x: number; y: number } | null>(null);
-  let dropTarget = $state<TableColumn | null>(null);
+  let press: { col: ColumnId; x: number; y: number } | null = null;
+  let dragging = $state<{ col: ColumnId; x: number; y: number } | null>(null);
+  let dropTarget = $state<ColumnId | null>(null);
   let suppressClick = false;
 
-  function headerDown(e: PointerEvent, col: TableColumn) {
+  function headerDown(e: PointerEvent, col: ColumnId) {
     if (e.button !== 0) return;
     e.preventDefault(); // no text selection while dragging
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -301,7 +291,7 @@
     dragging = { col: press.col, x: e.clientX, y: e.clientY };
     const over = document
       .elementFromPoint(e.clientX, e.clientY)
-      ?.closest<HTMLElement>('th[data-col]')?.dataset.col as TableColumn | undefined;
+      ?.closest<HTMLElement>('th[data-col]')?.dataset.col as ColumnId | undefined;
     dropTarget = over && over !== press.col ? over : null;
   }
 
@@ -320,7 +310,7 @@
     dropTarget = null;
   }
 
-  function headerClick(col: TableColumn) {
+  function headerClick(col: ColumnId) {
     if (!suppressClick && sortable(col)) tableLayout.sortBy(col);
   }
 
@@ -332,7 +322,7 @@
       id,
     );
 
-  const ariaSort = (col: TableColumn) =>
+  const ariaSort = (col: ColumnId) =>
     col !== sortColumn ? undefined : layout.sortAscending ? 'ascending' : 'descending';
 </script>
 

@@ -4,7 +4,7 @@
   The operator taps the card to select it, the viewer to open the details.
 -->
 <script lang="ts">
-  import type { AlignmentRole, ColumnId, Config, Group, Projector } from '../../api/types';
+  import type { AlignmentRole, Config, DataColumn, Group, Projector } from '../../api/types';
   import { cellText } from '../../logic/cells';
   import { isPatternActive, patternSwatch } from '../../logic/patterns';
   import { isSelectable } from '../../logic/selection';
@@ -47,7 +47,7 @@
   const selectable = $derived(aligning ? role !== null : isSelectable(p));
   const online = $derived(p.connection === 'connected' || p.connection === 'unprotected');
   const hasErrors = $derived(p.errors !== '-' && p.errors !== 'NO ERRORS' && p.errors !== '');
-  const cell = (column: ColumnId) => cellText(column, p, groups, patternLabel);
+  const cell = (column: DataColumn) => cellText(column, p, groups, patternLabel);
   // Shown behind a closed shutter too (owner, 2026-09-30; the app card follows).
   const showPattern = $derived(online && isPatternActive(p.testPattern));
 
@@ -59,7 +59,7 @@
   }
 </script>
 
-{#snippet value(column: ColumnId)}
+{#snippet value(column: DataColumn)}
   <Cell {column} {p} {groups} thresholds={config.thresholds} {patternLabel} />
 {/snippet}
 

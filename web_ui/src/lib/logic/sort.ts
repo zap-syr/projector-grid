@@ -1,4 +1,4 @@
-import type { ColumnId, Group, Projector } from '../api/types';
+import type { DataColumn, Group, Projector } from '../api/types';
 import { leadingNumber } from './cells';
 
 type Key = string | number;
@@ -17,7 +17,7 @@ const num = (s: string) => leadingNumber(s) ?? Number.NEGATIVE_INFINITY;
 
 /** Sort key per column — the app's `_Column.sortKey`. */
 export function sortKey(
-  column: ColumnId,
+  column: DataColumn,
   p: Projector,
   groups: ReadonlyMap<string, Group>,
   patternText: (p: Projector) => string,
@@ -62,7 +62,7 @@ export function sortKey(
 
 export function sortProjectors(
   projectors: readonly Projector[],
-  column: ColumnId,
+  column: DataColumn,
   ascending: boolean,
   groups: ReadonlyMap<string, Group>,
   patternText: (p: Projector) => string,

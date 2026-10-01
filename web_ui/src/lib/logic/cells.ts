@@ -1,8 +1,8 @@
-import type { ColumnId, Group, Projector } from '../api/types';
+import type { DataColumn, Group, Projector } from '../api/types';
 
 /** Plain cell text per column, as the app's Monitoring table shows it (`_Column.text`). */
 export function cellText(
-  column: ColumnId,
+  column: DataColumn,
   p: Projector,
   groups: ReadonlyMap<string, Group>,
   patternLabel: (code: string) => string,

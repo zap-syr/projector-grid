@@ -1,6 +1,6 @@
 <!-- One table cell, drawn like the app's Monitoring cell builders. -->
 <script lang="ts">
-  import type { ColumnId, Config, Group, Projector } from '../../api/types';
+  import type { Config, DataColumn, Group, Projector } from '../../api/types';
   import { cellText, tempTint } from '../../logic/cells';
   import { isPatternActive, patternSwatch } from '../../logic/patterns';
   import Icon from '../Icon.svelte';
@@ -12,7 +12,7 @@
     thresholds,
     patternLabel,
   }: {
-    column: ColumnId;
+    column: DataColumn;
     p: Projector;
     groups: ReadonlyMap<string, Group>;
     thresholds: Config['thresholds'];

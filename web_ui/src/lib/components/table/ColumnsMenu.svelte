@@ -1,21 +1,15 @@
 <!-- View ▸ Monitoring Table from the app, as a popover. Reordering is done by dragging headers. -->
 <script lang="ts">
   import type { Config, Density } from '../../api/types';
-  import {
-    resolveColumns,
-    tableCatalogue,
-    tableDefaults,
-    toggledColumn,
-    withPreview,
-  } from '../../logic/columns';
+  import { resolveColumns, toggledColumn } from '../../logic/columns';
   import { live } from '../../state/live.svelte';
   import { tableLayout, type StoredLayout } from '../../state/tableLayout.svelte';
 
   let { config, layout }: { config: Config; layout: StoredLayout } = $props();
 
-  const columns = $derived(tableCatalogue(config));
+  const columns = $derived(config.columns);
   const catalogue = $derived(columns.map((c) => c.id));
-  const visible = $derived(resolveColumns(layout.columns, catalogue, tableDefaults(config)));
+  const visible = $derived(resolveColumns(layout.columns, catalogue, config.defaultColumns));
   const densities: Density[] = ['compact', 'standard', 'comfortable'];
   const cap = (s: string) => s[0]?.toUpperCase() + s.slice(1);
 </script>
@@ -46,11 +40,7 @@
     <h6>Presets</h6>
     <div class="presets">
       {#each config.presets as p (p.name)}
-        <button
-          onclick={() =>
-            tableLayout.update({ columns: withPreview(p.columns, visible.includes('preview')) })}
-          >{p.name}</button
-        >
+        <button onclick={() => tableLayout.update({ columns: [...p.columns] })}>{p.name}</button>
       {/each}
       <button
         class="quiet"

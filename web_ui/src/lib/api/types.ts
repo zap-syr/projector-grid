@@ -25,8 +25,8 @@ export type AlignmentPresetId = Schemas['AlignmentPresetId'];
 export type PreviewStatus = Schemas['PreviewStatus'];
 export type PreviewFrame = Schemas['PreviewFrame'];
 export type PreShowRequest = Schemas['PreShowRequest'];
-/** The table's columns: the app's catalogue plus the page's own Preview. */
-export type TableColumn = ColumnId | 'preview';
+/** Columns with a value per projector: all but Preview's button. */
+export type DataColumn = Exclude<ColumnId, 'preview'>;
 export type AlignmentOp =
   | 'enter'
   | 'exit'

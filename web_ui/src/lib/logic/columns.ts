@@ -1,30 +1,3 @@
-import type { ColumnId, Config, TableColumn } from '../api/types';
-
-/**
- * The page's own column: a button that opens Remote Preview. Not in the app's
- * table, so it's added to the app's catalogue here; hidden and moved like
- * any other.
- */
-export const PREVIEW_COLUMN = { id: 'preview', label: 'Preview', defaultWidth: 92 } as const;
-
-export interface ColumnInfo {
-  id: TableColumn;
-  label: string;
-  defaultWidth: number;
-}
-
-/** The app's columns, then Preview. */
-export const tableCatalogue = (config: Config): ColumnInfo[] => [...config.columns, PREVIEW_COLUMN];
-
-export const tableDefaults = (config: Config): TableColumn[] => [
-  ...config.defaultColumns,
-  PREVIEW_COLUMN.id,
-];
-
-/** An app preset (it has no Preview) keeps Preview at the end while it's shown. */
-export const withPreview = (columns: readonly ColumnId[], shown: boolean): TableColumn[] =>
-  shown ? [...columns, PREVIEW_COLUMN.id] : [...columns];
-
 /**
  * Column list rules, ported from the app's `MonitoringTable` statics and
  * `monitoring_columns.dart`. `saved` is the stored visible order; empty or

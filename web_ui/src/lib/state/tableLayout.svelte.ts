@@ -1,12 +1,11 @@
-import type { ColumnId, Config, Density, TableColumn } from '../api/types';
-import { PREVIEW_COLUMN } from '../logic/columns';
+import type { ColumnId, Config, Density } from '../api/types';
 import { device } from './device.svelte';
 
 /** Per-browser table layout, so a phone and a booth laptop can differ. */
 export interface StoredLayout {
   /** Visible columns in order; Group stays in here while grouping hides it. */
-  columns: TableColumn[];
-  widths: Partial<Record<TableColumn, number>>;
+  columns: ColumnId[];
+  widths: Partial<Record<ColumnId, number>>;
   sortColumn: ColumnId;
   sortAscending: boolean;
   density: Density;
@@ -54,8 +53,8 @@ function read(): StoredLayout | null {
 }
 
 /** Empty means the default set, which already has Preview. */
-const withPreviewColumn = (columns: TableColumn[]): TableColumn[] =>
-  columns.length === 0 ? [] : [...columns, PREVIEW_COLUMN.id];
+const withPreviewColumn = (columns: ColumnId[]): ColumnId[] =>
+  columns.length === 0 ? [] : [...columns, 'preview'];
 
 function write(layout: StoredLayout): void {
   try {
@@ -72,7 +71,7 @@ function write(layout: StoredLayout): void {
 function seed(config: Config): StoredLayout {
   return {
     ...config.layout,
-    columns: withPreviewColumn(config.layout.columns),
+    columns: [...config.layout.columns],
     widths: { ...config.layout.widths },
     density: device.touch ? 'comfortable' : config.layout.density,
     collapsed: [],
@@ -105,7 +104,7 @@ class TableLayoutState {
     });
   }
 
-  setWidth(column: TableColumn, width: number): void {
+  setWidth(column: ColumnId, width: number): void {
     if (this.value) this.update({ widths: { ...this.value.widths, [column]: width } });
   }
 
