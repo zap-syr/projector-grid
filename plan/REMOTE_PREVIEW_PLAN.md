@@ -9,8 +9,9 @@ Branch: `features/remote-preview`.
 **Implementation status (2026-09-11):** Phase 1 (protocol, dialog, context-menu
 entry point) and most of Phase 2 — pre-show toggle, the live input/signal tag,
 and a responsive-layout fix — landed across 12 commits (`68ff0fa`…`70075fd`,
-after the plan itself in `439b0c3`). Remaining from Phase 2: the Monitoring
-table's "Preview" column and a toolbar/View-menu "Preview selection" action.
+after the plan itself in `439b0c3`). The Monitoring table's "Preview" column
+followed on 2026-10-01 (§4.2). Remaining from Phase 2: a toolbar/View-menu
+"Preview selection" action.
 Phase 3 and the windowing-API migration (§5.3) not started.
 
 ---
@@ -279,34 +280,76 @@ window** with a tile per selected projector (§5.2). The menu label stays
 
 ### 4.2 Monitoring table — "Preview" column
 
-`monitoring_table.dart`: new `_Column`
+The Web UI shipped its own page-only Preview column first (`PREVIEW_COLUMN` in
+`web_ui/src/lib/logic/columns.ts`, appended to the app's catalogue, always
+last). The app's column now **replaces** it: Preview becomes an ordinary entry
+of the shared catalogue in `monitoring_columns.dart`, so both sides get the
+same id, label, width and canonical order from one place (`/api/config`).
+
+**Shared catalogue** — `monitoring_columns.dart`:
+
+- `kColPreview = MonitoringColumnSpec('preview', 'Preview', 92)` (92 = the
+  Web UI's touch-friendly width), placed in `kMonitoringColumns` right after
+  `kColSerial`.
+- `'preview'` in `kMonitoringDefaultColumns` right after `'serial'` —
+  default-visible. Saved non-empty column lists don't change: those users add
+  it from the Columns menu, like any later-added column.
+- Presets stay as they are except **Signal**, which gains `'preview'` (after
+  `'signal'`). Presets apply as-is on both sides — the Web UI's "keep Preview
+  when applying a preset" special case goes away.
+- *Show all* includes it automatically.
+
+**App** — `monitoring_table.dart`, new `_Column` after Serial Number:
 
 ```dart
 _Column(
-  id: 'preview',
-  label: 'Preview',
-  defaultWidth: 72,
-  text: (n, _) => '',                       // nothing to auto-fit / tooltip
-  sortKey: (n, _) => 0,                     // not meaningfully sortable
-  cell: (context, n, _) => IconButton(
+  spec: kColPreview,
+  text: (_, _) => '',                       // nothing to auto-fit / tooltip
+  sortKey: (_, _) => 0,                     // not sortable, see below
+  cell: (context, n, groups) => IconButton(
     icon: const Icon(Icons.cast, size: 18),
-    tooltip: 'Open remote preview',
-    onPressed: () => showRemotePreviewDialog(context, [n]),
+    tooltip: 'Remote Preview',
+    onPressed: () => showRemotePreviewDialog(context, [n], groups: groups),
   ),
 ),
 ```
 
-- Register in `_allColumns` and `_columnsById`.
-- **Not** in `_defaultVisibleIds` — opt-in via View ▸ Monitoring Table ▸ Columns,
-  same as other non-default columns.
-- Confirm the header sort path tolerates a constant `sortKey` (clicking the
-  header is a no-op); if not, mark the column non-sortable in the header
-  builder.
+- Not sortable: the header click is ignored and no sort arrow is shown for
+  `preview`; auto-fit keeps the column's default width.
 - The cell is just a launcher button, **single projector only** — the Monitoring
   table is view-only and has no selection, so there is no multiview entry point
   here. It does **not** hold a socket — showing a live "available/unavailable"
   dot per row would mean one socket per projector held open permanently;
   explicitly out of scope for v1.
+
+**Web API** — `web_ui/api/openapi.yaml`: `preview` added to the `ColumnId` enum
+after `serial`; `npm run gen:api`. Golden fixtures regenerated with
+`flutter test --update-goldens test/unit/web_api_dto_test.dart`
+(`config.json` gains the column, default and preset entries).
+
+**Web UI** — drop the page's own column:
+
+- `logic/columns.ts`: remove `PREVIEW_COLUMN`, `tableCatalogue`,
+  `tableDefaults` and `withPreview`; callers use `config.columns` /
+  `config.defaultColumns` directly.
+- `api/types.ts`: remove `TableColumn` (`ColumnId` now covers `preview`);
+  add `DataColumn = Exclude<ColumnId, 'preview'>` for what has a value per
+  projector (`cellText`, `sortKey`, `Cell.svelte`, the phone card).
+- `DetailFields.svelte` (card strip, Map popover) skips `preview` — those
+  already have their own Preview button.
+- `state/tableLayout.svelte.ts`: `seed` takes the app's layout as-is (Preview
+  is already in it, in the app's position). The `pg.table.v1` migration keeps
+  appending `'preview'` to old saved layouts — it predates the column either
+  way. `pg.table.v2` layouts already use the id `preview`, so they keep working.
+- `DataTable.svelte`: keep the non-sortable rule (`c !== 'preview'`) and the
+  Alignment-mode hiding; the cell (icon button → `preview.open`) is unchanged.
+- `ColumnsMenu.svelte`: presets apply `p.columns` directly.
+- Tests: `tests/preview.test.ts` (catalogue/`withPreview` cases → "Preview
+  comes from the config"), `tests/table.test.ts` if it builds a catalogue.
+
+**Tests (app)** — the existing catalogue-order test covers the new column;
+a widget test that tapping the row's icon opens the Remote Preview dialog for
+that projector; a `web_api_dto` golden diff for the config.
 
 ### 4.3 Pre-show mode
 
@@ -571,7 +614,9 @@ service or provider) is what makes this a wrapper swap.
   - `[x]` Responsive dialog layout (§5.1) — fixed the `RenderFlex` overflow at
     small window sizes; scrollbar gutter in the grid so it doesn't draw over
     the rightmost tiles.
-  - `[ ]` Monitoring-table "Preview" column (opt-in, single projector).
+  - `[x]` Monitoring-table "Preview" column (default-visible after Serial
+    Number, single projector) — moved into the shared column catalogue, the
+    Web UI's own `PREVIEW_COLUMN` removed (§4.2).
   - `[ ]` Toolbar / View-menu "Preview selection" action.
 - **Phase 3 — polish (all optional)**
   - `[ ]` Draggable-within-barrier dialog; a preset "large" size.
