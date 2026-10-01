@@ -711,6 +711,189 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/preview/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One projector's Remote Preview (Server-Sent Events)
+         * @description The app relays the projector's own preview feed (~1 fps JPEG): every page and the
+         *     app's preview dialog share one feed per projector, opened by the first watcher and
+         *     closed a few seconds after the last one leaves. Viewers can watch too.
+         *     `text/event-stream`; a `: ping` comment every 15 s. Events:
+         *
+         *     | Event | Data | When |
+         *     |---|---|---|
+         *     | `status` | `PreviewStatus` | first, and whenever it changes |
+         *     | `frame` | `PreviewFrame` | after `status` when an image is up, then each new image |
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Event stream */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/event-stream": string;
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                /** @description No such projector. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/preview/{id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reconnect the preview feed (the window's *Retry*)
+         * @description Any signed-in page; only while a page watches this projector.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Reconnecting; the stream reports the outcome. */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                401: components["responses"]["Unauthorized"];
+                /** @description No such projector, or nobody watches it. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/preview/{id}/preshow": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Switch pre-show (operator only)
+         * @description Only exists while *Allow control* is on (404 otherwise); a viewer session gets 403.
+         *     Only in Standby with the feed up (`status` `live` or `notice`) and a page watching,
+         *     as in the app; the stream's `preShow` / `preShowApplying` follow.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PreShowRequest"];
+                };
+            };
+            responses: {
+                /** @description Sent; the projector confirms it in a few seconds. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PreShowRequest"];
+                    };
+                };
+                /** @description A bad body, or the projector can't take it now. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                /** @description Viewer session. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description *Allow control* is off. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -935,6 +1118,32 @@ export interface components {
             summary: string;
         };
         SignedOutEvent: Record<string, never>;
+        PreviewStatus: {
+            /**
+             * @description `live` = images are coming (`frame` events); `notice` = the feed is up but the
+             *     projector reports a status instead of an image; `unavailable` = no feed (offer
+             *     *Retry*).
+             * @enum {string}
+             */
+            state: "connecting" | "live" | "notice" | "unavailable";
+            /** @description Set with `state` `notice`; `blank` shows nothing. */
+            notice: ("noSignal" | "hdcp" | "startingUp" | "rotating" | "blank") | null;
+            /** @description A tag over a live image. */
+            overlay: ("testPattern" | "aspectMismatch") | null;
+            /** @description The input and signal tag, e.g. "HDMI1 · 1080/60p"; null while unknown. */
+            signal: string | null;
+            /** @description Whether pre-show is on; null until read (only read in Standby). */
+            preShow: boolean | null;
+            /** @description A change was sent and the projector hasn't confirmed it yet. */
+            preShowApplying: boolean;
+        };
+        PreviewFrame: {
+            /** @description The image, base64. */
+            jpeg: string;
+        };
+        PreShowRequest: {
+            on: boolean;
+        };
     };
     responses: {
         /** @description No session, or it expired. */

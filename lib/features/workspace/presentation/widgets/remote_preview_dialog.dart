@@ -1,12 +1,14 @@
+import 'dart:async';
 import 'dart:math' show min;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/services/panasonic_protocol_service.dart';
 import '../../../../core/services/remote_preview_service.dart';
+import '../../domain/pre_show.dart';
 import '../../domain/projector_group.dart';
 import '../../domain/projector_node.dart';
+import '../providers/pre_show_provider.dart';
 import '../providers/remote_preview_provider.dart';
 import '../providers/workspace_provider.dart';
 import 'dialog_title_bar.dart';
@@ -44,28 +46,12 @@ class RemotePreviewDialog extends ConsumerStatefulWidget {
 }
 
 class _RemotePreviewDialogState extends ConsumerState<RemotePreviewDialog> {
-  final _service = PanasonicProtocolService();
-
   bool get _isMulti => widget.nodes.length > 1;
-
-  // Pre-show state per projector IP, from NTCONTROL QVX:PSMI1. Absent = unknown.
-  final Map<String, bool> _preShow = {};
-  // IPs whose pre-show change we've sent but the projector hasn't confirmed yet
-  // (entering pre-show takes ~12 s to report back).
-  final Set<String> _applying = {};
-  // Bumped on every toggle so a superseded confirmation loop bails out.
-  int _psGen = 0;
 
   // The grid's own Scrollbar needs an explicit controller shared with its
   // GridView — without one it falls back to PrimaryScrollController, which
   // has no ScrollPosition here and throws on every scroll.
   final _gridScrollController = ScrollController();
-
-  @override
-  void initState() {
-    super.initState();
-    _loadPreShow(widget.nodes);
-  }
 
   @override
   void dispose() {
@@ -78,64 +64,8 @@ class _RemotePreviewDialogState extends ConsumerState<RemotePreviewDialog> {
 
   // ── Pre-show (§4.3) ──────────────────────────────────────────────────────
 
-  static bool? _parsePsmi(String? response) {
-    if (response == null) return null;
-    final i = response.indexOf('PSMI1=');
-    if (i < 0) return null;
-    final v = response.substring(i + 6).trim();
-    if (v.startsWith('+00001')) return true;
-    if (v.startsWith('+00000')) return false;
-    return null;
-  }
-
-  // This dialog's own PanasonicProtocolService probes run independently of
-  // workspaceProvider's poll cycle and its concurrency throttling (added
-  // specifically because unthrottled NTCONTROL bursts risk ERR3/busy and
-  // false-offline misreads — see panasonic_protocol_service.dart). Claiming
-  // the node first (rather than just checking isPolling) keeps this dialog's
-  // QVX:PSMI1 traffic from landing on a projector's NTCONTROL socket at the
-  // same moment the regular poll cycle starts on it: isPolling only says a
-  // cycle is running right now, not that one is about to claim this specific
-  // node next, which left a real gap between checking and sending.
-  Future<String?> _sendPsmi(ProjectorNode n) async {
-    final notifier = ref.read(workspaceProvider.notifier);
-    final deadline = DateTime.now().add(const Duration(seconds: 5));
-    var claimed = notifier.claimNodeForExternalPoll(n.id);
-    while (mounted && !claimed && DateTime.now().isBefore(deadline)) {
-      await Future.delayed(const Duration(milliseconds: 200));
-      claimed = notifier.claimNodeForExternalPoll(n.id);
-    }
-    if (!mounted) {
-      // The claim can succeed on the very iteration that races past
-      // dispose() — release it now since the try/finally below never runs.
-      if (claimed) notifier.releaseNodeFromExternalPoll(n.id);
-      return null;
-    }
-    try {
-      // Best-effort: if the deadline passed without ever claiming the node,
-      // send anyway rather than block this dialog indefinitely.
-      return await _service.sendRawCommand(
-        n.ipAddress,
-        n.port,
-        n.login,
-        n.password,
-        'QVX:PSMI1',
-      );
-    } finally {
-      if (claimed) notifier.releaseNodeFromExternalPoll(n.id);
-    }
-  }
-
-  Future<void> _loadPreShow(Iterable<ProjectorNode> nodes) async {
-    for (final n in nodes) {
-      if (n.powerStatus != PowerStatus.standby) continue;
-      final resp = await _sendPsmi(n);
-      if (!mounted) return;
-      final on = _parsePsmi(resp);
-      if (!mounted) return;
-      if (on != null) setState(() => _preShow[n.ipAddress] = on);
-    }
-  }
+  // Shared with a web page previewing the same projector (preShowProvider).
+  PreShowState _preShow(ProjectorNode n) => ref.watch(preShowProvider(n.id));
 
   bool _wsConnected(ProjectorNode n) {
     final s = ref.watch(remotePreviewProvider(n.ipAddress));
@@ -148,55 +78,9 @@ class _RemotePreviewDialogState extends ConsumerState<RemotePreviewDialog> {
       if (n.powerStatus == PowerStatus.standby && _wsConnected(n)) n,
   ];
 
-  Future<void> _setPreShow(List<ProjectorNode> targets, bool on) async {
-    if (targets.isEmpty) return;
-    final gen = ++_psGen;
-    // Bumping _psGen makes the previous generation's confirmation loop below
-    // bail out (both its while condition and its own cleanup are gated on
-    // `_psGen == gen`) without ever clearing 'applying' for a node that isn't
-    // part of THIS call's targets — e.g. one that dropped out of _eligible
-    // between two toggles. Clear those orphans now instead of leaving their
-    // spinner stuck for the rest of the dialog's life.
-    final targetIps = {for (final n in targets) n.ipAddress};
-    if (_applying.any((ip) => !targetIps.contains(ip))) {
-      setState(() => _applying.removeWhere((ip) => !targetIps.contains(ip)));
-    }
+  void _setPreShow(List<ProjectorNode> targets, bool on) {
     for (final n in targets) {
-      ref.read(remotePreviewProvider(n.ipAddress).notifier).setPreshow(on);
-    }
-    // Reflect the intent immediately — the WebSocket command has no reply, and
-    // the projector takes seconds (≈12 s to enter pre-show) to report the new
-    // state over NTCONTROL.
-    setState(() {
-      for (final n in targets) {
-        _preShow[n.ipAddress] = on;
-        _applying.add(n.ipAddress);
-      }
-    });
-
-    // Confirm in the background: poll QVX:PSMI1 until it reports the value we
-    // asked for (ignoring transient ER401 during the transition), or give up
-    // after a generous window and keep the optimistic value.
-    final pending = {for (final n in targets) n.ipAddress: n};
-    final deadline = DateTime.now().add(const Duration(seconds: 25));
-    while (mounted &&
-        _psGen == gen &&
-        pending.isNotEmpty &&
-        DateTime.now().isBefore(deadline)) {
-      await Future.delayed(const Duration(seconds: 2));
-      if (!mounted || _psGen != gen) return;
-      for (final entry in pending.entries.toList()) {
-        final n = entry.value;
-        final back = _parsePsmi(await _sendPsmi(n));
-        if (!mounted || _psGen != gen) return;
-        if (back == on) {
-          pending.remove(entry.key);
-          setState(() => _applying.remove(entry.key));
-        }
-      }
-    }
-    if (mounted && _psGen == gen) {
-      setState(() => _applying.removeAll(pending.keys));
+      unawaited(ref.read(preShowProvider(n.id).notifier).set(on));
     }
   }
 
@@ -264,7 +148,7 @@ class _RemotePreviewDialogState extends ConsumerState<RemotePreviewDialog> {
 
   void _close() {
     // Pre-show is sticky projector-side — leaving the dialog doesn't clear it.
-    if (_preShow.containsValue(true)) {
+    if (widget.nodes.any((n) => ref.read(preShowProvider(n.id)).on == true)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Pre-show stays active on the projector')),
       );
@@ -290,7 +174,7 @@ class _RemotePreviewDialogState extends ConsumerState<RemotePreviewDialog> {
       child: PreviewViewport(
         node: nodes.first,
         group: _groupOf(nodes.first),
-        preShowActive: _preShow[nodes.first.ipAddress] ?? false,
+        preShowActive: _preShow(nodes.first).on ?? false,
       ),
     );
   }
@@ -351,7 +235,7 @@ class _RemotePreviewDialogState extends ConsumerState<RemotePreviewDialog> {
             node: nodes[i],
             group: _groupOf(nodes[i]),
             showCaption: true,
-            preShowActive: _preShow[nodes[i].ipAddress] ?? false,
+            preShowActive: _preShow(nodes[i]).on ?? false,
           ),
         ),
       ),
@@ -368,12 +252,13 @@ class _RemotePreviewDialogState extends ConsumerState<RemotePreviewDialog> {
     final void Function(bool) onChanged;
 
     if (_isMulti) {
+      // Watched for every projector, not just the eligible ones, so each
+      // one in Standby reads its pre-show as soon as the dialog opens.
+      final states = {for (final n in nodes) n.id: _preShow(n)};
       final eligible = _eligible(nodes);
-      final onCount = eligible
-          .where((n) => _preShow[n.ipAddress] == true)
-          .length;
+      final onCount = eligible.where((n) => states[n.id]!.on == true).length;
       enabled = eligible.isNotEmpty;
-      applying = eligible.any((n) => _applying.contains(n.ipAddress));
+      applying = eligible.any((n) => states[n.id]!.applying);
       value = eligible.isNotEmpty && onCount == eligible.length;
       subtitle =
           'Standby + live feed: ${eligible.length} of ${nodes.length}'
@@ -387,9 +272,10 @@ class _RemotePreviewDialogState extends ConsumerState<RemotePreviewDialog> {
       // silent no-op the projector never confirms, leaving the switch stuck
       // showing ON with nothing actually applied.
       final live = standby && _wsConnected(n);
+      final state = _preShow(n);
       enabled = live;
-      applying = _applying.contains(n.ipAddress);
-      value = _preShow[n.ipAddress] ?? false;
+      applying = state.applying;
+      value = state.on ?? false;
       subtitle = !standby
           ? 'Enabled only in Standby — this projector is on'
           : (live

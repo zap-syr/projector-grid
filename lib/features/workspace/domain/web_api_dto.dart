@@ -5,6 +5,9 @@
 /// fails CI.
 library;
 
+import 'dart:convert';
+
+import '../../../core/services/remote_preview_service.dart';
 import '../../../core/services/web_api.dart' show Json;
 import '../../../core/services/web_auth.dart';
 import '../../../core/services/web_event_hub.dart';
@@ -15,6 +18,7 @@ import 'control_options.dart';
 import 'dispatch_result.dart';
 import 'log_event.dart';
 import 'monitoring_columns.dart';
+import 'pre_show.dart';
 import 'projector_group.dart';
 import 'projector_node.dart';
 import 'test_patterns.dart';
@@ -165,6 +169,39 @@ Json alignmentJson({
   'includeDiagonals': includeDiagonals,
   'showAll': showAll,
 };
+
+/// SSE event names on `/api/preview/{id}`.
+abstract final class WebPreviewEvents {
+  static const status = 'status';
+  static const frame = 'frame';
+}
+
+/// What a page's preview window shows besides the image: the feed's state,
+/// its overlays and the projector's pre-show. Sent whenever it changes; a
+/// `frame` event carries each new image while [preview] is live.
+Json previewStatusJson({
+  required RemotePreviewState preview,
+  required String? signal,
+  required PreShowState preShow,
+}) => {
+  'state': switch (preview) {
+    RemotePreviewConnecting() => 'connecting',
+    RemotePreviewFrame() => 'live',
+    RemotePreviewNotice() => 'notice',
+    RemotePreviewUnavailable() => 'unavailable',
+  },
+  'notice': preview is RemotePreviewNotice ? preview.kind.name : null,
+  'overlay': preview is RemotePreviewFrame ? preview.overlay?.name : null,
+  'signal': signal,
+  'preShow': preShow.on,
+  'preShowApplying': preShow.applying,
+};
+
+/// One JPEG of the preview feed.
+Json previewFrameJson(List<int> jpeg) => {'jpeg': base64Encode(jpeg)};
+
+/// [previewStatusJson] is flat, like the projector JSON.
+bool samePreviewStatusJson(Json? a, Json b) => a != null && _sameJson(a, b);
 
 List<Json> _options(Map<String, String> byCode) => [
   for (final e in byCode.entries) {'code': e.key, 'label': e.value},

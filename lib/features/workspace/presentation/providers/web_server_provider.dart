@@ -1,21 +1,28 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shelf/shelf.dart';
 
+import '../../../../core/services/remote_preview_service.dart';
 import '../../../../core/services/web_api.dart';
 import '../../../../core/services/web_auth.dart';
 import '../../../../core/services/web_event_hub.dart';
 import '../../../../core/services/web_server_service.dart';
 import '../../../../core/services/web_static_handler.dart';
 import '../../domain/log_event.dart';
+import '../../domain/projector_node.dart';
 import '../../domain/web_actions.dart';
 import '../../domain/web_alignment.dart';
 import '../../domain/web_api_dto.dart';
 import 'alignment_provider.dart';
 import 'app_settings_provider.dart';
 import 'event_log_provider.dart';
+import 'pre_show_provider.dart';
 import 'project_provider.dart';
+import 'remote_preview_provider.dart';
+import 'web_preview_feeds.dart';
 import 'workspace_provider.dart';
 
 part 'web_server_provider.g.dart';
@@ -35,6 +42,10 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
   late final WebEventHub _hub = WebEventHub(
     onHeartbeat: (token) => _auth.touch(token) != null,
   );
+  late final WebPreviewFeeds _previews = WebPreviewFeeds(
+    ref,
+    onHeartbeat: (token) => _auth.touch(token) != null,
+  );
 
   /// What the connected pages were last sent, to push only the changes.
   List<Json> _sentProjectors = const [];
@@ -44,9 +55,13 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
   bool build() {
     ref.onDispose(() {
       _hub.closeAll();
+      _previews.closeAll();
       _service.stop();
     });
-    ref.listen(workspaceProvider, (_, nodes) => _pushWorkspace());
+    ref.listen(workspaceProvider, (_, nodes) {
+      _pushWorkspace();
+      _previews.refresh();
+    });
     // Entering or leaving from the app or any page shows on every page.
     ref.listen(
       alignmentProvider,
@@ -145,6 +160,7 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
     _hub.closeAll(
       last: (name: WebEvents.signedOut, data: const <String, Object?>{}),
     );
+    _previews.closeAll();
   }
 
   void _pushWorkspace() {
@@ -276,6 +292,44 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
     }
     return alignment();
   }
+
+  @override
+  Stream<List<int>>? preview(String id, WebSession session) =>
+      _previews.subscribe(session.token, id);
+
+  @override
+  bool previewRetry(String id) {
+    final node = _node(id);
+    if (node == null || !_previews.isOpen(id)) return false;
+    ref.read(remotePreviewProvider(node.ipAddress).notifier).retry();
+    return true;
+  }
+
+  @override
+  Future<Json?> previewPreShow(
+    String id,
+    Object? body,
+    WebSession session,
+  ) async {
+    final on = body is Map && body.length == 1 ? body['on'] : null;
+    final node = _node(id);
+    if (on is! bool || node == null || !_previews.isOpen(id)) return null;
+    // As in the app's dialog: Standby with the feed up, or the command is
+    // silently dropped and never confirmed.
+    final feed = ref.read(remotePreviewProvider(node.ipAddress));
+    final live = feed is RemotePreviewFrame || feed is RemotePreviewNotice;
+    if (node.powerStatus != PowerStatus.standby || !live) return null;
+    _log(
+      LogSeverity.info,
+      'Web · ${session.ip} · ${session.role.name} · '
+      'Pre-show ${on ? 'on' : 'off'} · ${node.name}',
+    );
+    unawaited(ref.read(preShowProvider(id).notifier).set(on));
+    return {'on': on};
+  }
+
+  ProjectorNode? _node(String id) =>
+      ref.read(workspaceProvider).where((n) => n.id == id).firstOrNull;
 
   @override
   void signedIn(WebSession session) => _log(

@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:projector_grid/core/services/remote_preview_service.dart';
 import 'package:projector_grid/core/services/web_api.dart';
 import 'package:projector_grid/core/services/web_auth.dart';
 import 'package:projector_grid/features/workspace/domain/alignment.dart';
@@ -200,6 +202,29 @@ void main() {
           showAll: false,
         ),
       );
+    });
+
+    test('preview', () {
+      expectFixture(
+        'preview-status',
+        previewStatusJson(
+          preview: RemotePreviewFrame(
+            Uint8List(0),
+            overlay: RemotePreviewOverlay.testPattern,
+          ),
+          signal: 'HDMI1 · 1080/60p (67.50kHz/60.00Hz)',
+          preShow: (on: true, applying: false),
+        ),
+      );
+      expectFixture(
+        'preview-status-notice',
+        previewStatusJson(
+          preview: const RemotePreviewNotice(RemotePreviewNoticeKind.noSignal),
+          signal: null,
+          preShow: (on: null, applying: true),
+        ),
+      );
+      expectFixture('preview-frame', previewFrameJson([0xFF, 0xD8, 0xFF]));
     });
 
     test('dispatch result', () {

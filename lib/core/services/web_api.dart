@@ -73,6 +73,19 @@ abstract interface class WebApiSource {
   /// (null when empty). Null when the op or its body is invalid, else the
   /// new state.
   Future<Json?> alignmentOp(String op, Object? body, WebSession session);
+
+  /// `GET /api/preview/{id}`: the projector's Remote Preview as SSE; null
+  /// for an unknown projector.
+  Stream<List<int>>? preview(String id, WebSession session);
+
+  /// `POST /api/preview/{id}/retry`: reconnects a watched feed; false when
+  /// no page watches [id].
+  bool previewRetry(String id);
+
+  /// `POST /api/preview/{id}/preshow` from an operator: [body] is the decoded
+  /// JSON. Null when it's invalid or the projector can't take it now (not in
+  /// Standby, no live feed), else the preview status.
+  Future<Json?> previewPreShow(String id, Object? body, WebSession session);
 }
 
 /// `/api/*` routes: PIN login, session check on everything else, read-only
@@ -103,6 +116,28 @@ class WebApi {
             '/api/alignment/<op>',
             (Request r, String op) =>
                 _authed((r, s) => _alignment(r, s, op))(r),
+          )
+          ..get(
+            '/api/preview/<id>',
+            (Request r, String id) => _authed((_, s) => _preview(s, id))(r),
+          )
+          ..post(
+            '/api/preview/<id>/retry',
+            (Request r, String id) => _authed(
+              (_, _) => source.previewRetry(id)
+                  ? Response(204, headers: {'cache-control': 'no-store'})
+                  : _json(404, errorJson('not_found')),
+            )(r),
+          )
+          ..post(
+            '/api/preview/<id>/preshow',
+            (Request r, String id) => _authed(
+              (r, s) => _operatorPost(
+                r,
+                s,
+                (body) => source.previewPreShow(id, body, s),
+              ),
+            )(r),
           )
           ..get(
             '/api/config',
@@ -266,8 +301,16 @@ class WebApi {
     );
   }
 
-  Response _events(WebSession session) => Response.ok(
-    hub.subscribe(session.token, source.snapshotEvents()),
+  Response _events(WebSession session) =>
+      _sse(hub.subscribe(session.token, source.snapshotEvents()));
+
+  Response _preview(WebSession session, String id) {
+    final stream = source.preview(id, session);
+    return stream == null ? _json(404, errorJson('not_found')) : _sse(stream);
+  }
+
+  static Response _sse(Stream<List<int>> stream) => Response.ok(
+    stream,
     headers: {
       'content-type': 'text/event-stream; charset=utf-8',
       'cache-control': 'no-store',

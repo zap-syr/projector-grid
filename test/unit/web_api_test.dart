@@ -55,6 +55,36 @@ class _Source implements WebApiSource {
     return alignment();
   }
 
+  /// Preview streams opened, as `id`; only `a` exists.
+  final previews = <String>[];
+  @override
+  Stream<List<int>>? preview(String id, WebSession session) {
+    if (id != 'a') return null;
+    previews.add(id);
+    return Stream.value(utf8.encode('event: status\ndata: {}\n\n'));
+  }
+
+  final retried = <String>[];
+  @override
+  bool previewRetry(String id) {
+    if (id != 'a') return false;
+    retried.add(id);
+    return true;
+  }
+
+  /// (id, body) pairs [previewPreShow] was handed; only `{"on": bool}` is valid.
+  final preShows = <(String, Object?)>[];
+  @override
+  Future<Json?> previewPreShow(
+    String id,
+    Object? body,
+    WebSession session,
+  ) async {
+    if (body is! Map || body['on'] is! bool) return null;
+    preShows.add((id, body));
+    return {'on': body['on']};
+  }
+
   @override
   Json config(WebRole role) => {'role': role.name};
   @override
@@ -333,6 +363,65 @@ void main() {
       });
     });
 
+    group('/api/preview', () {
+      Future<Response> post(String token, String path, {Object? body}) => send(
+        'POST',
+        path,
+        body: body,
+        headers: {'authorization': 'Bearer $token'},
+      );
+
+      test('anyone signed in watches; unknown projector → 404', () async {
+        final h = {'authorization': 'Bearer ${await loginToken()}'};
+        final r = await send('GET', '/api/preview/a', headers: h);
+        expect(r.headers['content-type'], startsWith('text/event-stream'));
+        expect(r.context['shelf.io.buffer_output'], isFalse);
+        expect(await r.readAsString(), startsWith('event: status'));
+        expect(
+          (await send('GET', '/api/preview/zz', headers: h)).statusCode,
+          404,
+        );
+        expect(source.previews, ['a']);
+      });
+
+      test('a viewer can retry, but not switch pre-show', () async {
+        final token = await loginToken();
+        expect((await post(token, '/api/preview/a/retry')).statusCode, 204);
+        expect((await post(token, '/api/preview/zz/retry')).statusCode, 404);
+        expect(source.retried, ['a']);
+        final r = await post(
+          token,
+          '/api/preview/a/preshow',
+          body: {'on': true},
+        );
+        expect(r.statusCode, 403);
+        expect(source.preShows, isEmpty);
+      });
+
+      test('an operator switches pre-show; bad bodies → 400', () async {
+        final token = await loginToken();
+        await unlock(token, '9876');
+        final r = await post(
+          token,
+          '/api/preview/a/preshow',
+          body: {'on': true},
+        );
+        expect(await jsonOf(r), {'on': true});
+        expect(
+          (await post(
+            token,
+            '/api/preview/a/preshow',
+            body: {'on': 1},
+          )).statusCode,
+          400,
+        );
+        expect(source.preShows.map((p) => p.$1), ['a']);
+        expect(source.preShows.map((p) => p.$2), [
+          {'on': true},
+        ]);
+      });
+    });
+
     test('unlock needs a session', () async {
       expect(
         (await send('POST', '/api/unlock', body: {'pin': '9876'})).statusCode,
@@ -351,6 +440,7 @@ void main() {
         '/api/alerts',
         '/api/alignment',
         '/api/events',
+        '/api/preview/a',
       ]) {
         final r = await send('GET', path);
         expect(r.statusCode, 401, reason: path);

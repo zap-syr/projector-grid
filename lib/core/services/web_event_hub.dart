@@ -15,9 +15,16 @@ class _Client {
 /// Server-Sent Events fan-out: one stream per connected page, a heartbeat
 /// comment so proxies and phones keep idle connections open.
 class WebEventHub {
-  WebEventHub({this.heartbeat = const Duration(seconds: 15), this.onHeartbeat});
+  WebEventHub({
+    this.heartbeat = const Duration(seconds: 15),
+    this.onHeartbeat,
+    this.onIdle,
+  });
 
   final Duration heartbeat;
+
+  /// Called when the last client's stream ends.
+  final void Function()? onIdle;
 
   /// Called per client on every heartbeat — keeps the session of a page
   /// that only listens from idling out. Returning false (session gone)
@@ -73,10 +80,12 @@ class WebEventHub {
   }
 
   void _remove(_Client c) {
-    _clients.remove(c);
+    // A closed stream's onCancel lands here again after _closeWhere did.
+    if (!_clients.remove(c)) return;
     if (_clients.isEmpty) {
       _timer?.cancel();
       _timer = null;
+      onIdle?.call();
     }
   }
 

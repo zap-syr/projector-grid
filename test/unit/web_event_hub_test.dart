@@ -55,6 +55,21 @@ void main() {
     expect(hub.clientCount, 0);
   });
 
+  test('onIdle fires once the last client leaves', () async {
+    var idle = 0;
+    final hub = WebEventHub(onIdle: () => idle++);
+    final a = hub.subscribe('a', const []).listen((_) {});
+    final b = hub.subscribe('b', const []).listen((_) {});
+    await a.cancel();
+    expect(idle, 0);
+    await b.cancel();
+    expect(idle, 1);
+    hub.subscribe('c', const []).listen((_) {});
+    hub.closeAll();
+    await pumpEventQueue();
+    expect(idle, 2);
+  });
+
   test('heartbeat pings live sessions and drops dead ones', () async {
     var alive = true;
     final touched = <String>[];

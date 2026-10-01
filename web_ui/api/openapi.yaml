@@ -576,6 +576,57 @@ components:
       type: object
       additionalProperties: false
 
+    PreviewStatus:
+      type: object
+      additionalProperties: false
+      required: [state, notice, overlay, signal, preShow, preShowApplying]
+      properties:
+        state:
+          type: string
+          enum: [connecting, live, notice, unavailable]
+          description: |
+            `live` = images are coming (`frame` events); `notice` = the feed is up but the
+            projector reports a status instead of an image; `unavailable` = no feed (offer
+            *Retry*).
+        notice:
+          description: Set with `state` `notice`; `blank` shows nothing.
+          oneOf:
+            - type: string
+              enum: [noSignal, hdcp, startingUp, rotating, blank]
+            - type: 'null'
+        overlay:
+          description: A tag over a live image.
+          oneOf:
+            - type: string
+              enum: [testPattern, aspectMismatch]
+            - type: 'null'
+        signal:
+          description: The input and signal tag, e.g. "HDMI1 · 1080/60p"; null while unknown.
+          type: [string, 'null']
+        preShow:
+          description: Whether pre-show is on; null until read (only read in Standby).
+          type: [boolean, 'null']
+        preShowApplying:
+          type: boolean
+          description: A change was sent and the projector hasn't confirmed it yet.
+
+    PreviewFrame:
+      type: object
+      additionalProperties: false
+      required: [jpeg]
+      properties:
+        jpeg:
+          type: string
+          description: The image, base64.
+
+    PreShowRequest:
+      type: object
+      additionalProperties: false
+      required: ['on']
+      properties:
+        'on':
+          type: boolean
+
 security:
   - cookie: []
   - bearer: []
@@ -923,3 +974,107 @@ paths:
                 type: string
         '401':
           $ref: '#/components/responses/Unauthorized'
+
+  /api/preview/{id}:
+    get:
+      summary: One projector's Remote Preview (Server-Sent Events)
+      description: |
+        The app relays the projector's own preview feed (~1 fps JPEG): every page and the
+        app's preview dialog share one feed per projector, opened by the first watcher and
+        closed a few seconds after the last one leaves. Viewers can watch too.
+        `text/event-stream`; a `: ping` comment every 15 s. Events:
+
+        | Event | Data | When |
+        |---|---|---|
+        | `status` | `PreviewStatus` | first, and whenever it changes |
+        | `frame` | `PreviewFrame` | after `status` when an image is up, then each new image |
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Event stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: No such projector.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/preview/{id}/retry:
+    post:
+      summary: Reconnect the preview feed (the window's *Retry*)
+      description: Any signed-in page; only while a page watches this projector.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Reconnecting; the stream reports the outcome.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: No such projector, or nobody watches it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/preview/{id}/preshow:
+    post:
+      summary: Switch pre-show (operator only)
+      description: |
+        Only exists while *Allow control* is on (404 otherwise); a viewer session gets 403.
+        Only in Standby with the feed up (`status` `live` or `notice`) and a page watching,
+        as in the app; the stream's `preShow` / `preShowApplying` follow.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PreShowRequest'
+      responses:
+        '200':
+          description: Sent; the projector confirms it in a few seconds.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreShowRequest'
+        '400':
+          description: A bad body, or the projector can't take it now.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Viewer session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: '*Allow control* is off.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'

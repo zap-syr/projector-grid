@@ -5,6 +5,7 @@ import '../../../../core/services/projector_web_status_service.dart';
 import '../../../../core/services/remote_preview_service.dart';
 import '../../domain/projector_group.dart';
 import '../../domain/projector_node.dart';
+import '../../domain/preview_signal_tag.dart';
 import '../providers/preview_signal_status_provider.dart';
 import '../providers/remote_preview_provider.dart';
 import '../providers/workspace_provider.dart';
@@ -179,7 +180,7 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
         final tag = widget.preShowActive
             ? 'PRE-SHOW'
             : overlay?.label.toUpperCase();
-        final signal = _signalTag(node, webSignal);
+        final signal = previewSignalTag(node, webSignal);
         return Stack(
           fit: StackFit.expand,
           children: [
@@ -241,40 +242,6 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
         textAlign: center ? TextAlign.center : null,
         style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
       );
-
-  static bool _isRealSignal(String s) => !isUnusableSignalValue(s);
-
-  // Bottom-right tag for the live frame. Primary source is [webSignal] — the
-  // projector's own web UI, event-driven off the preview socket's SIGNAL
-  // message (see previewSignalStatusProvider); it works in every power state,
-  // unlike NTCONTROL. previewSignalStatusProvider keeps its last known-good
-  // value across a transient fetch failure, so the polled node fields below
-  // are only a fallback until the very first fetch lands, not on every
-  // failure — that would mean displaying NTCONTROL's own stale/ER401 reading
-  // with no time bound, the exact staleness this tag exists to avoid.
-  //  - web says a real signal  -> "HDMI1 · 3840x2160/60p (134.99kHz/59.99Hz)"
-  //  - web says no signal      -> "No signal" (authoritative — built-in test
-  //    pattern / no external input, in any power state)
-  //  - no fetch has ever landed, polled value real -> that, same format
-  //  - polled value also unusable  -> "No signal" if that's what NTCONTROL
-  //    said, else no tag (nothing known yet)
-  String? _signalTag(ProjectorNode node, WebSignalStatus? webSignal) {
-    if (webSignal != null) {
-      if (!webSignal.hasSignal) return 'No signal';
-      final input = webSignal.input.isNotEmpty ? webSignal.input : node.input;
-      final freq = webSignal.signalFrequency;
-      final detail = freq.isNotEmpty
-          ? '${webSignal.signalName} ($freq)'
-          : webSignal.signalName;
-      return _isRealSignal(input) ? '$input · $detail' : detail;
-    }
-    final hasInput = _isRealSignal(node.input);
-    if (_isRealSignal(node.signal)) {
-      return hasInput ? '${node.input} · ${node.signal}' : node.signal;
-    }
-    if (node.signal.toUpperCase() == 'NO SIGNAL') return 'No signal';
-    return null;
-  }
 
   Widget _tag(String text) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
