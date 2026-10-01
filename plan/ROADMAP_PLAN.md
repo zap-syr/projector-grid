@@ -18,6 +18,7 @@ accepted item so each can be picked up independently. Edge Blending has its own 
 | F3 | Cues / scenes | **Accepted** → §2 | Owner asked for UX + implementation design |
 | F4 | Alignment mode (solo / identify) | **Accepted** → §3, `[~]` Alignment mode + test-pattern indicator done; Identify `[later]` | "Very useful" |
 | F5 | Telemetry alerts | **Accepted** → §4 | |
+| F5b | Extra alert rules (backup input, DIGITAL LINK, Multi Projector Sync) | `[later]` → §4b | Split out of F5: each adds a query to the poll cycle, which F5 leaves unchanged |
 | F6 | Network discovery | `[dropped]` | Already exists — the Add Projector dialog scans the network |
 | F7 | Two-way OSC | **Reframed** → §5 | The owner prefers a local web server / API so monitoring can be viewed from any device (phone, laptop) |
 | R1 | Per-projector command queue | `[later]` | Stress test: newer models have no session cap, only slower replies; Geometry/Color dialogs open rarely. Revisit only if field reports show `ERR3` on older models |
@@ -463,58 +464,225 @@ with the raw code in the tooltip. Transient telemetry → covered by
 The app polls temperatures, runtime, light-source hours and `QVX:ERRS2` errors already, but
 only shows them. Nobody watches a table all night.
 
-### Alert rules (defaults, all editable)
-| Rule | Default | Source |
-|---|---|---|
-| Went offline (after N consecutive failed polls) | N = 2 | `connectionStatus` |
-| New projector error | any change in `errors` away from `NO ERRORS` | `QVX:ERRS2` |
-| Intake temperature above | 40 °C | `QTM:0` |
-| Exhaust temperature above | 60 °C | `QTM:1` |
-| Light-source hours above | 20 000 h | `QVX:LRTS3` |
-| No signal while powered on and shutter open | 10 s | `signal` + power + shutter |
+Design approved 2026-10-01 from the mockup at
+https://claude.ai/artifact/EaTfnLYHzBuejNci3MkTd5 (card badge, alert panel, status-bar list).
 
-Each rule has hysteresis (e.g. clear only when 2 °C below the threshold) so values hovering
-near the limit don't flap.
+### Alert rules
+Every rule has its own on/off switch. There is no global "armed" switch: during setup the
+operator turns off the rules that would be noise (Signal lost above all) and turns them back
+on for the show.
 
-Optional rules whose commands are confirmed in the PT-RQ35K2/RZ34K2 list but **not polled
-today** (each would add a query to the poll cycle, so off by default and polled only when
-enabled):
-| Rule | Command | Trips when |
-|---|---|---|
-| Running on backup input | `QVX:BACI4` | `+00001` — the main signal failed and the projector switched to its backup input; the image may still look fine, so this is the one worth having |
-| DIGITAL LINK lost | `QVX:DKSI1` | `+00000` (no link) on a projector whose input is `DL1` |
-| Multi Projector Sync link | `QVX:MPSI2` | status changes away from the value seen when the rule was enabled |
+| Rule | Severity | Trips when | Source |
+|---|---|---|---|
+| Offline | critical | the first poll that gets no answer (the moment `connectionStatus` turns `offline`); no poll-count setting | `connectionStatus` |
+| Projector error | critical | `errors` changes away from `NO ERRORS`; one alert per reported error | `QVX:ERRS2` |
+| Signal lost | critical | powered on, a signal was seen since power-on, then it is gone; **no debounce**, every dropout counts | see spike below |
+| Intake temperature | warning at *warm*, critical at *hot* | thresholds shared with the Monitoring table tint (`kIntakeTempThreshold`, 40 / 45 °C) | `QTM:0` |
+| Exhaust temperature | warning at *warm*, critical at *hot* | same, `kExhaustTempThreshold` (55 / 65 °C) | `QTM:1` |
 
-Models that don't support a command answer `ERR1`/`ER401` → the rule is shown as
-"not supported" for that projector instead of alerting.
+Signal lost details:
+- Armed only after the projector has shown a signal once since power-on, so powering up
+  before the source is ready doesn't raise it. Disarmed in standby / cooling, and for ~10 s
+  after the app itself switches the input.
+- Latched: if the signal comes back, the alert stays (shown as "Back after 3 s") until
+  acknowledged, so a short dropout can't flash by unseen.
+- The shutter is not part of the condition.
+
+Thresholds have hysteresis (clear only 2 °C below the threshold) so values hovering near the
+limit don't flap.
+
+### Alert lifecycle
+- **Raised** → unacknowledged. **Acknowledge** → stays listed while the condition holds, shown
+  quieter. **Cleared** when the condition clears (a latched Signal lost clears on acknowledge).
+- At most one active alert per (projector, rule), per error item for Projector error, so the
+  active list is bounded by the project size and never accumulates. History lives in the
+  event log.
+- Not persisted: after a restart the active list is rebuilt from the first poll; conditions
+  that still hold come back as new and unacknowledged, with "since" counted from that poll.
+
+### Spike before implementation: signal-loss detection via Remote Preview `[ ]`
+The regular poll (30 s minimum, 60 s default, ×3 in background) misses short signal dropouts
+between polls, and the "No signal" rule is meant to catch even short ones (no debounce). The
+RemoView WebSocket (`remote_preview_service.dart`) pushes `SIGNAL` / `NOSIGNAL` text events the
+moment the input changes, so it can detect every dropout without polling. Test on hardware:
+- Does the socket keep delivering `SIGNAL` / `NOSIGNAL` if the app never answers frames with
+  `receive` (hypothesis: frames are ack-paced, so skipping `receive` stops the ~1 fps JPEG
+  stream and leaves only text events)? Measure traffic per projector either way.
+- How many simultaneous RemoView sessions a projector accepts, and whether a background
+  session blocks the projector's own web UI preview or the app's Remote Preview dialog.
+- Behaviour on input switch, standby → on and reboot (`CLOSE` / `IMPOSSIBLE`): reconnect
+  timing and whether events are lost in between.
+
+- If the socket stays open, check how fast `onDone` / `onError` fires when the projector's
+  network cable is pulled: that would also make the Offline alert near-instant instead of
+  waiting for the next poll.
+
+Outcome decides the source for the signal rule: RemoView events if the socket can stay open
+cheaply on every projector, otherwise a dedicated signal-only NTCONTROL poll (2–5 s, powered-on
+projectors only, only while the rule is enabled).
+
+F5 adds **no new queries to the poll cycle**: every rule above works from telemetry the app
+already polls (plus the signal source the spike picks). Rules that need extra queries are a
+separate item, §4b.
 
 ### UX
-- **Preferences → new "Alerts" tab:** rule list with enable switch + threshold stepper
-  (`SleekStepperInput`), and delivery options:
-  - Event log (always on).
-  - **Desktop notification** (Windows toast / macOS Notification Center).
-  - **OSC** `/pgrid/alert/<rule> "<projector name>" <value>` to the configured send target.
-  - Sound (single short system sound, off by default).
-- **Card:** a small alert badge (amber/red) replacing the generic warning icon when a rule is
-  active; tooltip lists active alerts.
-- **Status bar:** the existing *warnings* count becomes clickable → opens an **Active Alerts**
-  popover (projector, rule, value, since) with *Acknowledge* (silences repeats until the
-  condition clears and re-triggers).
-- **Monitoring table:** cells that trip a rule are tinted.
+UI text uses commas, colons and parentheses as separators, never `·` or `—`.
+
+**Card badge** (replaces today's orange ⚠ in the card's status row):
+- `Icons.error` red for critical, `Icons.warning` orange for warning; the colour follows the
+  highest-severity *unacknowledged* alert.
+- Filled while anything is unacknowledged, outlined once everything is acknowledged.
+- A number next to the icon from two alerts up.
+- No tint on the status row: it merged with red / orange group colours.
+
+**Alert panel** (from the card badge):
+- Hover the badge for 250 ms → opens. It stays open while the pointer is on the badge or the
+  panel (250 ms grace to cross the gap), so its buttons are reachable. Clicking the badge pins
+  it until a click outside or Esc. One panel, no read-only mode.
+- Built on `OverlayPortal`, not `Tooltip` — a `Tooltip` inside the card's `MenuAnchor`
+  corrupts the Windows AXTree (see the comment in `projector_card.dart`). Not scaled with
+  canvas zoom.
+- Width 320. Header: projector name, IP, critical / warning counts, *Acknowledge all*
+  (`done_all`) and *Event log* (`receipt_long`, opens the log filtered to this projector) as
+  icon buttons. The header never scrolls.
+- Each alert is a row on its own surface: severity chip (same icon as the badge), rule name
+  small, **value large in the severity colour** (`58 °C`, `No signal`, `Cooling fan`;
+  recovered dropouts green, `Back after 3 s`), an optional qualifier (e.g. the input, `HDMI 1`),
+  duration with start time on the right, and an *Acknowledge* button in its own column.
+  No threshold or limit text in rows.
+- Order: critical first, newest first within each severity.
+- List up to 436 px (≈ 8 rows), then scrolls; the edge with hidden rows fades and a
+  "N more below" line shows under it. Never taller than the window minus 16 px; opens above
+  the badge when there's no room below.
+- Acknowledged alerts sit at the bottom as single quiet lines in a collapsible
+  "Acknowledged (N)" block, folded when there are more than 3.
+
+**Status bar:**
+- The *Warning* counter becomes an **Alerts** button: an `error` and a `warning` icon with the
+  number of unacknowledged alerts each (filled icon, bold number). When everything is
+  acknowledged the icons turn outlined and show the active totals; with no alerts, a green
+  check.
+- It opens **Active alerts** (width 404, list up to 520 px):
+  - Header: total, fold / unfold all groups, *Acknowledge all*, *Event log*.
+  - Filter chips: All / critical / warning, with counts.
+  - Grouping toggle **Projector / Alert**. Starts on Projector; the last choice is remembered
+    in app settings. Alert grouping turns a mass failure (one media server feeding 24
+    projectors) into one row, e.g. "Signal lost, 20 projectors, since 14:11".
+  - Groups start folded when there are more than 4; a folded group shows a one-line summary
+    (projector: its rule names; alert: the first projector names "and N more").
+    Each group has its own *Acknowledge* button.
+  - Same alert rows as the card panel; acknowledged ones collapsed at the bottom.
+  - Empty states: "No active alerts", and "All acknowledged" when nothing is new.
+- There is no "clear" button: acknowledging is the clear, and the list only holds conditions
+  that are true right now.
+
+**Monitoring table:** cells that trip a rule are tinted (temperatures already are).
+
+**Preferences → Alerts** (new section between General and OSC; mockup
+https://claude.ai/artifact/SgePKn3PrHM5xwGWsbro6R, approved 2026-10-01). Built from `SettingsGroup` / `SettingsRow`; every switch sits in one right-hand
+column, and a rule that's off greys out its fields.
+- **Rules:** Offline, Projector error, Signal lost (switch only, severity icon in front of
+  the label); Intake and Exhaust temperature with two value fields each (warning, critical,
+  marked with the alert icons) plus the switch. Editing them changes the Monitoring table
+  tint too, so the thresholds move from `status_thresholds.dart` constants into app settings.
+- No Extra rules group in this item; it arrives with §4b (the mockup shows the final dialog
+  without it).
+- **Notify:** Desktop notification (on) with "Notify for: Critical / All" (default Critical);
+  Sound (off) with a play-sample button and "Play for: Critical / All"; OSC message (on).
+  No Event log row: alerts are always logged.
+- Not settings: hysteresis (2 °C) and the Signal lost arming.
+
+**Value fields** (all numeric fields in this section; whether the rest of Preferences moves
+to the same style is decided after the design is final):
+- Filled, no outline at rest: `surfaceContainerHighest` background, radius 8, height 32
+  (same as the segmented buttons), unit inside the field, an optional severity icon in front.
+- While editing: a 2 px primary border around the whole field and a slight primary tint.
+- **Enter** applies the value and drops focus. **Esc** drops focus without applying (the
+  field returns to the value it had before editing) and must not close the dialog.
+
+**Desktop notifications:**
+- The system's own UI (Windows toast, macOS Notification Center banner); the app sets icon,
+  title and text. On Windows a severity icon can sit next to the text; macOS banners only
+  show the app icon. macOS asks for permission on first use.
+- Title "<Rule> on <projector>", body with value and time, e.g. "Signal lost on PRJ-03
+  Right" / "No signal on HDMI 1 since 14:02".
+- Alerts raised within 2 s of each other are merged into one notification ("Signal lost on
+  20 projectors", "PRJ-13, PRJ-14, PRJ-15 and 17 more, plus 12 other alerts").
+- Clicking it brings the app to the front and opens Active alerts.
+- The notification itself is silent.
+
+**Sound:** played by the app, not by the notification, so it still plays when Windows Focus
+or macOS Do Not Disturb hides notifications. Two short bundled sounds, one for critical and
+one for warning; one sound per merged batch. Needs an audio package or a little native code
+(Windows `PlaySound`, macOS `NSSound`); pick after a quick spike.
+
+**OSC** (to the send target from the OSC section, one message per change, never repeated
+while nothing changes):
+| Address | Arguments | When |
+|---|---|---|
+| `/pgrid/alert/<rule>` | projector (s), ip (s), active 1/0 (i), severity (s), value (s) | an alert is raised (1) or clears (0) |
+| `/pgrid/alert/acknowledged` | projector (s), rule (s) | an alert is acknowledged in the app or on the Web page |
+| `/pgrid/status/critical` | count (i) | the number of unacknowledged critical alerts changes |
+| `/pgrid/status/warning` | count (i) | the number of unacknowledged warning alerts changes |
+
+Rule names in the address: `offline`, `error`, `signal-lost`, `intake-temp`,
+`exhaust-temp` (§4b adds its own). Example:
+`/pgrid/alert/signal-lost "PRJ-03 Right" "192.168.10.13" 1 "critical" "HDMI 1"`.
+
+`/pgrid/status/warning` **changes meaning** (decided): today it counts projectors with
+errors, from now on unacknowledged warning alerts, since errors become critical alerts.
+`/pgrid/status` (request) answers with `critical` too. Update to match: the OSC reference
+(`osc_reference_html.dart`), and `statusSummaryProvider`, whose `warnings` count (projectors
+with errors) feeds both the status bar and `osc_provider.dart` today.
 
 ### Code
 - `domain/alert_rule.dart` (plain Dart + JSON, saved in app settings — alerts are a machine
-  preference, not per-project).
+  preference, not per-project). The Active alerts grouping choice is saved there too.
 - `presentation/providers/alerts_provider.dart` (`keepAlive`) — `ref.listen(workspaceProvider)`,
-  evaluates rules per node on each telemetry change, keeps `Map<(nodeId, rule), ActiveAlert>`,
-  emits transitions only (raised / cleared) to the event log, OSC and notifications.
+  evaluates rules per node on each telemetry change, keeps `Map<(nodeId, rule), ActiveAlert>`
+  (with `acknowledged`, `since`, and for Signal lost `restoredAt`), emits transitions only
+  (raised / cleared) to the event log, OSC and notifications. In memory only.
   Must not rebuild on every tick — compare previous vs next per node (the same dedupe idea as
   `statusSummaryProvider`).
+- Evaluation and ordering as pure functions in `domain/` (testable without widgets).
 - Temperatures are stored formatted (`_formatTemp`) — add numeric parsing in one place (or
   keep raw numeric fields on `ProjectorNode`: Freezed field + `build_runner`).
 - Desktop notifications: evaluate `local_notifier` (Windows + macOS) vs a platform channel;
   pick after a quick spike. New Dart dependencies in this roadmap: this one, plus `shelf` /
   `shelf_router` for F7 (§5).
+
+---
+
+## 4b. `[later]` F5b — Extra Alert Rules (new poll queries)
+
+### Why separate
+Split out of F5 on 2026-10-01: these rules each add a query to every poll cycle, and F5 is
+meant to ship without touching the poll cycle. Builds on F5's alert engine, panels and
+Preferences section.
+
+### Rules
+Commands confirmed in the PT-RQ35K2/RZ34K2 list but **not polled today**. Each one is off by
+default, and its query is added to the poll cycle only while the rule is enabled.
+| Rule | Severity | Command | Trips when | OSC name |
+|---|---|---|---|---|
+| Running on backup input | warning | `QVX:BACI4` | `+00001`: the main signal failed and the projector switched to its backup input; the image may still look fine, so this is the one worth having | `backup-input` |
+| DIGITAL LINK lost | critical | `QVX:DKSI1` | `+00000` (no link) on a projector whose input is `DL1` | `dl-lost` |
+| Multi Projector Sync changed | warning | `QVX:MPSI2` | status changes away from the value seen when the rule was enabled | `mps-changed` |
+
+Models that don't support a command answer `ERR1`/`ER401` → the rule is shown as
+"not supported" for that projector instead of alerting.
+
+### UX
+- **Preferences → Alerts:** a third group, **Extra rules**, between Rules and Notify: one
+  row per rule with its severity icon, the hint "Adds a query to each poll" and a switch
+  (all off). Shown in the first Preferences mockup
+  (https://claude.ai/artifact/SgePKn3PrHM5xwGWsbro6R, earlier version).
+- **Alert rows:** backup input shows the backup input as the value and the failed one as the
+  qualifier (`SDI 2`, `SDI 1 failed`); DIGITAL LINK shows `No link`, `DL1`.
+
+### Code
+- The poll cycle asks for the extra queries only while their rule is on; keep them inside
+  the existing per-projector poll so the NTCONTROL connection limits still hold.
 
 ---
 
