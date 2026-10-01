@@ -1,4 +1,4 @@
-/// Web Access PIN rules for the Preferences tab: 4–8 digits, a PIN is
+/// Web Access PIN rules for the Preferences dialog: 4–8 digits, a PIN is
 /// required once its role can be used, and the two PINs must differ (the
 /// server tells the role from which PIN matches).
 library;
