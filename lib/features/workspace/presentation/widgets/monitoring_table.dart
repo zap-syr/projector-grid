@@ -2,10 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../providers/alerts_provider.dart';
 import '../providers/app_settings_provider.dart';
 import '../providers/workspace_provider.dart';
+import 'monitoring_errors_cell.dart';
 import 'remote_preview_dialog.dart';
-import '../../../../core/theme/status_thresholds.dart';
+import '../../domain/alert_rule.dart';
+import '../../domain/alerts.dart';
+import '../../domain/ip_sort.dart';
+import '../../domain/projector_errors.dart';
 import '../../domain/monitoring_columns.dart';
 import '../../domain/projector_group.dart';
 import '../../domain/projector_node.dart';
@@ -209,7 +214,6 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
     size: 13,
     color: Colors.green,
   );
-  static const _iconErrors = Icon(Icons.error, size: 13, color: Colors.red);
   static const _gap4 = SizedBox(width: 4);
   static const _gap6 = SizedBox(width: 6);
 
@@ -274,7 +278,7 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
     _Column(
       spec: kColIp,
       text: (n, _) => n.ipAddress,
-      sortKey: (n, _) => _ipSortKey(n.ipAddress),
+      sortKey: (n, _) => ipSortKey(n.ipAddress),
       cell: (_, n, _) => _CellText(n.ipAddress),
     ),
     _Column(
@@ -336,13 +340,13 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
       spec: kColIntake,
       text: (n, _) => n.intakeTemp,
       sortKey: (n, _) => _leadingNum(n.intakeTemp),
-      cell: (_, n, _) => _TempCell(n.intakeTemp, exhaust: false),
+      cell: (_, n, _) => _TempCell(n, AlertRule.intakeTemp),
     ),
     _Column(
       spec: kColExhaust,
       text: (n, _) => n.exhaustTemp,
       sortKey: (n, _) => _leadingNum(n.exhaustTemp),
-      cell: (_, n, _) => _TempCell(n.exhaustTemp, exhaust: true),
+      cell: (_, n, _) => _TempCell(n, AlertRule.exhaustTemp),
     ),
     _Column(
       spec: kColVoltage,
@@ -432,12 +436,6 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
     return m == null ? double.negativeInfinity : num.parse(m.group(0)!);
   }
 
-  /// Zero-padded dotted-quad so a plain string compare orders IPs numerically.
-  static String _ipSortKey(String ip) => ip
-      .split('.')
-      .map((o) => (int.tryParse(o) ?? 0).toString().padLeft(3, '0'))
-      .join('.');
-
   /// Flattens the sorted node list into a display list: with [groupBy] on, each
   /// group's nodes (still in the current sort order) are preceded by a
   /// `_HeaderEntry`; groups are ordered by name, ungrouped and orphaned nodes
@@ -479,45 +477,6 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
     ];
     if (trailing.isNotEmpty) addCluster(null, trailing);
     return entries;
-  }
-
-  /// Worst-status roll-up for a group header: errors beat auth errors beat
-  /// offline; healthy groups get no pill.
-  static ({String text, Color color})? _worstStatus(List<ProjectorNode> m) {
-    final errors = m
-        .where((n) => n.errors != '-' && !_errorsOk(n.errors))
-        .length;
-    if (errors > 0) {
-      return (
-        text: '$errors error${errors == 1 ? '' : 's'}',
-        color: Colors.red,
-      );
-    }
-    final auth = m
-        .where((n) => n.connectionStatus == ConnectionStatus.unauthorized)
-        .length;
-    if (auth > 0) {
-      return (
-        text: '$auth auth error${auth == 1 ? '' : 's'}',
-        color: _warnText,
-      );
-    }
-    final offline = m
-        .where((n) => n.connectionStatus == ConnectionStatus.offline)
-        .length;
-    if (offline > 0) return (text: '$offline offline', color: Colors.red);
-    return null;
-  }
-
-  /// Text tint for an Intake/Exhaust cell from its display string: `null`
-  /// (default colour) when normal or unreadable (`-`, `Timeout`), amber past
-  /// the warm threshold, red past the hot one (the alert thresholds).
-  static Color? _tempTint(String display, TempThreshold t) {
-    final n = _leadingNum(display);
-    if (n == double.negativeInfinity) return null;
-    if (n >= t.hot) return Colors.red;
-    if (n >= t.warm) return _warnText;
-    return null;
   }
 
   // ── Scroll sync ─────────────────────────────────────────────────────────
@@ -823,18 +782,15 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
 
   static Widget _errorsCell(ProjectorNode node) {
     if (node.errors == '-') return const _CellText('-');
-    final ok = _errorsOk(node.errors);
-    return Row(
+    if (decodeProjectorErrors(node.errors).isNotEmpty) {
+      return MonitoringErrorsCell(node: node);
+    }
+    return const Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        ok ? _iconNoErrors : _iconErrors,
+        _iconNoErrors,
         _gap6,
-        Flexible(
-          child: _CellText(
-            ok ? 'NO ERRORS' : node.errors,
-            color: ok ? null : Colors.red,
-          ),
-        ),
+        Flexible(child: _CellText('NO ERRORS')),
       ],
     );
   }
@@ -1254,8 +1210,10 @@ final class _HeaderEntry extends _Entry {
 
 /// Non-collapsing cluster header shown above each group's rows when "Merge
 /// into groups" is on. Same height as a data row so the list keeps a single
-/// `itemExtent`.
-class _GroupHeaderRow extends StatelessWidget {
+/// `itemExtent`. Its pills count the members' unacknowledged alerts by
+/// severity, like the status bar; auth errors (not an alert) only show when
+/// there are none.
+class _GroupHeaderRow extends ConsumerWidget {
   final ProjectorGroup? group;
   final List<ProjectorNode> members;
   final double width;
@@ -1271,11 +1229,35 @@ class _GroupHeaderRow extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
     final g = group;
     final accent = g == null ? scheme.outline : Color(g.color);
-    final worst = _MonitoringTableState._worstStatus(members);
+    final ids = {for (final n in members) n.id};
+    // A record, so only a change in these counts rebuilds the row.
+    final counts = ref.watch(
+      alertsProvider.select(
+        (alerts) =>
+            countAlerts(alerts.values.where((a) => ids.contains(a.nodeId))),
+      ),
+    );
+    final auth = members
+        .where((n) => n.connectionStatus == ConnectionStatus.unauthorized)
+        .length;
+    final pills = [
+      if (counts.critical > 0)
+        (text: '${counts.critical} critical', color: Colors.red),
+      if (counts.warning > 0)
+        (
+          text: '${counts.warning} warning',
+          color: _MonitoringTableState._warnText,
+        ),
+      if (counts.critical + counts.warning == 0 && auth > 0)
+        (
+          text: '$auth auth error${auth == 1 ? '' : 's'}',
+          color: _MonitoringTableState._warnText,
+        ),
+    ];
 
     return SizedBox(
       width: width,
@@ -1313,9 +1295,9 @@ class _GroupHeaderRow extends StatelessWidget {
                 '${members.length} projector${members.length == 1 ? '' : 's'}',
                 style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
               ),
-              if (worst != null) ...[
+              for (final p in pills) ...[
                 const SizedBox(width: 8),
-                _StatusPill(text: worst.text, color: worst.color),
+                _StatusPill(text: p.text, color: p.color),
               ],
             ],
           ),
@@ -1351,27 +1333,37 @@ class _StatusPill extends StatelessWidget {
   }
 }
 
-/// Text that shows a tooltip with its full contents only when the rendered
-/// text is actually truncated to fit its cell.
-/// Watches only its own threshold, so editing it in Preferences retints the
-/// column without rebuilding the table.
+/// An Intake / Exhaust reading tinted by its active alert: amber for a
+/// warning, red for critical, plain otherwise. Following the alert rather
+/// than the raw threshold keeps the table in step with the card badge
+/// (hysteresis, a switched-off rule). Watches only its own alert, so other
+/// alerts don't rebuild it.
 class _TempCell extends ConsumerWidget {
-  final String text;
-  final bool exhaust;
+  final ProjectorNode node;
+  final AlertRule rule;
 
-  const _TempCell(this.text, {required this.exhaust});
+  const _TempCell(this.node, this.rule);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final t = ref.watch(
-      appSettingsProvider.select(
-        (s) => exhaust ? s.alerts.exhaust : s.alerts.intake,
+    final severity = ref.watch(
+      alertsProvider.select(
+        (alerts) => alerts[(nodeId: node.id, rule: rule, item: '')]?.severity,
       ),
     );
-    return _CellText(text, color: _MonitoringTableState._tempTint(text, t));
+    return _CellText(
+      rule == AlertRule.intakeTemp ? node.intakeTemp : node.exhaustTemp,
+      color: switch (severity) {
+        AlertSeverity.critical => Colors.red,
+        AlertSeverity.warning => _MonitoringTableState._warnText,
+        null => null,
+      },
+    );
   }
 }
 
+/// Text that shows a tooltip with its full contents only when the rendered
+/// text is actually truncated to fit its cell.
 class _CellText extends StatelessWidget {
   final String text;
   final Color? color;
