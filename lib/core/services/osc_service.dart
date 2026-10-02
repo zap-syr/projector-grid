@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:async';
+import 'dart:collection';
 
 import 'package:osc/osc.dart';
 import 'package:flutter/foundation.dart';
@@ -159,6 +160,12 @@ class OscService {
   int? _lastOffline;
   int? _lastWarnings;
 
+  // RawDatagramSocket.send() returns 0 instead of throwing when the socket
+  // can't take the datagram yet — on Windows that's most back-to-back sends,
+  // so the 3-message status burst used to silently lose messages. Unsent
+  // datagrams wait here, in order, until the socket reports it is writable.
+  final Queue<List<int>> _outbox = Queue();
+
   /// Called when a valid OSC command is received and resolved.
   OscCommandCallback? onCommand;
 
@@ -216,6 +223,8 @@ class OscService {
         if (event == RawSocketEvent.read) {
           final datagram = _socket!.receive();
           if (datagram != null) _handleDatagram(datagram);
+        } else if (event == RawSocketEvent.write) {
+          _flushOutbox();
         }
       });
 
@@ -234,6 +243,7 @@ class OscService {
     _socket = null;
     _isActive = false;
     _lastCommandTimes.clear();
+    _outbox.clear();
   }
 
   void _handleDatagram(Datagram datagram) {
@@ -384,11 +394,26 @@ class OscService {
   }
 
   void _sendMessage(String address, int value) {
-    try {
-      final msg = OSCMessage(address, arguments: [value]);
-      _socket!.send(msg.toBytes(), InternetAddress(_sendIp), _sendPort);
-    } catch (e) {
-      debugPrint('OSC: Failed to send $address — $e');
+    _outbox.add(OSCMessage(address, arguments: [value]).toBytes());
+    _flushOutbox();
+  }
+
+  void _flushOutbox() {
+    final socket = _socket;
+    if (socket == null) return;
+    while (_outbox.isNotEmpty) {
+      try {
+        if (socket.send(_outbox.first, InternetAddress(_sendIp), _sendPort) ==
+            0) {
+          // Delivery of the next write event resets this flag, so it has to
+          // be re-armed on every stall.
+          socket.writeEventsEnabled = true;
+          return;
+        }
+      } catch (e) {
+        debugPrint('OSC: Failed to send datagram — $e');
+      }
+      _outbox.removeFirst();
     }
   }
 }
