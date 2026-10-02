@@ -15,16 +15,18 @@ class DesktopNotificationService {
   /// Called when the operator clicks a notification.
   void Function()? onClick;
 
-  /// Windows takes the toast's app icon from a file, not from the exe's own
-  /// icon resource, so it points at the bundled copy next to the exe.
-  static String get _windowsIconPath => [
+  /// Windows takes toast images from files, not from the exe's resources,
+  /// so they point at the bundled assets next to the exe.
+  static String _bundledAsset(List<String> path) => [
     File(Platform.resolvedExecutable).parent.path,
     'data',
     'flutter_assets',
     'assets',
-    'launcher_icon',
-    'app_icon.png',
+    ...path,
   ].join(Platform.pathSeparator);
+
+  static String get _windowsIconPath =>
+      _bundledAsset(['launcher_icon', 'app_icon.png']);
 
   Future<void> _init() => _ready ??= _plugin
       .initialize(
@@ -37,6 +39,9 @@ class DesktopNotificationService {
           ),
           windows: WindowsInitializationSettings(
             appName: 'Projector Grid',
+            // The installer's Start menu shortcut carries the same ID and
+            // GUID (installer/projector_grid.iss); without it the toast's
+            // header shows the name but no icon.
             appUserModelId: 'ProjectorGrid.ProjectorGrid',
             // Identifies the app's activation callback to Windows; fixed for
             // the app's lifetime.
@@ -48,7 +53,14 @@ class DesktopNotificationService {
       )
       .then((_) {});
 
-  Future<void> show({required String title, required String body}) async {
+  /// [critical] picks the Windows toast's severity logo (red circle or
+  /// orange triangle, `assets/alert_icons/`); macOS always shows the app
+  /// icon there.
+  Future<void> show({
+    required String title,
+    required String body,
+    required bool critical,
+  }) async {
     await _init();
     if (Platform.isMacOS && !_permissionAsked) {
       _permissionAsked = true;
@@ -66,6 +78,19 @@ class DesktopNotificationService {
         macOS: const DarwinNotificationDetails(presentSound: false),
         windows: WindowsNotificationDetails(
           audio: WindowsNotificationAudio.silent(),
+          images: [
+            WindowsImage(
+              Uri.file(
+                _bundledAsset([
+                  'alert_icons',
+                  critical ? 'critical.png' : 'warning.png',
+                ]),
+                windows: true,
+              ),
+              altText: critical ? 'Critical' : 'Warning',
+              placement: WindowsImagePlacement.appLogoOverride,
+            ),
+          ],
         ),
       ),
     );

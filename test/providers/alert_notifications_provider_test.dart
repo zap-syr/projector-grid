@@ -22,8 +22,12 @@ class _FakeNotifications implements DesktopNotificationService {
   void Function()? onClick;
 
   @override
-  Future<void> show({required String title, required String body}) async =>
-      shown.add('$title | $body');
+  Future<void> show({
+    required String title,
+    required String body,
+    required bool critical,
+  }) async =>
+      shown.add('$title | $body | ${critical ? 'critical' : 'warning'}');
 }
 
 class _FakeSound implements AlertSoundService {
@@ -80,7 +84,7 @@ void main() {
       // Notify for: Critical (the default) leaves the warning out.
       expect(notifications.shown, [
         'Projector error on Proj 2 (10.0.0.2) | Fan error (F305) since '
-            '${_hhmm(DateTime.now())}',
+            '${_hhmm(DateTime.now())} | critical',
       ]);
       expect(sound.played, [true]);
     });

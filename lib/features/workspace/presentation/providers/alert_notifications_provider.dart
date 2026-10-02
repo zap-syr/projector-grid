@@ -57,7 +57,11 @@ class AlertNotificationsNotifier extends _$AlertNotificationsNotifier {
         unawaited(
           ref
               .read(desktopNotificationServiceProvider)
-              .show(title: notice.title, body: notice.body),
+              .show(
+                title: notice.title,
+                body: notice.body,
+                critical: notice.severity == AlertSeverity.critical,
+              ),
         );
       }
     }
