@@ -207,6 +207,8 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
         fitToWidth: s.monitoringFitToWidth,
         groupBy: s.monitoringGroupBy,
       ),
+      intakeThreshold: s.alerts.intake,
+      exhaustThreshold: s.alerts.exhaust,
     );
   }
 

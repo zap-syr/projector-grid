@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:projector_grid/core/services/remote_preview_service.dart';
 import 'package:projector_grid/core/services/web_api.dart';
 import 'package:projector_grid/core/services/web_auth.dart';
+import 'package:projector_grid/core/theme/status_thresholds.dart';
 import 'package:projector_grid/features/workspace/domain/alignment.dart';
 import 'package:projector_grid/features/workspace/domain/dispatch_result.dart';
 import 'package:projector_grid/features/workspace/domain/monitoring_columns.dart';
@@ -120,6 +121,8 @@ void main() {
             fitToWidth: true,
             groupBy: false,
           ),
+          intakeThreshold: kDefaultIntakeTempThreshold,
+          exhaustThreshold: kDefaultExhaustTempThreshold,
         ),
       );
     });

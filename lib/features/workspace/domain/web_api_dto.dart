@@ -97,6 +97,8 @@ Json configJson({
   required String projectName,
   required WebRole role,
   required WebTableLayout layout,
+  required TempThreshold intakeThreshold,
+  required TempThreshold exhaustThreshold,
 }) => {
   'projectName': projectName,
   'role': role.name,
@@ -124,14 +126,8 @@ Json configJson({
     'groupBy': layout.groupBy,
   },
   'thresholds': {
-    'intake': {
-      'warm': kIntakeTempThreshold.warm,
-      'hot': kIntakeTempThreshold.hot,
-    },
-    'exhaust': {
-      'warm': kExhaustTempThreshold.warm,
-      'hot': kExhaustTempThreshold.hot,
-    },
+    'intake': {'warm': intakeThreshold.warm, 'hot': intakeThreshold.hot},
+    'exhaust': {'warm': exhaustThreshold.warm, 'hot': exhaustThreshold.hot},
   },
   'testPatterns': _options(kTestPatternLabels),
   'inputs': _options(kInputOptions),

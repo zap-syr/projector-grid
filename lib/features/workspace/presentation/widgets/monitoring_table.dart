@@ -336,19 +336,13 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
       spec: kColIntake,
       text: (n, _) => n.intakeTemp,
       sortKey: (n, _) => _leadingNum(n.intakeTemp),
-      cell: (_, n, _) => _CellText(
-        n.intakeTemp,
-        color: _tempTint(n.intakeTemp, exhaust: false),
-      ),
+      cell: (_, n, _) => _TempCell(n.intakeTemp, exhaust: false),
     ),
     _Column(
       spec: kColExhaust,
       text: (n, _) => n.exhaustTemp,
       sortKey: (n, _) => _leadingNum(n.exhaustTemp),
-      cell: (_, n, _) => _CellText(
-        n.exhaustTemp,
-        color: _tempTint(n.exhaustTemp, exhaust: true),
-      ),
+      cell: (_, n, _) => _TempCell(n.exhaustTemp, exhaust: true),
     ),
     _Column(
       spec: kColVoltage,
@@ -517,11 +511,10 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
 
   /// Text tint for an Intake/Exhaust cell from its display string: `null`
   /// (default colour) when normal or unreadable (`-`, `Timeout`), amber past
-  /// the warm threshold, red past the hot one (`status_thresholds.dart`).
-  static Color? _tempTint(String display, {required bool exhaust}) {
+  /// the warm threshold, red past the hot one (the alert thresholds).
+  static Color? _tempTint(String display, TempThreshold t) {
     final n = _leadingNum(display);
     if (n == double.negativeInfinity) return null;
-    final t = exhaust ? kExhaustTempThreshold : kIntakeTempThreshold;
     if (n >= t.hot) return Colors.red;
     if (n >= t.warm) return _warnText;
     return null;
@@ -1360,6 +1353,25 @@ class _StatusPill extends StatelessWidget {
 
 /// Text that shows a tooltip with its full contents only when the rendered
 /// text is actually truncated to fit its cell.
+/// Watches only its own threshold, so editing it in Preferences retints the
+/// column without rebuilding the table.
+class _TempCell extends ConsumerWidget {
+  final String text;
+  final bool exhaust;
+
+  const _TempCell(this.text, {required this.exhaust});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = ref.watch(
+      appSettingsProvider.select(
+        (s) => exhaust ? s.alerts.exhaust : s.alerts.intake,
+      ),
+    );
+    return _CellText(text, color: _MonitoringTableState._tempTint(text, t));
+  }
+}
+
 class _CellText extends StatelessWidget {
   final String text;
   final Color? color;

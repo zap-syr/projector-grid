@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../../core/services/app_config_dir.dart';
+import '../../domain/alert_rule.dart';
 import '../../domain/alignment.dart';
 
 part 'app_settings_provider.g.dart';
@@ -83,6 +84,8 @@ class AppSettings {
   /// restores them on the next launch.
   final Map<String, ShutterFade> pendingFadeRestores;
 
+  final AlertSettings alerts;
+
   const AppSettings({
     this.pollingIntervalSeconds = defaultPollingIntervalSeconds,
     this.themeMode = ThemeMode.dark,
@@ -111,6 +114,7 @@ class AppSettings {
     this.alignmentShowNeighbours = false,
     this.alignmentDiagonals = false,
     this.pendingFadeRestores = const {},
+    this.alerts = const AlertSettings(),
   });
 
   AppSettings copyWith({
@@ -142,6 +146,7 @@ class AppSettings {
     bool? alignmentShowNeighbours,
     bool? alignmentDiagonals,
     Map<String, ShutterFade>? pendingFadeRestores,
+    AlertSettings? alerts,
   }) {
     return AppSettings(
       pollingIntervalSeconds:
@@ -179,6 +184,7 @@ class AppSettings {
           alignmentShowNeighbours ?? this.alignmentShowNeighbours,
       alignmentDiagonals: alignmentDiagonals ?? this.alignmentDiagonals,
       pendingFadeRestores: pendingFadeRestores ?? this.pendingFadeRestores,
+      alerts: alerts ?? this.alerts,
     );
   }
 
@@ -213,6 +219,7 @@ class AppSettings {
       for (final e in pendingFadeRestores.entries)
         e.key: {'in': e.value.fadeIn, 'out': e.value.fadeOut},
     },
+    'alerts': alerts.toJson(),
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) => AppSettings(
@@ -271,6 +278,11 @@ class AppSettings {
           )),
         ) ??
         const {},
+    alerts: json['alerts'] is Map
+        ? AlertSettings.fromJson(
+            (json['alerts'] as Map).cast<String, dynamic>(),
+          )
+        : const AlertSettings(),
   );
 }
 
@@ -430,6 +442,11 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
 
   void setAlignmentDiagonals(bool diagonals) {
     state = state.copyWith(alignmentDiagonals: diagonals);
+    _save(state);
+  }
+
+  void setAlertSettings(AlertSettings alerts) {
+    state = state.copyWith(alerts: alerts);
     _save(state);
   }
 

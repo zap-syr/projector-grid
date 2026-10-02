@@ -1,5 +1,7 @@
-/// Temperature tint thresholds (°C) shared by the Monitoring table and the
-/// Web UI (`/api/config`).
+/// Default temperature thresholds (°C) for the Intake / Exhaust alert rules,
+/// which also drive the Monitoring table tint and the Web UI's
+/// (`/api/config`). The live values are in `AlertSettings`, editable in
+/// Preferences → Alerts.
 ///
 /// Intake tracks the projectors' 0–45 °C operating spec — units raise a
 /// temperature fault around 45 °C and shut down near 50 °C. Exhaust is
@@ -11,5 +13,9 @@ library;
 
 typedef TempThreshold = ({double warm, double hot});
 
-const TempThreshold kIntakeTempThreshold = (warm: 40, hot: 45);
-const TempThreshold kExhaustTempThreshold = (warm: 55, hot: 65);
+const TempThreshold kDefaultIntakeTempThreshold = (warm: 40, hot: 45);
+const TempThreshold kDefaultExhaustTempThreshold = (warm: 55, hot: 65);
+
+/// A temperature alert clears only this far below its threshold, so a value
+/// hovering at the limit doesn't raise and clear on every poll.
+const double kTempHysteresis = 2;
