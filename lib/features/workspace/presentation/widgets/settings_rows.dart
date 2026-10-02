@@ -84,6 +84,7 @@ class SettingsRow extends StatelessWidget {
     required this.control,
     this.hint,
     this.error,
+    this.leading,
     this.controlWidth = 240,
     this.indented = false,
     this.enabled = true,
@@ -91,6 +92,10 @@ class SettingsRow extends StatelessWidget {
 
   final String label;
   final Widget control;
+
+  /// 16px slot in front of the label (alert severity icons). Rows of one
+  /// group pass an empty `SizedBox(width: 16)` so their labels still line up.
+  final Widget? leading;
 
   /// Short note under the label; replaced by [error] when that is set.
   final String? hint;
@@ -117,19 +122,44 @@ class SettingsRow extends StatelessWidget {
             Expanded(
               child: Opacity(
                 opacity: enabled ? 1 : 0.45,
-                child: Column(
+                child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  spacing: 10,
                   children: [
-                    Text(label, style: theme.textTheme.bodyMedium),
-                    if (note != null)
-                      Text(
-                        note,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: error != null
-                              ? theme.colorScheme.error
-                              : theme.colorScheme.onSurfaceVariant,
-                        ),
+                    if (leading case final leading?)
+                      SizedBox(
+                        width: 16,
+                        height: 20,
+                        child: Center(child: leading),
                       ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        spacing: 2,
+                        children: [
+                          Text(
+                            label,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          // A step below the label so the two never read
+                          // as one line of the same text.
+                          if (note != null)
+                            Text(
+                              note,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                fontSize: 11.5,
+                                height: 1.3,
+                                color: error != null
+                                    ? theme.colorScheme.error
+                                    : theme.colorScheme.onSurfaceVariant
+                                          .withValues(alpha: 0.75),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
