@@ -151,6 +151,32 @@ List<ProjectorErrorItem> decodeProjectorErrors(String errors) {
   ];
 }
 
+/// How many of the leading tags fit in [available] width, the rest folding
+/// into a "+N" label after them. [tagWidths] are in display order, [gap]
+/// sits between neighbours (tags and the label alike), [plusWidth] measures
+/// the label for N hidden tags. All of them when they fit without a label.
+int tagsThatFit({
+  required List<double> tagWidths,
+  required double available,
+  required double gap,
+  required double Function(int hidden) plusWidth,
+}) {
+  double row(int shown) {
+    final hidden = tagWidths.length - shown;
+    var w = 0.0;
+    for (var i = 0; i < shown; i++) {
+      w += tagWidths[i] + (i > 0 ? gap : 0);
+    }
+    if (hidden > 0) w += (shown > 0 ? gap : 0) + plusWidth(hidden);
+    return w;
+  }
+
+  for (var shown = tagWidths.length; shown > 0; shown--) {
+    if (row(shown) <= available) return shown;
+  }
+  return 0;
+}
+
 /// Display order: critical first, then newest first by [since] (when each
 /// error's alert started); errors without an alert, its rule being off, go
 /// after those with one.

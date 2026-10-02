@@ -18,10 +18,36 @@ import 'hover_panel.dart';
 class MonitoringErrorsCell extends ConsumerWidget {
   const MonitoringErrorsCell({super.key, required this.node});
 
-  /// More than this many tags don't fit a default-width column.
-  static const int _maxTags = 4;
+  // Row metrics, shared by the layout and by the measuring that decides how
+  // many tags fit.
+  static const double _padding = 6;
+  static const double _iconSize = 13;
+  static const double _iconGap = 6;
+  static const double _tagGap = 4;
+  static const _plusStyle = TextStyle(
+    fontSize: 11,
+    fontWeight: FontWeight.w700,
+  );
 
   final ProjectorNode node;
+
+  /// [style] over the inherited text style, as a `Text` on screen gets it
+  /// (the table sets its own font and size), rounded up so sub-pixel
+  /// differences can't add up past the edge.
+  static double _textWidth(BuildContext context, String text, TextStyle style) {
+    final painter = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: DefaultTextStyle.of(context).style.merge(style),
+      ),
+      textDirection: TextDirection.ltr,
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout();
+    final width = painter.width.ceilToDouble();
+    painter.dispose();
+    return width;
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -41,62 +67,82 @@ class MonitoringErrorsCell extends ConsumerWidget {
     );
     final top = items.first.severity;
     final palette = AlertPalette.of(context);
-    final shown = items.take(_maxTags).toList();
-    final rest = items.length - shown.length;
+    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
 
     return HoverPanel(
       width: _ErrorsPanel.width,
       panel: (_) => _ErrorsPanel(items: items, since: since),
-      builder: (context, active) => Semantics(
-        label: '${items.length} ${items.length == 1 ? 'error' : 'errors'}',
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-          decoration: BoxDecoration(
-            color: active
-                ? Theme.of(context).colorScheme.onSurface
-                      .withValues(alpha: 0.06)
-                : null,
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            spacing: 6,
-            children: [
-              Icon(
-                AlertPalette.iconData(top),
-                size: 13,
-                color: AlertPalette.icon(top),
-              ),
-              // Tags past the column's edge are cut off rather than
-              // overflowing; +N stays visible outside the clip.
-              Flexible(
-                child: ClipRect(
-                  child: OverflowBox(
-                    alignment: Alignment.centerLeft,
-                    maxWidth: double.infinity,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      spacing: 4,
-                      children: [
-                        for (final e in shown)
-                          _CodeTag(e.id, color: palette.text(e.severity)),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              if (rest > 0)
-                Text(
-                  '+$rest',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
+      // Whole tags only, as many as this column's width takes; the rest go
+      // into +N, so a narrow column never cuts a code in half.
+      builder: (context, active) => LayoutBuilder(
+        builder: (context, constraints) {
+          double plusWidth(int hidden) =>
+              _textWidth(context, '+$hidden', _plusStyle);
+          final inner = constraints.maxWidth - 2 * _padding;
+          final shown = tagsThatFit(
+            tagWidths: [
+              for (final e in items)
+                _textWidth(context, e.id, _CodeTag.style) +
+                    2 * _CodeTag.padding,
             ],
-          ),
-        ),
+            available: inner - _iconSize - _iconGap,
+            gap: _tagGap,
+            plusWidth: plusWidth,
+          );
+          final hidden = items.length - shown;
+          // Narrower still, the count matters more than the icon.
+          final showIcon =
+              shown > 0 || _iconSize + _iconGap + plusWidth(hidden) <= inner;
+          return Semantics(
+            label: '${items.length} ${items.length == 1 ? 'error' : 'errors'}',
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: _padding,
+                vertical: 3,
+              ),
+              decoration: BoxDecoration(
+                color: active
+                    ? Theme.of(context).colorScheme.onSurface
+                          .withValues(alpha: 0.06)
+                    : null,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              // The measuring above already keeps the row inside the cell;
+              // whatever a column too narrow for even "+N" leaves over is
+              // clipped quietly instead of flagged as an overflow. Sized to
+              // the row, so the hover highlight hugs it.
+              child: UnconstrainedBox(
+                alignment: Alignment.centerLeft,
+                constrainedAxis: Axis.vertical,
+                clipBehavior: Clip.hardEdge,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (showIcon) ...[
+                      Icon(
+                        AlertPalette.iconData(top),
+                        size: _iconSize,
+                        color: AlertPalette.icon(top),
+                      ),
+                      const SizedBox(width: _iconGap),
+                    ],
+                    for (final (i, e) in items.take(shown).indexed) ...[
+                      if (i > 0) const SizedBox(width: _tagGap),
+                      _CodeTag(e.id, color: palette.text(e.severity)),
+                    ],
+                    if (hidden > 0) ...[
+                      if (shown > 0) const SizedBox(width: _tagGap),
+                      Text(
+                        '+$hidden',
+                        style: _plusStyle.copyWith(color: muted),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -105,25 +151,25 @@ class MonitoringErrorsCell extends ConsumerWidget {
 class _CodeTag extends StatelessWidget {
   const _CodeTag(this.code, {required this.color});
 
+  /// Horizontal padding and text style, also used to measure a tag.
+  static const double padding = 5;
+  static const style = TextStyle(
+    fontFamily: 'monospace',
+    fontSize: 11.5,
+    fontWeight: FontWeight.w600,
+  );
+
   final String code;
   final Color color;
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+    padding: const EdgeInsets.symmetric(horizontal: padding, vertical: 1),
     decoration: BoxDecoration(
       color: color.withValues(alpha: 0.13),
       borderRadius: BorderRadius.circular(4),
     ),
-    child: Text(
-      code,
-      style: TextStyle(
-        fontFamily: 'monospace',
-        fontSize: 11.5,
-        fontWeight: FontWeight.w600,
-        color: color,
-      ),
-    ),
+    child: Text(code, style: style.copyWith(color: color)),
   );
 }
 

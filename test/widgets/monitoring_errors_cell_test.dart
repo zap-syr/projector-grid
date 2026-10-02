@@ -17,38 +17,68 @@ class _NoAlerts extends AlertsNotifier {
 void main() {
   useTempConfigDir();
 
-  Future<void> pump(WidgetTester tester, String errors) => tester.pumpWidget(
-    ProviderScope(
-      overrides: [alertsProvider.overrideWith(_NoAlerts.new)],
-      child: MaterialApp(
-        home: Scaffold(
-          body: Align(
-            alignment: Alignment.topLeft,
-            child: SizedBox(
-              width: 400,
-              child: MonitoringErrorsCell(
-                node: ProjectorNode(
-                  id: '1',
-                  name: 'PRJ-05',
-                  ipAddress: '10.0.0.5',
-                  x: 0,
-                  y: 0,
-                  errors: errors,
+  Future<void> pump(WidgetTester tester, String errors, {double width = 400}) =>
+      tester.pumpWidget(
+        ProviderScope(
+          overrides: [alertsProvider.overrideWith(_NoAlerts.new)],
+          child: MaterialApp(
+            home: Scaffold(
+              body: Align(
+                alignment: Alignment.topLeft,
+                child: SizedBox(
+                  width: width,
+                  child: MonitoringErrorsCell(
+                    node: ProjectorNode(
+                      id: '1',
+                      name: 'PRJ-05',
+                      ipAddress: '10.0.0.5',
+                      x: 0,
+                      y: 0,
+                      errors: errors,
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
         ),
-      ),
-    ),
-  );
+      );
 
-  testWidgets('codes only, critical first, +N past four', (tester) async {
-    await pump(tester, 'U201 F305 H001 F011 F306');
-    expect(find.text('F305'), findsOneWidget);
-    expect(find.text('F011'), findsOneWidget);
-    expect(find.text('+1'), findsOneWidget);
+  testWidgets('a wide column shows every code, names stay in the panel', (
+    tester,
+  ) async {
+    await pump(tester, 'U201 F305 H001 F011 F306', width: 600);
+    for (final code in ['F305', 'F011', 'F306', 'U201', 'H001']) {
+      expect(find.text(code), findsOneWidget, reason: code);
+    }
+    expect(find.textContaining('+'), findsNothing);
     expect(find.text('Fan error'), findsNothing);
+  });
+
+  testWidgets('a narrow column shows whole codes and counts the rest', (
+    tester,
+  ) async {
+    await pump(tester, 'U201 F305 H001 F011 F306', width: 150);
+    // Critical first; whatever doesn't fit whole is in +N, none cut.
+    expect(find.text('F305'), findsOneWidget);
+    expect(find.text('H001'), findsNothing);
+    final plus = find.textContaining('+');
+    expect(plus, findsOneWidget);
+    final shown = [
+      'F305',
+      'F011',
+      'F306',
+      'U201',
+    ].where((c) => find.text(c).evaluate().isNotEmpty).length;
+    expect(tester.widget<Text>(plus).data, '+${5 - shown}');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('no overflow at any width, down to just "+N"', (tester) async {
+    for (var width = 10.0; width <= 260; width += 7) {
+      await pump(tester, 'U201 F305 H001 F011 F306', width: width);
+      expect(tester.takeException(), isNull, reason: 'width $width');
+    }
   });
 
   testWidgets('hover opens the names', (tester) async {

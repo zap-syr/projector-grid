@@ -118,6 +118,19 @@ void main() {
       ]);
     });
 
+    test('tagsThatFit: as many as the width takes, +N for the rest', () {
+      int fit(double available) => tagsThatFit(
+        tagWidths: [40, 40, 40, 40, 40],
+        available: available,
+        gap: 4,
+        plusWidth: (_) => 16,
+      );
+      expect(fit(216), 5); // all five: 5 × 40 + 4 × 4, no label
+      expect(fit(215), 4); // 4 × 40 + 3 × 4 + 4 + 16 = 192
+      expect(fit(100), 1); // 40 + 4 + 16
+      expect(fit(59), 0); // not even one tag with its label
+    });
+
     test('sortProjectorErrors: critical first, then newest, no alert last', () {
       final items = decodeProjectorErrors('U200 F305 F011 F306');
       final since = {
