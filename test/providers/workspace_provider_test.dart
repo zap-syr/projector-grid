@@ -415,6 +415,18 @@ void main() {
       expect(logMessages(c).where((m) => m == 'Went offline'), hasLength(1));
     });
 
+    test('a loaded offline node counts as polled only after a check', () async {
+      final c = makeContainer(fake);
+      final ws = c.read(workspaceProvider.notifier);
+      ws.setNodes([node('1', status: ConnectionStatus.offline)]);
+      expect(c.read(workspaceProvider).single.polled, isFalse);
+      await ws.refreshAll();
+      expect(c.read(workspaceProvider).single.polled, isTrue);
+
+      ws.updateNode('1', '10.0.0.9', 'admin1', 'panasonic');
+      expect(c.read(workspaceProvider).single.polled, isFalse);
+    });
+
     test('"Authentication failed" is logged once', () async {
       final c = makeContainer(fake);
       final ws = c.read(workspaceProvider.notifier);

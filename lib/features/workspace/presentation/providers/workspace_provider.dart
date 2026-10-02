@@ -150,6 +150,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
         .map(
           (n) => n.copyWith(
             connectionStatus: ConnectionStatus.offline,
+            polled: false,
             powerStatus: PowerStatus.standby,
             shutterStatus: ShutterStatus.closed,
             serialNumber: '-',
@@ -191,6 +192,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
         return saved.copyWith(
           name: live.name,
           connectionStatus: live.connectionStatus,
+          polled: live.polled,
           powerStatus: live.powerStatus,
           shutterStatus: live.shutterStatus,
           serialNumber: live.serialNumber,
@@ -602,7 +604,10 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
       state = state
           .map(
             (n) => n.id == node.id
-                ? n.copyWith(connectionStatus: ConnectionStatus.unauthorized)
+                ? n.copyWith(
+                    connectionStatus: ConnectionStatus.unauthorized,
+                    polled: true,
+                  )
                 : n,
           )
           .toList();
@@ -625,7 +630,10 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
       state = state
           .map(
             (n) => n.id == node.id
-                ? n.copyWith(connectionStatus: ConnectionStatus.offline)
+                ? n.copyWith(
+                    connectionStatus: ConnectionStatus.offline,
+                    polled: true,
+                  )
                 : n,
           )
           .toList();
@@ -763,6 +771,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
                 parseTestPattern(telemetry['testPattern'] as String?) ??
                 n.testPattern,
             connectionStatus: targetStatus,
+            polled: true,
           );
         }
         return n;
@@ -802,7 +811,10 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
       }
       state = state.map((n) {
         if (n.id == node.id) {
-          return n.copyWith(connectionStatus: ConnectionStatus.offline);
+          return n.copyWith(
+            connectionStatus: ConnectionStatus.offline,
+            polled: true,
+          );
         }
         return n;
       }).toList();
@@ -904,6 +916,14 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
         _telemetryConcurrencyFor(state.length),
         previousStatus: previousStatus,
       );
+    } else if (state.any((n) => n.id == id && !n.polled)) {
+      // Written once: later failed checks of a node already known to be
+      // offline change nothing, so they don't touch state.
+      state = [
+        for (final n in state)
+          if (n.id == id) n.copyWith(polled: true) else n,
+      ];
+      _notifyStateChanged();
     }
   }
 
@@ -1287,6 +1307,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier with WindowListener {
           login: login,
           password: password,
           connectionStatus: ConnectionStatus.offline,
+          polled: false,
         );
       }
       return node;

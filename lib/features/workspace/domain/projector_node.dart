@@ -34,6 +34,11 @@ abstract class ProjectorNode with _$ProjectorNode {
     @Default(PowerStatus.standby) PowerStatus powerStatus,
     @Default(ShutterStatus.closed) ShutterStatus shutterStatus,
     @Default(ConnectionStatus.offline) ConnectionStatus connectionStatus,
+
+    /// A poll has tried this projector since it was loaded, added or
+    /// re-addressed. Until then `offline` only means "not asked yet", which
+    /// must not raise the Offline alert.
+    @Default(false) bool polled,
     @Default('-') String serialNumber,
     @Default('-') String runtime,
     @Default('-') String lightRuntime,
