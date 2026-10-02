@@ -43,7 +43,7 @@ The `QVX:` prefix queries extended projector variables. The response always come
 | `QVX:POWI1` | Power status (4-state) | `POWI1=+00003` | `+00001`=standby, `+00002`=turning on, `+00003`=on, `+00004`=cooling. Supersedes `QPW` (which only distinguishes standby/on) for the app's power telemetry — see `projector_node.dart`'s `PowerStatus` enum. |
 | `QVX:RTMS1` | Projector runtime (hours) | `RTMS1=1234` | Integer hours |
 | `QVX:VMOI2` | AC input voltage | `VMOI2=+00120` | Integer volts (leading `+` is safe for `int.parse`) |
-| `QVX:ERRS2` | Error status bitmask | `ERRS2=000000000000` | 12-char string; non-zero chars indicate active errors |
+| `QVX:ERRS2` | Self-diagnosis: active error / warning codes | `ERRS2=` (healthy), or the active codes, e.g. `U200` | Nothing after `=` when healthy. Otherwise the active alphanumeric codes (`U###`, `F###`, `H###`; confirmed on hardware 2026-10-02). Meanings in **Self-diagnosis codes** below. Not a bitmask. |
 
 ```dart
 // Parsing QVX: KEY=VALUE responses
@@ -60,8 +60,51 @@ final hasSignal = parseQVX(rawSignal) == '1';
 
 final rawErrors = await sendRawCommand(ip, port, login, password, 'QVX:ERRS2');
 final errors = parseQVX(rawErrors) ?? '';
-final hasError = errors.contains(RegExp(r'[^0]'));
+final codes = RegExp(r'[A-Z]\d{3}').allMatches(errors).map((m) => m.group(0)!);
 ```
+
+### Self-diagnosis codes (`QVX:ERRS2`)
+
+From the PT-RQ35K operating instructions. The app decodes them in
+`decodeProjectorErrors` (`lib/features/workspace/domain/projector_errors.dart`), which
+pulls every `[A-Z]\d{3}` code out of the reply without assuming a separator, matches exact
+codes before the ranges that contain them (U355 and U356 sit inside U302–U358), and passes
+an unknown code or a code-less reply through raw. *Severity* is how the app's alerts rate
+it: the manual's warnings are `warning`, everything else `critical`.
+
+| Code | Meaning | Severity |
+|---|---|---|
+| U081 | Low AC voltage warning (below 90 V) | warning |
+| U084 | USB power supply error | critical |
+| U090 | Projection lens not attached | critical |
+| U200 | Intake air temperature warning | warning |
+| U201 | Exhaust air temperature warning | warning |
+| U255 | `<AC IN>` terminal high temperature warning | warning |
+| U202 – U254 | Other high temperature warnings | warning |
+| U280 | Low temperature warning | warning |
+| U300 | Intake air temperature error | critical |
+| U301 | Exhaust air temperature error | critical |
+| U355 | `<AC IN>` terminal high temperature error | critical |
+| U356 | Peltier temperature error | critical |
+| U302 – U358 | Other high temperature errors | critical |
+| U380 | Low temperature error | critical |
+| F011 | Shutter error | critical |
+| F015 | Luminance sensor error | critical |
+| F061 – F066 | Light source driver communication error | critical |
+| F096 | Lens mounter error | critical |
+| F098 | Lens EEPROM error | critical |
+| F110, F111 | Phosphor wheel error | critical |
+| F400 – F461 | Light source error | critical |
+| F200 – F228 | Fan warning | warning |
+| F250 – F259 | Liquid cooling pump fan error | critical |
+| F300 – F328 | Fan error | critical |
+| F380, F381 | Peltier driver error | critical |
+| H001 | Battery replacement for the internal clock | warning |
+| H011 – H028 | Temperature sensor error | critical |
+
+Other models may use codes outside this table; they show up raw rather than being guessed.
+The projector's own web UI lists each active code with its description. Reading it from
+there is a possible later source (not built yet; see ROADMAP_PLAN §4).
 
 ### `QVX:LRTS3=00` — light-source runtime (different shape, don't reuse `parseQVX`)
 

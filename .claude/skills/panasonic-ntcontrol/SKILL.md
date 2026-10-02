@@ -82,6 +82,10 @@ Every projector in this app **closes the TCP connection after each command respo
 
 All error codes start with `ER`, so the existing check `response.startsWith('ER')` catches them all.
 
+These are *command* errors. The projector's own fault codes (`U200`, `F305`, `H001`…) are a
+different thing: they come back as data in the `QVX:ERRS2` reply. Their meanings are in
+`references/command_reference.md` → **Self-diagnosis codes**.
+
 ---
 
 ## Connection Concurrency Limits
@@ -188,7 +192,7 @@ in one call now.
    | 7 | `QTM:0` | `intakeTemp` |
    | 8 | `QTM:1` | `exhaustTemp` |
    | 9 | `QVX:VMOI2` | `acVoltage` |
-   | 10 | `QVX:ERRS2` | `errors` |
+   | 10 | `QVX:ERRS2` | `errors` (fault codes, see Self-diagnosis codes) |
 
 3. **If every one of those 11 fails** (`_isFailureResponse` on all of them), the whole call
    returns `ProbeResult.offline` even though `QID` itself answered — a projector that answers one
