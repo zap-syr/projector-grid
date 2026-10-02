@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../providers/alerts_provider.dart';
 import '../providers/alignment_provider.dart';
 import '../providers/app_settings_provider.dart';
 import '../providers/osc_provider.dart';
@@ -279,6 +280,8 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
     // Same for Alignment mode: it restores shutter fades a previous session
     // left zeroed as soon as those projectors come online.
     ref.read(alignmentProvider.notifier);
+    // Same for alerts: they must evaluate every poll, watched or not.
+    ref.read(alertsProvider.notifier);
 
     return MacMenuBar(
       child: Shortcuts(
