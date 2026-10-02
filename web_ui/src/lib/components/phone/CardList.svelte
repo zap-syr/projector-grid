@@ -1,5 +1,5 @@
 <!--
-  Projector cards in layout order: one collapsible section per group
+  Projector cards sorted by IP: one collapsible section per group
   (ungrouped last), or a plain grid when the project has no groups.
 -->
 <script lang="ts">
@@ -14,6 +14,7 @@
     withDetails,
     worstStatus,
   } from '../../logic/rows';
+  import { sortByIp } from '../../logic/sort';
   import { isSelectable, toggledAll, triState } from '../../logic/selection';
   import { alignment } from '../../state/alignment.svelte';
   import { live } from '../../state/live.svelte';
@@ -33,9 +34,10 @@
   const patternLabel = (code: string) => testPatternLabel(code, patterns);
   const groupMap = $derived(new Map(live.groups.map((g) => [g.id, g])));
 
-  // The API sends projectors in layout order, which is the order on the wall.
   const shown = $derived(
-    live.projectors.filter((p) => matchesFilter(p, view.filter) && matchesSearch(p, view.search)),
+    sortByIp(
+      live.projectors.filter((p) => matchesFilter(p, view.filter) && matchesSearch(p, view.search)),
+    ),
   );
   /** One card's details are open at a time. */
   let openId = $state<string | null>(null);

@@ -313,8 +313,8 @@ Then the existing `build_runner → format → analyze → flutter test`. The re
    | Desktop (mouse) | Table / Cards switch, table by default | side panel |
 
    Notes: the switch is remembered per browser (`pg.listMode.v1`), apart from the table
-   layout; a narrow desktop window keeps its choice. Cards follow layout order in one
-   section per group (collapse shared with the table), a plain grid without groups; the
+   layout; a narrow desktop window keeps its choice. Cards are sorted by IP (owner,
+   2026-10-02; was layout order) in one section per group (collapse shared with the table), a plain grid without groups; the
    operator taps a card to select it, the viewer to open its details, the chevron does it
    for both. Details open one at a time as a full-width strip under the card's row
    (sliding in, with a pointer at the card), so the grid never goes ragged

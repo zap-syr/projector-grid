@@ -14,7 +14,7 @@ import {
   UNGROUPED,
   worstStatus,
 } from '../src/lib/logic/rows';
-import { sortProjectors } from '../src/lib/logic/sort';
+import { sortByIp, sortProjectors } from '../src/lib/logic/sort';
 import { autoFitWidth, layoutWidths, resizeBase } from '../src/lib/logic/widths';
 
 const CATALOGUE: ColumnId[] = [
@@ -97,6 +97,7 @@ describe('sort', () => {
     const list = [pj('1', { ip: '10.0.0.20' }), pj('2', { ip: '10.0.0.3' })];
     expect(ids(sortProjectors(list, 'ip', true, groups, text))).toEqual(['2', '1']);
     expect(ids(sortProjectors(list, 'ip', false, groups, text))).toEqual(['1', '2']);
+    expect(ids(sortByIp(list))).toEqual(['2', '1']);
   });
 
   test('numbers from display strings; "-" first ascending', () => {

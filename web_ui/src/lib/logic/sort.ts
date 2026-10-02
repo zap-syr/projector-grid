@@ -60,6 +60,14 @@ export function sortKey(
   }
 }
 
+/** Ascending by IP, numerically per octet (10.0.0.9 before 10.0.0.10). */
+export function sortByIp(projectors: readonly Projector[]): Projector[] {
+  return projectors
+    .map((p) => ({ p, k: ipKey(p.ip) }))
+    .sort((a, b) => (a.k < b.k ? -1 : a.k > b.k ? 1 : 0))
+    .map((e) => e.p);
+}
+
 export function sortProjectors(
   projectors: readonly Projector[],
   column: DataColumn,
