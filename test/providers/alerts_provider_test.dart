@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:projector_grid/features/workspace/domain/alert_rule.dart';
+import 'package:projector_grid/features/workspace/domain/alerts.dart';
 import 'package:projector_grid/features/workspace/domain/log_event.dart';
 import 'package:projector_grid/features/workspace/domain/projector_node.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/alerts_provider.dart';
@@ -67,6 +68,28 @@ void main() {
 
     alerts.acknowledgeAll(nodeId: '2');
     expect(c.read(alertsProvider).values.every((a) => a.acknowledged), isTrue);
+  });
+
+  test('publishes raised, acknowledged and cleared events', () async {
+    final c = makeContainer(FakeProtocolService());
+    c.listen(alertsProvider, (_, _) {});
+    final events = <AlertEvent>[];
+    final sub = c.read(alertsProvider.notifier).events.listen(events.add);
+    addTearDown(sub.cancel);
+    final ws = c.read(workspaceProvider.notifier);
+
+    ws.setNodes([node('1').copyWith(exhaustTemp: '58°C')]);
+    c.read(alertsProvider.notifier).acknowledgeAll();
+    ws.setNodes([node('1').copyWith(exhaustTemp: '40°C')]);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(events.map((e) => e.change), [
+      AlertChange.raised,
+      AlertChange.acknowledged,
+      AlertChange.cleared,
+    ]);
+    expect(events.first.projector, 'Proj 1');
+    expect(events.first.ip, '10.0.0.1');
   });
 
   test('switching a rule off clears its alerts', () {

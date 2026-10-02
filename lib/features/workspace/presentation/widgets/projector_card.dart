@@ -13,6 +13,7 @@ import '../../domain/projector_group.dart';
 import '../../domain/test_patterns.dart';
 import '../providers/alignment_provider.dart';
 import '../providers/selection_provider.dart';
+import 'alert_badge.dart';
 
 /// How strongly a grouped card's background is tinted with its group's
 /// color. Applied via [Color.alphaBlend] over the card's normal surface
@@ -129,12 +130,7 @@ class _ProjectorCardState extends ConsumerState<ProjectorCard> {
               const SizedBox(width: 4),
               Icon(Icons.visibility, size: 14, color: shutterColor),
               const SizedBox(width: 4),
-              if (node.errors != 'NO ERRORS' && node.errors != '-')
-                const Icon(
-                  Icons.warning_amber_rounded,
-                  size: 14,
-                  color: Colors.orange,
-                ),
+              AlertBadge(node: node),
               const Spacer(),
               if (node.connectionStatus == ConnectionStatus.unauthorized)
                 const Icon(Icons.lock_outline, size: 12, color: Colors.amber),

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -14,14 +16,25 @@ part 'alerts_provider.g.dart';
 
 /// The active alerts, rebuilt from every workspace change. In memory only:
 /// after a restart, conditions that still hold come back as new.
+///
+/// Every change is logged here and published on [events], which OSC (and
+/// desktop notifications) subscribe to, so this provider knows nothing of
+/// them.
 @Riverpod(keepAlive: true)
 class AlertsNotifier extends _$AlertsNotifier {
   /// Last known name and IP per projector, so an alert of a just-deleted
-  /// projector can still be logged by name when it clears.
+  /// projector can still be named when it clears.
   final Map<String, ProjectorNode> _nodes = {};
+
+  final _events = StreamController<AlertEvent>.broadcast();
+
+  /// Raised, cleared and acknowledged alerts, one event each, as they
+  /// happen.
+  Stream<AlertEvent> get events => _events.stream;
 
   @override
   Map<AlertKey, ActiveAlert> build() {
+    ref.onDispose(_events.close);
     ref.listen(workspaceProvider, (_, nodes) => _reconcile(nodes));
     ref.listen(
       appSettingsProvider.select((s) => s.alerts),
@@ -48,7 +61,7 @@ class AlertsNotifier extends _$AlertsNotifier {
     if (result.transitions.isNotEmpty || !mapEquals(result.active, state)) {
       state = result.active;
       for (final t in result.transitions) {
-        _log(t);
+        _publish(t.change, t.alert);
       }
     }
     final ids = {for (final n in nodes) n.id};
@@ -59,14 +72,19 @@ class AlertsNotifier extends _$AlertsNotifier {
     final alert = state[key];
     if (alert == null || alert.acknowledged) return;
     state = {...state, key: alert.copyWith(acknowledged: true)};
-    _logAcknowledged([alert]);
+    _publish(AlertChange.acknowledged, alert);
   }
 
   /// Every unacknowledged alert, or only [nodeId]'s.
-  void acknowledgeAll({String? nodeId}) {
+  void acknowledgeAll({String? nodeId}) =>
+      acknowledgeWhere((a) => nodeId == null || a.nodeId == nodeId);
+
+  /// Every unacknowledged alert that passes [test] (a group of the Active
+  /// alerts panel).
+  void acknowledgeWhere(bool Function(ActiveAlert) test) {
     final hits = [
       for (final a in state.values)
-        if (!a.acknowledged && (nodeId == null || a.nodeId == nodeId)) a,
+        if (!a.acknowledged && test(a)) a,
     ];
     if (hits.isEmpty) return;
     state = {
@@ -75,51 +93,41 @@ class AlertsNotifier extends _$AlertsNotifier {
             ? e.value.copyWith(acknowledged: true)
             : e.value,
     };
-    _logAcknowledged(hits);
-  }
-
-  void _log(AlertTransition t) {
-    final a = t.alert;
-    final raised = t.change == AlertChange.raised;
-    _write(
-      a,
-      severity: !raised
-          ? LogSeverity.success
-          : a.severity == AlertSeverity.critical
-          ? LogSeverity.error
-          : LogSeverity.warning,
-      message: raised
-          ? '${a.rule.label}: ${a.value} (${a.severity.name})'
-          : '${a.rule.label} cleared',
-    );
-  }
-
-  void _logAcknowledged(List<ActiveAlert> alerts) {
-    for (final a in alerts) {
-      _write(
-        a,
-        severity: LogSeverity.info,
-        message: '${a.rule.label} acknowledged',
-      );
+    for (final a in hits) {
+      _publish(AlertChange.acknowledged, a);
     }
   }
 
-  void _write(
-    ActiveAlert a, {
-    required LogSeverity severity,
-    required String message,
-  }) {
+  void _publish(AlertChange change, ActiveAlert a) {
     final node = _nodes[a.nodeId];
     ref
         .read(eventLogProvider.notifier)
         .log(
           LogEvent(
-            severity: severity,
+            severity: switch (change) {
+              AlertChange.raised =>
+                a.severity == AlertSeverity.critical
+                    ? LogSeverity.error
+                    : LogSeverity.warning,
+              AlertChange.cleared => LogSeverity.success,
+              AlertChange.acknowledged => LogSeverity.info,
+            },
             type: LogEventType.alert,
-            message: message,
+            message: switch (change) {
+              AlertChange.raised =>
+                '${a.rule.label}: ${a.value} (${a.severity.name})',
+              AlertChange.cleared => '${a.rule.label} cleared',
+              AlertChange.acknowledged => '${a.rule.label} acknowledged',
+            },
             projectorIp: node?.ipAddress,
             projectorName: node?.name,
           ),
         );
+    _events.add((
+      change: change,
+      alert: a,
+      projector: node?.name ?? '',
+      ip: node?.ipAddress ?? '',
+    ));
   }
 }

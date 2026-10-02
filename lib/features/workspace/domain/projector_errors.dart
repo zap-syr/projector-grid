@@ -4,13 +4,21 @@ library;
 
 import 'alert_rule.dart';
 
-/// One error the projector reports. [id] is stable across polls, so the same
-/// error keeps the same alert; [label] is what the operator reads.
+/// One error the projector reports. [id] is its code (or the whole raw
+/// reply when it has none), stable across polls, so the same error keeps
+/// the same alert. [name] comes from the code table; null for a code it
+/// doesn't know.
 typedef ProjectorErrorItem = ({
   String id,
-  String label,
+  String? name,
   AlertSeverity severity,
 });
+
+/// What the operator reads in an alert: "Fan error (F305)", or the code
+/// itself when it isn't in the table. The code stays in so two errors of
+/// one range are told apart.
+String projectorErrorLabel(ProjectorErrorItem e) =>
+    e.name == null ? e.id : '${e.name} (${e.id})';
 
 typedef _CodeRange = ({
   String from,
@@ -124,25 +132,43 @@ final _codePattern = RegExp(r'[A-Z]\d{3}');
 
 /// Every error in [errors], in reply order; empty when healthy or unknown.
 ///
-/// Known codes get the label and severity from the table, with the code in
-/// the label so two errors of one range stay apart. A reply without any code
-/// in it, or a code the table doesn't know, comes through as the projector
-/// sent it, as a critical error.
+/// Known codes get their name and severity from the table. A reply without
+/// any code in it, or a code the table doesn't know, comes through as the
+/// projector sent it, as a critical error.
 List<ProjectorErrorItem> decodeProjectorErrors(String errors) {
   final value = errors.trim();
   if (value == 'NO ERRORS' || value == '-' || RegExp(r'^0*$').hasMatch(value)) {
     return const [];
   }
   final codes = {for (final m in _codePattern.allMatches(value)) m.group(0)!};
-  if (codes.isEmpty) return [(id: value, label: value, severity: _c)];
+  if (codes.isEmpty) return [(id: value, name: null, severity: _c)];
   return [
     for (final code in codes)
       if (_lookup(code) case final known?)
-        (id: code, label: '${known.label} ($code)', severity: known.severity)
+        (id: code, name: known.label, severity: known.severity)
       else
-        (id: code, label: code, severity: _c),
+        (id: code, name: null, severity: _c),
   ];
 }
+
+/// Display order: critical first, then newest first by [since] (when each
+/// error's alert started); errors without an alert, its rule being off, go
+/// after those with one.
+List<ProjectorErrorItem> sortProjectorErrors(
+  List<ProjectorErrorItem> items,
+  DateTime? Function(String id) since,
+) => [...items]
+  ..sort((a, b) {
+    if (a.severity != b.severity) {
+      return b.severity.index.compareTo(a.severity.index);
+    }
+    final sa = since(a.id);
+    final sb = since(b.id);
+    if (sa == null || sb == null) {
+      return (sa == null ? 1 : 0) - (sb == null ? 1 : 0);
+    }
+    return sb.compareTo(sa);
+  });
 
 _CodeRange? _lookup(String code) => _codes
     .where(

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/poll_status_provider.dart';
 import '../providers/status_summary_provider.dart';
+import 'status_bar_alerts_button.dart';
 
 class StatusBar extends ConsumerWidget {
   const StatusBar({super.key});
@@ -14,7 +15,6 @@ class StatusBar extends ConsumerWidget {
     final total = summary.total;
     final online = summary.online;
     final offline = summary.offline;
-    final warnings = summary.warnings;
 
     return Container(
       height: 36,
@@ -38,8 +38,8 @@ class StatusBar extends ConsumerWidget {
           _StatusItem(label: 'Online', count: online, color: Colors.green),
           const SizedBox(width: 16),
           _StatusItem(label: 'Offline', count: offline, color: Colors.red),
-          const SizedBox(width: 16),
-          _StatusItem(label: 'Warning', count: warnings, color: Colors.orange),
+          const SizedBox(width: 14),
+          const StatusBarAlertsButton(),
           const Spacer(),
           _RefreshStatusItem(pollStatus: pollStatus),
         ],

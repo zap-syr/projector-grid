@@ -6,8 +6,9 @@ import '../../domain/log_event.dart';
 import 'custom_tooltip.dart';
 import '../providers/app_settings_provider.dart';
 import '../providers/event_log_provider.dart';
+import '../providers/event_log_request_provider.dart';
 
-enum _LogFilter { all, errors, commands, connectivity, osc }
+enum _LogFilter { all, errors, alerts, commands, connectivity, osc }
 
 class EventLogPanel extends ConsumerStatefulWidget {
   const EventLogPanel({super.key, required this.maxHeight});
@@ -34,6 +35,18 @@ class _EventLogPanelState extends ConsumerState<EventLogPanel> {
       EventLogPanel.minHeight,
       widget.maxHeight,
     );
+    // The panel is often built by the very request that opened it.
+    if (ref.read(eventLogRequestProvider) case final request?) {
+      _apply(request);
+      // A provider can't change while the tree is building.
+      Future.microtask(ref.read(eventLogRequestProvider.notifier).handled);
+    }
+  }
+
+  void _apply(EventLogRequest request) {
+    _searchController.text = request.query;
+    _searchQuery = request.query;
+    _activeFilter = request.alertsOnly ? _LogFilter.alerts : _LogFilter.all;
   }
 
   @override
@@ -54,6 +67,7 @@ class _EventLogPanelState extends ConsumerState<EventLogPanel> {
     _LogFilter.all => true,
     _LogFilter.errors =>
       e.severity == LogSeverity.error || e.severity == LogSeverity.warning,
+    _LogFilter.alerts => e.type == LogEventType.alert,
     _LogFilter.commands => e.type == LogEventType.command,
     _LogFilter.connectivity => e.type == LogEventType.connectivity,
     _LogFilter.osc => e.type == LogEventType.osc,
@@ -76,6 +90,7 @@ class _EventLogPanelState extends ConsumerState<EventLogPanel> {
   static String _filterLabel(_LogFilter f) => switch (f) {
     _LogFilter.all => 'All',
     _LogFilter.errors => 'Errors',
+    _LogFilter.alerts => 'Alerts',
     _LogFilter.commands => 'Commands',
     _LogFilter.connectivity => 'Connectivity',
     _LogFilter.osc => 'OSC',
@@ -107,6 +122,11 @@ class _EventLogPanelState extends ConsumerState<EventLogPanel> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(eventLogRequestProvider, (_, request) {
+      if (request == null) return;
+      setState(() => _apply(request));
+      ref.read(eventLogRequestProvider.notifier).handled();
+    });
     final allEvents = ref.watch(eventLogProvider);
     final filtered = _filterEvents(allEvents);
     final theme = Theme.of(context);

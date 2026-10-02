@@ -10,16 +10,28 @@ part of 'alerts_provider.dart';
 // ignore_for_file: type=lint, type=warning
 /// The active alerts, rebuilt from every workspace change. In memory only:
 /// after a restart, conditions that still hold come back as new.
+///
+/// Every change is logged here and published on [events], which OSC (and
+/// desktop notifications) subscribe to, so this provider knows nothing of
+/// them.
 
 @ProviderFor(AlertsNotifier)
 final alertsProvider = AlertsNotifierProvider._();
 
 /// The active alerts, rebuilt from every workspace change. In memory only:
 /// after a restart, conditions that still hold come back as new.
+///
+/// Every change is logged here and published on [events], which OSC (and
+/// desktop notifications) subscribe to, so this provider knows nothing of
+/// them.
 final class AlertsNotifierProvider
     extends $NotifierProvider<AlertsNotifier, Map<AlertKey, ActiveAlert>> {
   /// The active alerts, rebuilt from every workspace change. In memory only:
   /// after a restart, conditions that still hold come back as new.
+  ///
+  /// Every change is logged here and published on [events], which OSC (and
+  /// desktop notifications) subscribe to, so this provider knows nothing of
+  /// them.
   AlertsNotifierProvider._()
     : super(
         from: null,
@@ -47,10 +59,14 @@ final class AlertsNotifierProvider
   }
 }
 
-String _$alertsNotifierHash() => r'2f02f8260c81d9a6218e050ff83ce5eaf7989c08';
+String _$alertsNotifierHash() => r'e6a70f852431aef512e2372f03f9635a237eed75';
 
 /// The active alerts, rebuilt from every workspace change. In memory only:
 /// after a restart, conditions that still hold come back as new.
+///
+/// Every change is logged here and published on [events], which OSC (and
+/// desktop notifications) subscribe to, so this provider knows nothing of
+/// them.
 
 abstract class _$AlertsNotifier extends $Notifier<Map<AlertKey, ActiveAlert>> {
   Map<AlertKey, ActiveAlert> build();

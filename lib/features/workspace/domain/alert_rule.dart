@@ -20,6 +20,14 @@ enum AlertRule {
       values.where((r) => r.slug == slug).firstOrNull;
 }
 
+/// What's wrong with a temperature threshold pair typed in Preferences, or
+/// null when it can be saved. Empty fields parse to null.
+String? temperatureThresholdError(int? warm, int? hot) {
+  if (warm == null || hot == null) return 'Enter both values';
+  if (warm >= hot) return 'Warning must be below critical';
+  return null;
+}
+
 /// Which alerts a notification channel (desktop notification, sound) fires
 /// for.
 enum AlertNotifyScope { critical, all }
@@ -50,6 +58,10 @@ class AlertSettings {
   final bool osc;
   final AlertGrouping grouping;
 
+  /// Projector grouping only: sort the projectors into the project's groups
+  /// (sections, Ungrouped last).
+  final bool byProjectGroups;
+
   const AlertSettings({
     this.enabled = defaultEnabled,
     this.intake = kDefaultIntakeTempThreshold,
@@ -60,6 +72,7 @@ class AlertSettings {
     this.soundFor = AlertNotifyScope.critical,
     this.osc = true,
     this.grouping = AlertGrouping.projector,
+    this.byProjectGroups = true,
   });
 
   bool isEnabled(AlertRule rule) => enabled.contains(rule);
@@ -74,6 +87,7 @@ class AlertSettings {
     AlertNotifyScope? soundFor,
     bool? osc,
     AlertGrouping? grouping,
+    bool? byProjectGroups,
   }) => AlertSettings(
     enabled: enabled ?? this.enabled,
     intake: intake ?? this.intake,
@@ -84,6 +98,7 @@ class AlertSettings {
     soundFor: soundFor ?? this.soundFor,
     osc: osc ?? this.osc,
     grouping: grouping ?? this.grouping,
+    byProjectGroups: byProjectGroups ?? this.byProjectGroups,
   );
 
   Map<String, dynamic> toJson() => {
@@ -96,6 +111,7 @@ class AlertSettings {
     'soundFor': soundFor.name,
     'osc': osc,
     'grouping': grouping.name,
+    'byProjectGroups': byProjectGroups,
   };
 
   factory AlertSettings.fromJson(Map<String, dynamic> json) => AlertSettings(
@@ -116,6 +132,7 @@ class AlertSettings {
       (g) => g.name == json['grouping'],
       orElse: () => AlertGrouping.projector,
     ),
+    byProjectGroups: (json['byProjectGroups'] as bool?) ?? true,
   );
 
   static AlertNotifyScope _scope(Object? name) =>

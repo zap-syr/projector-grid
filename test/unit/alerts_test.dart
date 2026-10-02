@@ -90,35 +90,46 @@ void main() {
     });
 
     test('names known codes, exact codes before their range', () {
-      expect(decodeProjectorErrors('U200,U355 F305'), [
+      final items = decodeProjectorErrors('U200,U355 F305');
+      expect(items, [
         (
           id: 'U200',
-          label: 'Intake air temperature warning (U200)',
+          name: 'Intake air temperature warning',
           severity: AlertSeverity.warning,
         ),
         (
           id: 'U355',
-          label: 'AC IN terminal high temperature error (U355)',
+          name: 'AC IN terminal high temperature error',
           severity: AlertSeverity.critical,
         ),
-        (
-          id: 'F305',
-          label: 'Fan error (F305)',
-          severity: AlertSeverity.critical,
-        ),
+        (id: 'F305', name: 'Fan error', severity: AlertSeverity.critical),
       ]);
+      expect(projectorErrorLabel(items.last), 'Fan error (F305)');
     });
 
     test('an unknown code or a reply without codes comes through raw', () {
-      expect(decodeProjectorErrors('U999'), [
-        (id: 'U999', label: 'U999', severity: AlertSeverity.critical),
+      final unknown = decodeProjectorErrors('U999');
+      expect(unknown, [
+        (id: 'U999', name: null, severity: AlertSeverity.critical),
       ]);
+      expect(projectorErrorLabel(unknown.single), 'U999');
       expect(decodeProjectorErrors('000100000000'), [
-        (
-          id: '000100000000',
-          label: '000100000000',
-          severity: AlertSeverity.critical,
-        ),
+        (id: '000100000000', name: null, severity: AlertSeverity.critical),
+      ]);
+    });
+
+    test('sortProjectorErrors: critical first, then newest, no alert last', () {
+      final items = decodeProjectorErrors('U200 F305 F011 F306');
+      final since = {
+        'U200': _t0,
+        'F305': _t0,
+        'F011': _t0.add(const Duration(minutes: 5)),
+      };
+      expect(sortProjectorErrors(items, (id) => since[id]).map((e) => e.id), [
+        'F011',
+        'F305',
+        'F306',
+        'U200',
       ]);
     });
   });
@@ -262,6 +273,123 @@ void main() {
       'old-warn',
       'acked',
     ]);
+  });
+
+  group('alertBadge', () {
+    ActiveAlert a(AlertSeverity s, {bool ack = false}) => ActiveAlert(
+      nodeId: '1',
+      rule: AlertRule.offline,
+      severity: s,
+      value: '',
+      since: _t0,
+      acknowledged: ack,
+    );
+
+    test('none without alerts', () => expect(alertBadge([]), isNull));
+
+    test('colour follows the unacknowledged alerts', () {
+      expect(
+        alertBadge([
+          a(AlertSeverity.critical, ack: true),
+          a(AlertSeverity.warning),
+        ]),
+        (severity: AlertSeverity.warning, acknowledged: false, count: 2),
+      );
+      expect(
+        alertBadge([
+          a(AlertSeverity.critical, ack: true),
+          a(AlertSeverity.warning, ack: true),
+        ]),
+        (severity: AlertSeverity.critical, acknowledged: true, count: 2),
+      );
+    });
+  });
+
+  group('groupAlerts / countAlerts', () {
+    ActiveAlert a(
+      String node,
+      AlertRule rule,
+      AlertSeverity s,
+      int minute, {
+      bool ack = false,
+    }) => ActiveAlert(
+      nodeId: node,
+      rule: rule,
+      severity: s,
+      value: '',
+      since: _t0.add(Duration(minutes: minute)),
+      acknowledged: ack,
+    );
+    final alerts = [
+      a('1', AlertRule.exhaustTemp, AlertSeverity.warning, 5),
+      a('2', AlertRule.offline, AlertSeverity.critical, 1),
+      a('3', AlertRule.offline, AlertSeverity.critical, 2),
+      a('3', AlertRule.intakeTemp, AlertSeverity.warning, 3, ack: true),
+    ];
+
+    test('by projector: most urgent group first', () {
+      final groups = groupAlerts(alerts, AlertGrouping.projector);
+      expect(groups.map((g) => g.key), ['3', '2', '1']);
+      expect(groups.first.alerts.map((x) => x.rule), [
+        AlertRule.offline,
+        AlertRule.intakeTemp,
+      ]);
+    });
+
+    test('by projector with IPs: IP ascending, numerically', () {
+      const ips = {'1': '10.0.0.10', '2': '10.0.0.9', '3': '10.0.0.100'};
+      final groups = groupAlerts(
+        alerts,
+        AlertGrouping.projector,
+        ipOf: (id) => ips[id],
+      );
+      expect(groups.map((g) => g.key), ['2', '1', '3']);
+    });
+
+    test('by rule: one group per rule', () {
+      final groups = groupAlerts(alerts, AlertGrouping.alert);
+      expect(groups.map((g) => g.key), [
+        'offline',
+        'exhaust-temp',
+        'intake-temp',
+      ]);
+      expect(groups.first.alerts, hasLength(2));
+    });
+
+    test('sections follow the group order, Ungrouped last', () {
+      final groups = groupAlerts(alerts, AlertGrouping.projector);
+      const groupOf = {'1': 'stage', '2': 'gone', '3': 'balcony'};
+      final sections = sectionByProjectGroup(groups, (id) => groupOf[id], [
+        'stage',
+        'balcony',
+        'truss',
+      ]);
+      expect(sections.map((s) => s.groupId), ['stage', 'balcony', null]);
+      expect(sections.last.groups.single.key, '2');
+    });
+
+    test('counts unacknowledged and total per severity', () {
+      expect(countAlerts(alerts), (
+        critical: 2,
+        warning: 1,
+        criticalTotal: 2,
+        warningTotal: 2,
+      ));
+    });
+  });
+
+  test('formatAlertDuration / formatAlertStart', () {
+    expect(formatAlertDuration(const Duration(seconds: 40)), '< 1 min');
+    expect(formatAlertDuration(const Duration(minutes: 12)), '12 min');
+    expect(formatAlertDuration(const Duration(minutes: 65)), '1 h 05 min');
+    expect(formatAlertStart(DateTime(2026, 10, 2, 9, 5), _t0), '09:05');
+    expect(formatAlertStart(DateTime(2026, 9, 30, 14, 2), _t0), 'Sep 30 14:02');
+  });
+
+  test('temperatureThresholdError', () {
+    expect(temperatureThresholdError(40, 45), isNull);
+    expect(temperatureThresholdError(null, 45), 'Enter both values');
+    expect(temperatureThresholdError(45, 45), 'Warning must be below critical');
   });
 
   test('AlertSettings JSON round trip', () {
