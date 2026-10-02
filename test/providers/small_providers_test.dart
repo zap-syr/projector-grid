@@ -18,21 +18,16 @@ void main() {
   final configDir = useTempConfigDir();
 
   group('statusSummaryProvider', () {
-    test('counts online, offline and warnings', () {
+    test('counts online and offline', () {
       final c = makeContainer(FakeProtocolService());
       c.read(workspaceProvider.notifier).setNodes([
         node('1'),
         node('2', status: ConnectionStatus.unprotected),
         node('3', status: ConnectionStatus.offline),
         node('4', status: ConnectionStatus.unauthorized),
-        node('5').copyWith(errors: '000100000000'),
+        node('5').copyWith(errors: 'U200'),
       ]);
-      expect(c.read(statusSummaryProvider), (
-        total: 5,
-        online: 3,
-        offline: 1,
-        warnings: 1,
-      ));
+      expect(c.read(statusSummaryProvider), (total: 5, online: 3, offline: 1));
     });
 
     test('does not notify when the counts are unchanged', () {

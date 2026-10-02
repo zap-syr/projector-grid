@@ -11,7 +11,7 @@ part of 'status_summary_provider.dart';
 /// Aggregate node counts for [StatusBar]. Riverpod dedupes record results by
 /// structural equality, so this only triggers a `StatusBar` rebuild when one
 /// of the counts actually changes — not on every single-node telemetry tick
-/// that leaves them all the same.
+/// that leaves them all the same. Alert counts are `alertCountsProvider`'s.
 
 @ProviderFor(statusSummary)
 final statusSummaryProvider = StatusSummaryProvider._();
@@ -19,20 +19,20 @@ final statusSummaryProvider = StatusSummaryProvider._();
 /// Aggregate node counts for [StatusBar]. Riverpod dedupes record results by
 /// structural equality, so this only triggers a `StatusBar` rebuild when one
 /// of the counts actually changes — not on every single-node telemetry tick
-/// that leaves them all the same.
+/// that leaves them all the same. Alert counts are `alertCountsProvider`'s.
 
 final class StatusSummaryProvider
     extends
         $FunctionalProvider<
-          ({int offline, int online, int total, int warnings}),
-          ({int offline, int online, int total, int warnings}),
-          ({int offline, int online, int total, int warnings})
+          ({int offline, int online, int total}),
+          ({int offline, int online, int total}),
+          ({int offline, int online, int total})
         >
-    with $Provider<({int offline, int online, int total, int warnings})> {
+    with $Provider<({int offline, int online, int total})> {
   /// Aggregate node counts for [StatusBar]. Riverpod dedupes record results by
   /// structural equality, so this only triggers a `StatusBar` rebuild when one
   /// of the counts actually changes — not on every single-node telemetry tick
-  /// that leaves them all the same.
+  /// that leaves them all the same. Alert counts are `alertCountsProvider`'s.
   StatusSummaryProvider._()
     : super(
         from: null,
@@ -49,26 +49,23 @@ final class StatusSummaryProvider
 
   @$internal
   @override
-  $ProviderElement<({int offline, int online, int total, int warnings})>
-  $createElement($ProviderPointer pointer) => $ProviderElement(pointer);
+  $ProviderElement<({int offline, int online, int total})> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
 
   @override
-  ({int offline, int online, int total, int warnings}) create(Ref ref) {
+  ({int offline, int online, int total}) create(Ref ref) {
     return statusSummary(ref);
   }
 
   /// {@macro riverpod.override_with_value}
-  Override overrideWithValue(
-    ({int offline, int online, int total, int warnings}) value,
-  ) {
+  Override overrideWithValue(({int offline, int online, int total}) value) {
     return $ProviderOverride(
       origin: this,
       providerOverride:
-          $SyncValueProvider<
-            ({int offline, int online, int total, int warnings})
-          >(value),
+          $SyncValueProvider<({int offline, int online, int total})>(value),
     );
   }
 }
 
-String _$statusSummaryHash() => r'5977da14e306f0218e3147c8def08486040ee130';
+String _$statusSummaryHash() => r'5120d145eb556cb8e3c313208f5a2ba8a4b3fb2f';

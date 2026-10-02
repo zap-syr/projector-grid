@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:osc/osc.dart';
@@ -101,7 +103,7 @@ void main() {
   group('outbound status', () {
     late RawDatagramSocket receiver;
     late StreamController<OSCMessage> received;
-    var status = (online: 2, offline: 1, warnings: 0);
+    var status = (online: 2, offline: 1, critical: 0, warning: 0);
 
     setUp(() async {
       receiver = await RawDatagramSocket.bind(InternetAddress.loopbackIPv4, 0);
@@ -111,7 +113,7 @@ void main() {
         final dg = receiver.receive();
         if (dg != null) received.add(OSCMessage.fromBytes(dg.data));
       });
-      status = (online: 2, offline: 1, warnings: 0);
+      status = (online: 2, offline: 1, critical: 0, warning: 0);
       osc.getStatus = () => status;
       await osc.start(
         networkDevice: '127.0.0.1',
@@ -130,30 +132,101 @@ void main() {
         '${m.address} ${m.arguments}',
     ];
 
-    test('first send broadcasts all three, then only what changed', () async {
+    test('first send broadcasts all four, then only what changed', () async {
       expect(osc.isActive, isTrue);
       osc.sendStatusIfActive();
-      status = (online: 3, offline: 0, warnings: 0);
+      status = (online: 3, offline: 0, critical: 2, warning: 0);
       osc.sendStatusIfActive();
       osc.sendStatusIfActive(); // unchanged — nothing sent
-      expect(await collect(5), [
+      expect(await collect(7), [
         '/pgrid/status/online [2]',
         '/pgrid/status/offline [1]',
+        '/pgrid/status/critical [0]',
         '/pgrid/status/warning [0]',
         '/pgrid/status/online [3]',
         '/pgrid/status/offline [0]',
+        '/pgrid/status/critical [2]',
       ]);
     });
 
-    test('/pgrid/status forces all three even when unchanged', () async {
+    test('/pgrid/status forces all four even when unchanged', () async {
       osc.sendStatusIfActive();
       send('/pgrid/status');
-      final msgs = await collect(6);
-      expect(msgs.sublist(3), [
+      final msgs = await collect(8);
+      expect(msgs.sublist(4), [
         '/pgrid/status/online [2]',
         '/pgrid/status/offline [1]',
+        '/pgrid/status/critical [0]',
         '/pgrid/status/warning [0]',
       ]);
+    });
+
+    test('sendMessage goes out on the socket', () async {
+      osc.sendMessage('/pgrid/alert/offline', ['PRJ-03', 1]);
+      expect(await collect(1), ['/pgrid/alert/offline [PRJ-03, 1]']);
+    });
+  });
+
+  group('encodeOscMessage', () {
+    // A spec-correct reader. package:osc's decoder steps over a string by
+    // its length without the terminating null, so it misreads everything
+    // after a string of 4n bytes (an IP like 10.0.0.3, "critical").
+    List<Object> decode(List<int> bytes) {
+      final data = ByteData.sublistView(Uint8List.fromList(bytes));
+      var i = 0;
+      String string() {
+        final end = bytes.indexOf(0, i);
+        final s = utf8.decode(bytes.sublist(i, end));
+        i = (end + 4) & ~3;
+        return s;
+      }
+
+      final args = <Object>[string()];
+      for (final tag in string().substring(1).split('')) {
+        if (tag == 's') {
+          args.add(string());
+        } else {
+          args.add(data.getInt32(i));
+          i += 4;
+        }
+      }
+      return args;
+    }
+
+    test('mixed arguments, strings of 4n bytes included', () {
+      expect(
+        decode(
+          encodeOscMessage('/pgrid/alert/offline', [
+            'PRJ-03',
+            '10.0.0.3',
+            1,
+            'critical',
+            'No answer',
+          ]),
+        ),
+        [
+          '/pgrid/alert/offline',
+          'PRJ-03',
+          '10.0.0.3',
+          1,
+          'critical',
+          'No answer',
+        ],
+      );
+    });
+
+    test('strings are UTF-8: degree sign and Cyrillic names survive', () {
+      expect(decode(encodeOscMessage('/a', ['Проектор 1', '58 °C'])), [
+        '/a',
+        'Проектор 1',
+        '58 °C',
+      ]);
+    });
+
+    test('every string ends in at least one null, padded to 4', () {
+      final bytes = encodeOscMessage('/abc', []);
+      expect(bytes.length % 4, 0);
+      expect(bytes.sublist(0, 8), [..."/abc".codeUnits, 0, 0, 0, 0]);
     });
   });
 

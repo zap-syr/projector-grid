@@ -1,8 +1,11 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../../core/services/osc_service.dart';
+import '../../domain/alerts.dart';
 import '../../domain/projector_node.dart';
 import '../../domain/log_event.dart';
+import 'alert_counts_provider.dart';
+import 'alerts_provider.dart';
 import 'app_settings_provider.dart';
 import 'custom_commands_provider.dart';
 import 'event_log_provider.dart';
@@ -29,7 +32,37 @@ class OscNotifier extends _$OscNotifier {
       start();
     }
 
+    // Acknowledging changes the counts without touching the workspace, so
+    // the workspace's onStateChanged alone would miss it.
+    ref.listen(alertCountsProvider, (_, _) => _service.sendStatusIfActive());
+    final alertEvents = ref
+        .read(alertsProvider.notifier)
+        .events
+        .listen(_sendAlert);
+    ref.onDispose(alertEvents.cancel);
+
     return false; // real state syncs shortly after via start(), if active
+  }
+
+  /// One message per alert change, never repeated while nothing changes;
+  /// dropped by the service while OSC is stopped.
+  void _sendAlert(AlertEvent e) {
+    if (!ref.read(appSettingsProvider).alerts.osc) return;
+    final a = e.alert;
+    if (e.change == AlertChange.acknowledged) {
+      _service.sendMessage('/pgrid/alert/acknowledged', [
+        e.projector,
+        a.rule.slug,
+      ]);
+      return;
+    }
+    _service.sendMessage('/pgrid/alert/${a.rule.slug}', [
+      e.projector,
+      e.ip,
+      if (e.change == AlertChange.raised) 1 else 0,
+      a.severity.name,
+      a.value,
+    ]);
   }
 
   void _wireCallbacks() {
@@ -81,14 +114,15 @@ class OscNotifier extends _$OscNotifier {
       final offline = nodes
           .where((n) => n.connectionStatus == ConnectionStatus.offline)
           .length;
-      final warnings = nodes
-          .where(
-            (n) =>
-                n.errors != 'NO ERRORS' && n.errors != '-' ||
-                n.connectionStatus == ConnectionStatus.unauthorized,
-          )
-          .length;
-      return (online: online, offline: offline, warnings: warnings);
+      // Unacknowledged alerts, not projectors: /pgrid/status/warning used to
+      // count projectors with errors, which are critical alerts now.
+      final alerts = ref.read(alertCountsProvider);
+      return (
+        online: online,
+        offline: offline,
+        critical: alerts.critical,
+        warning: alerts.warning,
+      );
     };
 
     _service.resolveGroupId = (String oscAddress) {

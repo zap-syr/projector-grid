@@ -117,8 +117,9 @@ undoing a layout change never rolls back power/temperature readings.
   challenge token. Commands are plain text (`PON` power on, `OSH:1` shutter close). See the
   `panasonic-ntcontrol` skill for the full wire format and connection-concurrency limits.
 - **`osc_service.dart`** — UDP. Inbound: maps OSC addresses to projector actions; custom commands get slugs
-  like `/pgrid/custom/dynamic-contrast`. Outbound: broadcasts `/pgrid/status/{online,offline,warning}` to a
-  configured send IP/port on every status change.
+  like `/pgrid/custom/dynamic-contrast`. Outbound: broadcasts `/pgrid/status/{online,offline,critical,warning}` to a
+  configured send IP/port on every status change (`critical`/`warning` count unacknowledged alerts), and
+  `/pgrid/alert/<rule>` / `/pgrid/alert/acknowledged` from `alertsProvider.events`.
 - **`remote_preview_service.dart`** — "Remote Preview" (RemoView) live view: a WebSocket client to
   the projector's own web UI (`ws://<ip>:80/remotepreview`, port 80 — not the NTCONTROL port),
   receiving ~1fps JPEG frames and text status messages. Transport-only, no Riverpod/UI in this

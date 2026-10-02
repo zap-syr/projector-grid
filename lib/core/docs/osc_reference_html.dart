@@ -196,6 +196,7 @@ const String oscReferenceHtml = '''<!DOCTYPE html>
       <li><a href="#quadpixel">Quad Pixel Drive</a></li>
       <li><a href="#custom">Custom Commands</a></li>
       <li><a href="#outgoing">Outgoing Status</a></li>
+      <li><a href="#alerts">Alert Messages</a></li>
     </ul>
   </nav>
 
@@ -447,7 +448,7 @@ const String oscReferenceHtml = '''<!DOCTYPE html>
   <!-- ─── OUTGOING STATUS ─── -->
   <h2 id="outgoing">Outgoing Status Messages</h2>
 
-  <p>The app sends status updates over UDP whenever projector counts change. Your system receives these on the configured send IP and send port.</p>
+  <p>The app sends status updates over UDP whenever a count changes. Your system receives these on the configured send IP and send port.</p>
 
   <table class="outgoing-table">
     <thead>
@@ -465,14 +466,46 @@ const String oscReferenceHtml = '''<!DOCTYPE html>
         <td>Number of offline projectors changes</td>
       </tr>
       <tr>
+        <td><code>/pgrid/status/critical</code></td>
+        <td>int</td>
+        <td>Number of unacknowledged critical alerts changes</td>
+      </tr>
+      <tr>
         <td><code>/pgrid/status/warning</code></td>
         <td>int</td>
-        <td>Number of projectors with errors or unauthorized status changes</td>
+        <td>Number of unacknowledged warning alerts changes (before alerts, this counted projectors with errors; projector errors are critical alerts now)</td>
       </tr>
     </tbody>
   </table>
 
-  <p>Send <code>/pgrid/status</code> (no arguments) to request all three values immediately, bypassing change detection.</p>
+  <p>Send <code>/pgrid/status</code> (no arguments) to request all four values immediately, bypassing change detection.</p>
+
+  <!-- ─── ALERTS ─── -->
+  <h2 id="alerts">Alert Messages</h2>
+
+  <p>With <strong>Preferences → Alerts → OSC message</strong> on, every alert change goes to the same target: one message per change, never repeated while nothing changes. Strings are <code>s</code>, integers <code>i</code>.</p>
+
+  <table class="outgoing-table">
+    <thead>
+      <tr><th>Address</th><th>Arguments</th><th>Sent when</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>/pgrid/alert/{rule}</code></td>
+        <td>projector (s), ip (s), active (i, 1/0), severity (s), value (s)</td>
+        <td>An alert is raised (1) or clears (0)</td>
+      </tr>
+      <tr>
+        <td><code>/pgrid/alert/acknowledged</code></td>
+        <td>projector (s), rule (s)</td>
+        <td>Someone acknowledges an alert</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>Rule names in the address: <code>offline</code>, <code>error</code>, <code>signal-lost</code>, <code>intake-temp</code>, <code>exhaust-temp</code>. A warning that turns critical is sent again as raised, with severity <code>critical</code>.</p>
+
+  <p class="example">Example: <code>/pgrid/alert/exhaust-temp "PRJ-02 Centre" "192.168.10.12" 1 "warning" "58 °C"</code></p>
 
 </div>
 </body>

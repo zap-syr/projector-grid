@@ -94,7 +94,7 @@ Key providers:
 
 **NTCONTROL** (`panasonic_protocol_service.dart`): TCP socket per projector. Authentication uses an MD5 hash of a challenge token. Commands are plain-text strings (`PON` = power on, `OSH:1` = shutter close).
 
-**OSC** (`osc_service.dart`): UDP-based. Receives commands on a configurable port and maps OSC addresses to projector actions. Custom commands produce slugs like `/pgrid/custom/dynamic-contrast`. The service also broadcasts projector status outbound (`/pgrid/status/online`, `/pgrid/status/offline`, `/pgrid/status/warning`) to a configurable send IP and port whenever status changes.
+**OSC** (`osc_service.dart`): UDP-based. Receives commands on a configurable port and maps OSC addresses to projector actions. Custom commands produce slugs like `/pgrid/custom/dynamic-contrast`. The service also broadcasts projector status outbound (`/pgrid/status/online`, `/pgrid/status/offline`, and the unacknowledged alert counts `/pgrid/status/critical`, `/pgrid/status/warning`) to a configurable send IP and port whenever status changes, plus one `/pgrid/alert/<rule>` or `/pgrid/alert/acknowledged` message per alert change.
 
 ### Persistence
 

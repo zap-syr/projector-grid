@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'dart:async';
 import 'dart:collection';
+import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:osc/osc.dart';
 import 'package:flutter/foundation.dart';
@@ -140,8 +142,51 @@ typedef OscCommandCallback = Future<void> Function({
   bool all,
 });
 
-/// Callback type for collecting projector status counts.
-typedef OscStatusCallback = ({int online, int offline, int warnings});
+/// One outgoing OSC 1.0 message: strings as UTF-8, null-terminated and
+/// padded to 4 bytes; ints as 32-bit big-endian; doubles as 32-bit floats.
+///
+/// Not package:osc's own encoder: it writes a string's UTF-16 code units
+/// one byte each, so `°` goes out as a lone 0xB0 and a Cyrillic projector
+/// name is cut down to garbage.
+List<int> encodeOscMessage(String address, List<Object> arguments) {
+  final out = BytesBuilder();
+  void string(String s) {
+    final bytes = utf8.encode(s);
+    out
+      ..add(bytes)
+      ..add(List.filled(4 - bytes.length % 4, 0));
+  }
+
+  string(address);
+  string(
+    ',${arguments.map((a) => switch (a) {
+      String() => 's',
+      int() => 'i',
+      double() => 'f',
+      _ => throw ArgumentError.value(a, 'arguments', 'OSC string, int or double'),
+    }).join()}',
+  );
+  for (final a in arguments) {
+    switch (a) {
+      case String():
+        string(a);
+      case int():
+        out.add((ByteData(4)..setInt32(0, a)).buffer.asUint8List());
+      case double():
+        out.add((ByteData(4)..setFloat32(0, a)).buffer.asUint8List());
+    }
+  }
+  return out.takeBytes();
+}
+
+/// Callback type for collecting projector status counts. [critical] and
+/// [warning] are unacknowledged alerts, not projectors.
+typedef OscStatusCallback = ({
+  int online,
+  int offline,
+  int critical,
+  int warning,
+});
 
 class OscService {
   RawDatagramSocket? _socket;
@@ -158,7 +203,8 @@ class OscService {
   // Previous counts — used to detect changes and skip redundant sends.
   int? _lastOnline;
   int? _lastOffline;
-  int? _lastWarnings;
+  int? _lastCritical;
+  int? _lastWarning;
 
   // RawDatagramSocket.send() returns 0 instead of throwing when the socket
   // can't take the datagram yet — on Windows that's most back-to-back sends,
@@ -202,7 +248,8 @@ class OscService {
     _sendPort = sendPort;
     _lastOnline = null;
     _lastOffline = null;
-    _lastWarnings = null;
+    _lastCritical = null;
+    _lastWarning = null;
 
     try {
       final bindAddress = networkDevice.isEmpty
@@ -351,7 +398,7 @@ class OscService {
       return;
     }
 
-    // /pgrid/status — request: send all 3 status messages immediately, bypass change detection.
+    // /pgrid/status — request: send every status message immediately, bypass change detection.
     if (address == '/pgrid/status') {
       sendStatusForced();
       return;
@@ -374,29 +421,40 @@ class OscService {
       _sendMessage('/pgrid/status/offline', status.offline);
       _lastOffline = status.offline;
     }
-    if (status.warnings != _lastWarnings) {
-      _sendMessage('/pgrid/status/warning', status.warnings);
-      _lastWarnings = status.warnings;
+    if (status.critical != _lastCritical) {
+      _sendMessage('/pgrid/status/critical', status.critical);
+      _lastCritical = status.critical;
+    }
+    if (status.warning != _lastWarning) {
+      _sendMessage('/pgrid/status/warning', status.warning);
+      _lastWarning = status.warning;
     }
   }
 
-  /// Sends all 3 status messages unconditionally (used for on-demand /pgrid/status requests).
+  /// Sends every status message unconditionally (used for on-demand /pgrid/status requests).
   void sendStatusForced() {
     if (!_isActive || _socket == null || getStatus == null) return;
 
     final status = getStatus!();
     _sendMessage('/pgrid/status/online', status.online);
     _sendMessage('/pgrid/status/offline', status.offline);
-    _sendMessage('/pgrid/status/warning', status.warnings);
+    _sendMessage('/pgrid/status/critical', status.critical);
+    _sendMessage('/pgrid/status/warning', status.warning);
     _lastOnline = status.online;
     _lastOffline = status.offline;
-    _lastWarnings = status.warnings;
+    _lastCritical = status.critical;
+    _lastWarning = status.warning;
   }
 
-  void _sendMessage(String address, int value) {
-    _outbox.add(OSCMessage(address, arguments: [value]).toBytes());
+  /// Sends one message with any arguments (strings, ints, floats) to the
+  /// send target, if the service is running. For the alert messages.
+  void sendMessage(String address, List<Object> arguments) {
+    if (!_isActive || _socket == null) return;
+    _outbox.add(encodeOscMessage(address, arguments));
     _flushOutbox();
   }
+
+  void _sendMessage(String address, int value) => sendMessage(address, [value]);
 
   void _flushOutbox() {
     final socket = _socket;
