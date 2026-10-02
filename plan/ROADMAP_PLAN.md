@@ -477,8 +477,8 @@ on for the show.
 | Offline | critical | the first poll that gets no answer (the moment `connectionStatus` turns `offline`); no poll-count setting | `connectionStatus` |
 | Projector error | critical | `errors` changes away from `NO ERRORS`; one alert per reported error | `QVX:ERRS2` |
 | Signal lost | critical | powered on, a signal was seen since power-on, then it is gone; **no debounce**, every dropout counts | see spike below |
-| Intake temperature | warning at *warm*, critical at *hot* | thresholds shared with the Monitoring table tint (`kIntakeTempThreshold`, 40 / 45 °C) | `QTM:0` |
-| Exhaust temperature | warning at *warm*, critical at *hot* | same, `kExhaustTempThreshold` (55 / 65 °C) | `QTM:1` |
+| Intake temperature | warning at *warm*, critical at *hot* | thresholds shared with the Monitoring table tint (`AlertSettings.intake`, default 40 / 45 °C) | `QTM:0` |
+| Exhaust temperature | warning at *warm*, critical at *hot* | same, `AlertSettings.exhaust` (default 55 / 65 °C) | `QTM:1` |
 
 Signal lost details:
 - Armed only after the projector has shown a signal once since power-on, so powering up
@@ -537,8 +537,10 @@ UI text uses commas, colons and parentheses as separators, never `·` or `—`.
 
 **Alert panel** (from the card badge):
 - Hover the badge for 250 ms → opens. It stays open while the pointer is on the badge or the
-  panel (250 ms grace to cross the gap), so its buttons are reachable. Clicking the badge pins
-  it until a click outside or Esc. One panel, no read-only mode.
+  panel (250 ms grace to cross the gap), so its buttons are reachable; a click elsewhere
+  closes it. One panel, no read-only mode. **No pinning** (changed 2026-10-02): a click on
+  the badge is a click on the card (it selects); a pinned panel looked the same as a hovered
+  one and read as stuck.
 - Built on `OverlayPortal`, not `Tooltip` — a `Tooltip` inside the card's `MenuAnchor`
   corrupts the Windows AXTree (see the comment in `projector_card.dart`). Not scaled with
   canvas zoom.
@@ -568,9 +570,17 @@ UI text uses commas, colons and parentheses as separators, never `·` or `—`.
   - Grouping toggle **Projector / Alert**. Starts on Projector; the last choice is remembered
     in app settings. Alert grouping turns a mass failure (one media server feeding 24
     projectors) into one row, e.g. "Signal lost, 20 projectors, since 14:11".
-  - Groups start folded when there are more than 4; a folded group shows a one-line summary
-    (projector: its rule names; alert: the first projector names "and N more").
-    Each group has its own *Acknowledge* button.
+  - Groups start folded when there are more than 4. Group headers are one line, the same
+    folded and unfolded (approved 2026-10-02, mockup
+    https://claude.ai/artifact/1sFY6SMU1z3SC868eeB6Dm v6): projector name and IP with
+    the counts; or rule, "N projectors, since 14:11" and the count. No summary line under
+    them. Each group has its own *Acknowledge* button.
+  - **Project groups** toggle (`workspaces` icon next to Projector / Alert), shown only in
+    the Projector grouping of a project that has groups, last state saved in app settings:
+    sorts the projector groups into foldable sections, one per project group in Manage
+    Groups order (colour, projector count, alert counts, its own *Acknowledge*), then
+    **Ungrouped**.
+  - Rows grouped by alert name the projector with its IP instead of the rule.
   - Same alert rows as the card panel; acknowledged ones collapsed at the bottom.
   - Empty states: "No active alerts", and "All acknowledged" when nothing is new.
 - There is no "clear" button: acknowledging is the clear, and the list only holds conditions
@@ -592,13 +602,29 @@ column, and a rule that's off greys out its fields.
   No Event log row: alerts are always logged.
 - Not settings: hysteresis (2 °C) and the Signal lost arming.
 
-**Value fields** (all numeric fields in this section; whether the rest of Preferences moves
-to the same style is decided after the design is final):
+**Value fields and dropdowns, whole dialog** (approved 2026-10-02, mockup v4 at the
+Preferences link above; every field and dropdown in Preferences moves to this style, OSC and
+Web Access included):
 - Filled, no outline at rest: `surfaceContainerHighest` background, radius 8, height 32
   (same as the segmented buttons), unit inside the field, an optional severity icon in front.
+  Numbers right-aligned; IP and PIN fields left-aligned.
 - While editing: a 2 px primary border around the whole field and a slight primary tint.
+  Error: 1 px error border and a faint error tint at rest, 2 px while editing; the message
+  stays under the row label and in the footer.
+- Focusing a field selects its whole value, so typing replaces it. In Flutter, select in a
+  post-frame callback after the tap: a tap places the caret after focus arrives.
 - **Enter** applies the value and drops focus. **Esc** drops focus without applying (the
   field returns to the value it had before editing) and must not close the dialog.
+- Hints under row labels are smaller and lighter than the label (the label gets weight 500);
+  placeholders (`Unchanged`, `Not set`) are italic, smaller and lighter than any value.
+- **Dropdown:** the same filled surface, network icon, IP in bold, interface name muted;
+  editing border and a turned chevron while open. Menu on its own raised surface, 36 px rows,
+  a check on the current value, *Any interface* split off by a divider; opens below, flips
+  above when there's no room; arrow keys, Enter, Esc closes only the menu. Built on
+  `MenuAnchor` with a custom button, not `DropdownMenu` (a text field; plain text only).
+- *Link* is read-only: quieter surface, no hover, copy button inside. *Sign out all* is
+  36 px tall, like the footer buttons (32 read too thin in the app). The HTTP note loses
+  its dash.
 
 **Desktop notifications:**
 - The system's own UI (Windows toast, macOS Notification Center banner); the app sets icon,
@@ -634,6 +660,70 @@ errors, from now on unacknowledged warning alerts, since errors become critical 
 `/pgrid/status` (request) answers with `critical` too. Update to match: the OSC reference
 (`osc_reference_html.dart`), and `statusSummaryProvider`, whose `warnings` count (projectors
 with errors) feeds both the status bar and `osc_provider.dart` today.
+
+### Progress
+Build order: engine → Preferences (fields, dropdown, Alerts section) → card badge and panel
+→ status bar and Active alerts → OSC → Monitoring tints → notifications and sound.
+- `[x]` Engine (2026-10-02): `AlertSettings` in app settings (thresholds moved there from
+  `status_thresholds.dart`, which now holds the defaults and the 2 °C hysteresis),
+  `domain/alerts.dart` (evaluate, reconcile, sort), `alertsProvider`, event log type
+  `alert`. Offline needs `ProjectorNode.polled`, so a just-loaded project doesn't raise it
+  before the first poll.
+- `[x]` Projector error (2026-10-02): `decodeProjectorErrors`
+  (`domain/projector_errors.dart`) pulls every `U/F/H###` code out of the `ERRS2` reply and
+  names it from the PT-RQ35K manual's code table (exact codes before the ranges that hold
+  them), e.g. "Fan error (F305)". Severity comes from the table: the manual's *warnings*
+  (U081, U200–U280, F200–F228, H001) raise warning alerts, everything else critical. A code
+  the table doesn't know, or a reply with no code in it, comes through raw as one critical
+  alert. Confirmed on hardware 2026-10-02: `ERRS2` returns these codes. The table is also
+  in the `panasonic-ntcontrol` skill (`command_reference.md` → Self-diagnosis codes).
+- `[ ]` Later, with hardware: the projector's web UI shows each error code with its
+  description. If that page parses reliably (the app already reads the web status page for
+  signal), take the descriptions from there and keep the table as the fallback.
+- `[x]` Preferences (2026-10-02): `SettingsValueField`, `SettingsDropdown` (one text line,
+  so the IP is never cut for the interface name's sake), quieter `SettingsRow` hints, the
+  Alerts section; Save rejects a warning threshold at or above critical. Checked in the app.
+- `[x]` Card badge and alert panel (2026-10-02): `AlertBadge` on
+  `OverlayPortal.overlayChildLayoutBuilder` (gets the badge's place during layout, so the
+  panel follows the card through zoom and pan), `ProjectorAlertPanel`, shared `AlertRow` /
+  `AlertScrollArea`. *Event log* opens the log searching for the projector's IP
+  (`eventLogRequestProvider`); the log got an *Alerts* tab. Checked in the app.
+- `[x]` Status bar Alerts button and Active alerts (2026-10-02): `StatusBarAlertsButton`,
+  `ActiveAlertsPanel` (stays under its button and shrinks with the window), project-group
+  sections (`sectionByProjectGroup`). Projector groups go by IP ascending (`ipSortKey`,
+  shared with the Monitoring table), also inside sections; rule groups stay
+  most-urgent-first. Checked in the app.
+- `[x]` OSC (2026-10-02): `alertsProvider.events` (raised / cleared / acknowledged, with
+  name and IP) → `/pgrid/alert/<rule>` and `/pgrid/alert/acknowledged`, gated by the
+  *OSC message* setting; `/pgrid/status/critical` and the new-meaning `/pgrid/status/warning`
+  from `alertCountsProvider`, also sent on acknowledge; `statusSummaryProvider.warnings`
+  removed; OSC reference updated. Outgoing messages use our own `encodeOscMessage`:
+  package:osc writes strings as single-byte UTF-16 code units (`°` and Cyrillic names
+  come out broken), and its decoder misreads arguments after a string of 4n bytes.
+- `[~]` Monitoring table (2026-10-02, mockup https://claude.ai/artifact/B6LrAinsr6zWe5B7VzHskr
+  v3): Intake / Exhaust tinted by their active alert (hysteresis, switched-off rule);
+  Errors cell shows the codes as severity-coloured tags, critical first, up to 4 then +N
+  (`MonitoringErrorsCell`), and a hover panel with each error's name and how long it has
+  been active, no header; group rows count unacknowledged alerts by severity (auth errors
+  only when there are none). Hover behaviour shared with the card badge (`HoverPanel`).
+  Checked in the app; the Errors cell only in tests (the simulator reports no errors).
+- `[~]` Desktop notifications and sound (2026-10-02): packages chosen after the spike,
+  `flutter_local_notifications` (Windows toast in an unpackaged exe via AUMID + GUID,
+  silent mode, click callback; macOS asks permission on first use) and `audioplayers`.
+  Two sounds synthesised by `tool/generate_alert_sounds.dart` into `assets/sounds/`.
+  `alertNotificationsProvider` batches raised alerts for 2 s from the first
+  (`alertNotice`, `noticeable` in `domain/alert_notifications.dart`); a click brings the
+  window forward on Active alerts (`activeAlertsRequestProvider`). Preferences has the
+  play-sample button. Severity icon in the Windows toast (`appLogoOverride`, the batch's
+  top severity): `tool/generate_alert_icons.dart` → `assets/alert_icons/`, glyph ~75% of
+  the image so it reads smaller at Windows' fixed logo size. macOS keeps the app icon (no
+  API to replace it; an attachment thumbnail was declined). The toast header's app icon
+  comes only from a Start menu shortcut carrying the AUMID (checked with a test
+  shortcut), so the installer's shortcut sets `AppUserModelID` and the toast activator
+  CLSID; dev and portable builds show the header without an icon. Checked on Windows;
+  awaiting a check on macOS.
+- `[ ]` Signal lost: waits for the RemoView spike; the rule and its switch exist, nothing
+  raises it yet.
 
 ### Code
 - `domain/alert_rule.dart` (plain Dart + JSON, saved in app settings — alerts are a machine
