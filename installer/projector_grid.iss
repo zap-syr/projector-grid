@@ -31,7 +31,9 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExeName}"
+; Windows puts the app's icon in a toast's header only for an AUMID that a
+; Start menu shortcut carries; both must match DesktopNotificationService.
+Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExeName}"; AppUserModelID: "ProjectorGrid.ProjectorGrid"; AppUserModelToastActivatorCLSID: "B6C4A1E2-5F3D-4E8A-9C71-2D0F8E6A4B13"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
 
 [Run]
