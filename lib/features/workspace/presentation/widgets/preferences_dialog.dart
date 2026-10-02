@@ -4,16 +4,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../domain/alert_rule.dart';
 import '../../domain/web_pins.dart';
+import '../providers/alert_delivery_providers.dart';
 import '../providers/app_settings_provider.dart';
 import '../providers/osc_provider.dart';
 import '../providers/web_server_provider.dart';
 import '../providers/workspace_provider.dart';
 import 'dialog_title_bar.dart';
+import 'settings_dropdown.dart';
 import 'settings_rows.dart';
+import 'settings_value_field.dart';
 
 enum _Section {
   general('General', Icons.tune),
+  alerts('Alerts', Icons.notifications_outlined),
   osc('OSC', Icons.sensors),
   web('Web Access', Icons.language);
 
@@ -36,6 +41,15 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
   // General
   late final TextEditingController _intervalController;
   late ThemeMode _selectedTheme;
+
+  // Alerts: thresholds live in their own fields until Save.
+  late AlertSettings _alerts;
+  late final TextEditingController _intakeWarmController;
+  late final TextEditingController _intakeHotController;
+  late final TextEditingController _exhaustWarmController;
+  late final TextEditingController _exhaustHotController;
+  String? _intakeError;
+  String? _exhaustError;
 
   // OSC
   late bool _oscActive;
@@ -64,6 +78,20 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
       text: settings.pollingIntervalSeconds.toString(),
     );
     _selectedTheme = settings.themeMode;
+    _alerts = settings.alerts;
+    String degrees(double c) => c.round().toString();
+    _intakeWarmController = TextEditingController(
+      text: degrees(_alerts.intake.warm),
+    );
+    _intakeHotController = TextEditingController(
+      text: degrees(_alerts.intake.hot),
+    );
+    _exhaustWarmController = TextEditingController(
+      text: degrees(_alerts.exhaust.warm),
+    );
+    _exhaustHotController = TextEditingController(
+      text: degrees(_alerts.exhaust.hot),
+    );
     _oscActive = settings.oscActive;
     _selectedNetworkDevice = settings.oscNetworkDevice;
     _oscReceivePortController = TextEditingController(
@@ -103,16 +131,27 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
   String _webUrl(String ip) => 'http://$ip:${_webPortController.text}';
 
   /// Footer summary of a rejected Save; names the field because the bare
-  /// messages ("Required") don't say which PIN they're about.
-  String? get _webError => _webPinError != null
+  /// messages ("Required") don't say which value they're about.
+  String? get _saveError => _intakeError != null
+      ? 'Intake temperature: $_intakeError'
+      : _exhaustError != null
+      ? 'Exhaust temperature: $_exhaustError'
+      : _webPinError != null
       ? 'Viewer PIN: $_webPinError'
       : _webOperatorPinError != null
       ? 'Operator PIN: $_webOperatorPinError'
       : null;
 
+  bool get _alertsHaveError => _intakeError != null || _exhaustError != null;
+  bool get _webHasError => _webPinError != null || _webOperatorPinError != null;
+
   @override
   void dispose() {
     _intervalController.dispose();
+    _intakeWarmController.dispose();
+    _intakeHotController.dispose();
+    _exhaustWarmController.dispose();
+    _exhaustHotController.dispose();
     _oscReceivePortController.dispose();
     _oscSendIpController.dispose();
     _oscSendPortController.dispose();
@@ -128,7 +167,13 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
     // live socket needs rebinding, not just whether OSC was toggled).
     final oldSettings = ref.read(appSettingsProvider);
 
-    // Checked before anything is written, so a rejected PIN saves nothing.
+    // Checked before anything is written, so a rejected value saves nothing.
+    final intakeWarm = int.tryParse(_intakeWarmController.text);
+    final intakeHot = int.tryParse(_intakeHotController.text);
+    final exhaustWarm = int.tryParse(_exhaustWarmController.text);
+    final exhaustHot = int.tryParse(_exhaustHotController.text);
+    final intakeError = temperatureThresholdError(intakeWarm, intakeHot);
+    final exhaustError = temperatureThresholdError(exhaustWarm, exhaustHot);
     final pin = _webPinController.text;
     final operatorPin = _webOperatorPinController.text;
     final pinErrors = validateWebPins(
@@ -139,11 +184,16 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
       viewerHash: oldSettings.webViewerPinHash,
       operatorHash: oldSettings.webOperatorPinHash,
     );
-    if (pinErrors.viewer != null || pinErrors.operator != null) {
+    if (intakeError != null ||
+        exhaustError != null ||
+        pinErrors.viewer != null ||
+        pinErrors.operator != null) {
       setState(() {
+        _intakeError = intakeError;
+        _exhaustError = exhaustError;
         _webPinError = pinErrors.viewer;
         _webOperatorPinError = pinErrors.operator;
-        _section = _Section.web;
+        _section = _alertsHaveError ? _Section.alerts : _Section.web;
       });
       return;
     }
@@ -162,8 +212,16 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
     }
     ref.read(appSettingsProvider.notifier).setThemeMode(_selectedTheme);
 
-    // OSC settings
+    // Alerts
     final settingsNotifier = ref.read(appSettingsProvider.notifier);
+    settingsNotifier.setAlertSettings(
+      _alerts.copyWith(
+        intake: (warm: intakeWarm!.toDouble(), hot: intakeHot!.toDouble()),
+        exhaust: (warm: exhaustWarm!.toDouble(), hot: exhaustHot!.toDouble()),
+      ),
+    );
+
+    // OSC settings
     settingsNotifier.setOscNetworkDevice(_selectedNetworkDevice);
     final recvPort = int.tryParse(_oscReceivePortController.text);
     if (recvPort != null && recvPort > 0) {
@@ -221,36 +279,15 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
     Navigator.of(context).pop();
   }
 
-  InputDecoration _decoration({
-    String? hintText,
-    String? suffixText,
-    bool hasError = false,
-  }) {
-    final error = Theme.of(context).colorScheme.error;
-    // The message itself sits under the row label (SettingsRow.error);
-    // errorText here would squeeze it into the narrow field.
-    return InputDecoration(
-      border: const OutlineInputBorder(),
-      enabledBorder: hasError
-          ? OutlineInputBorder(borderSide: BorderSide(color: error))
-          : null,
-      focusedBorder: hasError
-          ? OutlineInputBorder(borderSide: BorderSide(color: error, width: 2))
-          : null,
-      isDense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      hintText: hintText,
-      suffixText: suffixText,
-    );
-  }
-
-  Widget _numberField(TextEditingController controller, {String? suffix}) =>
-      TextField(
-        controller: controller,
-        keyboardType: TextInputType.number,
-        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-        decoration: _decoration(suffixText: suffix),
-      );
+  Widget _numberField(
+    TextEditingController controller, {
+    String? unit,
+    double inputWidth = 44,
+  }) => SettingsValueField(
+    controller: controller,
+    unit: unit,
+    inputWidth: inputWidth,
+  );
 
   Widget _pinField({
     required TextEditingController controller,
@@ -258,50 +295,27 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
     required VoidCallback clearError,
     required bool isSet,
     bool enabled = true,
-  }) => TextField(
+  }) => SettingsValueField(
     controller: controller,
-    enabled: enabled,
+    numeric: false,
     obscureText: true,
-    keyboardType: TextInputType.number,
-    inputFormatters: [
-      FilteringTextInputFormatter.digitsOnly,
-      LengthLimitingTextInputFormatter(8),
-    ],
+    maxLength: 8,
+    width: 132,
+    enabled: enabled,
+    hasError: error != null,
+    hintText: isSet ? 'Unchanged' : 'Not set',
     onChanged: (_) {
       if (error != null) setState(clearError);
     },
-    decoration: _decoration(
-      hintText: isSet ? 'Unchanged' : 'Not set',
-      hasError: error != null,
-    ),
   );
 
-  Widget _addressDropdown({
-    required Key key,
-    required String? initialSelection,
-    required List<DropdownMenuEntry<String>> entries,
-    required ValueChanged<String?> onSelected,
-  }) => DropdownMenu<String>(
-    key: key,
-    initialSelection: initialSelection,
-    expandedInsets: EdgeInsets.zero,
-    requestFocusOnTap: false,
-    enableFilter: false,
-    inputDecorationTheme: const InputDecorationTheme(
-      border: OutlineInputBorder(),
-      isDense: true,
-      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-    ),
-    dropdownMenuEntries: entries,
-    onSelected: onSelected,
-  );
-
-  List<DropdownMenuEntry<String>> get _interfaceEntries => [
+  List<SettingsDropdownEntry<String>> get _interfaceEntries => [
     for (final iface in _networkInterfaces ?? const <NetworkInterface>[])
       for (final addr in iface.addresses)
-        DropdownMenuEntry(
+        SettingsDropdownEntry(
           value: addr.address,
-          label: '${iface.name}  ${addr.address}',
+          label: addr.address,
+          detail: iface.name,
         ),
   ];
 
@@ -317,7 +331,7 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
             hint:
                 '${AppSettings.minPollingIntervalSeconds}–${AppSettings.maxPollingIntervalSeconds} s',
             controlWidth: 120,
-            control: _numberField(_intervalController, suffix: 's'),
+            control: _numberField(_intervalController, unit: 's'),
           ),
         ],
       ),
@@ -351,6 +365,200 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
     ],
   );
 
+  void _setRule(AlertRule rule, bool on) => setState(
+    () => _alerts = _alerts.copyWith(
+      enabled: on
+          ? {..._alerts.enabled, rule}
+          : _alerts.enabled.difference({rule}),
+    ),
+  );
+
+  SettingsRow _ruleRow(
+    AlertRule rule, {
+    required String hint,
+    AlertSeverity? severity,
+    List<Widget> fields = const [],
+    String? error,
+  }) {
+    final on = _alerts.isEnabled(rule);
+    return SettingsRow(
+      label: rule.label,
+      hint: hint,
+      error: error,
+      enabled: on,
+      leading: severity == null
+          ? const SizedBox(width: 16)
+          : _SeverityIcon(severity),
+      controlWidth: 260,
+      control: Row(
+        mainAxisSize: MainAxisSize.min,
+        spacing: 10,
+        children: [
+          if (fields.isNotEmpty)
+            Row(mainAxisSize: MainAxisSize.min, spacing: 6, children: fields),
+          Switch(value: on, onChanged: (v) => _setRule(rule, v)),
+        ],
+      ),
+    );
+  }
+
+  /// Warning and critical fields of one temperature rule.
+  List<Widget> _thresholdFields(
+    AlertRule rule,
+    TextEditingController warm,
+    TextEditingController hot,
+    String? error,
+    VoidCallback clearError,
+  ) => [
+    for (final (controller, severity) in [
+      (warm, AlertSeverity.warning),
+      (hot, AlertSeverity.critical),
+    ])
+      SettingsValueField(
+        controller: controller,
+        unit: '°C',
+        inputWidth: 24,
+        leading: _SeverityIcon(severity, size: 14),
+        enabled: _alerts.isEnabled(rule),
+        hasError: error != null,
+        semanticLabel: '${rule.label} ${severity.name}',
+        onChanged: (_) {
+          if (error != null) setState(clearError);
+        },
+      ),
+  ];
+
+  Widget _scopeButton(
+    AlertNotifyScope value,
+    bool enabled,
+    ValueChanged<AlertNotifyScope> onChanged,
+  ) => SegmentedButton<AlertNotifyScope>(
+    segments: const [
+      ButtonSegment(value: AlertNotifyScope.critical, label: Text('Critical')),
+      ButtonSegment(value: AlertNotifyScope.all, label: Text('All')),
+    ],
+    selected: {value},
+    showSelectedIcon: false,
+    onSelectionChanged: enabled ? (s) => onChanged(s.first) : null,
+  );
+
+  Widget _buildAlerts() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    spacing: 20,
+    children: [
+      SettingsGroup(
+        title: 'Rules',
+        children: [
+          _ruleRow(
+            AlertRule.offline,
+            hint: 'Poll gets no answer',
+            severity: AlertSeverity.critical,
+          ),
+          _ruleRow(
+            AlertRule.error,
+            hint: 'Any error the projector reports',
+            severity: AlertSeverity.critical,
+          ),
+          _ruleRow(
+            AlertRule.signalLost,
+            hint: 'Every dropout while powered on',
+            severity: AlertSeverity.critical,
+          ),
+          _ruleRow(
+            AlertRule.intakeTemp,
+            hint: 'Also tints the Monitoring table',
+            error: _intakeError,
+            fields: _thresholdFields(
+              AlertRule.intakeTemp,
+              _intakeWarmController,
+              _intakeHotController,
+              _intakeError,
+              () => _intakeError = null,
+            ),
+          ),
+          _ruleRow(
+            AlertRule.exhaustTemp,
+            hint: 'Also tints the Monitoring table',
+            error: _exhaustError,
+            fields: _thresholdFields(
+              AlertRule.exhaustTemp,
+              _exhaustWarmController,
+              _exhaustHotController,
+              _exhaustError,
+              () => _exhaustError = null,
+            ),
+          ),
+        ],
+      ),
+      SettingsGroup(
+        title: 'Notify',
+        children: [
+          SettingsRow(
+            label: 'Desktop notification',
+            control: Switch(
+              value: _alerts.desktopNotification,
+              onChanged: (v) => setState(
+                () => _alerts = _alerts.copyWith(desktopNotification: v),
+              ),
+            ),
+          ),
+          SettingsRow(
+            label: 'Notify for',
+            indented: true,
+            enabled: _alerts.desktopNotification,
+            control: _scopeButton(
+              _alerts.desktopNotifyFor,
+              _alerts.desktopNotification,
+              (v) => setState(
+                () => _alerts = _alerts.copyWith(desktopNotifyFor: v),
+              ),
+            ),
+          ),
+          SettingsRow(
+            label: 'Sound',
+            control: Row(
+              mainAxisSize: MainAxisSize.min,
+              spacing: 6,
+              children: [
+                // The critical sound: the one an operator must recognise.
+                IconButton(
+                  tooltip: 'Play sample',
+                  icon: const Icon(Icons.volume_up_outlined, size: 20),
+                  onPressed: () =>
+                      ref.read(alertSoundServiceProvider).play(critical: true),
+                ),
+                Switch(
+                  value: _alerts.sound,
+                  onChanged: (v) =>
+                      setState(() => _alerts = _alerts.copyWith(sound: v)),
+                ),
+              ],
+            ),
+          ),
+          SettingsRow(
+            label: 'Play for',
+            indented: true,
+            enabled: _alerts.sound,
+            control: _scopeButton(
+              _alerts.soundFor,
+              _alerts.sound,
+              (v) => setState(() => _alerts = _alerts.copyWith(soundFor: v)),
+            ),
+          ),
+          SettingsRow(
+            label: 'OSC message',
+            hint: '/pgrid/alert/<rule> to the OSC target',
+            control: Switch(
+              value: _alerts.osc,
+              onChanged: (v) =>
+                  setState(() => _alerts = _alerts.copyWith(osc: v)),
+            ),
+          ),
+        ],
+      ),
+    ],
+  );
+
   Widget _buildOsc(bool running, int listeningPort) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     spacing: 20,
@@ -368,18 +576,19 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
         children: [
           SettingsRow(
             label: 'Network interface',
-            control: _addressDropdown(
-              key: ValueKey(_networkInterfaces == null),
-              initialSelection: _selectedNetworkDevice,
+            control: SettingsDropdown<String>(
+              value: _selectedNetworkDevice,
               entries: [
-                const DropdownMenuEntry(value: '', label: 'Any (0.0.0.0)'),
+                const SettingsDropdownEntry(
+                  value: '',
+                  label: 'Any interface',
+                  detail: '0.0.0.0',
+                  dividerAfter: true,
+                ),
                 ..._interfaceEntries,
               ],
-              onSelected: (value) {
-                if (value != null) {
-                  setState(() => _selectedNetworkDevice = value);
-                }
-              },
+              onSelected: (value) =>
+                  setState(() => _selectedNetworkDevice = value),
             ),
           ),
           SettingsRow(
@@ -396,9 +605,10 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
         children: [
           SettingsRow(
             label: 'Target IP',
-            control: TextField(
+            control: SettingsValueField(
               controller: _oscSendIpController,
-              decoration: _decoration(),
+              numeric: false,
+              width: 240,
             ),
           ),
           SettingsRow(
@@ -412,7 +622,6 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
   );
 
   Widget _buildWeb(bool running, AppSettings settings) {
-    final theme = Theme.of(context);
     final ip = _webUrlIp;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -431,11 +640,9 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
           children: [
             SettingsRow(
               label: 'Address',
-              control: _addressDropdown(
-                // Rebuilt once the interface list arrives so the first
-                // address shows as selected.
-                key: ValueKey(_networkInterfaces == null),
-                initialSelection: ip,
+              control: SettingsDropdown<String>(
+                value: ip,
+                placeholder: 'No network',
                 entries: _interfaceEntries,
                 onSelected: (value) => setState(() => _webUrlIp = value),
               ),
@@ -444,48 +651,17 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
               label: 'Port',
               hint: 'HTTP',
               controlWidth: 120,
-              control: TextField(
+              control: SettingsValueField(
                 controller: _webPortController,
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                inputWidth: 44,
                 onChanged: (_) => setState(() {}),
-                decoration: _decoration(),
               ),
             ),
             if (ip != null)
               SettingsRow(
                 label: 'Link',
                 controlWidth: 300,
-                control: Row(
-                  children: [
-                    Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.surfaceContainer,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: SelectableText(
-                          _webUrl(ip),
-                          maxLines: 1,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontFamily: 'monospace',
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    IconButton(
-                      tooltip: 'Copy',
-                      icon: const Icon(Icons.copy, size: 18),
-                      onPressed: () =>
-                          Clipboard.setData(ClipboardData(text: _webUrl(ip))),
-                    ),
-                  ],
-                ),
+                control: _LinkField(url: _webUrl(ip)),
               ),
           ],
         ),
@@ -497,7 +673,7 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
               label: 'Viewer PIN',
               hint: '4–8 digits',
               error: _webPinError,
-              controlWidth: 120,
+              controlWidth: 132,
               control: _pinField(
                 controller: _webPinController,
                 error: _webPinError,
@@ -507,7 +683,7 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
             ),
             SettingsRow(
               label: 'Allow control',
-              controlWidth: 120,
+              controlWidth: 132,
               control: Switch(
                 value: _webAllowControl,
                 onChanged: (value) => setState(() {
@@ -522,7 +698,7 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
               error: _webOperatorPinError,
               indented: true,
               enabled: _webAllowControl,
-              controlWidth: 120,
+              controlWidth: 132,
               control: _pinField(
                 controller: _webOperatorPinController,
                 error: _webOperatorPinError,
@@ -540,7 +716,14 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
             SettingsRow(
               label: 'Signed-in clients',
               hint: 'Forces every browser to enter the PIN again',
+              // Just the button's width, so the hint keeps one line.
+              controlWidth: 140,
               control: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(0, 36),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
                 onPressed: running
                     ? ref.read(webServerProvider.notifier).signOutAll
                     : null,
@@ -559,13 +742,14 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
     final settings = ref.watch(appSettingsProvider);
     final oscRunning = ref.watch(oscProvider);
     final webRunning = ref.watch(webServerProvider);
-    final webError = _webError;
+    final saveError = _saveError;
 
     Color? dotFor(_Section section) => switch (section) {
       _Section.general => null,
+      _Section.alerts => _alertsHaveError ? theme.colorScheme.error : null,
       _Section.osc => oscRunning ? Colors.green : theme.colorScheme.outline,
       _Section.web =>
-        webError != null
+        _webHasError
             ? theme.colorScheme.error
             : webRunning
             ? Colors.green
@@ -628,6 +812,7 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
                           ),
                           switch (_section) {
                             _Section.general => _buildGeneral(),
+                            _Section.alerts => _buildAlerts(),
                             _Section.osc => _buildOsc(
                               oscRunning,
                               settings.oscReceivePort,
@@ -650,7 +835,7 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
                 children: [
                   Expanded(
                     child: Text(
-                      webError ?? '',
+                      saveError ?? '',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.error,
                       ),
@@ -667,6 +852,61 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _SeverityIcon extends StatelessWidget {
+  const _SeverityIcon(this.severity, {this.size = 16});
+
+  final AlertSeverity severity;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => severity == AlertSeverity.critical
+      ? Icon(Icons.error, size: size, color: Colors.red)
+      : Icon(Icons.warning, size: size, color: Colors.orange);
+}
+
+/// The Web Access link: read-only, so a quieter surface than the editable
+/// fields, with the copy button inside.
+class _LinkField extends StatelessWidget {
+  const _LinkField({required this.url});
+
+  final String url;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      height: 32,
+      padding: const EdgeInsets.only(left: 10, right: 2),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: SelectableText(
+              url,
+              maxLines: 1,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontFamily: 'monospace',
+                fontSize: 12.5,
+              ),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Copy',
+            iconSize: 16,
+            constraints: const BoxConstraints.tightFor(width: 28, height: 28),
+            padding: EdgeInsets.zero,
+            icon: const Icon(Icons.copy),
+            onPressed: () => Clipboard.setData(ClipboardData(text: url)),
+          ),
+        ],
       ),
     );
   }
@@ -810,7 +1050,7 @@ class _PlainHttpNote extends StatelessWidget {
           Icon(Icons.warning_amber_rounded, size: 18, color: foreground),
           Expanded(
             child: Text(
-              'Plain HTTP — PINs are sent unencrypted. '
+              'Plain HTTP: PINs are sent unencrypted. '
               'Use on a trusted network only.',
               style: Theme.of(context).textTheme.bodySmall
                   ?.copyWith(color: foreground),

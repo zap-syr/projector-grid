@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/protocol_service_provider.dart';
@@ -37,6 +38,20 @@ void main() {
     await pumpDialog(tester);
     expect(find.text('Update interval'), findsOneWidget);
 
+    await openSection(tester, 'Alerts');
+    expect(find.text('Exhaust temperature'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('OSC message'),
+      100,
+      scrollable: find
+          .descendant(
+            of: find.byType(SingleChildScrollView),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    expect(find.text('OSC message'), findsOneWidget);
+
     await openSection(tester, 'OSC');
     expect(find.text('Network interface'), findsOneWidget);
 
@@ -60,5 +75,55 @@ void main() {
     expect(find.text('Viewer PIN'), findsOneWidget);
     expect(find.text('Viewer PIN: Required'), findsOneWidget);
     expect(find.byType(PreferencesDialog), findsOneWidget);
+  });
+
+  testWidgets('a warning threshold at or above critical blocks Save', (
+    tester,
+  ) async {
+    await pumpDialog(tester);
+    await openSection(tester, 'Alerts');
+    // Intake warning, then intake critical, then the exhaust pair.
+    await tester.enterText(find.byType(TextField).at(0), '50');
+    await openSection(tester, 'General');
+
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Exhaust temperature'), findsOneWidget);
+    expect(
+      find.text('Intake temperature: Warning must be below critical'),
+      findsOneWidget,
+    );
+  });
+
+  group('value field', () {
+    TextField intervalField(WidgetTester tester) =>
+        tester.widget<TextField>(find.byType(TextField).first);
+
+    testWidgets('focusing selects the whole value', (tester) async {
+      await pumpDialog(tester);
+      await tester.tap(find.byType(TextField).first);
+      await tester.pumpAndSettle();
+
+      final controller = intervalField(tester).controller!;
+      expect(controller.selection.start, 0);
+      expect(controller.selection.end, controller.text.length);
+    });
+
+    testWidgets('Esc puts the old value back and leaves the field', (
+      tester,
+    ) async {
+      await pumpDialog(tester);
+      final before = intervalField(tester).controller!.text;
+      await tester.tap(find.byType(TextField).first);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).first, '999');
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+
+      expect(intervalField(tester).controller!.text, before);
+      expect(intervalField(tester).focusNode!.hasFocus, isFalse);
+    });
   });
 }
