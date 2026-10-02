@@ -501,7 +501,7 @@ limit don't flap.
   that still hold come back as new and unacknowledged, with "since" counted from that poll.
 
 ### Spike before implementation: signal-loss detection via Remote Preview `[ ]`
-The regular poll (30 s minimum, 60 s default, ×3 in background) misses short signal dropouts
+The regular poll (30 s minimum, 60 s default) misses short signal dropouts
 between polls, and the "No signal" rule is meant to catch even short ones (no debounce). The
 RemoView WebSocket (`remote_preview_service.dart`) pushes `SIGNAL` / `NOSIGNAL` text events the
 moment the input changes, so it can detect every dropout without polling. Test on hardware:

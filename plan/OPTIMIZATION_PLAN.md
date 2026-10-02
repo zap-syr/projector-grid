@@ -16,7 +16,7 @@ This document outlines the identified bottlenecks, their root causes, architectu
 | 2.1 `statusSummaryProvider` (+ `TopMenuBar` watch narrowing — folded in) | ✅ Done |
 | 2.2 Decouple drag coords from global state | ✅ Done |
 | 3.1 Socket concurrency / batch size | ✅ Done |
-| 3.2 Lifecycle-throttled polling | ✅ Done (revised approach — see §3.2) |
+| 3.2 Lifecycle-throttled polling | ❌ Reverted (2026-10-02) — see §3.2 |
 
 All items reviewed against current source; per-section notes record where the audit's
 claims or code snippets needed correction. Runtime profiling (DevTools §5) not yet run.
@@ -333,7 +333,17 @@ Future<List<String>> _sendSequentialCommands(
 
 ---
 
-### 3.2 Lifecycle-Aware Network Activity — ✅ DONE (revised approach)
+### 3.2 Lifecycle-Aware Network Activity — ❌ REVERTED
+
+**Reverted (2026-10-02):** with telemetry alerts (ROADMAP F5) the app is a real-time
+monitor: desktop notifications, alert sounds and OSC `/pgrid/status/*` / `/pgrid/alert/*`
+matter most while the operator works in another window (media server, show control), and
+the 3x cadence delayed them by up to 3 minutes at the 60 s default. The saving was small —
+a minimized Flutter window doesn't render, so a poll costs a few short TCP exchanges, the
+same as in the foreground — and the polling interval setting already covers network load.
+`WorkspaceNotifier` polls at the configured interval regardless of window state; the
+`WindowListener`, the multiplier and the refresh-on-return are gone. The original write-up
+follows for history.
 
 **Status:** Implemented on `features/fixes`. `dart analyze` clean (same 2 pre-existing,
 unrelated lints as before).
@@ -383,10 +393,10 @@ immediately on return.
 | **P1 (High)** | Add fine-grained `statusSummaryProvider` to decouple `StatusBar` from node telemetry changes — **also narrow `TopMenuBar`'s bare `workspaceProvider` watch to an `editHistoryStatusProvider`** (same defect, confirmed via rebuild counts) | ✅ Done | Low (45 mins) | Prevents unnecessary `StatusBar` **and menu-bar/toolbar** rebuilds/repaints on every telemetry tick and card-drag tick | [`status_bar.dart`](file:///D:/Flutter%20Dev/projector-grid/lib/features/workspace/presentation/widgets/status_bar.dart), [`top_menu_bar.dart`](file:///D:/Flutter%20Dev/projector-grid/lib/features/workspace/presentation/widgets/top_menu_bar.dart), `status_summary_provider.dart` |
 | **P2 (Medium)** | Decouple interactive card dragging coordinates from global Riverpod state until `onPanEnd` | ✅ Done | Medium (2 hours) | Eliminates global Riverpod rebuild cycles on mouse moves | [`projector_workspace.dart`](file:///D:/Flutter%20Dev/projector-grid/lib/features/workspace/presentation/widgets/projector_workspace.dart), [`workspace_provider.dart`](file:///D:/Flutter%20Dev/projector-grid/lib/features/workspace/presentation/providers/workspace_provider.dart) |
 | **P2 (Medium)** | Separate Marquee Selection rubber-band rectangle from `ProjectorWorkspace` `setState` | ✅ Done | Low (45 mins) | Prevents card widget reconstruction during area selections | [`projector_workspace.dart`](file:///D:/Flutter%20Dev/projector-grid/lib/features/workspace/presentation/widgets/projector_workspace.dart) |
-| **P3 (Low)** | Add desktop lifecycle throttling for auto-polling when window is minimized | ✅ Done | Low (30 mins) | Reduces background network traffic on idle workstations, without losing offline/fault detection | [`workspace_provider.dart`](file:///D:/Flutter%20Dev/projector-grid/lib/features/workspace/presentation/providers/workspace_provider.dart) |
+| **P3 (Low)** | Add desktop lifecycle throttling for auto-polling when window is minimized | ✅ Done | Low (30 mins) | ❌ Reverted 2026-10-02: delayed alerts while unfocused (§3.2) | [`workspace_provider.dart`](file:///D:/Flutter%20Dev/projector-grid/lib/features/workspace/presentation/providers/workspace_provider.dart) |
 
 > **Review notes (not in original audit):**
-> - **P3 revised:** fully pausing polling while minimized would've stopped the event log
+> - **P3 reverted (2026-10-02):** see §3.2. Earlier note, for history: fully pausing polling while minimized would've stopped the event log
 >   from capturing projectors dropping offline / hardware faults exactly when the operator
 >   isn't watching. Implemented instead as a 3x-slower background cadence plus an immediate
 >   refresh on return to the foreground — see §3.2.
