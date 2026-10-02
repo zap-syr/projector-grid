@@ -72,6 +72,8 @@ before running. `tool/osc_test.dart` requires the app to be running with OSC ena
 `tool/projector_simulator.dart [count]` is the opposite direction: it runs fake projectors on
 127.0.0.1…N (port 1024) and writes a matching `.pgrid` to the temp dir — open it in the app to
 test polling, controls and Alignment mode without hardware (macOS needs `lo0` aliases, see its header).
+It also takes `ERRS2` error codes for alert testing: `--demo-errors` at start, or `err 3 F305` /
+`clear all` / `list` typed into its console while it runs.
 `tool/svg2png/` is a Node helper for regenerating lens-shift icons; `tool/generate_icon.dart` builds the app icon.
 
 ## Architecture

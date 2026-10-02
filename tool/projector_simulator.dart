@@ -1,6 +1,6 @@
 // Loopback NTCONTROL projector simulator.
 //
-//   dart run tool/projector_simulator.dart [count]
+//   dart run tool/projector_simulator.dart [count] [--demo-errors]
 //
 // Starts [count] (default 6, max 250) fake projectors on 127.0.0.1,
 // 127.0.0.2, … — each on the NTCONTROL port, unprotected (`NTCONTROL 0`) —
@@ -13,6 +13,15 @@
 // query the app's poll cycle sends. Projector 2 starts with a 2.0 s fade-in
 // so Alignment mode's fade zeroing and restore show up in the event log.
 // Every command is printed as it arrives.
+//
+// Self-diagnosis codes (QVX:ERRS2, see the panasonic-ntcontrol skill's
+// Self-diagnosis codes) are set while it runs, by typing into its console:
+//   err 3 F305 U200   projector 3 reports these codes
+//   err all F011      every projector reports them
+//   clear 3 | clear all
+//   list              who reports what
+// --demo-errors starts with a set that covers the app's Errors cell: a
+// warning, a critical, five codes on one projector, an unknown code.
 //
 // Windows routes the whole 127.0.0.0/8 range to loopback out of the box;
 // macOS only has 127.0.0.1 — add aliases first:
@@ -51,6 +60,9 @@ class SimProjector {
   String fadeIn;
   String fadeOut = '0.0';
 
+  /// Active self-diagnosis codes, sent space-separated after `ERRS2=`.
+  List<String> errors = [];
+
   void _powerTo(int transitional, int target, Duration delay) {
     power = transitional;
     Timer(delay, () => power = target);
@@ -88,7 +100,7 @@ class SimProjector {
       'QTM:0' => '00${24 + index % 5}/0075',
       'QTM:1' => '00${38 + index % 7}/0100',
       'QVX:VMOI2' => 'VMOI2=+00230',
-      'QVX:ERRS2' => 'ERRS2=',
+      'QVX:ERRS2' => 'ERRS2=${errors.join(' ')}',
       'QVX:SEFS1' => 'SEFS1=$fadeIn',
       'QVX:SEFS2' => 'SEFS2=$fadeOut',
       // Anything else (lens moves, picture settings, …) is acknowledged.
@@ -97,12 +109,24 @@ class SimProjector {
   }
 }
 
+/// What --demo-errors starts with, by projector number.
+const Map<int, List<String>> demoErrors = {
+  2: ['U200'], // a warning
+  3: ['F011'], // a critical
+  5: ['U201', 'F305', 'H001', 'F011', 'F306'], // more than fit the cell
+  6: ['X912'], // not in the code table
+};
+
 Future<void> main(List<String> args) async {
-  final count = (args.isEmpty ? defaultCount : int.parse(args.first)).clamp(
-    1,
-    250,
-  );
+  final numbers = args.where((a) => !a.startsWith('--'));
+  final count = (numbers.isEmpty ? defaultCount : int.parse(numbers.first))
+      .clamp(1, 250);
   final projectors = [for (var i = 1; i <= count; i++) SimProjector(i)];
+  if (args.contains('--demo-errors')) {
+    for (final e in demoErrors.entries) {
+      if (e.key <= count) projectors[e.key - 1].errors = [...e.value];
+    }
+  }
 
   for (final p in projectors) {
     final server = await ServerSocket.bind(p.ip, port);
@@ -119,7 +143,65 @@ Future<void> main(List<String> args) async {
     // ASCII only: the Windows console mangles ×, – and →.
     ..writeln('Simulating $count x $model on 127.0.0.1-$count, port $port.')
     ..writeln('Open in the app: ${project.path}')
-    ..writeln('Ctrl+C to stop.\n');
+    ..writeln('Type "help" for error-code commands. Ctrl+C to stop.\n');
+  _listErrors(projectors);
+
+  stdin
+      .transform(utf8.decoder)
+      .transform(const LineSplitter())
+      .listen((line) => _command(line.trim(), projectors));
+}
+
+const _help = '''
+  err <n|all> <codes...>   set self-diagnosis codes, e.g. err 3 F305 U200
+  clear <n|all>            remove them
+  list                     who reports what''';
+
+void _command(String line, List<SimProjector> projectors) {
+  final parts = line.split(RegExp(r'\s+'));
+  if (line.isEmpty) return;
+  if (parts.first == 'list') return _listErrors(projectors);
+  if (parts.first == 'help' || parts.length < 2) return stdout.writeln(_help);
+
+  final List<SimProjector> targets;
+  if (parts[1] == 'all') {
+    targets = projectors;
+  } else {
+    final n = int.tryParse(parts[1]);
+    if (n == null || n < 1 || n > projectors.length) {
+      return stdout.writeln(
+        'No projector ${parts[1]} (1-${projectors.length}).',
+      );
+    }
+    targets = [projectors[n - 1]];
+  }
+
+  switch (parts.first) {
+    case 'err' when parts.length > 2:
+      final codes = [for (final c in parts.skip(2)) c.toUpperCase()];
+      for (final p in targets) {
+        p.errors = codes;
+      }
+    case 'clear':
+      for (final p in targets) {
+        p.errors = [];
+      }
+    default:
+      return stdout.writeln(_help);
+  }
+  _listErrors(projectors);
+}
+
+void _listErrors(List<SimProjector> projectors) {
+  final faulty = projectors.where((p) => p.errors.isNotEmpty).toList();
+  if (faulty.isEmpty) {
+    stdout.writeln('No projector reports errors.');
+    return;
+  }
+  for (final p in faulty) {
+    stdout.writeln('${p.ip}  ERRS2=${p.errors.join(' ')}');
+  }
+  stdout.writeln('The app picks these up on its next poll.');
 }
 
 void _serve(Socket socket, SimProjector p) {
