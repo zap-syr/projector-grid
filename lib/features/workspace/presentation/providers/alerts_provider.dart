@@ -10,6 +10,7 @@ import '../../domain/log_event.dart';
 import '../../domain/projector_node.dart';
 import 'app_settings_provider.dart';
 import 'event_log_provider.dart';
+import 'signal_watch_provider.dart';
 import 'workspace_provider.dart';
 
 part 'alerts_provider.g.dart';
@@ -40,6 +41,10 @@ class AlertsNotifier extends _$AlertsNotifier {
       appSettingsProvider.select((s) => s.alerts),
       (_, _) => _reconcile(ref.read(workspaceProvider)),
     );
+    ref.listen(
+      signalWatchProvider,
+      (_, _) => _reconcile(ref.read(workspaceProvider)),
+    );
     // Another provider's state can't change during build, and the event log
     // is one.
     Future.microtask(() => _reconcile(ref.read(workspaceProvider)));
@@ -52,6 +57,7 @@ class AlertsNotifier extends _$AlertsNotifier {
       nodes: nodes,
       settings: ref.read(appSettingsProvider).alerts,
       now: DateTime.now(),
+      signalLoss: ref.read(signalWatchProvider),
     );
     for (final n in nodes) {
       _nodes[n.id] = n;
@@ -63,6 +69,14 @@ class AlertsNotifier extends _$AlertsNotifier {
       for (final t in result.transitions) {
         _publish(t.change, t.alert);
       }
+      // A cleared Signal lost is done with: without this its dropout would
+      // raise it again on the next reconcile.
+      for (final t in result.transitions) {
+        if (t.change == AlertChange.cleared &&
+            t.alert.rule == AlertRule.signalLost) {
+          ref.read(signalWatchProvider.notifier).dismiss(t.alert.nodeId);
+        }
+      }
     }
     final ids = {for (final n in nodes) n.id};
     _nodes.removeWhere((id, _) => !ids.contains(id));
@@ -73,6 +87,14 @@ class AlertsNotifier extends _$AlertsNotifier {
     if (alert == null || alert.acknowledged) return;
     state = {...state, key: alert.copyWith(acknowledged: true)};
     _publish(AlertChange.acknowledged, alert);
+    _clearRestoredSignalLost([alert]);
+  }
+
+  /// A Signal lost whose signal is back clears on acknowledge.
+  void _clearRestoredSignalLost(List<ActiveAlert> acknowledged) {
+    if (acknowledged.any((a) => a.rule == AlertRule.signalLost)) {
+      _reconcile(ref.read(workspaceProvider));
+    }
   }
 
   /// Every unacknowledged alert, or only [nodeId]'s.
@@ -96,6 +118,7 @@ class AlertsNotifier extends _$AlertsNotifier {
     for (final a in hits) {
       _publish(AlertChange.acknowledged, a);
     }
+    _clearRestoredSignalLost(hits);
   }
 
   void _publish(AlertChange change, ActiveAlert a) {

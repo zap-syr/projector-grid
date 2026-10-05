@@ -24,8 +24,14 @@ class FakeProtocolService extends PanasonicProtocolService {
   /// Per-IP overrides of [rawResponses], checked first.
   final Map<String, Map<String, String?>> rawResponsesByIp = {};
 
+  /// `sendQuickQuery` to these IPs doesn't answer until the completer does.
+  final Map<String, Completer<void>> holdQueries = {};
+
   final List<(String ip, String cmd)> sentCommands = [];
   final List<(String ip, String cmd)> sentRaw = [];
+
+  /// `sendQuickQuery` calls only (the signal watch's).
+  final List<(String ip, String cmd)> sentQuick = [];
   int pollCount = 0;
 
   @override
@@ -66,6 +72,19 @@ class FakeProtocolService extends PanasonicProtocolService {
     String cmd,
   ) async {
     sentRaw.add((ip, cmd));
+    return _raw(ip, cmd);
+  }
+
+  @override
+  Future<String?> sendQuickQuery(
+    String ip,
+    int port,
+    String login,
+    String password,
+    String cmd,
+  ) async {
+    sentQuick.add((ip, cmd));
+    await holdQueries[ip]?.future;
     return _raw(ip, cmd);
   }
 

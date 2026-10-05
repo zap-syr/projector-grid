@@ -8,6 +8,7 @@ import 'alert_rule.dart';
 import 'ip_sort.dart';
 import 'projector_errors.dart';
 import 'projector_node.dart';
+import 'signal_watch.dart';
 
 /// At most one active alert per key: per (projector, rule), and per error
 /// item for [AlertRule.error] ([item] is empty for every other rule).
@@ -50,6 +51,13 @@ class ActiveAlert {
   });
 
   AlertKey get key => (nodeId: nodeId, rule: rule, item: item);
+
+  /// What the panels show as the value: `Back after 3 s` once a latched
+  /// Signal lost has its signal back, [value] otherwise.
+  String get displayValue => switch (restoredAt) {
+    final at? => formatBackAfter(at.difference(since)),
+    null => value,
+  };
 
   ActiveAlert copyWith({
     AlertSeverity? severity,
@@ -203,12 +211,19 @@ List<AlertCondition> evaluateNode(
 
 /// Moves the active list from [previous] to what [nodes] say now. Alerts of
 /// removed projectors and switched-off rules clear like any other.
+///
+/// [signalLoss] is each projector's latest dropout from the signal watch.
+/// Signal lost is latched: the alert outlives the dropout (with
+/// `restoredAt` once the signal is back) and clears only once it is both
+/// acknowledged and over. A new dropout replaces the old one in place; it is
+/// raised again only if the old one was already acknowledged.
 ({Map<AlertKey, ActiveAlert> active, List<AlertTransition> transitions})
 reconcileAlerts({
   required Map<AlertKey, ActiveAlert> previous,
   required Iterable<ProjectorNode> nodes,
   required AlertSettings settings,
   required DateTime now,
+  Map<String, SignalLoss> signalLoss = const {},
 }) {
   final active = <AlertKey, ActiveAlert>{};
   final transitions = <AlertTransition>[];
@@ -243,6 +258,29 @@ reconcileAlerts({
         transitions.add((change: AlertChange.raised, alert: alert));
       } else {
         active[key] = old.copyWith(severity: c.severity, value: c.value);
+      }
+    }
+
+    final loss = signalLoss[node.id];
+    if (loss != null && settings.isEnabled(AlertRule.signalLost)) {
+      final key = (nodeId: node.id, rule: AlertRule.signalLost, item: '');
+      final old = previous[key];
+      final fresh = old == null || old.since != loss.since;
+      // Acknowledged and over: left out, so it clears below.
+      if (fresh || !old.acknowledged || loss.open) {
+        final alert = ActiveAlert(
+          nodeId: node.id,
+          rule: AlertRule.signalLost,
+          severity: AlertSeverity.critical,
+          value: signalLostValue(loss.input),
+          since: loss.since,
+          acknowledged: !fresh && old.acknowledged,
+          restoredAt: loss.restoredAt,
+        );
+        active[key] = alert;
+        if (old == null || (fresh && old.acknowledged)) {
+          transitions.add((change: AlertChange.raised, alert: alert));
+        }
       }
     }
   }

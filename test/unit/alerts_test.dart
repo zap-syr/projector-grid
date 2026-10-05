@@ -4,6 +4,7 @@ import 'package:projector_grid/features/workspace/domain/alert_rule.dart';
 import 'package:projector_grid/features/workspace/domain/alerts.dart';
 import 'package:projector_grid/features/workspace/domain/projector_errors.dart';
 import 'package:projector_grid/features/workspace/domain/projector_node.dart';
+import 'package:projector_grid/features/workspace/domain/signal_watch.dart';
 
 ProjectorNode _node({
   String id = '1',
@@ -286,6 +287,85 @@ void main() {
       'old-warn',
       'acked',
     ]);
+  });
+
+  group('reconcileAlerts: Signal lost', () {
+    const key = (nodeId: '1', rule: AlertRule.signalLost, item: '');
+    final lost = SignalLoss(since: _t0, input: 'HDMI 1');
+    final back = lost.restored(_t0.add(const Duration(seconds: 3)));
+
+    ({Map<AlertKey, ActiveAlert> active, List<AlertTransition> transitions})
+    step(
+      Map<AlertKey, ActiveAlert> previous,
+      SignalLoss? loss, {
+      AlertSettings settings = const AlertSettings(),
+    }) => reconcileAlerts(
+      previous: previous,
+      nodes: [_node()],
+      settings: settings,
+      now: _t0.add(const Duration(minutes: 5)),
+      signalLoss: {'1': ?loss},
+    );
+
+    test('raises with the dropout time and input', () {
+      final r = step({}, lost);
+      final a = r.active[key]!;
+      expect(a.severity, AlertSeverity.critical);
+      expect(a.value, 'No signal on HDMI 1');
+      expect(a.since, _t0);
+      expect(r.transitions.single.change, AlertChange.raised);
+    });
+
+    test('stays, unacknowledged, once the signal is back', () {
+      final raised = step({}, lost).active;
+      final r = step(raised, back);
+      expect(r.active[key]!.restoredAt, back.restoredAt);
+      expect(r.active[key]!.displayValue, 'Back after 3 s');
+      expect(r.transitions, isEmpty);
+    });
+
+    test('clears once acknowledged and over, in either order', () {
+      final raised = step({}, lost).active;
+      final acked = {key: raised[key]!.copyWith(acknowledged: true)};
+      expect(step(acked, lost).active[key]!.acknowledged, isTrue);
+      final cleared = step(acked, back);
+      expect(cleared.active, isEmpty);
+      expect(cleared.transitions.single.change, AlertChange.cleared);
+
+      final restored = step(raised, back).active;
+      final ackedAfter = {key: restored[key]!.copyWith(acknowledged: true)};
+      expect(step(ackedAfter, back).active, isEmpty);
+    });
+
+    test('a new dropout replaces the old one, raised only if acknowledged', () {
+      final again = SignalLoss(
+        since: _t0.add(const Duration(minutes: 1)),
+        input: 'HDMI 1',
+      );
+      final restored = step(step({}, lost).active, back).active;
+      final unacked = step(restored, again);
+      expect(unacked.active[key]!.since, again.since);
+      expect(unacked.active[key]!.restoredAt, isNull);
+      expect(unacked.transitions, isEmpty);
+
+      final acked = {
+        key: step({}, lost).active[key]!.copyWith(acknowledged: true),
+      };
+      final r = step(acked, again);
+      expect(r.active[key]!.acknowledged, isFalse);
+      expect(r.transitions.single.change, AlertChange.raised);
+    });
+
+    test('switching the rule off clears it', () {
+      final raised = step({}, lost).active;
+      final r = step(
+        raised,
+        lost,
+        settings: const AlertSettings(enabled: {AlertRule.offline}),
+      );
+      expect(r.active, isEmpty);
+      expect(r.transitions.single.change, AlertChange.cleared);
+    });
   });
 
   group('alertBadge', () {

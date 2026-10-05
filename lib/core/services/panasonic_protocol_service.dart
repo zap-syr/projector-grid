@@ -136,16 +136,15 @@ class PanasonicProtocolService {
     int port,
     String login,
     String password,
-    String cmd,
-  ) async {
+    String cmd, {
+    Duration connectTimeout = const Duration(seconds: 4),
+    Duration replyTimeout = const Duration(seconds: 5),
+  }) async {
     Socket? socket;
     StreamSubscription? subscription;
+    final closedByProjector = Completer<void>();
     try {
-      socket = await Socket.connect(
-        ip,
-        port,
-        timeout: const Duration(seconds: 4),
-      );
+      socket = await Socket.connect(ip, port, timeout: connectTimeout);
 
       Completer<String>? currentCompleter = Completer<String>();
       StringBuffer buffer = StringBuffer();
@@ -172,11 +171,12 @@ class PanasonicProtocolService {
             currentCompleter.completeError(e);
           }
         },
+        onDone: () {
+          if (!closedByProjector.isCompleted) closedByProjector.complete();
+        },
       );
 
-      final initResponse = await currentCompleter.future.timeout(
-        const Duration(seconds: 5),
-      );
+      final initResponse = await currentCompleter.future.timeout(replyTimeout);
 
       if (!initResponse.startsWith('NTCONTROL')) {
         await subscription.cancel();
@@ -210,8 +210,15 @@ class PanasonicProtocolService {
       socket.add(ascii.encode(fullCmd));
       await socket.flush();
 
-      final response = await currentCompleter.future.timeout(
-        const Duration(seconds: 5),
+      final response = await currentCompleter.future.timeout(replyTimeout);
+
+      // The projector closes the connection right after replying (~1 ms on a
+      // PT-RQ35K). Closing ours first would leave the socket in TIME_WAIT on
+      // this machine for ~2 minutes; with 150 projectors and the signal watch
+      // that adds up to thousands of ports, so let the projector close first.
+      await closedByProjector.future.timeout(
+        const Duration(milliseconds: 200),
+        onTimeout: () {},
       );
 
       // Responses are always prefixed with '00' regardless of auth mode.
@@ -295,6 +302,29 @@ class PanasonicProtocolService {
       return null;
     }
     return response;
+  }
+
+  /// [sendRawCommandPreservingErrorCodes] with short timeouts, for the
+  /// signal watch's frequent queries: a projector that stopped answering
+  /// gives up its slot after ~3 s instead of 9 s, and the regular poll is
+  /// what reports it offline.
+  Future<String?> sendQuickQuery(
+    String ip,
+    int port,
+    String login,
+    String password,
+    String cmd,
+  ) async {
+    final (response, _) = await _sendSingleCommandEx(
+      ip,
+      port,
+      login,
+      password,
+      cmd,
+      connectTimeout: const Duration(milliseconds: 1500),
+      replyTimeout: const Duration(milliseconds: 1500),
+    );
+    return _isTransportFailure(response) ? null : response;
   }
 
   /// Polls all essential telemetry points for the Monitoring Table, and

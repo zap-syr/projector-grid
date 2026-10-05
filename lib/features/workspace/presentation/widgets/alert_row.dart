@@ -33,6 +33,10 @@ class AlertPalette {
   };
 
   Color get item => _dark ? const Color(0xFF31343A) : const Color(0xFFF8F7F9);
+
+  /// A dropout that is over (`Back after 3 s`).
+  Color get recovered =>
+      _dark ? const Color(0xFF81C784) : const Color(0xFF2E7D32);
 }
 
 /// One active alert: severity chip, rule name, the value large in the
@@ -131,12 +135,14 @@ class AlertRow extends StatelessWidget {
                         ),
                 ),
                 Text(
-                  alert.value,
+                  alert.displayValue,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w600,
-                    color: palette.text(alert.severity),
+                    color: alert.restoredAt == null
+                        ? palette.text(alert.severity)
+                        : palette.recovered,
                     fontFeatures: const [FontFeature.tabularFigures()],
                     height: 1.2,
                   ),
@@ -267,7 +273,7 @@ class AcknowledgedAlertLine extends StatelessWidget {
                       text: '${alert.rule.label}: ',
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
-                    TextSpan(text: alert.value),
+                    TextSpan(text: alert.displayValue),
                   ],
                 ),
                 maxLines: 1,

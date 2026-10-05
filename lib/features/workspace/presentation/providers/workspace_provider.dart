@@ -51,6 +51,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     // Make sure to clean up the timer when the provider is destroyed
     ref.onDispose(() {
       _isPollingDisposed = true;
+      _commandsSent.close();
       _pollingTimer?.cancel();
       for (final t in _powerTransitionTimers.values) {
         t.cancel();
@@ -263,6 +264,47 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
 
   /// Releases a claim taken with [claimNodeForExternalPoll].
   void releaseNodeFromExternalPoll(String id) => _refreshingNodes.remove(id);
+
+  // Nodes a _dispatchToNodes command is in flight to.
+  final Set<String> _dispatching = {};
+
+  /// True while [id] has NTCONTROL traffic of the app's own in flight: its
+  /// regular poll, [refreshNode], a claim, power-transition tracking or a
+  /// command. The signal watch skips it then, so a projector never sees more
+  /// connections from the app at once than the poll's own concurrency.
+  bool isNodeBusy(String id) =>
+      _refreshingNodes.contains(id) ||
+      _dispatching.contains(id) ||
+      _powerTransitionTimers.containsKey(id);
+
+  final _commandsSent =
+      StreamController<({String nodeId, String cmd})>.broadcast();
+
+  /// Every command the app got through to a projector, from any source
+  /// (controls, OSC, schedule, Web, Alignment mode).
+  Stream<({String nodeId, String cmd})> get commandsSent =>
+      _commandsSent.stream;
+
+  /// Writes a signal the signal watch just read (`QVX:NSGS1`, as shown) into
+  /// [id]'s telemetry. Only a change touches state.
+  void applyPolledSignal(String id, String signal) {
+    if (!state.any((n) => n.id == id && n.signal != signal)) return;
+    state = [
+      for (final n in state)
+        if (n.id == id) n.copyWith(signal: signal) else n,
+    ];
+    _notifyStateChanged();
+  }
+
+  /// Like [applyPolledSignal], for the input (`QIN`, as shown).
+  void applyPolledInput(String id, String input) {
+    if (!state.any((n) => n.id == id && n.input != input)) return;
+    state = [
+      for (final n in state)
+        if (n.id == id) n.copyWith(input: input) else n,
+    ];
+    _notifyStateChanged();
+  }
 
   /// Re-poll a single projector now, off the normal cycle — used when the
   /// Remote Preview dialog starts receiving frames (proof the input is live)
@@ -903,13 +945,19 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
       );
       await Future.wait(
         batch.map((node) async {
-          final success = await _protocolService.sendCommand(
-            node.ipAddress,
-            node.port,
-            node.login,
-            node.password,
-            cmd,
-          );
+          _dispatching.add(node.id);
+          final bool success;
+          try {
+            success = await _protocolService.sendCommand(
+              node.ipAddress,
+              node.port,
+              node.login,
+              node.password,
+              cmd,
+            );
+          } finally {
+            _dispatching.remove(node.id);
+          }
           _logEvent(
             LogEvent(
               severity: success ? LogSeverity.info : LogSeverity.error,
@@ -1129,7 +1177,15 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
       _applyOptimisticUpdate(nodeId, cmd);
 
   void _applyOptimisticUpdate(String nodeId, String cmd) {
-    if (cmd.startsWith('OTS:')) {
+    if (!_commandsSent.isClosed) _commandsSent.add((nodeId: nodeId, cmd: cmd));
+    if (cmd.startsWith('IIS:')) {
+      final input = mapInputCode(cmd.substring(4));
+      state = [
+        for (final n in state)
+          if (n.id == nodeId) n.copyWith(input: input) else n,
+      ];
+      _notifyStateChanged();
+    } else if (cmd.startsWith('OTS:')) {
       state = state
           .map((n) => n.id == nodeId ? n.copyWith(testPattern: cmd) : n)
           .toList();
@@ -1237,6 +1293,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
   // life of the app process.
   void _forgetNode(String id) {
     _refreshingNodes.remove(id);
+    _dispatching.remove(id);
     _lastNodeRefresh.remove(id);
     _lastWebSignalWrite.remove(id);
     _lastWebSignalBaseline.remove(id);

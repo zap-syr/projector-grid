@@ -315,7 +315,7 @@ class _MonitoringTableState extends ConsumerState<MonitoringTable> {
       spec: kColSignal,
       text: (n, _) => n.signal,
       sortKey: (n, _) => n.signal.toLowerCase(),
-      cell: (_, n, _) => _CellText(n.signal),
+      cell: (_, n, _) => _SignalCell(n),
     ),
     _Column(
       spec: kColTestPattern,
@@ -1359,6 +1359,27 @@ class _TempCell extends ConsumerWidget {
         null => null,
       },
     );
+  }
+}
+
+/// The signal, red while a Signal lost alert says it is gone. A projector
+/// that was never armed (switched on with no source) shows `NO SIGNAL`
+/// plain, as before.
+class _SignalCell extends ConsumerWidget {
+  final ProjectorNode node;
+
+  const _SignalCell(this.node);
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final lost = ref.watch(
+      alertsProvider.select((alerts) {
+        final a =
+            alerts[(nodeId: node.id, rule: AlertRule.signalLost, item: '')];
+        return a != null && a.restoredAt == null;
+      }),
+    );
+    return _CellText(node.signal, color: lost ? Colors.red : null);
   }
 }
 
