@@ -500,7 +500,7 @@ limit don't flap.
 - Not persisted: after a restart the active list is rebuilt from the first poll; conditions
   that still hold come back as new and unacknowledged, with "since" counted from that poll.
 
-### Spike before implementation: signal-loss detection via Remote Preview `[ ]`
+### Spike before implementation: signal-loss detection via Remote Preview `[x]`
 The regular poll (30 s minimum, 60 s default) misses short signal dropouts
 between polls, and the "No signal" rule is meant to catch even short ones (no debounce). The
 RemoView WebSocket (`remote_preview_service.dart`) pushes `SIGNAL` / `NOSIGNAL` text events the
@@ -520,6 +520,124 @@ moment the input changes, so it can detect every dropout without polling. Test o
 Outcome decides the source for the signal rule: RemoView events if the socket can stay open
 cheaply on every projector, otherwise a dedicated signal-only NTCONTROL poll (2–5 s, powered-on
 projectors only, only while the rule is enabled).
+
+**Results** (PT-RQ35K at 192.168.0.8, HDMI 1 at 3840x2160/50p, 2026-10-05):
+- Skipping `receive` changes nothing: frames keep coming at 1 fps. The projector's own
+  `preview.cgi` sends only `start`, `alive`, `PONG`, `receive`, `preshow:1/0`; there is no
+  message that stops frames, so a background socket always carries the JPEG stream:
+  ~3 KB/s on a static dark source, ~15 KB/s on real content (~120 kbit/s per projector).
+- **Two RemoView sessions per projector, shared by the whole network.** The third
+  `WebSocket.connect` gets HTTP 500; with a phone holding one preview, this PC got only
+  one. A slot frees the moment its socket closes. The projector's web page shows a black
+  preview, no error, when refused. The app's dialog and its Web Access page share one
+  socket (`remotePreviewProvider`), so they take one slot together. A background socket
+  per projector would leave one slot for either one device on the projector's web UI or a
+  second Projector Grid, not both.
+- Input switch and standby ↔ on: the socket stays open, no `CLOSE`. In standby it goes
+  silent (no frames, no `NOSIGNAL`); after `PON` the first events come ~10 s later.
+- Real dropouts (HDMI cable pulled for ~1 s, ~1 s and ~5 s): the socket sends `SIGNAL` +
+  `NOSIGNAL` within ~0.2 s of the pull; `SIGNAL` itself only means "changed", the state
+  comes from `simple_status_hidden.cgi` (50–150 ms, occasionally a failed fetch mid-change).
+  A pull of ~1 s still gives **~3.5–4 s without signal** (the projector needs ~3 s to
+  re-lock), the 5 s pull 6.5 s.
+- `QVX:NSGS1` polled every 1 s caught every dropout: `ER401` for ~1–2 s while the input
+  re-syncs, then `NSGS1=NO SIGNAL`, then the signal name. ~10–20 ms per query on the LAN.
+  `ER401` also appears in standby and right after an input switch.
+- Network cable pulled for ~25 s: the socket closed with 1006 within a second (the poll's
+  first timeout came 4 s later). It does not reconnect by itself.
+
+**Decision input:** a background socket per projector would hold one of the two network-wide
+preview slots and stream ~15 KB/s of JPEG it doesn't need. Recommended: the dedicated
+NTCONTROL poll (~0.5 KB/s, one short connection per 2 s, skipped while the projector's
+regular poll, power tracking or a user command is in flight so it never adds a 4th
+connection), `QVX:NSGS1` every 2 s (shorter than the shortest real
+dropout, ~3.5 s), counting both `NO SIGNAL` and `ER401` as no signal, with the arming rules
+above covering standby and app-made input switches.
+
+**Decided 2026-10-05:** the dedicated `QVX:NSGS1` poll. Plan below.
+
+### Signal watch: implementation plan `[ ]`
+Must hold up with **150 projectors** in a project.
+
+**Measured on hardware (2026-10-05, PT-RQ35K):**
+- The projector closes the NTCONTROL connection itself ~1 ms after the reply; a second
+  command on the same socket gets nothing. One connection per query stays.
+- With the current `_sendSingleCommandEx` (destroys the socket right after the reply)
+  ~5 of 20 connections still ended in TIME_WAIT on our side (we won the close race);
+  waiting for the projector's FIN first left none. Windows: 16,384 ephemeral ports,
+  TIME_WAIT ~120 s by default.
+
+**Budget at 150 projectors, all on:**
+| | Value |
+|---|---|
+| Signal queries | 75 / s (one every ~13 ms), ~1 KB each → ~75 KB/s (~0.6 Mbit/s) |
+| Sockets in flight | 1–2 typical (10–20 ms per query), capped at 16 |
+| Per projector | one connection per 2 s, busy ~1% of the time |
+| Regular poll alongside (60 s) | 150 × 13 = 1,950 connections per cycle, ~33 / s average |
+| Our TIME_WAIT | ~0 with the FIN wait; without it up to ~25% of ~108 / s × 120 s ≈ 3,200 ports |
+
+**Pieces:**
+1. **Protocol** (`panasonic_protocol_service.dart`):
+   - `_sendSingleCommandEx`: after the reply, wait up to 200 ms for the projector to close
+     (`onDone`) before `destroy()`, so TIME_WAIT lands on the projector, which closes
+     first anyway. Applies to every command, which also helps the regular poll.
+   - `querySignal(ip, port, login, password)`: `QVX:NSGS1` with short timeouts (connect
+     1.5 s, reply 1.5 s instead of 4 + 5 s) so a dead projector can't hold a slot for 9 s.
+2. **Pure logic** (`domain/signal_watch.dart`, unit-tested):
+   - `parseSignalReading(raw)` → `present(name)` / `absent` (`NO SIGNAL`, `ER401`) /
+     `unknown` (transport failure: no transition, the regular poll owns Offline).
+   - `SignalWatchState` per projector: `armed` (signal seen since power-on), `holdUntil`
+     (app input switch + 10 s), `lostAt`, `restoredAt`, `input` at the loss.
+     `stepSignalWatch(state, reading, power, now)` → new state; disarms on anything but
+     `on`, arms on the first `present`, ignores `absent` while unarmed or held.
+3. **Scheduler** (`signalWatchProvider`, `keepAlive`, its own file):
+   - Runs only while the Signal lost rule is on; watches projectors that are `connected` /
+     `unprotected` and `PowerStatus.on`. Others are dropped from the schedule and their
+     state reset.
+   - **Staggered**: each projector gets a fixed phase in the 2 s period (by position in the
+     list), so 150 projectors give one query every ~13 ms, never a burst of 150. One driver
+     `Timer.periodic` (50 ms) starts the queries that are due.
+   - **Never piles up**: a projector whose previous query is still in flight is skipped;
+     at most 16 queries in flight overall (at 20 ms each that is ~800 / s of headroom).
+     If the network is slow the period stretches instead of queuing.
+   - **Never adds a 4th connection to a projector**: skips it while it is claimed
+     (`_refreshingNodes`: its regular poll, `refreshNode`, pre-show probes), during power
+     transition tracking, and while a command to it is in flight (new: `_dispatchToNodes`
+     marks its targets busy). The regular poll's own `NSGS1` result is fed to the watch
+     too, so a skipped tick loses nothing.
+   - `IIS:` sent by the app (UI, OSC, schedule, Web) → `holdUntil = now + 10 s` for those
+     projectors; `PON` → disarmed until a signal is seen.
+4. **Alert** (`alertsProvider` / `domain/alerts.dart`):
+   - `reconcileAlerts` gets the watch states. Signal lost is raised on `lostAt` with the
+     input as the value qualifier (`HDMI 1`), latched: when the signal returns it gets
+     `restoredAt` ("Back after 3 s", green) and stays until acknowledged; acknowledging a
+     restored one clears it. A new loss while latched and unacknowledged updates
+     `since`, not a second alert. `ActiveAlert.copyWith` learns `restoredAt`.
+   - The alert engine rebuilds only on a watch *change* (loss / return / arm), not on
+     every 2 s reading, the same dedupe as today.
+5. **Monitoring table**: on a change only, the watch writes `node.signal` through a new
+   `WorkspaceNotifier.applyPolledSignal`, so the Signal column shows `NO SIGNAL` within
+   2 s instead of at the next poll. Readings that don't change don't touch workspace
+   state (150 × 0.5 / s state writes would rebuild the UI constantly).
+
+**Not a setting:** the 2 s period and the 16-query cap. The Signal lost switch turns the
+whole watch off (no traffic at all).
+
+**Tests:**
+- Unit: `parseSignalReading`, `stepSignalWatch` (arming, hold after `IIS`, disarm on
+  standby, `ER401`, `unknown`), alert latch / acknowledge / repeat loss.
+- Provider, `FakeProtocolService` + `fake_async`: stagger (150 nodes → no more than
+  ~1 query per 13 ms), in-flight skip, claimed-node skip, rule off → no queries,
+  eligibility changes.
+- Simulator: console command `sig <n> off|on|blip` (`blip` = ~3.5 s without signal) to
+  test alerts without a cable; `projector_simulator.dart 150` as the load test (watch CPU,
+  sockets, UI smoothness).
+- Hardware: a 1-hour run on the PT-RQ35K with the watch on: no timeouts, web UI and
+  Remote Preview still responsive, `TIME_WAIT` count on the PC flat.
+
+**Docs when done:** CLAUDE.md providers table (`signalWatchProvider`), `panasonic-ntcontrol`
+skill (the projector closes after one command; `ER401` while locking), this item's
+Progress line.
 
 F5 adds **no new queries to the poll cycle**: every rule above works from telemetry the app
 already polls (plus the signal source the spike picks). Rules that need extra queries are a
@@ -722,7 +840,8 @@ Build order: engine → Preferences (fields, dropdown, Alerts section) → card 
   shortcut), so the installer's shortcut sets `AppUserModelID` and the toast activator
   CLSID; dev and portable builds show the header without an icon. Checked on Windows;
   awaiting a check on macOS.
-- `[ ]` Signal lost: waits for the RemoView spike; the rule and its switch exist, nothing
+- `[ ]` Signal lost: source decided after the spike (2026-10-05): a dedicated `QVX:NSGS1`
+  poll, see "Signal watch: implementation plan". The rule and its switch exist, nothing
   raises it yet.
 
 ### Code

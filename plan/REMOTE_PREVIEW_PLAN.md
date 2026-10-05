@@ -83,11 +83,15 @@ the WebSocket feed underneath it**, and that we can consume directly.
   the user), i.e. *not* `node.port` (1024, the NTCONTROL port). Hard-code 80.
 - Frame rate is ~1 fps, ~25 KB/frame — trivial bandwidth, several concurrent
   previews are fine.
-- **Concurrent preview clients are fine** — verified: the projector's own web
-  preview page and Panasonic's Multi Monitoring & Control Software stream at the
-  same time, neither evicts the other. No tight per-projector session cap to
-  design around. `CLOSE` is a graceful end-of-stream from the projector (reboot,
-  input switch) — handle it as a soft state, not a crash.
+- **At most 2 preview clients per projector, network-wide** (measured
+  2026-10-05 on a PT-RQ35K, see ROADMAP_PLAN §4 spike): the third upgrade gets a
+  plain `500 Internal Server Error` page, nothing in it says why. The projector's
+  own `preview.cgi` is rendered server-side with *"Access is restricted because
+  the maximum number of units to which simultaneous connection is allowed has
+  been exceeded.(Max. 2 units)"* while both slots are taken. Our dialog and the
+  Web Access page share one socket per projector, so the app takes one slot.
+  `CLOSE` is a graceful end-of-stream from the projector (reboot) — handle it as
+  a soft state, not a crash; an input switch does not send it.
 
 ### Reference capture / probe scripts
 
@@ -122,6 +126,15 @@ Trigger it on any of:
   on firmware without RemoView).
 - Socket closes before the first frame, or `IMPOSSIBLE` is received.
 - No frame **and** no text message for ~15 s (stall watchdog).
+
+**"Preview busy (max. 2 viewers)"** `[ ]` (planned 2026-10-05, not built): when
+the upgrade is refused, fetch `/cgi-bin/preview.cgi?lang=e` once (digest auth, `ProjectorWebStatusService`'s
+client) and look for `Max. 2 units` / `restricted`. Found → a new
+`RemotePreviewBusy` state with that text and Retry, in the dialog, the table cell
+and the Web Access preview; not found or the fetch fails → "Preview not
+available" as today. The projector decides, so a 500 for any other reason isn't
+mislabelled; the extra request only happens on a refusal. Match on the short
+fragment: the wording may change with firmware.
 
 Distinct from "Preview not available": `NOSIGNAL`, `HDCP`, `STARTINGUP`, etc. —
 those mean the feed *is* working, so show their own specific text, not the
@@ -618,6 +631,7 @@ service or provider) is what makes this a wrapper swap.
     Number, single projector) — moved into the shared column catalogue, the
     Web UI's own `PREVIEW_COLUMN` removed (§4.2).
   - `[ ]` Toolbar / View-menu "Preview selection" action.
+  - `[ ]` "Preview busy (max. 2 viewers)" state on a refused upgrade (§2).
 - **Phase 3 — polish (all optional)**
   - `[ ]` Draggable-within-barrier dialog; a preset "large" size.
   - `[ ]` `ASPECT` warning styling; small "live" indicator + fps.
@@ -644,10 +658,10 @@ None blocking. All the protocol unknowns from earlier drafts are resolved below.
   (user). No per-node override needed.
 - **Pre-show while powered on** — button is **hard-disabled** when the projector
   is on (user), so whether `preshow:1` would no-op in that state is moot.
-- **Concurrent clients** — no tight single-session limit. The projector's own
-  web preview and Panasonic's Multi Monitoring & Control Software stream
-  simultaneously (user-verified). `CLOSE` is a graceful shutdown hint, not an
-  eviction to design around.
+- **Concurrent clients** — 2 per projector across the network (measured
+  2026-10-05; the earlier "no tight limit" held only because two clients fit).
+  A third client is refused with HTTP 500, see §1 and the "Preview busy" state
+  in §2. `CLOSE` is a graceful shutdown hint, not an eviction to design around.
 - **Pre-show persistence** — pre-show survives the socket closing (user-verified
   via the web UI). Teardown must not clear it; the toggle is the only control.
 - **Pre-show state readback** — `QVX:PSMI1` over NTCONTROL returns
