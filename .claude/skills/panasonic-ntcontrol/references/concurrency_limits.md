@@ -85,6 +85,18 @@ throughput (92/s vs 82/s).
 - `geometry_correction_dialog.dart` `_loadCorner()` — 15 `QVX:GMFIx` queries now run in
   **batches of 8** instead of all at once.
 
+- `signalWatchProvider` — one `QVX:NSGS1` per powered-on projector every 2 s, skipped while
+  `WorkspaceNotifier.isNodeBusy` (its poll, power tracking, a command), so it never adds a
+  connection on top of the poll's own concurrency.
+
+## Who closes the connection (PT-RQ35K, 2026-10-05)
+
+The projector closes the socket itself ~1 ms after the reply; a second command on the same
+connection gets nothing, so one connection per command is the only way. The side that closes
+first keeps the socket in TIME_WAIT (~2 min on Windows, 16,384 ephemeral ports): destroying
+our socket right after the reply won that race for ~1 in 4 commands. `_sendSingleCommandEx`
+now waits up to 200 ms for the projector's close first, leaving none on our side.
+
 If you add a new burst-style loader (`Future.wait` over several `sendRawCommand`/`sendCommand`
 calls to the *same* projector), batch it the same way rather than firing everything at once —
 see `_loadCorner()` for the pattern (`sublist` chunks of ≤8, sequential `await Future.wait`

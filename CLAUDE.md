@@ -106,6 +106,8 @@ does window setup; `lib/app/app.dart` is just `MaterialApp` + theme.
 | `scheduledTasksProvider` | timed/recurring task list + its scheduler `Timer` (`keepAlive`) |
 | `selectionProvider` / `pollStatusProvider` | current card selection; per-projector poll-in-flight state |
 | `editHistoryStatusProvider` / `statusSummaryProvider` | small derived/selector providers (undo-redo availability for the Edit menu; online/offline/warning counts for the status bar) that dedupe by structural equality so they don't rebuild on every telemetry tick |
+| `alertsProvider` | active alerts (`keepAlive`), reconciled from workspace state and the signal watch by pure functions in `domain/alerts.dart` |
+| `signalWatchProvider` | Signal lost detection (`keepAlive`): `QVX:NSGS1` every 2 s on powered-on projectors while the rule is on, staggered, at most 16 in flight, skipping nodes `WorkspaceNotifier.isNodeBusy`; logic in `domain/signal_watch.dart` |
 | `remotePreviewProvider` / `previewSignalStatusProvider` | per-projector "Remote Preview" (RemoView) WebSocket feed and its web-UI-driven signal status — see `remote_preview_service.dart` below |
 
 `workspaceProvider` polls every projector on an interval. Undo/redo snapshots **strip transient telemetry**

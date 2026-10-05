@@ -556,7 +556,7 @@ above covering standby and app-made input switches.
 
 **Decided 2026-10-05:** the dedicated `QVX:NSGS1` poll. Plan below.
 
-### Signal watch: implementation plan `[ ]`
+### Signal watch: implementation plan `[~]`
 Must hold up with **150 projectors** in a project.
 
 **Measured on hardware (2026-10-05, PT-RQ35K):**
@@ -840,9 +840,25 @@ Build order: engine → Preferences (fields, dropdown, Alerts section) → card 
   shortcut), so the installer's shortcut sets `AppUserModelID` and the toast activator
   CLSID; dev and portable builds show the header without an icon. Checked on Windows;
   awaiting a check on macOS.
-- `[ ]` Signal lost: source decided after the spike (2026-10-05): a dedicated `QVX:NSGS1`
-  poll, see "Signal watch: implementation plan". The rule and its switch exist, nothing
-  raises it yet.
+- `[~]` Signal lost (2026-10-05): built as in "Signal watch: implementation plan"
+  (`sendQuickQuery` + the FIN wait, `domain/signal_watch.dart`, `signalWatchProvider`,
+  latched alert with "Back after 3 s" in green, Signal cell red while lost, simulator
+  `sig`). Changed from the plan while building:
+  - An input switch by the app **disarms** the watch instead of a 10 s hold: it re-arms on
+    the new input's first signal, so switching to an input with nothing connected never
+    raises.
+  - The alert value is `No signal on HDMI 1` (the input folded into the value; no
+    separate qualifier field). OSC and notifications carry the same text.
+  - A suspected loss is confirmed with `QVX:POWI1` first: `ER401` is also the answer of a
+    projector gone to standby by itself; then `refreshNode` updates it.
+  - Fixed after the first hardware check: `IIS:` updates the Input column at once
+    (optimistic); a reading that crossed an app input switch is dropped (it raised a false
+    loss); an app input switch no longer ends an open dropout, so a signal on the new
+    input turns it into "Back after"; a changed signal triggers one `QIN` so an input
+    switched on the projector itself shows within ~2 s.
+  Unit and provider tests pass; on hardware 50 quick queries took 1.5 s with no TIME_WAIT
+  left on the PC. Still to do: check in the app with the simulator (`sig 3 blip`), the
+  150-projector simulator run, the 1-hour hardware run.
 
 ### Code
 - `domain/alert_rule.dart` (plain Dart + JSON, saved in app settings — alerts are a machine
