@@ -764,7 +764,7 @@ one for warning; one sound per merged batch. Needs an audio package or a little 
 while nothing changes):
 | Address | Arguments | When |
 |---|---|---|
-| `/pgrid/alert/<rule>` | projector (s), ip (s), active 1/0 (i), severity (s), value (s) | an alert is raised (1) or clears (0) |
+| `/pgrid/alert/<rule>` | projector (s), ip (s), active 1/0 (i), severity (s), value (s) | an alert is raised (1) or its condition ends (0; for Signal lost the moment the signal is back) |
 | `/pgrid/alert/acknowledged` | projector (s), rule (s) | an alert is acknowledged in the app or on the Web page |
 | `/pgrid/status/critical` | count (i) | the number of unacknowledged critical alerts changes |
 | `/pgrid/status/warning` | count (i) | the number of unacknowledged warning alerts changes |
@@ -856,6 +856,17 @@ Build order: engine → Preferences (fields, dropdown, Alerts section) → card 
     loss); an app input switch no longer ends an open dropout, so a signal on the new
     input turns it into "Back after"; a changed signal triggers one `QIN` so an input
     switched on the projector itself shows within ~2 s.
+  - Signal back (2026-10-05, owner's request): a new `AlertChange.recovered` transition
+    when a latched Signal lost gets its signal back. A recovered alert is no longer a
+    problem: card badge and status bar show it apart as a green check with a count (red
+    only while the signal is really gone), panel headers and Monitoring group rows count
+    it as "recovered", severity filters leave it out (All keeps it). A silent desktop
+    notification "Signal back on PRJ-03 (ip)" / "Back after 3 s, lost at 14:02" (green
+    check logo, `assets/alert_icons/recovered.png`), batched like raised ones, under the
+    same Desktop notification switch and Notify for as the alert (no switch of its own:
+    it didn't fit the dialog, and Signal lost is critical anyway). OSC sends `active 0` with
+    `Back after 3 s` at the return, and nothing again when the acknowledge clears it.
+    Event log: "Signal lost: Back after 3 s". No sound for the return.
   Unit and provider tests pass; on hardware 50 quick queries took 1.5 s with no TIME_WAIT
   left on the PC. Still to do: check in the app with the simulator (`sig 3 blip`), the
   150-projector simulator run, the 1-hour hardware run.
