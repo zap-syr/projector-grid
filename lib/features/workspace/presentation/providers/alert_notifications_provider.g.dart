@@ -51,7 +51,7 @@ final class AlertNotificationsNotifierProvider
 }
 
 String _$alertNotificationsNotifierHash() =>
-    r'912cfa3cc98b1fa4cab97126b5e13ce2ee5ed37f';
+    r'a1a9aacdfb443d6c68149bdc8996cb957fd66c22';
 
 /// Turns raised alerts into desktop notifications and the alert sound, per
 /// Preferences → Alerts → Notify. Alerts raised within [kAlertBatchWindow]

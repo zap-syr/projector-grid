@@ -1,3 +1,8 @@
 # Prettier (web_ui/) requires LF; without this, core.autocrlf=true on Windows
 # checks the files out as CRLF and `npm run lint` fails on every file.
 web_ui/** text=auto eol=lf
+
+# build_runner always writes LF; checked out as CRLF they show up as modified
+# after every regeneration.
+*.g.dart text eol=lf
+*.freezed.dart text eol=lf
