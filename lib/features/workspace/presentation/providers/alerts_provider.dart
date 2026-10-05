@@ -71,12 +71,12 @@ class AlertsNotifier extends _$AlertsNotifier {
       }
       // A cleared Signal lost is done with: without this its dropout would
       // raise it again on the next reconcile.
-      for (final t in result.transitions) {
-        if (t.change == AlertChange.cleared &&
-            t.alert.rule == AlertRule.signalLost) {
-          ref.read(signalWatchProvider.notifier).dismiss(t.alert.nodeId);
-        }
-      }
+      ref.read(signalWatchProvider.notifier).dismiss({
+        for (final t in result.transitions)
+          if (t.change == AlertChange.cleared &&
+              t.alert.rule == AlertRule.signalLost)
+            t.alert.nodeId,
+      });
     }
     final ids = {for (final n in nodes) n.id};
     _nodes.removeWhere((id, _) => !ids.contains(id));

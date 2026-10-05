@@ -4,14 +4,25 @@ import 'package:projector_grid/features/workspace/domain/alert_rule.dart';
 import 'package:projector_grid/features/workspace/domain/alerts.dart';
 import 'package:projector_grid/features/workspace/domain/log_event.dart';
 import 'package:projector_grid/features/workspace/domain/projector_node.dart';
+import 'package:projector_grid/features/workspace/domain/signal_watch.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/alerts_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/app_settings_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/event_log_provider.dart';
+import 'package:projector_grid/features/workspace/presentation/providers/protocol_service_provider.dart';
+import 'package:projector_grid/features/workspace/presentation/providers/signal_watch_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/workspace_provider.dart';
 
 import '../helpers/fake_protocol_service.dart';
 import '../helpers/provider_harness.dart';
 import '../helpers/test_config_dir.dart';
+
+/// Dropouts set by the test instead of queried from projectors.
+class _FakeWatch extends SignalWatchNotifier {
+  @override
+  Map<String, SignalLoss> build() => const {};
+
+  void set(Map<String, SignalLoss> losses) => state = losses;
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -91,6 +102,43 @@ void main() {
     expect(events.first.projector, 'Proj 1');
     expect(events.first.ip, '10.0.0.1');
   });
+
+  test(
+    'acknowledging several returned signals raises none of them again',
+    () async {
+      final c = ProviderContainer(
+        overrides: [
+          protocolServiceProvider.overrideWithValue(FakeProtocolService()),
+          signalWatchProvider.overrideWith(_FakeWatch.new),
+        ],
+      );
+      addTearDown(c.dispose);
+      c.listen(workspaceProvider, (_, _) {});
+      c.listen(alertsProvider, (_, _) {});
+      final events = <AlertChange>[];
+      final sub = c
+          .read(alertsProvider.notifier)
+          .events
+          .listen((e) => events.add(e.change));
+      addTearDown(sub.cancel);
+      c.read(workspaceProvider.notifier).setNodes([node('1'), node('2')]);
+      final watch = c.read(signalWatchProvider.notifier) as _FakeWatch;
+      final since = DateTime.now();
+      final lost = SignalLoss(since: since, input: 'HDMI 1');
+      watch.set({'1': lost, '2': lost});
+      final back = lost.restored(since.add(const Duration(seconds: 3)));
+      watch.set({'1': back, '2': back});
+      await Future<void>.delayed(Duration.zero);
+      events.clear();
+
+      c.read(alertsProvider.notifier).acknowledgeAll();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(c.read(alertsProvider), isEmpty);
+      expect(c.read(signalWatchProvider), isEmpty);
+      expect(events, isNot(contains(AlertChange.raised)));
+    },
+  );
 
   test('switching a rule off clears its alerts', () {
     final c = makeContainer(FakeProtocolService());

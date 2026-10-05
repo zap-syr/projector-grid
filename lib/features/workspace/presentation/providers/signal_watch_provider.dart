@@ -84,11 +84,12 @@ class SignalWatchNotifier extends _$SignalWatchNotifier {
     return const {};
   }
 
-  /// Forgets [nodeId]'s dropout once its alert has cleared (acknowledged
-  /// and over).
-  void dismiss(String nodeId) {
-    if (!state.containsKey(nodeId)) return;
-    state = {...state}..remove(nodeId);
+  /// Forgets [nodeIds]' dropouts once their alerts have cleared
+  /// (acknowledged and over). All in one change: the alerts reconcile on
+  /// each one, and a dropout still here then would raise its alert anew.
+  void dismiss(Iterable<String> nodeIds) {
+    if (!nodeIds.any(state.containsKey)) return;
+    state = {...state}..removeWhere((id, _) => nodeIds.contains(id));
   }
 
   static bool _watchable(ProjectorNode n) =>
