@@ -321,7 +321,9 @@ void main() {
       final r = step(raised, back);
       expect(r.active[key]!.restoredAt, back.restoredAt);
       expect(r.active[key]!.displayValue, 'Back after 3 s');
-      expect(r.transitions, isEmpty);
+      expect(r.transitions.single.change, AlertChange.recovered);
+      expect(r.transitions.single.alert.recovered, isTrue);
+      expect(step(r.active, back).transitions, isEmpty);
     });
 
     test('clears once acknowledged and over, in either order', () {
@@ -330,7 +332,12 @@ void main() {
       expect(step(acked, lost).active[key]!.acknowledged, isTrue);
       final cleared = step(acked, back);
       expect(cleared.active, isEmpty);
-      expect(cleared.transitions.single.change, AlertChange.cleared);
+      expect(cleared.transitions.map((t) => t.change), [
+        AlertChange.recovered,
+        AlertChange.cleared,
+      ]);
+      // Cleared as its recovered self: the return was already reported.
+      expect(cleared.transitions.last.alert.recovered, isTrue);
 
       final restored = step(raised, back).active;
       final ackedAfter = {key: restored[key]!.copyWith(acknowledged: true)};
@@ -386,15 +393,44 @@ void main() {
           a(AlertSeverity.critical, ack: true),
           a(AlertSeverity.warning),
         ]),
-        (severity: AlertSeverity.warning, acknowledged: false, count: 2),
+        (
+          severity: AlertSeverity.warning,
+          acknowledged: false,
+          recovered: false,
+          count: 2,
+        ),
       );
       expect(
         alertBadge([
           a(AlertSeverity.critical, ack: true),
           a(AlertSeverity.warning, ack: true),
         ]),
-        (severity: AlertSeverity.critical, acknowledged: true, count: 2),
+        (
+          severity: AlertSeverity.critical,
+          acknowledged: true,
+          recovered: false,
+          count: 2,
+        ),
       );
+    });
+
+    test('recovered when the only unacknowledged ones are over', () {
+      final back = ActiveAlert(
+        nodeId: '1',
+        rule: AlertRule.signalLost,
+        severity: AlertSeverity.critical,
+        value: 'No signal',
+        since: _t0,
+        restoredAt: _t0.add(const Duration(seconds: 3)),
+      );
+      expect(alertBadge([back])!.recovered, isTrue);
+      expect(
+        alertBadge([back, a(AlertSeverity.warning, ack: true)])!.recovered,
+        isTrue,
+      );
+      final open = alertBadge([back, a(AlertSeverity.warning)])!;
+      expect(open.recovered, isFalse);
+      expect(open.severity, AlertSeverity.warning);
     });
   });
 
@@ -467,7 +503,29 @@ void main() {
         warning: 1,
         criticalTotal: 2,
         warningTotal: 2,
+        recovered: 0,
       ));
+    });
+
+    test('a recovered alert counts apart and sorts after problems', () {
+      final back = ActiveAlert(
+        nodeId: '9',
+        rule: AlertRule.signalLost,
+        severity: AlertSeverity.critical,
+        value: 'No signal on HDMI 1',
+        since: _t0.add(const Duration(hours: 1)),
+        restoredAt: _t0.add(const Duration(hours: 1, seconds: 3)),
+      );
+      final counts = countAlerts([...alerts, back]);
+      expect(counts.critical, 2);
+      expect(counts.criticalTotal, 2);
+      expect(counts.recovered, 1);
+      final sorted = sortAlerts([...alerts, back]);
+      expect(
+        sorted.indexOf(back),
+        lessThan(sorted.indexWhere((a) => a.acknowledged)),
+      );
+      expect(sorted.where((a) => !a.acknowledged).last, back);
     });
   });
 

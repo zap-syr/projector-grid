@@ -56,12 +56,15 @@ class OscNotifier extends _$OscNotifier {
       ]);
       return;
     }
+    // A recovered alert already said 0 when its condition ended; its later
+    // clear (on acknowledge) would only repeat it.
+    if (e.change == AlertChange.cleared && a.recovered) return;
     _service.sendMessage('/pgrid/alert/${a.rule.slug}', [
       e.projector,
       e.ip,
       if (e.change == AlertChange.raised) 1 else 0,
       a.severity.name,
-      a.value,
+      a.displayValue,
     ]);
   }
 

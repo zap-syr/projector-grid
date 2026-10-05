@@ -493,7 +493,7 @@ const String oscReferenceHtml = '''<!DOCTYPE html>
       <tr>
         <td><code>/pgrid/alert/{rule}</code></td>
         <td>projector (s), ip (s), active (i, 1/0), severity (s), value (s)</td>
-        <td>An alert is raised (1) or clears (0)</td>
+        <td>An alert is raised (1) or its condition ends (0)</td>
       </tr>
       <tr>
         <td><code>/pgrid/alert/acknowledged</code></td>
@@ -503,7 +503,7 @@ const String oscReferenceHtml = '''<!DOCTYPE html>
     </tbody>
   </table>
 
-  <p>Rule names in the address: <code>offline</code>, <code>error</code>, <code>signal-lost</code>, <code>intake-temp</code>, <code>exhaust-temp</code>. A warning that turns critical is sent again as raised, with severity <code>critical</code>.</p>
+  <p>Rule names in the address: <code>offline</code>, <code>error</code>, <code>signal-lost</code>, <code>intake-temp</code>, <code>exhaust-temp</code>. A warning that turns critical is sent again as raised, with severity <code>critical</code>. <code>signal-lost</code> sends 0 the moment the signal is back, with the value <code>Back after 3 s</code>, although the alert stays in the app until someone acknowledges it; acknowledging then sends only <code>/pgrid/alert/acknowledged</code>.</p>
 
   <p class="example">Example: <code>/pgrid/alert/exhaust-temp "PRJ-02 Centre" "192.168.10.12" 1 "warning" "58 °C"</code></p>
 

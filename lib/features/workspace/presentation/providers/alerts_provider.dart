@@ -132,6 +132,7 @@ class AlertsNotifier extends _$AlertsNotifier {
                 a.severity == AlertSeverity.critical
                     ? LogSeverity.error
                     : LogSeverity.warning,
+              AlertChange.recovered ||
               AlertChange.cleared => LogSeverity.success,
               AlertChange.acknowledged => LogSeverity.info,
             },
@@ -139,6 +140,7 @@ class AlertsNotifier extends _$AlertsNotifier {
             message: switch (change) {
               AlertChange.raised =>
                 '${a.rule.label}: ${a.value} (${a.severity.name})',
+              AlertChange.recovered => '${a.rule.label}: ${a.displayValue}',
               AlertChange.cleared => '${a.rule.label} cleared',
               AlertChange.acknowledged => '${a.rule.label} acknowledged',
             },

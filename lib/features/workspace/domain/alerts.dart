@@ -52,6 +52,10 @@ class ActiveAlert {
 
   AlertKey get key => (nodeId: nodeId, rule: rule, item: item);
 
+  /// Over, waiting only to be acknowledged (a Signal lost whose signal is
+  /// back): not a problem any more, so counts and badges keep it apart.
+  bool get recovered => restoredAt != null;
+
   /// What the panels show as the value: `Back after 3 s` once a latched
   /// Signal lost has its signal back, [value] otherwise.
   String get displayValue => switch (restoredAt) {
@@ -100,8 +104,10 @@ class ActiveAlert {
 }
 
 /// [acknowledged] never comes from [reconcileAlerts]; the provider reports
-/// it when someone acknowledges.
-enum AlertChange { raised, cleared, acknowledged }
+/// it when someone acknowledges. [recovered]: a latched Signal lost got its
+/// signal back; the alert stays until acknowledged, but the condition is
+/// over, so OSC reports it ended then, not on the later [cleared].
+enum AlertChange { raised, recovered, cleared, acknowledged }
 
 /// [raised] also covers a warning escalating to critical: the operator has
 /// to see it again even if the warning was acknowledged.
@@ -227,6 +233,9 @@ reconcileAlerts({
 }) {
   final active = <AlertKey, ActiveAlert>{};
   final transitions = <AlertTransition>[];
+  // A Signal lost that recovered and cleared in the same step clears as its
+  // recovered self, so listeners can tell it already reported the return.
+  final latest = <AlertKey, ActiveAlert>{};
 
   for (final node in nodes) {
     final conditions = evaluateNode(
@@ -266,17 +275,21 @@ reconcileAlerts({
       final key = (nodeId: node.id, rule: AlertRule.signalLost, item: '');
       final old = previous[key];
       final fresh = old == null || old.since != loss.since;
+      final alert = ActiveAlert(
+        nodeId: node.id,
+        rule: AlertRule.signalLost,
+        severity: AlertSeverity.critical,
+        value: signalLostValue(loss.input),
+        since: loss.since,
+        acknowledged: !fresh && old.acknowledged,
+        restoredAt: loss.restoredAt,
+      );
+      if (!fresh && old.restoredAt == null && alert.restoredAt != null) {
+        transitions.add((change: AlertChange.recovered, alert: alert));
+        latest[key] = alert;
+      }
       // Acknowledged and over: left out, so it clears below.
       if (fresh || !old.acknowledged || loss.open) {
-        final alert = ActiveAlert(
-          nodeId: node.id,
-          rule: AlertRule.signalLost,
-          severity: AlertSeverity.critical,
-          value: signalLostValue(loss.input),
-          since: loss.since,
-          acknowledged: !fresh && old.acknowledged,
-          restoredAt: loss.restoredAt,
-        );
         active[key] = alert;
         if (old == null || (fresh && old.acknowledged)) {
           transitions.add((change: AlertChange.raised, alert: alert));
@@ -287,7 +300,10 @@ reconcileAlerts({
 
   for (final old in previous.values) {
     if (!active.containsKey(old.key)) {
-      transitions.add((change: AlertChange.cleared, alert: old));
+      transitions.add((
+        change: AlertChange.cleared,
+        alert: latest[old.key] ?? old,
+      ));
     }
   }
 
@@ -295,19 +311,22 @@ reconcileAlerts({
 }
 
 /// What a projector card's badge shows for [alerts], or null for no badge.
-/// The colour follows the most severe *unacknowledged* alert (all of them
-/// once everything is acknowledged); [acknowledged] draws the icon outlined.
-({AlertSeverity severity, bool acknowledged, int count})? alertBadge(
-  Iterable<ActiveAlert> alerts,
-) {
+/// The colour follows the most severe unacknowledged alert that is still a
+/// problem; [recovered] when the only unacknowledged ones are over (a green
+/// check: "it happened, look"); otherwise the acknowledged ones, and
+/// [acknowledged] draws the icon outlined.
+({AlertSeverity severity, bool acknowledged, bool recovered, int count})?
+alertBadge(Iterable<ActiveAlert> alerts) {
   if (alerts.isEmpty) return null;
-  final open = alerts.where((a) => !a.acknowledged);
-  final pool = open.isEmpty ? alerts : open;
+  final unacked = alerts.where((a) => !a.acknowledged);
+  final open = unacked.where((a) => !a.recovered);
+  final pool = open.isNotEmpty ? open : alerts;
   return (
     severity: pool.any((a) => a.severity == AlertSeverity.critical)
         ? AlertSeverity.critical
         : AlertSeverity.warning,
-    acknowledged: open.isEmpty,
+    acknowledged: unacked.isEmpty,
+    recovered: open.isEmpty && unacked.isNotEmpty,
     count: alerts.length,
   );
 }
@@ -337,10 +356,11 @@ String formatAlertStart(DateTime since, DateTime now) {
   return sameDay ? hhmm : '${_months[since.month - 1]} ${since.day} $hhmm';
 }
 
-/// Display order: unacknowledged first, then critical before warning, then
-/// newest first.
+/// Display order: unacknowledged first, problems before recovered ones, then
+/// critical before warning, then newest first.
 int compareAlerts(ActiveAlert a, ActiveAlert b) {
   if (a.acknowledged != b.acknowledged) return a.acknowledged ? 1 : -1;
+  if (a.recovered != b.recovered) return a.recovered ? 1 : -1;
   if (a.severity != b.severity) {
     return b.severity.index.compareTo(a.severity.index);
   }
@@ -407,17 +427,24 @@ List<AlertSection> sectionByProjectGroup(
 }
 
 /// The status bar's Alerts counts: unacknowledged and all active, per
-/// severity.
+/// severity, of the alerts that are still a problem; [recovered] counts the
+/// ones that are over and wait to be acknowledged, apart.
 typedef AlertCounts = ({
   int critical,
   int warning,
   int criticalTotal,
   int warningTotal,
+  int recovered,
 });
 
 AlertCounts countAlerts(Iterable<ActiveAlert> alerts) {
   var critical = 0, warning = 0, criticalTotal = 0, warningTotal = 0;
+  var recovered = 0;
   for (final a in alerts) {
+    if (a.recovered) {
+      recovered++;
+      continue;
+    }
     final crit = a.severity == AlertSeverity.critical;
     if (crit) {
       criticalTotal++;
@@ -432,5 +459,6 @@ AlertCounts countAlerts(Iterable<ActiveAlert> alerts) {
     warning: warning,
     criticalTotal: criticalTotal,
     warningTotal: warningTotal,
+    recovered: recovered,
   );
 }
