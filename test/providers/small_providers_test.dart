@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:projector_grid/features/workspace/domain/log_event.dart';
 import 'package:projector_grid/features/workspace/domain/projector_node.dart';
+import 'package:projector_grid/features/workspace/presentation/providers/app_settings_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/custom_commands_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/event_log_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/status_summary_provider.dart';
@@ -16,6 +17,16 @@ import '../helpers/test_config_dir.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final configDir = useTempConfigDir();
+
+  test('the Web Access link address survives a restart', () {
+    final c = ProviderContainer();
+    addTearDown(c.dispose);
+    c.read(appSettingsProvider.notifier).setWebUrlIp('10.1.2.3');
+
+    final restarted = ProviderContainer();
+    addTearDown(restarted.dispose);
+    expect(restarted.read(appSettingsProvider).webUrlIp, '10.1.2.3');
+  });
 
   group('statusSummaryProvider', () {
     test('counts online and offline', () {

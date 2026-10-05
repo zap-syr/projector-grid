@@ -45,6 +45,11 @@ class AppSettings {
   final bool webEnabled;
   final int webPort;
 
+  /// The address Preferences shows the Web Access link with (show PCs have
+  /// several NICs). Display only: the server listens on every interface.
+  /// Empty: the first one found.
+  final String webUrlIp;
+
   /// Salted hash of the Viewer PIN (`hashPin`); null until one is set, and
   /// Web Access can't be enabled without it.
   final String? webViewerPinHash;
@@ -98,6 +103,7 @@ class AppSettings {
     this.isMonitoringView = false,
     this.webEnabled = false,
     this.webPort = defaultWebPort,
+    this.webUrlIp = '',
     this.webViewerPinHash,
     this.webAllowControl = false,
     this.webOperatorPinHash,
@@ -129,6 +135,7 @@ class AppSettings {
     bool? isMonitoringView,
     bool? webEnabled,
     int? webPort,
+    String? webUrlIp,
     String? webViewerPinHash,
     bool? webAllowControl,
     String? webOperatorPinHash,
@@ -161,6 +168,7 @@ class AppSettings {
       isMonitoringView: isMonitoringView ?? this.isMonitoringView,
       webEnabled: webEnabled ?? this.webEnabled,
       webPort: webPort ?? this.webPort,
+      webUrlIp: webUrlIp ?? this.webUrlIp,
       webViewerPinHash: webViewerPinHash ?? this.webViewerPinHash,
       webAllowControl: webAllowControl ?? this.webAllowControl,
       webOperatorPinHash: webOperatorPinHash ?? this.webOperatorPinHash,
@@ -200,6 +208,7 @@ class AppSettings {
     'isMonitoringView': isMonitoringView,
     'webEnabled': webEnabled,
     'webPort': webPort,
+    'webUrlIp': webUrlIp,
     'webViewerPinHash': webViewerPinHash,
     'webAllowControl': webAllowControl,
     'webOperatorPinHash': webOperatorPinHash,
@@ -240,6 +249,7 @@ class AppSettings {
     isMonitoringView: (json['isMonitoringView'] as bool?) ?? false,
     webEnabled: (json['webEnabled'] as bool?) ?? false,
     webPort: (json['webPort'] as int?) ?? defaultWebPort,
+    webUrlIp: (json['webUrlIp'] as String?) ?? '',
     webViewerPinHash: json['webViewerPinHash'] as String?,
     webAllowControl: (json['webAllowControl'] as bool?) ?? false,
     webOperatorPinHash: json['webOperatorPinHash'] as String?,
@@ -368,6 +378,11 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
 
   void setWebPort(int port) {
     state = state.copyWith(webPort: port);
+    _save(state);
+  }
+
+  void setWebUrlIp(String ip) {
+    state = state.copyWith(webUrlIp: ip);
     _save(state);
   }
 

@@ -118,7 +118,10 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
     if (mounted) {
       setState(() {
         _networkInterfaces = interfaces;
-        _webUrlIp = _localIps.firstOrNull;
+        // The saved address while this machine still has it (a NIC can be
+        // unplugged or readdressed), the first one otherwise.
+        final saved = ref.read(appSettingsProvider).webUrlIp;
+        _webUrlIp = _localIps.contains(saved) ? saved : _localIps.firstOrNull;
       });
     }
   }
@@ -262,6 +265,7 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
     final webPort = int.tryParse(_webPortController.text);
     final webPortValid = webPort != null && webPort > 0 && webPort <= 65535;
     if (webPortValid) settingsNotifier.setWebPort(webPort);
+    if (_webUrlIp case final ip?) settingsNotifier.setWebUrlIp(ip);
     final webNotifier = ref.read(webServerProvider.notifier);
     if (pin.isNotEmpty) webNotifier.setViewerPin(pin);
     if (operatorPin.isNotEmpty) webNotifier.setOperatorPin(operatorPin);
