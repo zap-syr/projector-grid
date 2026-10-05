@@ -11,8 +11,9 @@ import 'anchored_panel_layout.dart';
 
 /// The status bar's Alerts counter: per severity, the unacknowledged count
 /// with a filled icon, or once all are acknowledged the active total with
-/// an outlined one; a green check when nothing is active. Clicking opens
-/// Active alerts.
+/// an outlined one; a filled green check with the alerts that are over but
+/// unacknowledged; an outlined green check when nothing is active. Clicking
+/// opens Active alerts.
 class StatusBarAlertsButton extends ConsumerStatefulWidget {
   const StatusBarAlertsButton({super.key});
 
@@ -76,7 +77,8 @@ class _StatusBarAlertsButtonState extends ConsumerState<StatusBarAlertsButton> {
       );
     }
 
-    final none = counts.criticalTotal + counts.warningTotal == 0;
+    final none =
+        counts.criticalTotal + counts.warningTotal + counts.recovered == 0;
 
     return OverlayPortal.overlayChildLayoutBuilder(
       controller: _portal,
@@ -163,6 +165,28 @@ class _StatusBarAlertsButtonState extends ConsumerState<StatusBarAlertsButton> {
                         counts.warning,
                         counts.warningTotal,
                       ),
+                      // Over, waiting to be acknowledged.
+                      if (counts.recovered > 0)
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          spacing: 3,
+                          children: [
+                            const Icon(
+                              Icons.check_circle,
+                              size: 14,
+                              color: AlertPalette.recoveredIcon,
+                            ),
+                            Text(
+                              '${counts.recovered}',
+                              style: style?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                     ],
                   ],
                 ),

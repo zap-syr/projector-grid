@@ -111,6 +111,39 @@ class AlertSeverityCount extends StatelessWidget {
   );
 }
 
+/// [AlertSeverityCount] for the alerts that are over (a signal that came
+/// back): a green check.
+class AlertRecoveredCount extends StatelessWidget {
+  const AlertRecoveredCount(this.count, {super.key});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(left: 8),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      spacing: 2,
+      children: [
+        const Icon(
+          Icons.check_circle,
+          size: 13,
+          color: AlertPalette.recoveredIcon,
+        ),
+        Text(
+          '$count',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: AlertPalette.of(context).recovered,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
 /// 28px icon button. No tooltip, for the same reason as AcknowledgeButton.
 class AlertPanelIconButton extends StatelessWidget {
   const AlertPanelIconButton({

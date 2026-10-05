@@ -16,6 +16,9 @@ class AlertPalette {
   static Color icon(AlertSeverity s) =>
       s == AlertSeverity.critical ? Colors.red : Colors.orange;
 
+  /// The check for alerts that are over (a signal that came back).
+  static const Color recoveredIcon = Colors.green;
+
   static IconData iconData(AlertSeverity s, {bool filled = true}) =>
       switch ((s, filled)) {
         (AlertSeverity.critical, true) => Icons.error,
@@ -69,7 +72,9 @@ class AlertRow extends StatelessWidget {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
     final palette = AlertPalette.of(context);
-    final severityIcon = AlertPalette.icon(alert.severity);
+    final severityIcon = alert.recovered
+        ? AlertPalette.recoveredIcon
+        : AlertPalette.icon(alert.severity);
     final muted = colors.onSurfaceVariant.withValues(alpha: 0.75);
 
     return Container(
@@ -93,7 +98,9 @@ class AlertRow extends StatelessWidget {
               borderRadius: BorderRadius.circular(7),
             ),
             child: Icon(
-              AlertPalette.iconData(alert.severity),
+              alert.recovered
+                  ? Icons.check_circle
+                  : AlertPalette.iconData(alert.severity),
               size: 16,
               color: severityIcon,
             ),
@@ -140,9 +147,9 @@ class AlertRow extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w600,
-                    color: alert.restoredAt == null
-                        ? palette.text(alert.severity)
-                        : palette.recovered,
+                    color: alert.recovered
+                        ? palette.recovered
+                        : palette.text(alert.severity),
                     fontFeatures: const [FontFeature.tabularFigures()],
                     height: 1.2,
                   ),

@@ -1252,6 +1252,8 @@ class _GroupHeaderRow extends ConsumerWidget {
           text: '${counts.warning} warning',
           color: _MonitoringTableState._warnText,
         ),
+      if (counts.recovered > 0)
+        (text: '${counts.recovered} recovered', color: Colors.green),
       if (counts.critical + counts.warning == 0 && auth > 0)
         (
           text: '$auth auth error${auth == 1 ? '' : 's'}',
@@ -1376,7 +1378,7 @@ class _SignalCell extends ConsumerWidget {
       alertsProvider.select((alerts) {
         final a =
             alerts[(nodeId: node.id, rule: AlertRule.signalLost, item: '')];
-        return a != null && a.restoredAt == null;
+        return a != null && !a.recovered;
       }),
     );
     return _CellText(node.signal, color: lost ? Colors.red : null);

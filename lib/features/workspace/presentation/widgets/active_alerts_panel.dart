@@ -84,7 +84,10 @@ class _ActiveAlertsPanelState extends ConsumerState<ActiveAlertsPanel> {
     final canSection = byProjector && projectGroups.isNotEmpty;
     final sectioned = canSection && settings.byProjectGroups;
 
-    bool passes(ActiveAlert a) => _filter == null || a.severity == _filter;
+    // A severity filter is for what is still wrong; recovered ones show
+    // under All only.
+    bool passes(ActiveAlert a) =>
+        _filter == null || (a.severity == _filter && !a.recovered);
     final unacked = [
       for (final a in alerts)
         if (!a.acknowledged) a,
@@ -333,6 +336,11 @@ class _GroupHeader extends StatelessWidget {
     final alerts = group.alerts;
     final counts = countAlerts(alerts);
     final top = alerts.first.severity;
+    // Sorted problems first: the first one being over means all are.
+    final allBack = alerts.first.recovered;
+    final topColor = allBack
+        ? AlertPalette.recoveredIcon
+        : AlertPalette.icon(top);
 
     final String title;
     final String? note;
@@ -367,13 +375,15 @@ class _GroupHeader extends StatelessWidget {
                       width: 22,
                       height: 22,
                       decoration: BoxDecoration(
-                        color: AlertPalette.icon(top).withValues(alpha: 0.17),
+                        color: topColor.withValues(alpha: 0.17),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Icon(
-                        AlertPalette.iconData(top),
+                        allBack
+                            ? Icons.check_circle
+                            : AlertPalette.iconData(top),
                         size: 14,
-                        color: AlertPalette.icon(top),
+                        color: topColor,
                       ),
                     ),
                   Expanded(
@@ -385,7 +395,9 @@ class _GroupHeader extends StatelessWidget {
                       style: theme.textTheme.bodySmall?.copyWith(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
-                        color: AlertPalette.of(context).text(top),
+                        color: allBack
+                            ? AlertPalette.of(context).recovered
+                            : AlertPalette.of(context).text(top),
                       ),
                     )
                   else ...[
@@ -396,6 +408,8 @@ class _GroupHeader extends StatelessWidget {
                       ),
                     if (counts.warning > 0)
                       AlertSeverityCount(AlertSeverity.warning, counts.warning),
+                    if (counts.recovered > 0)
+                      AlertRecoveredCount(counts.recovered),
                   ],
                 ],
               ),
@@ -496,6 +510,8 @@ class _SectionHeader extends StatelessWidget {
                     AlertSeverityCount(AlertSeverity.critical, counts.critical),
                   if (counts.warning > 0)
                     AlertSeverityCount(AlertSeverity.warning, counts.warning),
+                  if (counts.recovered > 0)
+                    AlertRecoveredCount(counts.recovered),
                 ],
               ),
             ),
@@ -569,7 +585,7 @@ class _Toolbar extends StatelessWidget {
           children: [
             _Chip(
               label: 'All',
-              count: counts.critical + counts.warning,
+              count: counts.critical + counts.warning + counts.recovered,
               selected: filter == null,
               onTap: () => onFilter(null),
             ),

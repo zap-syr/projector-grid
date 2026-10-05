@@ -26,7 +26,9 @@ class AlertBadge extends ConsumerWidget {
       ),
     );
     if (badge == null) return const SizedBox.shrink();
-    final color = AlertPalette.icon(badge.severity);
+    final color = badge.recovered
+        ? AlertPalette.recoveredIcon
+        : AlertPalette.icon(badge.severity);
 
     return HoverPanel(
       width: ProjectorAlertPanel.width,
@@ -46,10 +48,12 @@ class AlertBadge extends ConsumerWidget {
               spacing: 1,
               children: [
                 Icon(
-                  AlertPalette.iconData(
-                    badge.severity,
-                    filled: !badge.acknowledged,
-                  ),
+                  badge.recovered
+                      ? Icons.check_circle
+                      : AlertPalette.iconData(
+                          badge.severity,
+                          filled: !badge.acknowledged,
+                        ),
                   size: 14,
                   color: color,
                 ),

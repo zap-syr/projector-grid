@@ -122,6 +122,8 @@ class _ProjectorAlertPanelState extends ConsumerState<ProjectorAlertPanel> {
                     AlertSeverityCount(AlertSeverity.critical, counts.critical),
                   if (counts.warning > 0)
                     AlertSeverityCount(AlertSeverity.warning, counts.warning),
+                  if (counts.recovered > 0)
+                    AlertRecoveredCount(counts.recovered),
                   const SizedBox(width: 4),
                 ],
                 if (active.isNotEmpty)

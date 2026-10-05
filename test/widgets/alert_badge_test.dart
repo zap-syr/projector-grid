@@ -111,6 +111,25 @@ void main() {
     return mouse;
   }
 
+  testWidgets('a green check once the only open alert is over', (tester) async {
+    final since = DateTime.now().subtract(const Duration(minutes: 2));
+    await pump(tester, [
+      ActiveAlert(
+        nodeId: '1',
+        rule: AlertRule.signalLost,
+        severity: AlertSeverity.critical,
+        value: 'No signal on HDMI 1',
+        since: since,
+        restoredAt: since.add(const Duration(seconds: 3)),
+      ),
+    ]);
+    expect(find.byIcon(Icons.check_circle), findsOneWidget);
+    expect(find.byIcon(Icons.error), findsNothing);
+
+    await hoverOpen(tester);
+    expect(find.text('Back after 3 s'), findsOneWidget);
+  });
+
   testWidgets('the panel acknowledges, staying open while hovered', (
     tester,
   ) async {
