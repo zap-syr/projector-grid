@@ -23,6 +23,12 @@
 // --demo-errors starts with a set that covers the app's Errors cell: a
 // warning, a critical, five codes on one projector, an unknown code.
 //
+// The input signal (QVX:NSGS1), for the Signal lost alert:
+//   sig 3 off | sig 3 on   cable out / back in on projector 3
+//   sig all blip           a ~1 s pull: ~3.5 s without signal, like hardware
+// While the signal is gone a powered-on projector answers ER401 for the
+// first ~1.5 s (re-locking), then NSGS1=NO SIGNAL.
+//
 // Windows routes the whole 127.0.0.0/8 range to loopback out of the box;
 // macOS only has 127.0.0.1 — add aliases first:
 //   for i in $(seq 2 6); do sudo ifconfig lo0 alias 127.0.0.$i up; done
@@ -63,6 +69,21 @@ class SimProjector {
   /// Active self-diagnosis codes, sent space-separated after `ERRS2=`.
   List<String> errors = [];
 
+  /// When the source signal went, or null while it is there.
+  DateTime? signalLostAt;
+
+  void setSignal(bool present) =>
+      signalLostAt = present ? null : (signalLostAt ?? DateTime.now());
+
+  String get _signal {
+    final lost = signalLostAt;
+    if (power != 3) return 'ER401';
+    if (lost == null) return 'NSGS1=1080/60p';
+    return DateTime.now().difference(lost) < const Duration(milliseconds: 1500)
+        ? 'ER401'
+        : 'NSGS1=NO SIGNAL';
+  }
+
   void _powerTo(int transitional, int target, Duration delay) {
     power = transitional;
     Timer(delay, () => power = target);
@@ -86,7 +107,6 @@ class SimProjector {
     if (cmd.startsWith('VXX:SEFS2=')) {
       return 'SEFS2=${fadeOut = cmd.substring(10)}';
     }
-    final on = power == 3;
     return switch (cmd) {
       'QID' => model,
       'QSN' => serial,
@@ -94,7 +114,7 @@ class SimProjector {
       'QSH' => shutter,
       'QIN' => input,
       'QTS' => pattern,
-      'QVX:NSGS1' => on ? 'NSGS1=1080/60p' : 'ER401',
+      'QVX:NSGS1' => _signal,
       'QVX:RTMS1' => 'RTMS1=${1200 + index * 37}',
       'QVX:LRTS3=00' => 'LRTS3=00:${800 + index * 21}',
       'QTM:0' => '00${24 + index % 5}/0075',
@@ -155,7 +175,8 @@ Future<void> main(List<String> args) async {
 const _help = '''
   err <n|all> <codes...>   set self-diagnosis codes, e.g. err 3 F305 U200
   clear <n|all>            remove them
-  list                     who reports what''';
+  list                     who reports what
+  sig <n|all> off|on|blip  input signal gone, back, or gone for ~3.5 s''';
 
 void _command(String line, List<SimProjector> projectors) {
   final parts = line.split(RegExp(r'\s+'));
@@ -186,6 +207,21 @@ void _command(String line, List<SimProjector> projectors) {
       for (final p in targets) {
         p.errors = [];
       }
+    case 'sig' when parts.length > 2:
+      final how = parts[2];
+      if (how != 'off' && how != 'on' && how != 'blip') {
+        return stdout.writeln(_help);
+      }
+      for (final p in targets) {
+        p.setSignal(how == 'on');
+        if (how == 'blip') {
+          Timer(const Duration(milliseconds: 3500), () => p.setSignal(true));
+        }
+      }
+      return stdout.writeln(
+        '${parts[1] == 'all' ? 'All projectors' : targets.single.ip}: '
+        'signal $how.',
+      );
     default:
       return stdout.writeln(_help);
   }
