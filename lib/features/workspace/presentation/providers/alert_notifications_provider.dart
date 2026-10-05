@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../../../../core/services/desktop_notification_service.dart';
 import '../../domain/alert_notifications.dart';
 import '../../domain/alert_rule.dart';
 import '../../domain/alerts.dart';
@@ -15,7 +16,8 @@ part 'alert_notifications_provider.g.dart';
 
 /// Turns raised alerts into desktop notifications and the alert sound, per
 /// Preferences → Alerts → Notify. Alerts raised within [kAlertBatchWindow]
-/// of the first one make one notification and one sound.
+/// of the first one make one notification and one sound. A signal coming
+/// back gets its own, silent notification, batched the same way.
 @Riverpod(keepAlive: true)
 class AlertNotificationsNotifier extends _$AlertNotificationsNotifier {
   final List<AlertEvent> _batch = [];
@@ -26,7 +28,11 @@ class AlertNotificationsNotifier extends _$AlertNotificationsNotifier {
     final events = ref
         .read(alertsProvider.notifier)
         .events
-        .where((e) => e.change == AlertChange.raised)
+        .where(
+          (e) =>
+              e.change == AlertChange.raised ||
+              e.change == AlertChange.recovered,
+        )
         .listen(_add);
     ref.read(desktopNotificationServiceProvider).onClick = _onClick;
     ref.onDispose(() {
@@ -49,19 +55,37 @@ class AlertNotificationsNotifier extends _$AlertNotificationsNotifier {
     final settings = ref.read(appSettingsProvider).alerts;
 
     if (settings.desktopNotification) {
+      final notifications = ref.read(desktopNotificationServiceProvider);
+      final now = DateTime.now();
       final notice = alertNotice(
         noticeable(batch, settings.desktopNotifyFor),
-        DateTime.now(),
+        now,
       );
       if (notice != null) {
         unawaited(
-          ref
-              .read(desktopNotificationServiceProvider)
-              .show(
-                title: notice.title,
-                body: notice.body,
-                critical: notice.severity == AlertSeverity.critical,
-              ),
+          notifications.show(
+            title: notice.title,
+            body: notice.body,
+            icon: notice.severity == AlertSeverity.critical
+                ? NoticeIcon.critical
+                : NoticeIcon.warning,
+          ),
+        );
+      }
+      // A return follows its alert's Notify for (Signal lost is critical).
+      final back = recoveryNotice([
+        for (final e in batch)
+          if (settings.desktopNotifyFor == AlertNotifyScope.all ||
+              e.alert.severity == AlertSeverity.critical)
+            e,
+      ], now);
+      if (back != null) {
+        unawaited(
+          notifications.show(
+            title: back.title,
+            body: back.body,
+            icon: NoticeIcon.recovered,
+          ),
         );
       }
     }

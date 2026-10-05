@@ -2,6 +2,18 @@ import 'dart:io';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
+/// A notification's logo: a red circle, an orange triangle, a green check.
+/// The name is the image's file name in `assets/alert_icons/`.
+enum NoticeIcon {
+  critical('Critical'),
+  warning('Warning'),
+  recovered('Recovered');
+
+  const NoticeIcon(this.altText);
+
+  final String altText;
+}
+
 /// The system's own notifications: a Windows toast, a macOS Notification
 /// Center banner. Always silent; the alert sound is the app's own
 /// (`AlertSoundService`), so it still plays under Focus or Do Not Disturb.
@@ -53,13 +65,12 @@ class DesktopNotificationService {
       )
       .then((_) {});
 
-  /// [critical] picks the Windows toast's severity logo (red circle or
-  /// orange triangle, `assets/alert_icons/`); macOS always shows the app
-  /// icon there.
+  /// [icon] picks the Windows toast's logo (`assets/alert_icons/`); macOS
+  /// always shows the app icon there.
   Future<void> show({
     required String title,
     required String body,
-    required bool critical,
+    required NoticeIcon icon,
   }) async {
     await _init();
     if (Platform.isMacOS && !_permissionAsked) {
@@ -81,13 +92,10 @@ class DesktopNotificationService {
           images: [
             WindowsImage(
               Uri.file(
-                _bundledAsset([
-                  'alert_icons',
-                  critical ? 'critical.png' : 'warning.png',
-                ]),
+                _bundledAsset(['alert_icons', '${icon.name}.png']),
                 windows: true,
               ),
-              altText: critical ? 'Critical' : 'Warning',
+              altText: icon.altText,
               placement: WindowsImagePlacement.appLogoOverride,
             ),
           ],

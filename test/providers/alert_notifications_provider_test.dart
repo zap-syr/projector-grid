@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:projector_grid/core/services/alert_sound_service.dart';
 import 'package:projector_grid/core/services/desktop_notification_service.dart';
 import 'package:projector_grid/features/workspace/domain/alert_rule.dart';
+import 'package:projector_grid/features/workspace/domain/signal_watch.dart';
+import 'package:projector_grid/features/workspace/presentation/providers/signal_watch_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/alert_delivery_providers.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/alert_notifications_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/alerts_provider.dart';
@@ -25,9 +27,16 @@ class _FakeNotifications implements DesktopNotificationService {
   Future<void> show({
     required String title,
     required String body,
-    required bool critical,
-  }) async =>
-      shown.add('$title | $body | ${critical ? 'critical' : 'warning'}');
+    required NoticeIcon icon,
+  }) async => shown.add('$title | $body | ${icon.name}');
+}
+
+/// Dropouts set by the test instead of queried from projectors.
+class _FakeWatch extends SignalWatchNotifier {
+  @override
+  Map<String, SignalLoss> build() => const {};
+
+  void set(Map<String, SignalLoss> losses) => state = losses;
 }
 
 class _FakeSound implements AlertSoundService {
@@ -55,6 +64,7 @@ void main() {
         protocolServiceProvider.overrideWithValue(FakeProtocolService()),
         desktopNotificationServiceProvider.overrideWithValue(notifications),
         alertSoundServiceProvider.overrideWithValue(sound),
+        signalWatchProvider.overrideWith(_FakeWatch.new),
       ],
     );
     addTearDown(c.dispose);
@@ -87,6 +97,48 @@ void main() {
             '${_hhmm(DateTime.now())} | critical',
       ]);
       expect(sound.played, [true]);
+    });
+  });
+
+  test('a signal coming back gets its own silent notification', () {
+    fakeAsync((async) {
+      final c = container();
+      c
+          .read(appSettingsProvider.notifier)
+          .setAlertSettings(const AlertSettings(sound: true));
+      c.read(workspaceProvider.notifier).setNodes([node('1')]);
+      final watch = c.read(signalWatchProvider.notifier) as _FakeWatch;
+      final since = DateTime.now();
+      final lost = SignalLoss(since: since, input: 'HDMI 1');
+      watch.set({'1': lost});
+      async.elapse(const Duration(seconds: 3));
+      watch.set({'1': lost.restored(since.add(const Duration(seconds: 3)))});
+      async.elapse(const Duration(seconds: 3));
+
+      expect(notifications.shown, [
+        'Signal lost on Proj 1 (10.0.0.1) | No signal on HDMI 1 since '
+            '${_hhmm(since)} | critical',
+        'Signal back on Proj 1 (10.0.0.1) | Back after 3 s, lost at '
+            '${_hhmm(since)} | recovered',
+      ]);
+      expect(sound.played, [true]);
+    });
+  });
+
+  test('no signal-back notification with notifications off', () {
+    fakeAsync((async) {
+      final c = container();
+      c
+          .read(appSettingsProvider.notifier)
+          .setAlertSettings(const AlertSettings(desktopNotification: false));
+      c.read(workspaceProvider.notifier).setNodes([node('1')]);
+      final watch = c.read(signalWatchProvider.notifier) as _FakeWatch;
+      final lost = SignalLoss(since: DateTime.now(), input: 'HDMI 1');
+      watch.set({'1': lost});
+      async.elapse(const Duration(seconds: 3));
+      watch.set({'1': lost.restored(DateTime.now())});
+      async.elapse(const Duration(seconds: 3));
+      expect(notifications.shown, isEmpty);
     });
   });
 

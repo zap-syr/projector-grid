@@ -1,6 +1,7 @@
 // Writes the desktop notification's severity icons to assets/alert_icons/:
 //   critical.png — red circle with "!"
 //   warning.png  — orange triangle with "!"
+//   recovered.png — green circle with a check (the signal is back)
 // Windows shows the toast's logo at a fixed size, so the glyph fills only
 // about 75% of the image and the transparent margin makes it look smaller.
 // Run from the project root: dart run tool/generate_alert_icons.dart
@@ -18,9 +19,11 @@ const _samples = 4;
 
 typedef Shape = bool Function(double x, double y);
 
-/// The app's alert colours (`AlertPalette.icon`: Colors.red / orange).
+/// The app's alert colours (`AlertPalette.icon`: Colors.red / orange /
+/// green).
 const _red = (0xF4, 0x43, 0x36);
 const _orange = (0xFF, 0x98, 0x00);
+const _green = (0x4C, 0xAF, 0x50);
 
 Shape circle(double cx, double cy, double r) =>
     (x, y) => (x - cx) * (x - cx) + (y - cy) * (y - cy) <= r * r;
@@ -101,5 +104,14 @@ void main() {
     roundedTriangle(const [Point(24, 5), Point(45, 42), Point(3, 42)], 1.5),
     (x, y) => capsule(24, 17, 30, 2.4)(x, y) || circle(24, 35.5, 2.8)(x, y),
     _orange,
+  );
+  const tick = [Point(14.0, 24.5), Point(21.0, 31.5), Point(34.0, 17.0)];
+  writeIcon(
+    'assets/alert_icons/recovered.png',
+    circle(24, 24, 20),
+    (x, y) =>
+        _segmentDistance(x, y, tick[0], tick[1]) <= 2.6 ||
+        _segmentDistance(x, y, tick[1], tick[2]) <= 2.6,
+    _green,
   );
 }

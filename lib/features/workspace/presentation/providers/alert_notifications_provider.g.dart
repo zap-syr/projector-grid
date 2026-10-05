@@ -10,19 +10,22 @@ part of 'alert_notifications_provider.dart';
 // ignore_for_file: type=lint, type=warning
 /// Turns raised alerts into desktop notifications and the alert sound, per
 /// Preferences → Alerts → Notify. Alerts raised within [kAlertBatchWindow]
-/// of the first one make one notification and one sound.
+/// of the first one make one notification and one sound. A signal coming
+/// back gets its own, silent notification, batched the same way.
 
 @ProviderFor(AlertNotificationsNotifier)
 final alertNotificationsProvider = AlertNotificationsNotifierProvider._();
 
 /// Turns raised alerts into desktop notifications and the alert sound, per
 /// Preferences → Alerts → Notify. Alerts raised within [kAlertBatchWindow]
-/// of the first one make one notification and one sound.
+/// of the first one make one notification and one sound. A signal coming
+/// back gets its own, silent notification, batched the same way.
 final class AlertNotificationsNotifierProvider
     extends $NotifierProvider<AlertNotificationsNotifier, void> {
   /// Turns raised alerts into desktop notifications and the alert sound, per
   /// Preferences → Alerts → Notify. Alerts raised within [kAlertBatchWindow]
-  /// of the first one make one notification and one sound.
+  /// of the first one make one notification and one sound. A signal coming
+  /// back gets its own, silent notification, batched the same way.
   AlertNotificationsNotifierProvider._()
     : super(
         from: null,
@@ -51,11 +54,12 @@ final class AlertNotificationsNotifierProvider
 }
 
 String _$alertNotificationsNotifierHash() =>
-    r'a1a9aacdfb443d6c68149bdc8996cb957fd66c22';
+    r'e8e0540bd5fe1c86e4cf0f553395276f84467638';
 
 /// Turns raised alerts into desktop notifications and the alert sound, per
 /// Preferences → Alerts → Notify. Alerts raised within [kAlertBatchWindow]
-/// of the first one make one notification and one sound.
+/// of the first one make one notification and one sound. A signal coming
+/// back gets its own, silent notification, batched the same way.
 
 abstract class _$AlertNotificationsNotifier extends $Notifier<void> {
   void build();

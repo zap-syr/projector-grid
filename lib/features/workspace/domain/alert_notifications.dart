@@ -75,5 +75,38 @@ AlertNotice? alertNotice(List<AlertEvent> events, DateTime now) {
   );
 }
 
+/// One notification for [events] whose signal came back, or null for none.
+///
+/// One: "Signal back on PRJ-03 (10.0.0.13)", "Back after 3 s, lost at
+/// 14:02". More: "Signal back on 20 projectors", "PRJ-13 (10.0.0.13),
+/// PRJ-14 (10.0.0.14), PRJ-15 (10.0.0.15) and 17 more".
+({String title, String body})? recoveryNotice(
+  List<AlertEvent> events,
+  DateTime now,
+) {
+  final back = [
+    for (final e in events)
+      if (e.change == AlertChange.recovered) e,
+  ];
+  if (back.isEmpty) return null;
+  final names = {for (final e in back) e.alert.nodeId: _projector(e)}.values
+      .toList();
+  if (names.length == 1) {
+    final e = back.last;
+    return (
+      title: 'Signal back on ${_projector(e)}',
+      body:
+          '${e.alert.displayValue}, lost at '
+          '${formatAlertStart(e.alert.since, now)}',
+    );
+  }
+  return (
+    title: 'Signal back on ${names.length} projectors',
+    body: names.length > 3
+        ? '${names.take(3).join(', ')} and ${names.length - 3} more'
+        : names.join(', '),
+  );
+}
+
 String _projector(AlertEvent e) =>
     e.ip.isEmpty ? e.projector : '${e.projector} (${e.ip})';
