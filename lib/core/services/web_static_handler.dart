@@ -26,6 +26,7 @@ String webContentTypeFor(String key) {
     'ico' => 'image/x-icon',
     'woff2' => 'font/woff2',
     'woff' => 'font/woff',
+    'wav' => 'audio/wav',
     _ => 'application/octet-stream',
   };
 }

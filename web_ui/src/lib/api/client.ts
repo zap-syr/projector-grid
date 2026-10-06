@@ -1,4 +1,6 @@
 import type {
+  AcknowledgeRequest,
+  AcknowledgeResult,
   Access,
   ActionRequest,
   Alignment,
@@ -51,6 +53,8 @@ export const api = {
     request<Alignment>('POST', `/api/alignment/${op}`, body),
   previewRetry: (id: string) =>
     request<undefined>('POST', `/api/preview/${encodeURIComponent(id)}/retry`),
+  acknowledge: (req: AcknowledgeRequest) =>
+    request<AcknowledgeResult>('POST', '/api/alerts/acknowledge', req),
   previewPreShow: (id: string, on: boolean) =>
     request<PreShowRequest>('POST', `/api/preview/${encodeURIComponent(id)}/preshow`, { on }),
 };

@@ -30,6 +30,7 @@ const pj = (id: string, over: Partial<Projector> = {}): Projector => ({
   exhaustTemp: '-',
   acVoltage: '-',
   errors: 'NO ERRORS',
+  errorItems: [],
   ...over,
 });
 
@@ -69,7 +70,9 @@ describe('selection', () => {
   test('Select ▾ presets', () => {
     const group: Group = { id: 'g', name: 'Stage', color: '#000000' };
     expect(ids(presetSelection({ kind: 'all' }, rows, new Set()))).toEqual(['1', '3', '5']);
-    expect(ids(presetSelection({ kind: 'warnings' }, rows, new Set()))).toEqual(['3']);
+    // Only selectable ones: 2 is offline.
+    const alerting = new Set(['2', '3']);
+    expect(ids(presetSelection({ kind: 'alerts', alerting }, rows, new Set()))).toEqual(['3']);
     expect(ids(presetSelection({ kind: 'invert' }, rows, new Set(['1'])))).toEqual(['3', '5']);
     expect(ids(presetSelection({ kind: 'group', group }, rows, new Set()))).toEqual(['1', '3']);
   });

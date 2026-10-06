@@ -1,4 +1,8 @@
 <script lang="ts">
+  import AlertPill from './lib/components/alerts/AlertPill.svelte';
+  import AlertsPanel from './lib/components/alerts/AlertsPanel.svelte';
+  import AlertsRail from './lib/components/alerts/AlertsRail.svelte';
+  import AlertToast from './lib/components/alerts/AlertToast.svelte';
   import AlignScreen from './lib/components/alignment/AlignScreen.svelte';
   import Banner from './lib/components/alignment/Banner.svelte';
   import ControlPanel from './lib/components/control/ControlPanel.svelte';
@@ -13,6 +17,8 @@
   import Toast from './lib/components/shell/Toast.svelte';
   import Toolbar from './lib/components/shell/Toolbar.svelte';
   import DataTable from './lib/components/table/DataTable.svelte';
+  import { setFavicon } from './lib/favicon';
+  import { alerts } from './lib/state/alerts.svelte';
   import { alignment } from './lib/state/alignment.svelte';
   import { config } from './lib/state/config.svelte';
   import { device } from './lib/state/device.svelte';
@@ -53,6 +59,20 @@
   });
 
   const aligning = $derived(alignment.active || alignment.busy);
+
+  // A sheet belongs to touch layouts; turning a tablet sideways hands over to the rail.
+  $effect(() => {
+    if (device.control === 'side') alerts.sheet = false;
+  });
+
+  // The tab carries the unacknowledged count, the favicon a dot, so a page in
+  // a background tab still says something needs a look.
+  $effect(() => {
+    const n = session.status === 'signedIn' ? alerts.unacknowledged : 0;
+    document.title =
+      n > 0 ? `(${n}) ${session.projectName}` : session.projectName || 'Projector Grid';
+    setFavicon(n > 0);
+  });
 
   // Alignment mode: the selection is the focused projector, as in the app,
   // so the Control panel's lens acts on it. Anything else snaps back.
@@ -97,9 +117,14 @@
     {:else if config.value && tableLayout.value}
       {@const sheetLayout = device.control !== 'side'}
       {@const sidePanel = operator && panel.open && !sheetLayout}
-      <div class="work" class:op={sidePanel}>
+      <div class="work" class:op={sidePanel} class:rail={!sheetLayout}>
         <div class="main">
-          <Toolbar config={config.value} layout={tableLayout.value} {operator} />
+          <div class="top">
+            <Toolbar config={config.value} layout={tableLayout.value} {operator} />
+            {#if sheetLayout}
+              <AlertPill />
+            {/if}
+          </div>
           <div class="table">
             {#if listMode.value === 'cards'}
               <CardList config={config.value} layout={tableLayout.value} {operator} />
@@ -116,6 +141,19 @@
         {#if sidePanel}
           <ControlPanel config={config.value} onclose={() => panel.toggle()} />
         {/if}
+        {#if !sheetLayout}
+          <AlertsRail touch={device.touch} />
+          {#if alerts.prefs.drawer}
+            <!-- Over the content, so the table and Control panel don't reflow. -->
+            <aside class="drawer" class:touch={device.touch}>
+              <AlertsPanel
+                {operator}
+                touch={device.touch}
+                onclose={() => alerts.setPref('drawer', false)}
+              />
+            </aside>
+          {/if}
+        {/if}
       </div>
       {#if device.control !== 'side' && operator && panel.sheet}
         <Sheet label="Control" placement={device.control} onclose={() => (panel.sheet = false)}>
@@ -129,10 +167,26 @@
       {/if}
     {/if}
   </div>
+  {#if device.control !== 'side' && alerts.sheet}
+    <Sheet
+      label="Alerts"
+      placement={device.control === 'right' ? 'right' : 'bottom'}
+      wide
+      onclose={() => (alerts.sheet = false)}
+    >
+      <AlertsPanel
+        {operator}
+        touch
+        narrow={device.control === 'right'}
+        onclose={() => (alerts.sheet = false)}
+      />
+    </Sheet>
+  {/if}
   {#if preview.id && config.value}
     <PreviewDialog config={config.value} {operator} />
   {/if}
   <ConfirmDialog />
+  <AlertToast />
   <Toast />
 {:else if session.status === 'signedOut'}
   <Login />
@@ -162,6 +216,44 @@
 
   .work.op {
     grid-template-columns: minmax(0, 1fr) 340px;
+  }
+
+  /* The alerts rail at the far right; the drawer opens over everything left of it. */
+  .work.rail {
+    position: relative;
+    grid-template-columns: minmax(0, 1fr) 52px;
+  }
+
+  .work.rail.op {
+    grid-template-columns: minmax(0, 1fr) 340px 52px;
+  }
+
+  .drawer {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 52px;
+    z-index: 20;
+    width: min(404px, calc(100% - 52px));
+    border-left: 1px solid var(--line);
+    background: var(--surface);
+    box-shadow: var(--sh-3);
+    animation: slide 0.18s ease-out;
+  }
+
+  .drawer.touch {
+    width: min(440px, calc(100% - 52px));
+  }
+
+  @keyframes slide {
+    from {
+      transform: translateX(16px);
+      opacity: 0;
+    }
+  }
+
+  .top {
+    min-width: 0;
   }
 
   .main {

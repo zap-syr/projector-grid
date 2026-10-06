@@ -8,6 +8,7 @@
     toggledAll,
     triState,
   } from '../../logic/selection';
+  import { alerts } from '../../state/alerts.svelte';
   import { alignment } from '../../state/alignment.svelte';
   import { control } from '../../state/control.svelte';
   import { device } from '../../state/device.svelte';
@@ -25,7 +26,9 @@
     $props();
 
   const shown = $derived(
-    live.projectors.filter((p) => matchesFilter(p, view.filter) && matchesSearch(p, view.search)),
+    live.projectors.filter(
+      (p) => matchesFilter(p, view.filter, alerts.byProjector) && matchesSearch(p, view.search),
+    ),
   );
 
   /** Tablets: finger-sized controls in one row, matching the touch Alignment banner. */
@@ -102,8 +105,10 @@
       {#if menu === 'select'}
         <div class="menu" role="menu">
           <button role="menuitem" onclick={() => pick({ kind: 'all' })}>All projectors</button>
-          <button role="menuitem" onclick={() => pick({ kind: 'warnings' })}
-            >Only with warnings</button
+          <button
+            role="menuitem"
+            onclick={() => pick({ kind: 'alerts', alerting: alerts.byProjector })}
+            >Only with alerts</button
           >
           <button role="menuitem" onclick={() => pick({ kind: 'invert' })}>Invert</button>
           {#if live.groups.length > 0}

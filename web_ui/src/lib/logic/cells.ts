@@ -59,14 +59,3 @@ export function leadingNumber(s: string): number | null {
   const m = /-?\d+(\.\d+)?/.exec(s);
   return m ? Number(m[0]) : null;
 }
-
-export type Tint = 'warm' | 'hot' | null;
-
-/** Temperature tint, same rule as the app's `_tempTint`. */
-export function tempTint(display: string, t: { warm: number; hot: number }): Tint {
-  const n = leadingNumber(display);
-  if (n === null) return null;
-  if (n >= t.hot) return 'hot';
-  if (n >= t.warm) return 'warm';
-  return null;
-}

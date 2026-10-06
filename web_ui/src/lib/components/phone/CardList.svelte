@@ -5,6 +5,7 @@
 <script lang="ts">
   import type { Config } from '../../api/types';
   import { testPatternLabel } from '../../logic/cells';
+  import { groupPills } from '../../logic/alerts';
   import {
     buildEntries,
     type CardEntry,
@@ -12,8 +13,10 @@
     matchesSearch,
     UNGROUPED,
     withDetails,
-    worstStatus,
   } from '../../logic/rows';
+  import { alerts } from '../../state/alerts.svelte';
+  import { device } from '../../state/device.svelte';
+  import AlertIcon, { severityIcon } from '../alerts/AlertIcon.svelte';
   import { sortByIp } from '../../logic/sort';
   import { isSelectable, toggledAll, triState } from '../../logic/selection';
   import { alignment } from '../../state/alignment.svelte';
@@ -36,7 +39,9 @@
 
   const shown = $derived(
     sortByIp(
-      live.projectors.filter((p) => matchesFilter(p, view.filter) && matchesSearch(p, view.search)),
+      live.projectors.filter(
+        (p) => matchesFilter(p, view.filter, alerts.byProjector) && matchesSearch(p, view.search),
+      ),
     ),
   );
   /** One card's details are open at a time. */
@@ -82,7 +87,7 @@
       />
     {:else if entry.kind === 'group'}
       {@const open = !layout.collapsed.includes(entry.key)}
-      {@const worst = worstStatus(entry.members)}
+      {@const pills = groupPills(entry.members, alerts.list)}
       {@const name = entry.group?.name ?? 'Ungrouped'}
       <div class="grp" style:--gcolor={entry.group?.color ?? 'var(--line-strong)'}>
         {#if operator && !alignment.active}
@@ -103,9 +108,23 @@
           <span class="gdot" class:none={entry.key === UNGROUPED}></span>
           <b>{name}</b>
           <span class="cnt">{entry.members.length}</span>
-          {#if worst}
-            <span class="pill {worst.tone}">{worst.text}</span>
-          {/if}
+          {#each pills as pill (pill.text)}
+            {#if device.phone}
+              <!-- A phone's width: icon and number, so the group's name keeps its room. -->
+              <span class="cpill {pill.tone}" title={pill.text}>
+                {#if pill.kind === 'auth'}
+                  <Icon name="lock" size={15} />
+                {:else}
+                  <AlertIcon
+                    name={pill.kind === 'recovered' ? 'checkCircle' : severityIcon(pill.kind)}
+                    size={17}
+                  />
+                {/if}{pill.count}
+              </span>
+            {:else}
+              <span class="pill {pill.tone}">{pill.text}</span>
+            {/if}
+          {/each}
           <span class="chev" class:closed={!open}><Icon name="chevron" size={16} /></span>
         </button>
       </div>
@@ -113,7 +132,6 @@
       {@const p = entry.projector}
       <ProjectorCard
         {p}
-        {config}
         groups={groupMap}
         {patternLabel}
         {operator}
@@ -221,7 +239,7 @@
     white-space: nowrap;
   }
 
-  .pill.err {
+  .pill.crit {
     background: var(--err-soft);
     color: var(--err);
   }
@@ -229,6 +247,46 @@
   .pill.warn {
     background: var(--warn-soft);
     color: var(--warn);
+  }
+
+  .pill.ok {
+    background: var(--ok-soft);
+    color: var(--ok);
+  }
+
+  .cpill {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    flex: none;
+    font-size: 14px;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .cpill.crit {
+    color: var(--err);
+  }
+
+  .cpill.warn {
+    color: var(--warn);
+  }
+
+  .cpill.ok {
+    color: var(--ok);
+  }
+
+  /* Touch: the pills a finger-sized read, like the rest of the touch layout. */
+  @media (pointer: coarse) {
+    .pill {
+      padding: 2px 9px;
+      font-size: 12.5px;
+    }
+
+    .gbtn {
+      height: 48px;
+      gap: 10px;
+    }
   }
 
   .chev {

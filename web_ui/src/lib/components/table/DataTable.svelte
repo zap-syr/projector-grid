@@ -7,14 +7,10 @@
   import type { ColumnId, Config, DataColumn, Density, Projector } from '../../api/types';
   import { cellText, testPatternLabel } from '../../logic/cells';
   import { renderedColumns, reorderColumn, resolveColumns } from '../../logic/columns';
-  import {
-    buildEntries,
-    matchesFilter,
-    matchesSearch,
-    UNGROUPED,
-    worstStatus,
-  } from '../../logic/rows';
+  import { groupPills } from '../../logic/alerts';
+  import { buildEntries, matchesFilter, matchesSearch, UNGROUPED } from '../../logic/rows';
   import { sortProjectors } from '../../logic/sort';
+  import { alerts } from '../../state/alerts.svelte';
   import { autoFitWidth, layoutWidths, resizeBase, type ResizeStart } from '../../logic/widths';
   import { live } from '../../state/live.svelte';
   import { tableLayout, type StoredLayout } from '../../state/tableLayout.svelte';
@@ -88,7 +84,9 @@
   );
 
   const shown = $derived(
-    live.projectors.filter((p) => matchesFilter(p, view.filter) && matchesSearch(p, view.search)),
+    live.projectors.filter(
+      (p) => matchesFilter(p, view.filter, alerts.byProjector) && matchesSearch(p, view.search),
+    ),
   );
   const sorted = $derived(
     sortColumn
@@ -397,7 +395,7 @@
       {#each entries as entry (entry.kind === 'group' ? `g:${entry.key}` : entry.projector.id)}
         {#if entry.kind === 'group'}
           {@const open = !layout.collapsed.includes(entry.key)}
-          {@const worst = worstStatus(entry.members)}
+          {@const pills = groupPills(entry.members, alerts.list)}
           <tr class="grp" style:--gcolor={entry.group?.color ?? 'var(--line-strong)'}>
             <td colspan={cols.length + (lead ? 1 : 0)}>
               <div class="grpcell">
@@ -423,9 +421,9 @@
                 <span class="cnt"
                   >{entry.members.length} projector{entry.members.length === 1 ? '' : 's'}</span
                 >
-                {#if worst}
-                  <span class="pill {worst.tone}">{worst.text}</span>
-                {/if}
+                {#each pills as pill (pill.text)}
+                  <span class="pill {pill.tone}">{pill.text}</span>
+                {/each}
               </div>
             </td>
           </tr>
@@ -465,13 +463,7 @@
             {#each cols as col (col)}
               {#if sortable(col)}
                 <td class="dc">
-                  <Cell
-                    column={col}
-                    {p}
-                    groups={groupMap}
-                    thresholds={config.thresholds}
-                    {patternLabel}
-                  />
+                  <Cell column={col} {p} groups={groupMap} {patternLabel} />
                 </td>
               {:else}
                 <td class="pvc">
@@ -860,7 +852,7 @@
     font-weight: 550;
   }
 
-  .pill.err {
+  .pill.crit {
     background: var(--err-soft);
     color: var(--err);
   }
@@ -868,6 +860,11 @@
   .pill.warn {
     background: var(--warn-soft);
     color: var(--warn);
+  }
+
+  .pill.ok {
+    background: var(--ok-soft);
+    color: var(--ok);
   }
 
   .empty {

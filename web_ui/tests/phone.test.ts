@@ -25,7 +25,6 @@ function card(id: string, operator: boolean, expanded = false) {
   const onexpand = vi.fn();
   render(ProjectorCard, {
     p: byId(id),
-    config,
     groups,
     patternLabel: (c: string) => c,
     operator,
@@ -136,7 +135,6 @@ describe('phone card', () => {
     const show = (testPattern: string, shutter: 'open' | 'closed') =>
       render(ProjectorCard, {
         p: { ...byId('n2'), testPattern, shutter },
-        config,
         groups,
         patternLabel: () => 'Cross Hatch',
         operator: false,

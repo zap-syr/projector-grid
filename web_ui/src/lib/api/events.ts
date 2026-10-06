@@ -1,5 +1,6 @@
 import type {
   Access,
+  Alerts,
   Alignment,
   Group,
   PreviewFrame,
@@ -17,6 +18,7 @@ export interface EventHandlers {
   groups(data: Group[]): void;
   project(data: ProjectEvent): void;
   alignment(data: Alignment): void;
+  alerts(data: Alerts): void;
   access(data: Access): void;
   signedOut(): void;
   /** The browser is retrying on its own (network blip, app restarting). */
@@ -37,6 +39,7 @@ export function connectEvents(h: EventHandlers): () => void {
   on<Group[]>('groups', h.groups);
   on<ProjectEvent>('project', h.project);
   on<Alignment>('alignment', h.alignment);
+  on<Alerts>('alerts', h.alerts);
   on<Access>('access', h.access);
   source.addEventListener('signedOut', () => {
     source.close();

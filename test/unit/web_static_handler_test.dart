@@ -43,6 +43,7 @@ void main() {
       expect(webContentTypeFor('x/index.html'), 'text/html; charset=utf-8');
       expect(webContentTypeFor('x/a.JS'), 'text/javascript; charset=utf-8');
       expect(webContentTypeFor('x/a.woff2'), 'font/woff2');
+      expect(webContentTypeFor('x/alert_critical-AbC.wav'), 'audio/wav');
       expect(webContentTypeFor('x/a.bin'), 'application/octet-stream');
     });
     test('hashed assets are immutable, the rest revalidates', () {

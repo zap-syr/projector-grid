@@ -25,6 +25,13 @@ export type AlignmentPresetId = Schemas['AlignmentPresetId'];
 export type PreviewStatus = Schemas['PreviewStatus'];
 export type PreviewFrame = Schemas['PreviewFrame'];
 export type PreShowRequest = Schemas['PreShowRequest'];
+export type Alerts = Schemas['Alerts'];
+export type Alert = Schemas['Alert'];
+export type AlertRule = Schemas['AlertRule'];
+export type AlertSeverity = Schemas['AlertSeverity'];
+export type ErrorItem = Schemas['ErrorItem'];
+export type AcknowledgeRequest = Schemas['AcknowledgeRequest'];
+export type AcknowledgeResult = Schemas['AcknowledgeResult'];
 /** Columns with a value per projector: all but Preview's button. */
 export type DataColumn = Exclude<ColumnId, 'preview'>;
 export type AlignmentOp =

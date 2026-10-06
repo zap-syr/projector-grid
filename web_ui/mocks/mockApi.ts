@@ -14,10 +14,15 @@ import type { Plugin } from 'vite';
 import { mockPreview } from './mockPreview.ts';
 
 import type {
+  AcknowledgeRequest,
   Action,
   ActionRequest,
+  Alert,
+  AlertRule,
+  AlertSeverity,
   Alignment,
   AlignmentPresetId,
+  ErrorItem,
   Group,
   Projector,
   Role,
@@ -31,6 +36,70 @@ const load = <T>(name: string): T =>
   JSON.parse(readFileSync(resolve(FIXTURES, `${name}.json`), 'utf8')) as T;
 
 const GROUPS: Group[] = [...load<Group[]>('groups'), { id: 'g3', name: 'Lobby', color: '#12B5CB' }];
+
+const ERROR_F011: ErrorItem = { code: 'F011', name: 'Shutter error', severity: 'critical' };
+const ERROR_F204: ErrorItem = { code: 'F204', name: 'Fan warning', severity: 'warning' };
+const ERROR_H001: ErrorItem = {
+  code: 'H001',
+  name: 'Replace the internal clock battery',
+  severity: 'warning',
+};
+
+const RULE_LABELS: Record<AlertRule, string> = {
+  offline: 'Offline',
+  error: 'Projector error',
+  'signal-lost': 'Signal lost',
+  'intake-temp': 'Intake temperature',
+  'exhaust-temp': 'Exhaust temperature',
+};
+
+/** One alert like `alertJson`; [minutesAgo] sets `since`. */
+function alert(
+  p: Projector,
+  rule: AlertRule,
+  severity: AlertSeverity,
+  value: string,
+  minutesAgo: number,
+  extra: Partial<Alert> = {},
+): Alert {
+  const item = extra.item ?? '';
+  return {
+    id: `${p.id}|${rule}|${item}`,
+    projectorId: p.id,
+    projector: p.name,
+    ip: p.ip,
+    rule,
+    label: RULE_LABELS[rule],
+    item,
+    severity,
+    value,
+    since: new Date(Date.now() - minutesAgo * 60_000).toISOString(),
+    acknowledged: false,
+    restoredAt: null,
+    ...extra,
+  };
+}
+
+/** A spread of alerts over the wall: every rule, new, acknowledged and a returned signal. */
+function seedAlerts(projectors: Projector[]): Alert[] {
+  const at = (n: number) => projectors[n - 1] as Projector;
+  return [
+    alert(at(15), 'signal-lost', 'critical', 'No signal on SDI 1', 3),
+    alert(at(17), 'signal-lost', 'critical', 'Back after 4 s', 8, {
+      restoredAt: new Date(Date.now() - 8 * 60_000 + 4000).toISOString(),
+    }),
+    alert(at(9), 'error', 'critical', 'Shutter error (F011)', 22, { item: 'F011' }),
+    alert(at(9), 'error', 'warning', 'Fan warning (F204)', 22, { item: 'F204' }),
+    alert(at(21), 'offline', 'critical', 'No answer', 5),
+    alert(at(24), 'offline', 'critical', 'No answer', 5),
+    alert(at(5), 'intake-temp', 'warning', '43 °C', 15),
+    alert(at(13), 'exhaust-temp', 'critical', '67 °C', 40, { acknowledged: true }),
+    alert(at(20), 'error', 'warning', 'Replace the internal clock battery (H001)', 308, {
+      item: 'H001',
+      acknowledged: true,
+    }),
+  ];
+}
 
 /**
  * A 6×4 wall of 24 projectors (Stage, Balcony, Lobby, one row ungrouped)
@@ -59,7 +128,16 @@ function wall(): Projector[] {
       testPattern: ['OTS:07', 'OTS:00', 'OTS:70', 'OTS:00', 'OTS:01', 'OTS:87'][i % 6] ?? null,
     };
     if (i === 3) Object.assign(p, { power: 'cooling', shutter: 'closed' });
-    if (i === 8) p.errors = '000100000000';
+    if (i === 4) p.intakeTemp = '43°C';
+    if (i === 8) {
+      p.errors = 'F011 F204';
+      p.errorItems = [ERROR_F011, ERROR_F204];
+    }
+    if (i === 12) p.exhaustTemp = '67°C';
+    if (i === 19) {
+      p.errors = 'H001';
+      p.errorItems = [ERROR_H001];
+    }
     if (i === 10)
       Object.assign(p, { connection: 'unauthorized', power: 'standby', shutter: 'closed' });
     if (i === 14) Object.assign(p, { shutter: 'closed', signal: 'NO SIGNAL' });
@@ -126,6 +204,60 @@ export function mockApi(): Plugin {
   const streams = new Set<ServerResponse>();
   const projectors = wall();
   const previews = mockPreview(projectors);
+  let alertList = seedAlerts(projectors);
+  const alertsJson = () => ({ now: new Date().toISOString(), alerts: alertList });
+  const pushAlerts = () => {
+    for (const s of streams) sse(s, 'alerts', alertsJson());
+  };
+
+  /** Like `parseAlertAcknowledge`; acknowledging a returned signal clears it. */
+  function acknowledge(body: AcknowledgeRequest): number | null {
+    const test: ((a: Alert) => boolean) | null =
+      'ids' in body
+        ? (a) => body.ids.includes(a.id)
+        : 'projectorId' in body
+          ? (a) => a.projectorId === body.projectorId
+          : 'rule' in body
+            ? (a) => a.rule === body.rule
+            : 'all' in body && body.all === true
+              ? () => true
+              : null;
+    if (!test) return null;
+    const hits = alertList.filter((a) => !a.acknowledged && test(a));
+    alertList = alertList
+      .filter((a) => !(hits.includes(a) && a.restoredAt !== null))
+      .map((a) => (hits.includes(a) ? { ...a, acknowledged: true } : a));
+    pushAlerts();
+    return hits.length;
+  }
+
+  /**
+   * Every 20 s PJ-03 loses its signal, and gets it back 20 s later ("Back
+   * after 3 s"), so the toast, the sound and the rail's pulse can be seen.
+   */
+  let dropout = false;
+  function blip() {
+    const p = projectors[2] as Projector;
+    const id = `${p.id}|signal-lost|`;
+    dropout = !dropout;
+    if (dropout) {
+      alertList = [
+        ...alertList.filter((a) => a.id !== id),
+        alert(p, 'signal-lost', 'critical', 'No signal on SDI 1', 0),
+      ];
+    } else {
+      alertList = alertList.map((a) =>
+        a.id === id && !a.acknowledged
+          ? {
+              ...a,
+              value: 'Back after 3 s',
+              restoredAt: new Date(Date.parse(a.since) + 3000).toISOString(),
+            }
+          : a,
+      );
+    }
+    pushAlerts();
+  }
 
   // ── Alignment mode, like alignment_provider.dart ──────────────────────
   const alignment: Alignment = {
@@ -414,7 +546,14 @@ export function mockApi(): Plugin {
       case '/api/groups':
         return send(res, 200, GROUPS);
       case '/api/alerts':
-        return send(res, 200, []);
+        return send(res, 200, alertsJson());
+      case '/api/alerts/acknowledge': {
+        if (role !== 'operator') return send(res, 403, { error: 'forbidden' });
+        const n = acknowledge(JSON.parse((await readBody(req)) || '{}') as AcknowledgeRequest);
+        return n === null
+          ? send(res, 400, { error: 'bad_request' })
+          : send(res, 200, { acknowledged: n });
+      }
       case '/api/events':
         res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store' });
         res.write('retry: 3000\n\n');
@@ -424,6 +563,7 @@ export function mockApi(): Plugin {
           groups: GROUPS,
         });
         sse(res, 'alignment', alignment);
+        sse(res, 'alerts', alertsJson());
         streams.add(res);
         req.on('close', () => streams.delete(res));
         return;
@@ -436,7 +576,11 @@ export function mockApi(): Plugin {
     name: 'projector-grid-mock-api',
     configureServer(server) {
       const timer = setInterval(drift, 2000);
-      server.httpServer?.on('close', () => clearInterval(timer));
+      const blipTimer = setInterval(blip, 20_000);
+      server.httpServer?.on('close', () => {
+        clearInterval(timer);
+        clearInterval(blipTimer);
+      });
       server.middlewares.use((req, res, next) => {
         if (req.url?.startsWith('/api/')) void handle(req, res);
         else next();

@@ -1,5 +1,6 @@
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { svelteTesting } from '@testing-library/svelte/vite';
+import { searchForWorkspaceRoot } from 'vite';
 import { defineConfig } from 'vitest/config';
 
 import { mockApi } from './mocks/mockApi.ts';
@@ -17,6 +18,9 @@ export default defineConfig(({ mode }) => ({
     sourcemap: false,
   },
   server: {
+    // The alert sounds are the app's own files (assets/sounds/), imported
+    // from outside web_ui/; the build copies them in like any other asset.
+    fs: { allow: [searchForWorkspaceRoot(process.cwd()), '../assets/sounds'] },
     proxy:
       mode === 'mock'
         ? undefined

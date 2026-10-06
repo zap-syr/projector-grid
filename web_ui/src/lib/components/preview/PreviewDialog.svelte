@@ -108,13 +108,7 @@
         <!-- Power only: the frame's colour already says the shutter. -->
         {#if p}
           <span class="pw">
-            <Cell
-              column="power"
-              {p}
-              groups={groupMap}
-              thresholds={config.thresholds}
-              {patternLabel}
-            />
+            <Cell column="power" {p} groups={groupMap} {patternLabel} />
           </span>
         {/if}
         {#if group}

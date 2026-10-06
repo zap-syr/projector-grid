@@ -1,5 +1,6 @@
 import { connectEvents } from '../api/events';
 import type { Alignment, Group, Projector } from '../api/types';
+import { alerts } from './alerts.svelte';
 import { session } from './session.svelte';
 
 type Connection = 'connecting' | 'live' | 'reconnecting';
@@ -19,6 +20,7 @@ class LiveState {
   connect(): void {
     this.disconnect();
     this.connection = 'connecting';
+    alerts.reset();
     this.#close = connectEvents({
       snapshot: (d) => {
         this.projectors = d.projectors;
@@ -34,9 +36,14 @@ class LiveState {
       groups: (d) => (this.groups = d),
       project: (d) => (session.projectName = d.name),
       alignment: (d) => (this.alignment = d),
+      alerts: (d) => alerts.apply(d),
       access: (d) => session.applyAccess(d),
       signedOut: () => void session.ended(),
-      reconnecting: () => (this.connection = 'reconnecting'),
+      reconnecting: () => {
+        this.connection = 'reconnecting';
+        // Alerts raised while the page was away shouldn't all go off at once.
+        alerts.reset();
+      },
       closed: () => void session.ended(),
     });
   }

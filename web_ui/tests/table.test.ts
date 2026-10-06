@@ -7,13 +7,7 @@ import {
   resolveColumns,
   toggledColumn,
 } from '../src/lib/logic/columns';
-import {
-  buildEntries,
-  matchesFilter,
-  matchesSearch,
-  UNGROUPED,
-  worstStatus,
-} from '../src/lib/logic/rows';
+import { buildEntries, matchesFilter, matchesSearch, UNGROUPED } from '../src/lib/logic/rows';
 import { sortByIp, sortProjectors } from '../src/lib/logic/sort';
 import { autoFitWidth, layoutWidths, resizeBase } from '../src/lib/logic/widths';
 
@@ -43,6 +37,7 @@ const pj = (id: string, over: Partial<Projector> = {}): Projector => ({
   exhaustTemp: '40°C',
   acVoltage: '230V',
   errors: 'NO ERRORS',
+  errorItems: [],
   ...over,
 });
 
@@ -167,10 +162,11 @@ describe('rows', () => {
   test('filters match the header counts', () => {
     const offline = pj('1', { connection: 'offline', errors: '-' });
     const faulty = pj('2', { connection: 'unprotected', errors: '0001' });
-    expect(matchesFilter(offline, 'offline')).toBe(true);
-    expect(matchesFilter(offline, 'warnings')).toBe(false);
-    expect(matchesFilter(faulty, 'online')).toBe(true);
-    expect(matchesFilter(faulty, 'warnings')).toBe(true);
+    const alerting = new Set(['2']);
+    expect(matchesFilter(offline, 'offline', alerting)).toBe(true);
+    expect(matchesFilter(offline, 'alerts', alerting)).toBe(false);
+    expect(matchesFilter(faulty, 'online', alerting)).toBe(true);
+    expect(matchesFilter(faulty, 'alerts', alerting)).toBe(true);
   });
 
   test('search by name, IP or serial', () => {
@@ -216,23 +212,5 @@ describe('rows', () => {
     const e = buildEntries(sorted, groups, true, new Set(['a']));
     expect(e.some((x) => x.kind === 'row' && x.projector.groupId === 'a')).toBe(false);
     expect(e.some((x) => x.kind === 'group' && x.key === 'a')).toBe(true);
-  });
-
-  test('worst status: errors > auth errors > offline', () => {
-    expect(worstStatus([pj('1')])).toBeNull();
-    expect(worstStatus([pj('1', { connection: 'offline' })])).toEqual({
-      text: '1 offline',
-      tone: 'err',
-    });
-    expect(
-      worstStatus([pj('1', { connection: 'unauthorized' }), pj('2', { connection: 'offline' })]),
-    ).toEqual({
-      text: '1 auth error',
-      tone: 'warn',
-    });
-    expect(worstStatus([pj('1', { errors: '01' }), pj('2', { errors: '02' })])).toEqual({
-      text: '2 errors',
-      tone: 'err',
-    });
   });
 });

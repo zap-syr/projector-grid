@@ -7,6 +7,7 @@
   import type { AlignmentRole, Group, Projector } from '../../api/types';
   import { CARD_H, CARD_W, chipText } from '../../logic/map';
   import { isPatternActive, patternSwatch } from '../../logic/patterns';
+  import AlertBadge from '../alerts/AlertBadge.svelte';
   import Icon from '../Icon.svelte';
 
   let {
@@ -41,7 +42,6 @@
   const aligning = $derived(role !== null || outside);
 
   const online = $derived(p.connection === 'connected' || p.connection === 'unprotected');
-  const hasErrors = $derived(p.errors !== '-' && p.errors !== 'NO ERRORS' && p.errors !== '');
   const power = $derived(p.power === 'on' ? 'ok' : p.power === 'standby' ? 'err' : 'warn');
 </script>
 
@@ -73,9 +73,7 @@
       <span class="bar">
         <span class={power}><Icon name="power" size={14} /></span>
         <span class={p.shutter === 'open' ? 'ok' : 'err'}><Icon name="eye" size={14} /></span>
-        {#if hasErrors}
-          <span class="warn"><Icon name="warn" size={14} /></span>
-        {/if}
+        <AlertBadge id={p.id} size={15} />
         <span class="grow"></span>
         {#if p.connection === 'unauthorized'}
           <span class="warn"><Icon name="lock" size={12} /></span>

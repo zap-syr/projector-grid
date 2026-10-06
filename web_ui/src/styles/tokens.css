@@ -32,6 +32,13 @@
   --align-soft: rgba(232, 113, 10, 0.12);
   --on-align: #231200;
   --scrim: rgba(16, 24, 40, 0.42);
+  /* Alert icons in the app's colours (AlertPalette: red, orange, green), the
+     same in both themes; text uses --err / --warn / --ok. --item is the
+     panel row surface. */
+  --sev-crit: #f44336;
+  --sev-warn: #ff9800;
+  --sev-ok: #4caf50;
+  --item: #f8f7f9;
   --sh-1: 0 1px 2px rgba(16, 24, 40, 0.06);
   --sh-2: 0 8px 24px -6px rgba(16, 24, 40, 0.18);
   --sh-3: 0 24px 56px -12px rgba(16, 24, 40, 0.32);
@@ -71,6 +78,7 @@
     --align-2: #ffddb3;
     --align-soft: rgba(255, 158, 64, 0.14);
     --scrim: rgba(0, 0, 0, 0.6);
+    --item: #1d2129;
     --sh-1: 0 1px 2px rgba(0, 0, 0, 0.4);
     --sh-2: 0 8px 24px -6px rgba(0, 0, 0, 0.6);
     --sh-3: 0 24px 56px -12px rgba(0, 0, 0, 0.8);
@@ -104,6 +112,7 @@
   --align-2: #ffddb3;
   --align-soft: rgba(255, 158, 64, 0.14);
   --scrim: rgba(0, 0, 0, 0.6);
+  --item: #1d2129;
   --sh-1: 0 1px 2px rgba(0, 0, 0, 0.4);
   --sh-2: 0 8px 24px -6px rgba(0, 0, 0, 0.6);
   --sh-3: 0 24px 56px -12px rgba(0, 0, 0, 0.8);

@@ -4,17 +4,20 @@
   The operator taps the card to select it, the viewer to open the details.
 -->
 <script lang="ts">
-  import type { AlignmentRole, Config, DataColumn, Group, Projector } from '../../api/types';
+  import type { AlignmentRole, DataColumn, Group, Projector } from '../../api/types';
+  import { signalLost } from '../../logic/alerts';
   import { cellText } from '../../logic/cells';
   import { isPatternActive, patternSwatch } from '../../logic/patterns';
   import { isSelectable } from '../../logic/selection';
+  import { alerts } from '../../state/alerts.svelte';
+  import { device } from '../../state/device.svelte';
+  import AlertBadge from '../alerts/AlertBadge.svelte';
   import Cell from '../table/Cell.svelte';
   import Checkbox from '../Checkbox.svelte';
   import Icon from '../Icon.svelte';
 
   let {
     p,
-    config,
     groups,
     patternLabel,
     operator,
@@ -27,7 +30,6 @@
     onfocus,
   }: {
     p: Projector;
-    config: Config;
     groups: ReadonlyMap<string, Group>;
     patternLabel: (code: string) => string;
     operator: boolean;
@@ -46,7 +48,8 @@
   const aligning = $derived(role !== null || outside);
   const selectable = $derived(aligning ? role !== null : isSelectable(p));
   const online = $derived(p.connection === 'connected' || p.connection === 'unprotected');
-  const hasErrors = $derived(p.errors !== '-' && p.errors !== 'NO ERRORS' && p.errors !== '');
+  const hasErrors = $derived(p.errorItems.length > 0);
+  const lost = $derived(signalLost(alerts.of(p.id)));
   const cell = (column: DataColumn) => cellText(column, p, groups, patternLabel);
   // Shown behind a closed shutter too (owner, 2026-09-30; the app card follows).
   const showPattern = $derived(online && isPatternActive(p.testPattern));
@@ -60,7 +63,7 @@
 </script>
 
 {#snippet value(column: DataColumn)}
-  <Cell {column} {p} {groups} thresholds={config.thresholds} {patternLabel} />
+  <Cell {column} {p} {groups} {patternLabel} />
 {/snippet}
 
 <article
@@ -94,9 +97,7 @@
         {#if p.connection === 'unauthorized'}
           <span class="warn"><Icon name="lock" size={13} /></span>
         {/if}
-        {#if hasErrors}
-          <span class="warn" title={p.errors}><Icon name="warn" size={15} /></span>
-        {/if}
+        <AlertBadge id={p.id} size={device.touch ? 20 : 16} />
         <span class="ip">{p.ip}</span>
       </span>
       {#if online}
@@ -116,7 +117,7 @@
             {/if}
           </span>
           <span class="l2">
-            <span class="sig" title={cell('signal')}>{cell('signal')}</span>
+            <span class="sig" class:lost title={cell('signal')}>{cell('signal')}</span>
             <span class="temps">
               {@render value('intake')}<span class="sep">/</span>{@render value('exhaust')}
             </span>
@@ -332,6 +333,11 @@
     color: var(--muted);
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .sig.lost {
+    color: var(--err);
+    font-weight: 650;
   }
 
   .temps {

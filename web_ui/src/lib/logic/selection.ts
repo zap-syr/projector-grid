@@ -80,7 +80,10 @@ export function draggedSelection(
 
 /** The toolbar's Select ▾ menu (the app's own group entries follow the fixed ones). */
 export type SelectPreset =
-  { kind: 'all' } | { kind: 'warnings' } | { kind: 'invert' } | { kind: 'group'; group: Group };
+  | { kind: 'all' }
+  | { kind: 'alerts'; alerting: { has(id: string): boolean } }
+  | { kind: 'invert' }
+  | { kind: 'group'; group: Group };
 
 export function presetSelection(
   preset: SelectPreset,
@@ -92,8 +95,8 @@ export function presetSelection(
   switch (preset.kind) {
     case 'all':
       return pick(() => true);
-    case 'warnings':
-      return pick((p) => p.errors !== 'NO ERRORS' && p.errors !== '-');
+    case 'alerts':
+      return pick((p) => preset.alerting.has(p.id));
     case 'invert':
       return pick((p) => !selected.has(p.id));
     case 'group':

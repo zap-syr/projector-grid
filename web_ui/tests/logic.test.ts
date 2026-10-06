@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { describe, expect, test } from 'vitest';
 
 import type { Group, Projector } from '../src/lib/api/types';
-import { cellText, leadingNumber, tempTint, testPatternLabel } from '../src/lib/logic/cells';
+import { cellText, leadingNumber, testPatternLabel } from '../src/lib/logic/cells';
 import { statusSummary } from '../src/lib/logic/status';
 
 const fixture = <T>(name: string): T =>
@@ -20,8 +20,8 @@ const text = (col: Parameters<typeof cellText>[0], id: string) =>
   cellText(col, byId(id), groups, (c) => testPatternLabel(c, labels));
 
 test('statusSummary counts like the app status bar', () => {
-  // n1 unprotected + errors, n2 connected, n3 unauthorized, n4 offline.
-  expect(statusSummary(projectors)).toEqual({ total: 4, online: 2, offline: 1, warnings: 1 });
+  // n1 unprotected, n2 connected, n3 unauthorized, n4 offline.
+  expect(statusSummary(projectors)).toEqual({ total: 4, online: 2, offline: 1 });
 });
 
 describe('cellText', () => {
@@ -53,20 +53,9 @@ describe('cellText', () => {
   });
 });
 
-describe('temperature tint', () => {
-  const intake = { warm: 40, hot: 45 };
-
-  test('leadingNumber', () => {
-    expect(leadingNumber('41°C')).toBe(41);
-    expect(leadingNumber('1518H')).toBe(1518);
-    expect(leadingNumber('-')).toBeNull();
-    expect(leadingNumber('Timeout')).toBeNull();
-  });
-
-  test('thresholds are inclusive', () => {
-    expect(tempTint('39°C', intake)).toBeNull();
-    expect(tempTint('40°C', intake)).toBe('warm');
-    expect(tempTint('45°C', intake)).toBe('hot');
-    expect(tempTint('-', intake)).toBeNull();
-  });
+test('leadingNumber', () => {
+  expect(leadingNumber('41°C')).toBe(41);
+  expect(leadingNumber('1518H')).toBe(1518);
+  expect(leadingNumber('-')).toBeNull();
+  expect(leadingNumber('Timeout')).toBeNull();
 });

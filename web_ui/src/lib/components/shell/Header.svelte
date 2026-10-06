@@ -5,6 +5,9 @@
   import { session } from '../../state/session.svelte';
   import { device } from '../../state/device.svelte';
   import { view } from '../../state/view.svelte';
+  import { alerts } from '../../state/alerts.svelte';
+  import AlertBell from '../alerts/AlertBell.svelte';
+  import AlertIcon, { severityIcon } from '../alerts/AlertIcon.svelte';
   import Icon from '../Icon.svelte';
   import AppLogo from './AppLogo.svelte';
   import UnlockDialog from './UnlockDialog.svelte';
@@ -27,11 +30,35 @@
     { id: 'all', label: 'All', count: 'total', tone: '' },
     { id: 'online', label: 'Online', count: 'online', tone: 'ok' },
     { id: 'offline', label: 'Offline', count: 'offline', tone: 'err' },
-    { id: 'warnings', label: 'Warnings', count: 'warnings', tone: 'warn' },
   ] as const;
+
+  // The app's status-bar Alerts button: per severity the unacknowledged count
+  // with a filled icon, or once all are acknowledged the active total outlined.
+  const ac = $derived(alerts.counts);
+  const none = $derived(ac.criticalTotal + ac.warningTotal + ac.recovered === 0);
+  /** Touch layouts open the alerts from the header; others have the rail. */
+  const bell = $derived(device.control !== 'side');
+  const iconSize = $derived(compact && !device.phone && !device.short ? 18 : 16);
 </script>
 
-<header class="hdr" class:phone={device.phone} class:compact class:op={operator}>
+{#snippet severityCount(severity: 'critical' | 'warning', open: number, total: number)}
+  {#if total > 0}
+    <span class="sc" class:fresh={open > 0}
+      ><span class={severity === 'critical' ? 'crit' : 'warn'}
+        ><AlertIcon name={severityIcon(severity, open > 0)} size={iconSize} /></span
+      >{open > 0 ? open : total}</span
+    >
+  {/if}
+{/snippet}
+
+<header
+  class="hdr"
+  class:phone={device.phone}
+  class:short={device.short}
+  class:compact
+  class:op={operator}
+  class:touch={device.touch}
+>
   <AppLogo size={32} />
   <div class="proj">
     <b>{session.projectName}</b>
@@ -45,6 +72,28 @@
         onclick={() => view.toggleFilter(f.id)}>{f.label} <b>{counts[f.count]}</b></button
       >
     {/each}
+    <button
+      class="flt alerts"
+      aria-pressed={view.filter === 'alerts'}
+      aria-label="Alerts: {ac.critical} critical, {ac.warning} warning new"
+      onclick={() => view.toggleFilter('alerts')}
+    >
+      <span class="al">Alerts</span>
+      {#if none}
+        <span class="sc"
+          ><span class="ok"><AlertIcon name="checkCircleOutline" size={iconSize} /></span>0</span
+        >
+      {:else}
+        {@render severityCount('critical', ac.critical, ac.criticalTotal)}
+        {@render severityCount('warning', ac.warning, ac.warningTotal)}
+        {#if ac.recovered > 0}
+          <span class="sc fresh"
+            ><span class="ok"><AlertIcon name="checkCircle" size={iconSize} /></span
+            >{ac.recovered}</span
+          >
+        {/if}
+      {/if}
+    </button>
   </div>
   <div class="grow"></div>
   {#if operator}
@@ -63,6 +112,9 @@
     <span class="dot"></span>
     <span class="lt">{liveText}</span>
   </span>
+  {#if bell}
+    <AlertBell pressed={alerts.sheet} touch={device.touch} onclick={() => (alerts.sheet = true)} />
+  {/if}
   <div class="who" class:op={session.role === 'operator'}>
     <span class="role" title={session.role === 'operator' ? 'Operator' : 'Viewer'}>
       <Icon name={session.role === 'operator' ? 'unlock' : 'lock'} size={13} />
@@ -97,26 +149,26 @@
     border-bottom: 1px solid var(--line);
   }
 
-  /* Phone: project, live, role and sign-out in one row; the filters below. */
+  /* Phone: project, live, bell, role and sign-out in one row; the filters below. */
   .hdr.phone {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+    flex-wrap: wrap;
     gap: 8px;
     min-height: 0;
     padding: 8px 12px;
   }
 
-  /* The operator's Alignment button takes one more column. */
-  .hdr.phone.op {
-    grid-template-columns: auto minmax(0, 1fr) auto auto auto auto;
+  .phone .proj {
+    flex: 1;
+    min-width: 0;
   }
 
   .phone .filters {
     order: 1;
-    grid-column: 1 / -1;
+    flex-basis: 100%;
     flex-wrap: nowrap;
     overflow-x: auto;
     margin: 0 -4px;
+    scrollbar-width: none;
   }
 
   /* Phone held sideways: everything in one short row. */
@@ -255,6 +307,130 @@
   .flt[aria-pressed='true'] {
     background: var(--accent-soft);
     color: var(--accent);
+  }
+
+  .flt.alerts {
+    gap: 9px;
+  }
+
+  .sc {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    color: var(--muted);
+    font-weight: 450;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .sc.fresh {
+    color: var(--text);
+    font-weight: 650;
+  }
+
+  .crit,
+  .warn,
+  .ok {
+    display: inline-flex;
+  }
+
+  .crit {
+    color: var(--sev-crit);
+  }
+
+  .warn {
+    color: var(--sev-warn);
+  }
+
+  .ok {
+    color: var(--sev-ok);
+  }
+
+  /* Touch: filters a finger-sized 40 px, as in the approved touch layout. */
+  .touch .flt {
+    height: 40px;
+    padding: 0 12px;
+    border-radius: 10px;
+    font-size: 14px;
+  }
+
+  /* A phone, either way up, fits all four filters in one row: tighter, and
+     the Alerts filter is its icons and counts (the bell beside it says "alerts"). */
+  .hdr.phone,
+  .hdr.short {
+    gap: 6px;
+  }
+
+  .short .filters {
+    flex-wrap: nowrap;
+  }
+
+  .phone .flt,
+  .short .flt {
+    gap: 5px;
+    padding: 0 8px;
+    font-size: 13.5px;
+  }
+
+  .phone .flt.alerts,
+  .short .flt.alerts {
+    gap: 7px;
+  }
+
+  .phone .al,
+  .short .al {
+    display: none;
+  }
+
+  /* Below 1280 px (where the toolbar drops its labels too) the header keeps
+     one row: the Alerts filter is its icons and counts. */
+  @media (max-width: 1279px) {
+    .hdr:not(.compact) {
+      column-gap: 10px;
+    }
+
+    .hdr:not(.compact) .al {
+      display: none;
+    }
+
+    .hdr:not(.compact) .flt.alerts {
+      gap: 7px;
+    }
+
+    /* A sideways tablet: still 40 px tall, a little narrower. */
+    .touch:not(.compact) .flt {
+      padding: 0 9px;
+    }
+  }
+
+  /* An upright tablet: the phone's two rows, the filters on their own row
+     at full size, so nothing wraps inside the header. */
+  .hdr.compact:not(.phone):not(.short) {
+    flex-wrap: wrap;
+  }
+
+  .compact:not(.phone):not(.short) .proj {
+    flex: 1;
+  }
+
+  .compact:not(.phone):not(.short) .filters {
+    order: 1;
+    flex-basis: 100%;
+    flex-wrap: nowrap;
+  }
+
+  .compact:not(.phone):not(.short) .grow {
+    display: none;
+  }
+
+  /* Lock / Unlock already says which role this is; the name gets the room. */
+  .phone .who:has(button),
+  .short .who:has(button) {
+    padding-left: 4px;
+  }
+
+  .phone .who:has(button) .role,
+  .short .who:has(button) .role {
+    display: none;
   }
 
   .grow {

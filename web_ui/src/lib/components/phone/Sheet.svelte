@@ -11,10 +11,17 @@
   let {
     label,
     placement,
+    wide = false,
     onclose,
     children,
-  }: { label: string; placement: 'bottom' | 'right'; onclose: () => void; children: Snippet } =
-    $props();
+  }: {
+    label: string;
+    placement: 'bottom' | 'right';
+    /** The right-hand sheet at 470 px (Alerts, whose rows need the room). */
+    wide?: boolean;
+    onclose: () => void;
+    children: Snippet;
+  } = $props();
 </script>
 
 <svelte:window
@@ -29,7 +36,7 @@
 
 <div class="wrap {placement}">
   <button class="scrim" aria-label="Close {label}" tabindex="-1" onclick={onclose}></button>
-  <div class="sheet" role="dialog" aria-modal="true" aria-label={label}>
+  <div class="sheet" class:wide role="dialog" aria-modal="true" aria-label={label}>
     {#if placement === 'bottom'}
       <button class="handle" aria-label="Close {label}" onclick={onclose}><span></span></button>
     {/if}
@@ -91,6 +98,10 @@
     padding-right: env(safe-area-inset-right);
     border-radius: 16px 0 0 16px;
     animation: slide 0.22s ease-out;
+  }
+
+  .right .sheet.wide {
+    width: min(470px, 100%);
   }
 
   .handle {

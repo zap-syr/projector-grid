@@ -34,7 +34,7 @@
     <div class="f">
       <dt>{c.label}</dt>
       <dd>
-        <Cell column={c.id} {p} {groups} thresholds={config.thresholds} {patternLabel} />
+        <Cell column={c.id} {p} {groups} {patternLabel} />
       </dd>
     </div>
   {/each}

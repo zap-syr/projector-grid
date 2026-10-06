@@ -1,25 +1,27 @@
 <!-- One table cell, drawn like the app's Monitoring cell builders. -->
 <script lang="ts">
-  import type { Config, DataColumn, Group, Projector } from '../../api/types';
-  import { cellText, tempTint } from '../../logic/cells';
+  import type { DataColumn, Group, Projector } from '../../api/types';
+  import { alertTint, signalLost } from '../../logic/alerts';
+  import { cellText } from '../../logic/cells';
   import { isPatternActive, patternSwatch } from '../../logic/patterns';
+  import { alerts } from '../../state/alerts.svelte';
+  import ErrorTags from '../alerts/ErrorTags.svelte';
   import Icon from '../Icon.svelte';
 
   let {
     column,
     p,
     groups,
-    thresholds,
     patternLabel,
   }: {
     column: DataColumn;
     p: Projector;
     groups: ReadonlyMap<string, Group>;
-    thresholds: Config['thresholds'];
     patternLabel: (code: string) => string;
   } = $props();
 
   const text = $derived(cellText(column, p, groups, patternLabel));
+  const own = $derived(alerts.of(p.id));
   const group = $derived(p.groupId ? groups.get(p.groupId) : undefined);
   const online = $derived(p.connection === 'connected' || p.connection === 'unprotected');
 </script>
@@ -53,12 +55,16 @@
     <span class="sw" style:background={patternSwatch(p.testPattern) ?? 'var(--hover)'}></span>
     <span class="t">{text}</span>
   {:else if column === 'intake' || column === 'exhaust'}
-    {@const tint = tempTint(text, thresholds[column])}
+    <!-- Tinted by the active alert, so hysteresis and a switched-off rule follow the app. -->
+    {@const tint = alertTint(own, column === 'intake' ? 'intake-temp' : 'exhaust-temp')}
     <span class="t" class:warm={tint === 'warm'} class:hot={tint === 'hot'}>{text}</span>
+  {:else if column === 'signal' && signalLost(own)}
+    <span class="t hot">{text}</span>
+  {:else if column === 'errors' && p.errorItems.length > 0}
+    <ErrorTags {p} />
   {:else if column === 'errors' && p.errors !== '-'}
-    {@const ok = text === 'NO ERRORS'}
-    <span class={ok ? 'ok' : 'err'}><Icon name={ok ? 'check' : 'error'} size={14} /></span>
-    <span class="t" class:err={!ok}>{text}</span>
+    <span class="ok"><Icon name="check" size={14} /></span>
+    <span class="t ok">{text}</span>
   {:else}
     <span class="t">{text}</span>
   {/if}
