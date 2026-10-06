@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### For Users
+
+#### Fixed
+- OSC status feedback on Windows no longer silently drops messages — the
+  `/pgrid/status/offline` and `/pgrid/status/warning` updates sent right
+  after `/pgrid/status/online` often never reached the show controller
+
 ## [1.4.2] - 2026-09-16
 
 ### For Users
