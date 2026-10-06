@@ -16,6 +16,7 @@ import '../../domain/projector_node.dart';
 import '../../domain/web_actions.dart';
 import '../../domain/web_alignment.dart';
 import '../../domain/web_api_dto.dart';
+import 'alerts_provider.dart';
 import 'alignment_provider.dart';
 import 'app_settings_provider.dart';
 import 'event_log_provider.dart';
@@ -61,6 +62,11 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
     ref.listen(workspaceProvider, (_, nodes) {
       _pushWorkspace();
       _previews.refresh();
+    });
+    // Raised, cleared or acknowledged (in the app or on any page).
+    ref.listen(alertsProvider, (_, _) {
+      if (_hub.clientCount == 0) return;
+      _hub.broadcast((name: WebEvents.alerts, data: alerts()));
     });
     // Entering or leaving from the app or any page shows on every page.
     ref.listen(
@@ -233,7 +239,28 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
         ),
       ),
       (name: WebEvents.alignment, data: alignment()),
+      (name: WebEvents.alerts, data: alerts()),
     ];
+  }
+
+  @override
+  Json alerts() => alertsJson(
+    now: DateTime.now(),
+    alerts: ref.read(alertsProvider).values,
+    nodes: {for (final n in ref.read(workspaceProvider)) n.id: n},
+  );
+
+  @override
+  Future<Json?> acknowledgeAlerts(Object? body, WebSession session) async {
+    final test = parseAlertAcknowledge(body);
+    if (test == null) return null;
+    final count = ref
+        .read(alertsProvider.notifier)
+        .acknowledgeWhere(
+          test,
+          source: 'Web · ${session.ip} · ${session.role.name}',
+        );
+    return {'acknowledged': count};
   }
 
   @override

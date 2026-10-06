@@ -1,0 +1,47 @@
+{
+  "now": "2026-10-06T14:20:00.000Z",
+  "alerts": [
+    {
+      "id": "n1|error|F011",
+      "projectorId": "n1",
+      "projector": "PJ-01",
+      "ip": "192.168.0.111",
+      "rule": "error",
+      "label": "Projector error",
+      "item": "F011",
+      "severity": "critical",
+      "value": "Shutter error (F011)",
+      "since": "2026-10-06T14:02:00.000Z",
+      "acknowledged": false,
+      "restoredAt": null
+    },
+    {
+      "id": "n1|signal-lost|",
+      "projectorId": "n1",
+      "projector": "PJ-01",
+      "ip": "192.168.0.111",
+      "rule": "signal-lost",
+      "label": "Signal lost",
+      "item": "",
+      "severity": "critical",
+      "value": "Back after 4 s",
+      "since": "2026-10-06T14:02:00.000Z",
+      "acknowledged": false,
+      "restoredAt": "2026-10-06T14:02:04.000Z"
+    },
+    {
+      "id": "n2|intake-temp|",
+      "projectorId": "n2",
+      "projector": "PJ-02",
+      "ip": "192.168.0.112",
+      "rule": "intake-temp",
+      "label": "Intake temperature",
+      "item": "",
+      "severity": "warning",
+      "value": "43 °C",
+      "since": "2026-10-06T14:02:00.000Z",
+      "acknowledged": true,
+      "restoredAt": null
+    }
+  ]
+}

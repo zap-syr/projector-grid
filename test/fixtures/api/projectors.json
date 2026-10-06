@@ -18,7 +18,14 @@
     "intakeTemp": "-",
     "exhaustTemp": "-",
     "acVoltage": "-",
-    "errors": "000100000000"
+    "errors": "000100000000",
+    "errorItems": [
+      {
+        "code": "000100000000",
+        "name": null,
+        "severity": "critical"
+      }
+    ]
   },
   {
     "id": "n2",
@@ -39,7 +46,8 @@
     "intakeTemp": "41°C",
     "exhaustTemp": "47°C",
     "acVoltage": "230V",
-    "errors": "NO ERRORS"
+    "errors": "NO ERRORS",
+    "errorItems": []
   },
   {
     "id": "n3",
@@ -60,7 +68,8 @@
     "intakeTemp": "-",
     "exhaustTemp": "-",
     "acVoltage": "-",
-    "errors": "-"
+    "errors": "-",
+    "errorItems": []
   },
   {
     "id": "n4",
@@ -81,6 +90,7 @@
     "intakeTemp": "-",
     "exhaustTemp": "-",
     "acVoltage": "-",
-    "errors": "-"
+    "errors": "-",
+    "errorItems": []
   }
 ]

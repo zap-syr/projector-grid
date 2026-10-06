@@ -117,6 +117,7 @@ components:
         - exhaustTemp
         - acVoltage
         - errors
+        - errorItems
       description: |
         Display strings are exactly what the app shows ('-' = not polled yet).
       properties:
@@ -164,6 +165,29 @@ components:
         errors:
           type: string
           description: "'NO ERRORS', '-' or the projector's error code."
+        errorItems:
+          type: array
+          description: "`errors` decoded by the app's code table, in reply order; empty when healthy."
+          items:
+            $ref: '#/components/schemas/ErrorItem'
+
+    ErrorItem:
+      type: object
+      additionalProperties: false
+      required: [code, name, severity]
+      properties:
+        code:
+          type: string
+          description: '`F305`, or the whole reply when it holds no code.'
+        name:
+          type: [string, 'null']
+          description: From the code table; null for a code it doesn't know.
+        severity:
+          $ref: '#/components/schemas/AlertSeverity'
+
+    AlertSeverity:
+      type: string
+      enum: [warning, critical]
 
     Projectors:
       type: array
@@ -408,9 +432,114 @@ components:
             type: string
 
     Alerts:
-      type: array
-      description: Always empty until telemetry alerts (ROADMAP §4) exist.
-      maxItems: 0
+      type: object
+      additionalProperties: false
+      required: [now, alerts]
+      description: The app's active alerts and its clock.
+      properties:
+        now:
+          type: string
+          format: date-time
+          description: The app's time (UTC); the page measures durations against it, not its own clock.
+        alerts:
+          type: array
+          description: In the app's display order (unacknowledged, problems before returned signals, critical, newest).
+          items:
+            $ref: '#/components/schemas/Alert'
+
+    Alert:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - projectorId
+        - projector
+        - ip
+        - rule
+        - label
+        - item
+        - severity
+        - value
+        - since
+        - acknowledged
+        - restoredAt
+      properties:
+        id:
+          type: string
+          description: Stable while the alert lasts; what `ids` in an acknowledge request takes.
+        projectorId:
+          type: string
+        projector:
+          type: string
+          description: The projector's name ('' once it was deleted).
+        ip:
+          type: string
+        rule:
+          $ref: '#/components/schemas/AlertRule'
+        label:
+          type: string
+          description: The rule's name, e.g. "Signal lost".
+        item:
+          type: string
+          description: The error code for `error`; '' for the other rules.
+        severity:
+          $ref: '#/components/schemas/AlertSeverity'
+        value:
+          type: string
+          description: What the app shows large, e.g. "58 °C", "No signal on HDMI 1", "Back after 3 s".
+        since:
+          type: string
+          format: date-time
+        acknowledged:
+          type: boolean
+        restoredAt:
+          type: [string, 'null']
+          format: date-time
+          description: A Signal lost whose signal came back; it stays until acknowledged.
+
+    AlertRule:
+      type: string
+      enum: [offline, error, signal-lost, intake-temp, exhaust-temp]
+
+    AcknowledgeRequest:
+      description: Exactly one way to name the alerts.
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [ids]
+          properties:
+            ids:
+              type: array
+              minItems: 1
+              items:
+                type: string
+        - type: object
+          additionalProperties: false
+          required: [projectorId]
+          properties:
+            projectorId:
+              type: string
+        - type: object
+          additionalProperties: false
+          required: [rule]
+          properties:
+            rule:
+              $ref: '#/components/schemas/AlertRule'
+        - type: object
+          additionalProperties: false
+          required: [all]
+          properties:
+            all:
+              const: true
+
+    AcknowledgeResult:
+      type: object
+      additionalProperties: false
+      required: [acknowledged]
+      properties:
+        acknowledged:
+          type: integer
+          description: How many were unacknowledged and now are.
 
     SnapshotEvent:
       type: object
@@ -950,6 +1079,48 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /api/alerts/acknowledge:
+    post:
+      summary: Acknowledge alerts (operator only)
+      description: |
+        Only exists while *Allow control* is on (404 otherwise). A viewer session gets 403.
+        Same as in the app: OSC `/pgrid/alert/acknowledged`, a returned signal clears, and the
+        Event Log names the source ("Signal lost acknowledged (Web · <ip> · operator)").
+        Every page gets an `alerts` event.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AcknowledgeRequest'
+      responses:
+        '200':
+          description: Done.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AcknowledgeResult'
+        '400':
+          description: Not a valid acknowledge request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Viewer session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: '*Allow control* is off.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /api/events:
     get:
       summary: Live updates (Server-Sent Events)
@@ -964,6 +1135,7 @@ paths:
         | `groups` | `Groups` | groups changed |
         | `project` | `ProjectEvent` | another project was opened or saved under a new name |
         | `alignment` | `Alignment` | after `snapshot`, and whenever Alignment mode changes (from the app or any page) |
+        | `alerts` | `Alerts` | after `alignment`, and whenever an alert is raised, changes, clears or is acknowledged |
         | `access` | `Access` | this session was unlocked / locked (in another tab too), or *Allow control* was switched |
         | `signedOut` | `SignedOutEvent` | the session ended (PIN changed, *Sign out all clients*, Web Access off); the stream then closes |
       responses:

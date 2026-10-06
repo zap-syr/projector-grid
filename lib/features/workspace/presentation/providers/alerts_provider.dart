@@ -102,13 +102,14 @@ class AlertsNotifier extends _$AlertsNotifier {
       acknowledgeWhere((a) => nodeId == null || a.nodeId == nodeId);
 
   /// Every unacknowledged alert that passes [test] (a group of the Active
-  /// alerts panel).
-  void acknowledgeWhere(bool Function(ActiveAlert) test) {
+  /// alerts panel); returns how many. [source] names who did it in the Event
+  /// Log when it isn't the app's own UI, e.g. "Web · 10.0.0.5 · operator".
+  int acknowledgeWhere(bool Function(ActiveAlert) test, {String? source}) {
     final hits = [
       for (final a in state.values)
         if (!a.acknowledged && test(a)) a,
     ];
-    if (hits.isEmpty) return;
+    if (hits.isEmpty) return 0;
     state = {
       for (final e in state.entries)
         e.key: hits.contains(e.value)
@@ -116,12 +117,13 @@ class AlertsNotifier extends _$AlertsNotifier {
             : e.value,
     };
     for (final a in hits) {
-      _publish(AlertChange.acknowledged, a);
+      _publish(AlertChange.acknowledged, a, source: source);
     }
     _clearRestoredSignalLost(hits);
+    return hits.length;
   }
 
-  void _publish(AlertChange change, ActiveAlert a) {
+  void _publish(AlertChange change, ActiveAlert a, {String? source}) {
     final node = _nodes[a.nodeId];
     ref
         .read(eventLogProvider.notifier)
@@ -142,7 +144,9 @@ class AlertsNotifier extends _$AlertsNotifier {
                 '${a.rule.label}: ${a.value} (${a.severity.name})',
               AlertChange.recovered => '${a.rule.label}: ${a.displayValue}',
               AlertChange.cleared => '${a.rule.label} cleared',
-              AlertChange.acknowledged => '${a.rule.label} acknowledged',
+              AlertChange.acknowledged =>
+                '${a.rule.label} acknowledged'
+                    '${source == null ? '' : ' ($source)'}',
             },
             projectorIp: node?.ipAddress,
             projectorName: node?.name,

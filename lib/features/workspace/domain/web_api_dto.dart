@@ -12,6 +12,8 @@ import '../../../core/services/web_api.dart' show Json;
 import '../../../core/services/web_auth.dart';
 import '../../../core/services/web_event_hub.dart';
 import '../../../core/theme/status_thresholds.dart';
+import 'alert_rule.dart';
+import 'alerts.dart';
 import 'alignment.dart';
 import 'card_layout.dart';
 import 'control_options.dart';
@@ -19,6 +21,7 @@ import 'dispatch_result.dart';
 import 'log_event.dart';
 import 'monitoring_columns.dart';
 import 'pre_show.dart';
+import 'projector_errors.dart';
 import 'projector_group.dart';
 import 'projector_node.dart';
 import 'test_patterns.dart';
@@ -31,6 +34,7 @@ abstract final class WebEvents {
   static const groups = 'groups';
   static const project = 'project';
   static const alignment = 'alignment';
+  static const alerts = 'alerts';
   static const signedOut = 'signedOut';
 }
 
@@ -77,7 +81,67 @@ Json projectorJson(ProjectorNode n) => {
   'exhaustTemp': n.exhaustTemp,
   'acVoltage': n.acVoltage,
   'errors': n.errors,
+  // Decoded here, so the page names and colours codes by the app's table.
+  'errorItems': [
+    for (final e in decodeProjectorErrors(n.errors))
+      {'code': e.id, 'name': e.name, 'severity': e.severity.name},
+  ],
 };
+
+/// An alert's id on the API: stable while the alert lasts, unique in the
+/// list.
+String webAlertId(AlertKey k) => '${k.nodeId}|${k.rule.slug}|${k.item}';
+
+/// [projector] is null once the projector was deleted; its alert clears on
+/// the next reconcile anyway.
+Json alertJson(ActiveAlert a, ProjectorNode? projector) => {
+  'id': webAlertId(a.key),
+  'projectorId': a.nodeId,
+  'projector': projector?.name ?? '',
+  'ip': projector?.ipAddress ?? '',
+  'rule': a.rule.slug,
+  'label': a.rule.label,
+  'item': a.item,
+  'severity': a.severity.name,
+  'value': a.displayValue,
+  'since': a.since.toUtc().toIso8601String(),
+  'acknowledged': a.acknowledged,
+  'restoredAt': a.restoredAt?.toUtc().toIso8601String(),
+};
+
+/// `GET /api/alerts` and the `alerts` event: the active alerts in the app's
+/// display order, with the app's clock, so a page on a device whose clock
+/// is off still shows the right durations.
+Json alertsJson({
+  required DateTime now,
+  required Iterable<ActiveAlert> alerts,
+  required Map<String, ProjectorNode> nodes,
+}) => {
+  'now': now.toUtc().toIso8601String(),
+  'alerts': [for (final a in sortAlerts(alerts)) alertJson(a, nodes[a.nodeId])],
+};
+
+/// `POST /api/alerts/acknowledge`: exactly one of `{"ids": [...]}`,
+/// `{"projectorId": "…"}`, `{"rule": "<slug>"}` or `{"all": true}`. The
+/// alerts it picks; null for anything else.
+bool Function(ActiveAlert)? parseAlertAcknowledge(Object? body) {
+  if (body is! Map || body.length != 1) return null;
+  return switch (body.entries.single) {
+    MapEntry(key: 'ids', value: final List<Object?> ids)
+        when ids.isNotEmpty && ids.every((i) => i is String) =>
+      (a) => ids.contains(webAlertId(a.key)),
+    MapEntry(key: 'projectorId', value: final String id) => (
+      a,
+    ) => a.nodeId == id,
+    MapEntry(key: 'rule', value: final String slug) =>
+      switch (AlertRule.fromSlug(slug)) {
+        final rule? => (a) => a.rule == rule,
+        null => null,
+      },
+    MapEntry(key: 'all', value: true) => (_) => true,
+    _ => null,
+  };
+}
 
 /// All projectors in layout order (left→right, top→bottom).
 List<Json> projectorsJson(Iterable<ProjectorNode> nodes) =>
@@ -241,10 +305,18 @@ List<WebEvent> projectorEvents(List<Json> prev, List<Json> next) {
   ];
 }
 
-/// Flat maps of primitives, which is all [projectorJson] and [groupJson]
-/// produce.
+/// Maps of primitives and lists of such maps, which is all [projectorJson]
+/// and [groupJson] produce.
 bool _sameJson(Json a, Json b) =>
-    a.length == b.length && a.keys.every((k) => a[k] == b[k]);
+    a.length == b.length && a.keys.every((k) => _sameValue(a[k], b[k]));
+
+bool _sameValue(Object? a, Object? b) => switch ((a, b)) {
+  (final List<Object?> x, final List<Object?> y) =>
+    x.length == y.length &&
+        Iterable.generate(x.length).every((i) => _sameValue(x[i], y[i])),
+  (final Json x, final Json y) => _sameJson(x, y),
+  _ => a == b,
+};
 
 bool sameGroupsJson(List<Json> a, List<Json> b) =>
     a.length == b.length &&

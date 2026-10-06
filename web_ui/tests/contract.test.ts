@@ -34,6 +34,7 @@ const schemaFor: Record<string, string> = {
   'preview-status': 'PreviewStatus',
   'preview-status-notice': 'PreviewStatus',
   'preview-frame': 'PreviewFrame',
+  alerts: 'Alerts',
 };
 
 // OpenAPI keywords (description, enum on $ref siblings…) aren't all JSON Schema.
@@ -79,6 +80,26 @@ describe('fixtures match openapi.yaml', () => {
     }
     expect(validate({ targets: [], action: act.power(true) })).toBe(false);
     expect(validate({ targets: 'all', action: { raw: 'VXX:RSTS1=+00001' } })).toBe(false);
+  });
+
+  test('acknowledge requests: the page sends ids; one way at a time', () => {
+    const validate = ajv.compile({ $ref: 'openapi.json#/components/schemas/AcknowledgeRequest' });
+    for (const body of [
+      { ids: ['n1|offline|'] },
+      { projectorId: 'n1' },
+      { rule: 'signal-lost' },
+      { all: true },
+    ]) {
+      expect(validate(body), JSON.stringify(validate.errors)).toBe(true);
+    }
+    for (const body of [
+      { ids: [] },
+      { all: false },
+      { rule: 'nope' },
+      { all: true, rule: 'offline' },
+    ]) {
+      expect(validate(body)).toBe(false);
+    }
   });
 
   test('extra fields are rejected', () => {

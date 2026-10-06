@@ -44,6 +44,18 @@ class _Source implements WebApiSource {
     return body is Map && body.containsKey('bad') ? null : {'ok': 1};
   }
 
+  @override
+  Json alerts() => {'now': 'T', 'alerts': const <Json>[]};
+
+  /// Bodies [acknowledgeAlerts] was handed; only `{"all": true}` is valid.
+  final acknowledged = <Object?>[];
+  @override
+  Future<Json?> acknowledgeAlerts(Object? body, WebSession session) async {
+    if (body is! Map || body['all'] != true) return null;
+    acknowledged.add(body);
+    return {'acknowledged': 2};
+  }
+
   /// (op, body) pairs [alignmentOp] was handed; the op `bad` counts as invalid.
   final alignmentOps = <(String, Object?)>[];
   @override
@@ -363,6 +375,38 @@ void main() {
       });
     });
 
+    group('/api/alerts/acknowledge', () {
+      Future<Response> ack(String token, Object body) => send(
+        'POST',
+        '/api/alerts/acknowledge',
+        body: body,
+        headers: {'authorization': 'Bearer $token'},
+      );
+
+      test('operators only: a viewer gets 403, nothing changes', () async {
+        final r = await ack(await loginToken(), {'all': true});
+        expect(r.statusCode, 403);
+        expect(source.acknowledged, isEmpty);
+      });
+
+      test('an operator acknowledges; invalid bodies → 400', () async {
+        final token = await loginToken();
+        await unlock(token, '9876');
+        final r = await ack(token, {'all': true});
+        expect(await jsonOf(r), {'acknowledged': 2});
+        expect((await ack(token, {'all': false})).statusCode, 400);
+        expect((await ack(token, 'not json {')).statusCode, 400);
+        expect(source.acknowledged, hasLength(1));
+      });
+
+      test('no route at all while Allow control is off', () async {
+        final token = await loginToken();
+        await unlock(token, '9876');
+        source.controlAllowed = false;
+        expect((await ack(token, {'all': true})).statusCode, 404);
+      });
+    });
+
     group('/api/preview', () {
       Future<Response> post(String token, String path, {Object? body}) => send(
         'POST',
@@ -480,10 +524,10 @@ void main() {
         (await send('GET', '/api/projectors/zz', headers: h)).statusCode,
         404,
       );
-      expect(
-        await jsonOf(await send('GET', '/api/alerts', headers: h)),
-        isEmpty,
-      );
+      expect(await jsonOf(await send('GET', '/api/alerts', headers: h)), {
+        'now': 'T',
+        'alerts': isEmpty,
+      });
       final r = await send('GET', '/api/nope', headers: h);
       expect(r.statusCode, 404);
       expect(r.headers['cache-control'], 'no-store');

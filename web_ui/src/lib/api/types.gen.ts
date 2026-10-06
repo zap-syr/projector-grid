@@ -660,6 +660,80 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/alerts/acknowledge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Acknowledge alerts (operator only)
+         * @description Only exists while *Allow control* is on (404 otherwise). A viewer session gets 403.
+         *     Same as in the app: OSC `/pgrid/alert/acknowledged`, a returned signal clears, and the
+         *     Event Log names the source ("Signal lost acknowledged (Web · <ip> · operator)").
+         *     Every page gets an `alerts` event.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AcknowledgeRequest"];
+                };
+            };
+            responses: {
+                /** @description Done. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AcknowledgeResult"];
+                    };
+                };
+                /** @description Not a valid acknowledge request. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                /** @description Viewer session. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description *Allow control* is off. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/events": {
         parameters: {
             query?: never;
@@ -679,6 +753,7 @@ export interface paths {
          *     | `groups` | `Groups` | groups changed |
          *     | `project` | `ProjectEvent` | another project was opened or saved under a new name |
          *     | `alignment` | `Alignment` | after `snapshot`, and whenever Alignment mode changes (from the app or any page) |
+         *     | `alerts` | `Alerts` | after `alignment`, and whenever an alert is raised, changes, clears or is acknowledged |
          *     | `access` | `Access` | this session was unlocked / locked (in another tab too), or *Allow control* was switched |
          *     | `signedOut` | `SignedOutEvent` | the session ended (PIN changed, *Sign out all clients*, Web Access off); the stream then closes |
          */
@@ -953,7 +1028,18 @@ export interface components {
             acVoltage: string;
             /** @description 'NO ERRORS', '-' or the projector's error code. */
             errors: string;
+            /** @description `errors` decoded by the app's code table, in reply order; empty when healthy. */
+            errorItems: components["schemas"]["ErrorItem"][];
         };
+        ErrorItem: {
+            /** @description `F305`, or the whole reply when it holds no code. */
+            code: string;
+            /** @description From the code table; null for a code it doesn't know. */
+            name: string | null;
+            severity: components["schemas"]["AlertSeverity"];
+        };
+        /** @enum {string} */
+        AlertSeverity: "warning" | "critical";
         /** @description In layout order (left→right, top→bottom). */
         Projectors: components["schemas"]["Projector"][];
         Group: {
@@ -1046,8 +1132,57 @@ export interface components {
             code: string;
             label: string;
         }[];
-        /** @description Always empty until telemetry alerts (ROADMAP §4) exist. */
-        Alerts: unknown[];
+        /** @description The app's active alerts and its clock. */
+        Alerts: {
+            /**
+             * Format: date-time
+             * @description The app's time (UTC); the page measures durations against it, not its own clock.
+             */
+            now: string;
+            /** @description In the app's display order (unacknowledged, problems before returned signals, critical, newest). */
+            alerts: components["schemas"]["Alert"][];
+        };
+        Alert: {
+            /** @description Stable while the alert lasts; what `ids` in an acknowledge request takes. */
+            id: string;
+            projectorId: string;
+            /** @description The projector's name ('' once it was deleted). */
+            projector: string;
+            ip: string;
+            rule: components["schemas"]["AlertRule"];
+            /** @description The rule's name, e.g. "Signal lost". */
+            label: string;
+            /** @description The error code for `error`; '' for the other rules. */
+            item: string;
+            severity: components["schemas"]["AlertSeverity"];
+            /** @description What the app shows large, e.g. "58 °C", "No signal on HDMI 1", "Back after 3 s". */
+            value: string;
+            /** Format: date-time */
+            since: string;
+            acknowledged: boolean;
+            /**
+             * Format: date-time
+             * @description A Signal lost whose signal came back; it stays until acknowledged.
+             */
+            restoredAt: string | null;
+        };
+        /** @enum {string} */
+        AlertRule: "offline" | "error" | "signal-lost" | "intake-temp" | "exhaust-temp";
+        /** @description Exactly one way to name the alerts. */
+        AcknowledgeRequest: {
+            ids: string[];
+        } | {
+            projectorId: string;
+        } | {
+            rule: components["schemas"]["AlertRule"];
+        } | {
+            /** @constant */
+            all: true;
+        };
+        AcknowledgeResult: {
+            /** @description How many were unacknowledged and now are. */
+            acknowledged: number;
+        };
         SnapshotEvent: {
             projectName: string;
             projectors: components["schemas"]["Projectors"];

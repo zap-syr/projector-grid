@@ -66,6 +66,13 @@ abstract interface class WebApiSource {
   /// when it isn't a valid action request, else the dispatch summary.
   Future<Json?> dispatch(Object? body, WebSession session);
 
+  /// The active alerts with the app's clock (`GET /api/alerts`).
+  Json alerts();
+
+  /// `POST /api/alerts/acknowledge` from an operator: [body] is the decoded
+  /// JSON. Null when it doesn't name alerts, else how many were acknowledged.
+  Future<Json?> acknowledgeAlerts(Object? body, WebSession session);
+
   /// Alignment mode's state (`GET /api/alignment`).
   Json alignment();
 
@@ -156,8 +163,17 @@ class WebApi {
             })(r);
           })
           ..get('/api/groups', _authed((_, _) => _json(200, source.groups())))
-          // Filled by the alerts provider (ROADMAP §4) once it exists.
-          ..get('/api/alerts', _authed((_, _) => _json(200, const <Json>[])))
+          ..get('/api/alerts', _authed((_, _) => _json(200, source.alerts())))
+          ..post(
+            '/api/alerts/acknowledge',
+            _authed(
+              (r, s) => _operatorPost(
+                r,
+                s,
+                (body) => source.acknowledgeAlerts(body, s),
+              ),
+            ),
+          )
           ..get('/api/events', _authed((_, s) => _events(s)));
     return router.call;
   }
