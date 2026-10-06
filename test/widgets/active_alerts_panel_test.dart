@@ -149,11 +149,55 @@ void main() {
     expect(find.textContaining('STAGE', findRichText: true), findsNothing);
   });
 
-  testWidgets('no project-groups toggle without groups or by rule', (
-    tester,
-  ) async {
+  testWidgets('no project-groups toggle without groups', (tester) async {
     await pump(tester, alerts);
     expect(find.bySemanticsLabel('Sort into project groups'), findsNothing);
+  });
+
+  testWidgets('by rule, the toggle stays and splits rules into subsections', (
+    tester,
+  ) async {
+    final c = await pump(tester, alerts, withGroups: true);
+    await tester.tap(find.text('Alert'));
+    await tester.pumpAndSettle();
+    expect(find.bySemanticsLabel('Sort into project groups'), findsOneWidget);
+    // Offline holds PRJ-01 and PRJ-02, both on Stage; Exhaust is PRJ-03's.
+    expect(find.textContaining('STAGE', findRichText: true), findsOneWidget);
+    expect(
+      find.textContaining('UNGROUPED', findRichText: true),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.bySemanticsLabel('Acknowledge Stage'));
+    await tester.pumpAndSettle();
+    final open = c.read(alertsProvider).values.where((a) => !a.acknowledged);
+    expect(open.map((a) => a.nodeId), ['3']);
+
+    await tester.tap(find.bySemanticsLabel('Sort into project groups'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('UNGROUPED', findRichText: true), findsNothing);
+  });
+
+  testWidgets('fold / unfold all: one rule group, its subsections too', (
+    tester,
+  ) async {
+    await pump(tester, alerts.take(2).toList(), withGroups: true);
+    await tester.tap(find.text('Alert'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertRow), findsNWidgets(2));
+
+    // Fold the Stage subsection by hand: not everything is open any more.
+    await tester.tap(find.textContaining('STAGE', findRichText: true));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertRow), findsNothing);
+    await tester.tap(find.bySemanticsLabel('Unfold all'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertRow), findsNWidgets(2));
+
+    await tester.tap(find.bySemanticsLabel('Fold all'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertRow), findsNothing);
+    expect(find.textContaining('STAGE', findRichText: true), findsNothing);
   });
 
   testWidgets('the warning filter hides critical groups', (tester) async {

@@ -81,8 +81,14 @@ class _ActiveAlertsPanelState extends ConsumerState<ActiveAlertsPanel> {
     final now = DateTime.now();
 
     final byProjector = grouping == AlertGrouping.projector;
-    final canSection = byProjector && projectGroups.isNotEmpty;
+    // Offered in both groupings, so switching them doesn't move the toolbar:
+    // projector groups go into sections, a rule's rows into subsections.
+    final canSection = projectGroups.isNotEmpty;
     final sectioned = canSection && settings.byProjectGroups;
+    final groupOrder = [for (final g in projectGroups) g.id];
+    String? groupOf(String nodeId) => nodes[nodeId]?.groupId;
+    ProjectorGroup? projectGroup(String? id) =>
+        projectGroups.where((g) => g.id == id).firstOrNull;
 
     // A severity filter is for what is still wrong; recovered ones show
     // under All only.
@@ -104,26 +110,102 @@ class _ActiveAlertsPanelState extends ConsumerState<ActiveAlertsPanel> {
     bool isOpen(AlertGroup g) =>
         _open[openKey(g.key)] ?? groups.length <= ActiveAlertsPanel.foldAbove;
     bool sectionOpen(String? id) => _open['section|$id'] ?? true;
-    final allOpen = groups.isNotEmpty && groups.every(isOpen);
+    bool subsectionOpen(String rule, String? id) =>
+        _open['sub|$rule|$id'] ?? true;
+    // Everything Fold all / Unfold all reaches, in both groupings: the groups,
+    // and the project-group sections or a rule's subsections.
+    final foldable = <(String, bool)>[
+      for (final g in groups) (openKey(g.key), isOpen(g)),
+      if (sectioned && byProjector)
+        for (final s in sectionByProjectGroup(groups, groupOf, groupOrder))
+          ('section|${s.groupId}', sectionOpen(s.groupId)),
+      if (sectioned && !byProjector)
+        for (final g in groups)
+          for (final s in subsectionByProjectGroup(
+            g.alerts,
+            groupOf,
+            groupOrder,
+          ))
+            ('sub|${g.key}|${s.groupId}', subsectionOpen(g.key, s.groupId)),
+    ];
+    final allOpen = foldable.isNotEmpty && foldable.every((f) => f.$2);
     final ackedOpen = _ackedOpen ?? acked.length <= 3;
 
     String nameOf(String nodeId) => nodes[nodeId]?.name ?? 'Removed projector';
 
-    void acknowledgeGroups(Iterable<AlertGroup> gs) {
-      final keys = {
-        for (final g in gs)
-          for (final a in g.alerts) a.key,
-      };
+    void acknowledgeAlerts(Iterable<ActiveAlert> alerts) {
+      final keys = {for (final a in alerts) a.key};
       notifier.acknowledgeWhere((a) => keys.contains(a.key));
     }
 
-    List<AlertScrollEntry> groupEntries(AlertGroup g, double indent) {
-      Widget indented(Widget child) => indent == 0
-          ? child
-          : Padding(
-              padding: EdgeInsets.only(left: indent),
-              child: child,
-            );
+    void acknowledgeGroups(Iterable<AlertGroup> gs) =>
+        acknowledgeAlerts([for (final g in gs) ...g.alerts]);
+
+    Widget indent(double by, Widget child) => by == 0
+        ? child
+        : Padding(
+            padding: EdgeInsets.only(left: by),
+            child: child,
+          );
+
+    List<AlertScrollEntry> rowEntries(
+      Iterable<ActiveAlert> alerts,
+      double by,
+    ) => [
+      for (final a in alerts)
+        (
+          child: indent(
+            by,
+            AlertRow(
+              alert: a,
+              now: now,
+              title: byProjector ? null : nameOf(a.nodeId),
+              titleNote: byProjector ? null : nodes[a.nodeId]?.ipAddress,
+              onAcknowledge: () => notifier.acknowledge(a.key),
+            ),
+          ),
+          height: AlertRow.height,
+          counts: true,
+        ),
+    ];
+
+    /// A rule group's rows, split by project group when sectioned.
+    List<AlertScrollEntry> ruleRowEntries(AlertGroup g) {
+      if (!sectioned) return rowEntries(g.alerts, 12);
+      return [
+        for (final s in subsectionByProjectGroup(
+          g.alerts,
+          groupOf,
+          groupOrder,
+        )) ...[
+          (
+            child: indent(
+              12,
+              _SectionHeader(
+                group: projectGroup(s.groupId),
+                projectors: {for (final a in s.alerts) a.nodeId}.length,
+                alerts: s.alerts,
+                open: subsectionOpen(g.key, s.groupId),
+                onToggle: () => setState(
+                  () => _open['sub|${g.key}|${s.groupId}'] = !subsectionOpen(
+                    g.key,
+                    s.groupId,
+                  ),
+                ),
+                onAcknowledge: () => acknowledgeAlerts(s.alerts),
+              ),
+            ),
+            height: _SectionHeader.height,
+            counts: false,
+          ),
+          if (subsectionOpen(g.key, s.groupId))
+            ...rowEntries(s.alerts, 12 + _sectionIndent),
+        ],
+      ];
+    }
+
+    List<AlertScrollEntry> groupEntries(AlertGroup g, double by) {
+      Widget indented(Widget child) => indent(by, child);
       final open = isOpen(g);
       return [
         (
@@ -142,36 +224,16 @@ class _ActiveAlertsPanelState extends ConsumerState<ActiveAlertsPanel> {
           counts: !open,
         ),
         if (open)
-          for (final a in g.alerts)
-            (
-              child: indented(
-                Padding(
-                  padding: const EdgeInsets.only(left: 12),
-                  child: AlertRow(
-                    alert: a,
-                    now: now,
-                    title: byProjector ? null : nameOf(a.nodeId),
-                    titleNote: byProjector ? null : nodes[a.nodeId]?.ipAddress,
-                    onAcknowledge: () => notifier.acknowledge(a.key),
-                  ),
-                ),
-              ),
-              height: AlertRow.height,
-              counts: true,
-            ),
+          ...(byProjector ? rowEntries(g.alerts, by + 12) : ruleRowEntries(g)),
       ];
     }
 
     final entries = <AlertScrollEntry>[
-      if (sectioned)
-        for (final s in sectionByProjectGroup(
-          groups,
-          (id) => nodes[id]?.groupId,
-          [for (final g in projectGroups) g.id],
-        )) ...[
+      if (sectioned && byProjector)
+        for (final s in sectionByProjectGroup(groups, groupOf, groupOrder)) ...[
           (
             child: _SectionHeader(
-              group: projectGroups.where((g) => g.id == s.groupId).firstOrNull,
+              group: projectGroup(s.groupId),
               projectors: s.groups.length,
               alerts: [for (final g in s.groups) ...g.alerts],
               open: sectionOpen(s.groupId),
@@ -229,13 +291,13 @@ class _ActiveAlertsPanelState extends ConsumerState<ActiveAlertsPanel> {
                     note: alerts.isEmpty ? null : '${alerts.length} total',
                   ),
                 ),
-                if (groups.length > 1)
+                if (foldable.isNotEmpty)
                   AlertPanelIconButton(
                     icon: allOpen ? Icons.unfold_less : Icons.unfold_more,
                     label: allOpen ? 'Fold all' : 'Unfold all',
                     onPressed: () => setState(() {
-                      for (final g in groups) {
-                        _open[openKey(g.key)] = !allOpen;
+                      for (final (key, _) in foldable) {
+                        _open[key] = !allOpen;
                       }
                     }),
                   ),

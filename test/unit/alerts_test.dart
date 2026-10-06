@@ -514,6 +514,29 @@ void main() {
       expect(sections.last.groups.single.key, '2');
     });
 
+    test('a rule group splits by project group, keeping its order', () {
+      final offline = groupAlerts(alerts, AlertGrouping.alert).first;
+      const groupOf = {'1': 'stage', '2': 'balcony', '3': 'balcony'};
+      final subs = subsectionByProjectGroup(
+        offline.alerts,
+        (id) => groupOf[id],
+        ['stage', 'balcony'],
+      );
+      expect(subs.map((s) => s.groupId), ['balcony']);
+      expect(subs.single.alerts.map((a) => a.nodeId), ['3', '2']);
+
+      final mixed = subsectionByProjectGroup(
+        [
+          a('1', AlertRule.offline, AlertSeverity.critical, 1),
+          a('4', AlertRule.offline, AlertSeverity.critical, 2),
+          a('2', AlertRule.offline, AlertSeverity.critical, 3),
+        ],
+        (id) => groupOf[id],
+        ['stage', 'balcony'],
+      );
+      expect(mixed.map((s) => s.groupId), ['stage', 'balcony', null]);
+    });
+
     test('counts unacknowledged and total per severity', () {
       expect(countAlerts(alerts), (
         critical: 2,

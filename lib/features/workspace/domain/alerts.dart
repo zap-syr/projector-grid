@@ -419,16 +419,52 @@ List<AlertSection> sectionByProjectGroup(
   List<AlertGroup> groups,
   String? Function(String nodeId) groupOf,
   List<String> order,
+) => [
+  for (final (id, list) in _byProjectGroup(
+    groups,
+    (g) => g.key,
+    groupOf,
+    order,
+  ))
+    (groupId: id, groups: list),
+];
+
+/// One rule group's alerts within a project group; a null [groupId] is
+/// Ungrouped.
+typedef AlertSubsection = ({String? groupId, List<ActiveAlert> alerts});
+
+/// A rule group's [alerts] (from [groupAlerts] by rule) split by their
+/// projectors' project groups, with the same order and Ungrouped rule as
+/// [sectionByProjectGroup]; each keeps the group's alert order.
+List<AlertSubsection> subsectionByProjectGroup(
+  List<ActiveAlert> alerts,
+  String? Function(String nodeId) groupOf,
+  List<String> order,
+) => [
+  for (final (id, list) in _byProjectGroup(
+    alerts,
+    (a) => a.nodeId,
+    groupOf,
+    order,
+  ))
+    (groupId: id, alerts: list),
+];
+
+List<(String?, List<T>)> _byProjectGroup<T>(
+  Iterable<T> items,
+  String Function(T) nodeOf,
+  String? Function(String nodeId) groupOf,
+  List<String> order,
 ) {
   final known = order.toSet();
-  final byGroup = <String?, List<AlertGroup>>{};
-  for (final g in groups) {
-    final id = groupOf(g.key);
-    byGroup.putIfAbsent(known.contains(id) ? id : null, () => []).add(g);
+  final byGroup = <String?, List<T>>{};
+  for (final item in items) {
+    final id = groupOf(nodeOf(item));
+    byGroup.putIfAbsent(known.contains(id) ? id : null, () => []).add(item);
   }
   return [
     for (final id in [...order, null])
-      if (byGroup[id] case final list?) (groupId: id, groups: list),
+      if (byGroup[id] case final list?) (id, list),
   ];
 }
 
