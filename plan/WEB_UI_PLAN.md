@@ -237,8 +237,27 @@ Then the existing `build_runner → format → analyze → flutter test`. The re
    auto-fit, fit-to-width, density, group-by; status colours; filters + search. Reorder is by dragging headers
    only, like the app — the Columns popover has no drag list. Group sections collapse and
    show the app's worst-status pill.
-4. `[later]` **Alerts rail / drawer** — skipped for now (owner, 2026-09-30): pointless
-   before ROADMAP §4 alerts exist; build it together with F5.
+4. `[~]` **Alerts** (F5 is done; design decided 2026-10-06, ROADMAP §5 *Alerts*, mockup
+   https://claude.ai/artifact/N6goiSv7DuMTYT15rophYT). Order:
+   - `[x]` API (2026-10-06): `GET /api/alerts` (`{now, alerts}`, the app's clock so a
+     phone with a wrong clock shows right durations), SSE `alerts`,
+     `POST /api/alerts/acknowledge` (`ids` / `projectorId` / `rule` / `all`, operators
+     only; the Event Log line names the web source), `errorItems` on projectors (decoded
+     by the app's code table); openapi, golden fixture, mocks (`dev:mock` has alerts of
+     every rule and PJ-03 dropping its signal every 20 s).
+   - `[x]` Rail + drawer / sheets with the Active alerts panel (`AlertsPanel`, one
+     component, desktop and touch layouts; placement from `device.control`), viewer
+     line, sound switch (the app's `assets/sounds/*.wav`, imported by Vite).
+   - `[x]` Header *Alerts* filter (drops the word below 1280 px and on phones so the
+     header stays one row), card / tile badge, Errors tags, alert tints, group pills
+     (icon + number on phones), *Only with alerts* in Select ▾.
+   - `[x]` New-alert cues: tab title count, favicon dot, toast with *Show*, tick pulse,
+     sound; the first `alerts` after a (re)connect raises none.
+   - Checked in Chrome with `dev:mock` at phone 360/390/430 and 740/844/932 wide,
+     tablet 768/820/1024 upright and 1024/1180/1366 sideways (touch emulated), desktop
+     1024–1920: no clipped button text in the alerts UI; the header stays one row
+     everywhere but upright phones and tablets (two rows by design). Still to do: a
+     check against the real app.
 5. `[x]` **Operator auth:** *Allow control* + Operator PIN, operator role on sessions,
    *Unlock control* / *Lock*, phone PIN pad. `dev:mock`: Viewer PIN 1234, Operator PIN
    5678. Notes: `POST /api/unlock` / `/api/lock` return

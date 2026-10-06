@@ -683,7 +683,10 @@ UI text uses commas, colons and parentheses as separators, never `·` or `—`.
   acknowledged the icons turn outlined and show the active totals; with no alerts, a green
   check.
 - It opens **Active alerts** (width 404, list up to 520 px):
-  - Header: total, fold / unfold all groups, *Acknowledge all*, *Event log*.
+  - Header: total, fold / unfold all, *Acknowledge all*, *Event log*. Fold / unfold all
+    shows whenever there is anything to fold, in both groupings (changed 2026-10-06: it
+    used to need two groups, so a single rule group had none), and reaches every level:
+    groups, project-group sections and a rule's subsections. Same on the web.
   - Filter chips: All / critical / warning, with counts.
   - Grouping toggle **Projector / Alert**. Starts on Projector; the last choice is remembered
     in app settings. Alert grouping turns a mass failure (one media server feeding 24
@@ -693,11 +696,14 @@ UI text uses commas, colons and parentheses as separators, never `·` or `—`.
     https://claude.ai/artifact/1sFY6SMU1z3SC868eeB6Dm v6): projector name and IP with
     the counts; or rule, "N projectors, since 14:11" and the count. No summary line under
     them. Each group has its own *Acknowledge* button.
-  - **Project groups** toggle (`workspaces` icon next to Projector / Alert), shown only in
-    the Projector grouping of a project that has groups, last state saved in app settings:
-    sorts the projector groups into foldable sections, one per project group in Manage
-    Groups order (colour, projector count, alert counts, its own *Acknowledge*), then
-    **Ungrouped**.
+  - **Project groups** toggle (`workspaces` icon next to Projector / Alert), shown in a
+    project that has groups, in both groupings (changed 2026-10-06: hiding it on the
+    Alert grouping moved the toolbar on every switch), last state saved in app settings:
+    by projector it sorts the projector groups into foldable sections, one per project
+    group in Manage Groups order (colour, projector count, alert counts, its own
+    *Acknowledge*), then **Ungrouped**; by alert it splits each rule's rows into the
+    same subsections inside the rule group ("Signal lost, 20 projectors" → Stage 12,
+    Balcony 8), so a mass failure shows which part of the venue it hit.
   - Rows grouped by alert name the projector with its IP instead of the rule.
   - Same alert rows as the card panel; acknowledged ones collapsed at the bottom.
   - Empty states: "No active alerts", and "All acknowledged" when nothing is new.
@@ -811,6 +817,8 @@ Build order: engine → Preferences (fields, dropdown, Alerts section) → card 
   sections (`sectionByProjectGroup`). Projector groups go by IP ascending (`ipSortKey`,
   shared with the Monitoring table), also inside sections; rule groups stay
   most-urgent-first. Checked in the app.
+  2026-10-06: the project-groups toggle stays in the Alert grouping too and splits each
+  rule's rows into project-group subsections (`subsectionByProjectGroup`).
 - `[x]` OSC (2026-10-02): `alertsProvider.events` (raised / cleared / acknowledged, with
   name and IP) → `/pgrid/alert/<rule>` and `/pgrid/alert/acknowledged`, gated by the
   *OSC message* setting; `/pgrid/status/critical` and the new-meaning `/pgrid/status/warning`
@@ -818,13 +826,14 @@ Build order: engine → Preferences (fields, dropdown, Alerts section) → card 
   removed; OSC reference updated. Outgoing messages use our own `encodeOscMessage`:
   package:osc writes strings as single-byte UTF-16 code units (`°` and Cyrillic names
   come out broken), and its decoder misreads arguments after a string of 4n bytes.
-- `[~]` Monitoring table (2026-10-02, mockup https://claude.ai/artifact/B6LrAinsr6zWe5B7VzHskr
+- `[x]` Monitoring table (2026-10-02, mockup https://claude.ai/artifact/B6LrAinsr6zWe5B7VzHskr
   v3): Intake / Exhaust tinted by their active alert (hysteresis, switched-off rule);
   Errors cell shows the codes as severity-coloured tags, critical first, up to 4 then +N
   (`MonitoringErrorsCell`), and a hover panel with each error's name and how long it has
   been active, no header; group rows count unacknowledged alerts by severity (auth errors
   only when there are none). Hover behaviour shared with the card badge (`HoverPanel`).
-  Checked in the app; the Errors cell only in tests (the simulator reports no errors).
+  Checked in the app; the Errors cell checked on 2026-10-06 with the simulator's
+  `err` command (an overflow found at first was fixed).
 - `[~]` Desktop notifications and sound (2026-10-02): packages chosen after the spike,
   `flutter_local_notifications` (Windows toast in an unpackaged exe via AUMID + GUID,
   silent mode, click callback; macOS asks permission on first use) and `audioplayers`.
@@ -868,8 +877,16 @@ Build order: engine → Preferences (fields, dropdown, Alerts section) → card 
     `Back after 3 s` at the return, and nothing again when the acknowledge clears it.
     Event log: "Signal lost: Back after 3 s". No sound for the return.
   Unit and provider tests pass; on hardware 50 quick queries took 1.5 s with no TIME_WAIT
-  left on the PC. Still to do: check in the app with the simulator (`sig 3 blip`), the
-  150-projector simulator run, the 1-hour hardware run.
+  left on the PC.
+  Checked 2026-10-06 in the app with the simulator (`sig N blip` on all projectors, F011
+  and H001 errors, simulator stopped mid-run): no false Offline, no duplicate alerts on
+  return. **150-projector simulator run:** TIME_WAIT only on the simulator's side
+  (~13,000 steady state, none on the app's side, as the FIN wait intends), CPU 0.5% idle
+  and up to ~6% during a full poll, 600-700 MB of memory. Debug builds stuttered on zoom
+  and card drags; `flutter run --profile` is smooth, DevTools shows the UI thread idle
+  and only raster time (a few ms, rare ~12 ms frames) with active alerts. Closing the
+  project stops all queries (no connections to the projectors, TIME_WAIT decays).
+  Still to do: the 1-hour hardware run.
 
 ### Code
 - `domain/alert_rule.dart` (plain Dart + JSON, saved in app settings — alerts are a machine
@@ -982,7 +999,7 @@ Taken from `projector_card.dart` / `monitoring_table.dart` so the web and the ap
 | Connection dot | green online / unprotected, amber auth error (+ lock icon), red offline |
 | Power | power icon + label: green **ON**, red **STANDBY**, amber **TURNING ON** / **COOLING** |
 | Shutter | eye icon + label: green **OPEN**, red **CLOSED** |
-| Errors | green check **NO ERRORS**; red error icon + the error text; card/phone shows the orange warning triangle like the app card header |
+| Errors | green check **NO ERRORS**; otherwise code tags in their severity colour, from `errorItems` (decoded by the app); cards and tiles show the alert badge (see *Alerts* below) |
 | Intake temp | amber ≥ 40 °C, red ≥ 45 °C (`_intakeWarmC` / `_intakeHotC`) |
 | Exhaust temp | amber ≥ 55 °C, red ≥ 65 °C (`_exhaustWarmC` / `_exhaustHotC`) |
 | Signal | plain text, like the app's table (`NO SIGNAL` isn't tinted there) |
@@ -1069,14 +1086,61 @@ Controls canvas, so the page reads like the wall.
     viewer taps (or clicks) the tile, and a viewer's one-finger or mouse drag pans the map.
   - Selection and the Control panel are shared with the other views.
 
-**Alerts on request:** a 52 px **rail** at the far right, for both roles:
-- a bell with the active count, coloured by the worst severity;
-- one tick per alert in its severity colour.
-
-Clicking it opens a 360 px **drawer over the content**, not a new column, so the table and
-control panel don't reflow. Each card shows projector, rule, detail, *since*, and
-*Acknowledge* (operator only). The open/closed choice is kept per browser in `localStorage`.
-Phone: bell in the top bar plus an "N active alerts" pill → alerts bottom sheet.
+#### Alerts (decided 2026-10-06, after F5 §4)
+Mockup: https://claude.ai/artifact/N6goiSv7DuMTYT15rophYT (desktop Table and Cards,
+tablet and phone both ways up with the touch layout, Map tiles). The page shows `alertsProvider`'s list as is:
+no rule engine in the browser.
+- **Where the panel opens** follows the Control panel's placement (`device.control`):
+  | Screen | Entry | Panel |
+  |---|---|---|
+  | Desktop, tablet sideways | 52 px **rail** at the far right: bell (colour of the worst unacknowledged alert, count), one tick per alert in its severity colour (acknowledged faint, a returned signal green) | **drawer over the content**, 404 px (the app's panel width, not the 360 px first planned), so table and Control panel don't reflow |
+  | Tablet upright, phone upright | bell in the header + an alert pill above the cards ("4 new alerts, 1 signal back") | bottom sheet |
+  | Phone sideways | same | right-hand sheet |
+- **The panel is the app's Active alerts** (`active_alerts_panel.dart`), for both roles:
+  title with the total, fold / unfold all, *Acknowledge all*; chips All / critical /
+  warning; grouping Projector / Alert and the project-groups toggle; group headers with
+  their counts and *Acknowledge*; the same alert rows (severity chip, rule, value large in
+  the severity colour, duration and start time, *Acknowledge*); acknowledged ones folded
+  at the bottom; the app's empty states. No *Event log* button (the log is app-only).
+  The project-groups toggle stays in both groupings, as in the app (§4).
+- **Touch layout** (tablets and phones, approved 2026-10-06 with mockup v3): not a
+  scaled-down desktop panel. Every target 44 px or more (row *Acknowledge* 52, group 48);
+  severity and grouping as full-width labelled segments (All / Critical / Warning, By
+  projector / By alert), the project-groups toggle labelled "Groups"; rows 68 px with a
+  severity stripe and the value at 17 px bold; *Sound* and *Acknowledge all (N)* in a
+  footer on the bottom edge (a viewer gets *Unlock* there). Phone sideways: the segments
+  share one row with icons and counts only, sheet 470 px wide. Header filters 40 px, bell
+  44 px, alert pill 56 px, larger card badges and tags; error tags open on tap. Tablet
+  sideways: the drawer is 440 px with the touch layout.
+- **Viewer:** everything but the *Acknowledge* buttons; a line "Viewers see alerts;
+  acknowledging needs control" with *Unlock control*.
+- **Elsewhere on the page:**
+  - The header filter *Warnings* becomes **Alerts**: projectors with an active alert, with
+    the counts of the app's status-bar button (filled icon + unacknowledged count,
+    outlined + total once acknowledged, green check for returned signals).
+  - Cards and Map tiles: the app's card badge replaces the orange triangle (`alertBadge`:
+    colour of the worst unacknowledged alert, filled / outlined, a number from two up,
+    green check while only a returned signal waits).
+  - Errors cell and the card's error line: code tags in their severity colour, critical
+    first, up to 4 then +N; hover (tap on touch) for each error's name and duration.
+  - Intake, Exhaust and Signal tinted by their active alert (so hysteresis and a switched-
+    off rule follow the app); group rows and card group headers count unacknowledged
+    alerts.
+- **New-alert cues:** the tab title gets the unacknowledged count ("(5) Main Hall") and the
+  favicon a dot; a toast "Signal lost on PJ-08: No signal on SDI 2" with *Show*; the
+  rail's new tick pulses. **Sound** (approved): a speaker button in the panel header, off
+  by default, per browser; the app's two sounds, one per batch of alerts raised within 2 s,
+  none for a returned signal. A browser plays sound only after a tap on the page, which
+  the button press is.
+- **No browser notifications:** they need HTTPS, which on a show LAN means a self-signed
+  certificate and a warning page on every device, and even then a phone shows nothing
+  while locked (push needs Apple's / Google's servers, i.e. internet). OSC
+  `/pgrid/alert/*` already covers remote alerting.
+- **Kept per browser** (`localStorage`): drawer open / closed, grouping, project groups,
+  sound. Fold state is not kept.
+- **Acknowledge from the page** works as in the app: OSC `/pgrid/alert/acknowledged`, a
+  returned signal clears, and the Event Log line names the source
+  ("Signal lost acknowledged (Web · 192.168.0.77 · operator)").
 
 #### Control (operator)
 - **Target = selection**, like the app's control bar. Offline projectors can't be selected.
@@ -1187,9 +1251,10 @@ may come later as a separate step.
 | GET | `/api/projectors` | all nodes + telemetry, in layout order (JSON) |
 | GET | `/api/projectors/{id}` | one node |
 | GET | `/api/groups` | groups (empty array → the page shows the flat list) |
-| GET | `/api/alerts` | active alerts; returns `[]` until F5 (§4) lands |
+| GET | `/api/alerts` | `{ "now", "alerts": [...] }`: the active alerts (projector id, name, IP, rule, item, severity, value, since, acknowledged, restoredAt) and the server's clock, so a phone with a wrong clock still shows right durations |
+| POST | `/api/alerts/acknowledge` | exactly one of `{"ids": [...]}`, `{"projectorId"}`, `{"rule"}`, `{"all": true}` → `{ "acknowledged": n }`; operators only |
 | GET | `/api/alignment` | alignment state: active, focused, roles, preset, toggles |
-| GET | `/api/events` | SSE stream: node changes, alerts, alignment state, command results |
+| GET | `/api/events` | SSE stream: node changes, `alerts` (the whole `/api/alerts` reply on every change), alignment state, command results |
 | GET | `/api/preview/{id}` | SSE stream of one projector's Remote Preview: `status` and `frame` (base64 JPEG) events |
 | POST | `/api/preview/{id}/retry` | reconnect a watched feed (any role) |
 | POST | `/api/preview/{id}/preshow` | `{ "on": bool }` — operators only, Standby with the feed up |
