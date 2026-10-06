@@ -39,7 +39,7 @@ The `QVX:` prefix queries extended projector variables. The response always come
 
 | Command | Description | Example response | Parsed value |
 |---------|-------------|-----------------|--------------|
-| `QVX:NSGS1` | Input signal name | `NSGS1=1080/60p` | Signal name/format of the main channel. Empty or `ER401` = no signal (also `ER401` while the projector isn't fully on) → the app shows `NO SIGNAL`. Lags the real state by a couple of seconds after power-on / input change. On a dropout while on (PT-RQ35K, 2026-10-05): `ER401` for ~1–2 s while it re-locks, then `NSGS1=NO SIGNAL`; even a ~1 s cable pull gives ~3.5 s without signal. |
+| `QVX:NSGS1` | Input signal name | `NSGS1=1080/60p` | Signal name/format of the main channel. Empty or `ER401` = no signal (also `ER401` while the projector isn't fully on) → the app shows `NO SIGNAL`. Lags the real state by a couple of seconds after power-on / input change. On a dropout while on (PT-RQ35K, 2026-10-05): `ER401` for ~1–2 s while it re-locks, then `NSGS1=NO SIGNAL`; even a ~1 s cable pull gives ~3.5 s without signal. `ER401` is also the answer of a projector that went to standby by itself, so a suspected loss is confirmed with `QVX:POWI1` first (Signal watch). |
 | `QVX:POWI1` | Power status (4-state) | `POWI1=+00003` | `+00001`=standby, `+00002`=turning on, `+00003`=on, `+00004`=cooling. Supersedes `QPW` (which only distinguishes standby/on) for the app's power telemetry — see `projector_node.dart`'s `PowerStatus` enum. |
 | `QVX:RTMS1` | Projector runtime (hours) | `RTMS1=1234` | Integer hours |
 | `QVX:VMOI2` | AC input voltage | `VMOI2=+00120` | Integer volts (leading `+` is safe for `int.parse`) |

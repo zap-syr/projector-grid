@@ -66,6 +66,8 @@ final result = trimmed.startsWith('00') && trimmed.length > 2
 ### 6. Connection lifetime
 Every projector in this app **closes the TCP connection after each command response**. `_sendSingleCommand` handles this — it opens a fresh socket, exchanges one command, then destroys the socket. Never try to reuse a socket across multiple commands.
 
+The projector closes ~1 ms after the reply (PT-RQ35K, 2026-10-05); a second command on the same socket gets nothing. The side that closes first keeps the socket in TIME_WAIT (Windows: 16,384 ephemeral ports, ~120 s). Destroying our socket right after the reply won the race ~5 times in 20 and left those on the PC, so `_sendSingleCommandEx` waits up to 200 ms for the projector's close (`onDone`) before `destroy()`, which leaves none on our side. Keep that wait when changing the send path: with 150 projectors polled every 2 s (Signal watch) the difference is ~0 vs ~3,200 occupied ports.
+
 ---
 
 ## Error Codes
