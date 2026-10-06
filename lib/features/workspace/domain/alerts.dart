@@ -314,20 +314,26 @@ reconcileAlerts({
 /// The colour follows the most severe unacknowledged alert that is still a
 /// problem; [recovered] when the only unacknowledged ones are over (a green
 /// check: "it happened, look"); otherwise the acknowledged ones, and
-/// [acknowledged] draws the icon outlined.
+/// [acknowledged] draws the icon outlined. [count] is only the alerts the
+/// icon stands for (same severity, or the recovered ones), so a warning icon
+/// never counts a recovered critical next to it.
 ({AlertSeverity severity, bool acknowledged, bool recovered, int count})?
 alertBadge(Iterable<ActiveAlert> alerts) {
   if (alerts.isEmpty) return null;
   final unacked = alerts.where((a) => !a.acknowledged);
   final open = unacked.where((a) => !a.recovered);
   final pool = open.isNotEmpty ? open : alerts;
+  final severity = pool.any((a) => a.severity == AlertSeverity.critical)
+      ? AlertSeverity.critical
+      : AlertSeverity.warning;
+  final recovered = open.isEmpty && unacked.isNotEmpty;
   return (
-    severity: pool.any((a) => a.severity == AlertSeverity.critical)
-        ? AlertSeverity.critical
-        : AlertSeverity.warning,
+    severity: severity,
     acknowledged: unacked.isEmpty,
-    recovered: open.isEmpty && unacked.isNotEmpty,
-    count: alerts.length,
+    recovered: recovered,
+    count: recovered
+        ? unacked.length
+        : pool.where((a) => a.severity == severity).length,
   );
 }
 

@@ -54,8 +54,10 @@ class _StatusBarAlertsButtonState extends ConsumerState<StatusBarAlertsButton> {
     final counts = ref.watch(alertCountsProvider);
     final style = theme.textTheme.bodySmall;
 
-    Widget count(AlertSeverity s, int open, int total) {
-      if (total == 0) return const SizedBox.shrink();
+    // Null rather than an empty box: Row.spacing also pads zero-width
+    // children, which shifted the icons depending on which severities exist.
+    Widget? count(AlertSeverity s, int open, int total) {
+      if (total == 0) return null;
       final fresh = open > 0;
       return Row(
         mainAxisSize: MainAxisSize.min,
@@ -155,12 +157,12 @@ class _StatusBarAlertsButtonState extends ConsumerState<StatusBarAlertsButton> {
                         ],
                       )
                     else ...[
-                      count(
+                      ?count(
                         AlertSeverity.critical,
                         counts.critical,
                         counts.criticalTotal,
                       ),
-                      count(
+                      ?count(
                         AlertSeverity.warning,
                         counts.warning,
                         counts.warningTotal,

@@ -397,7 +397,7 @@ void main() {
           severity: AlertSeverity.warning,
           acknowledged: false,
           recovered: false,
-          count: 2,
+          count: 1,
         ),
       );
       expect(
@@ -409,8 +409,25 @@ void main() {
           severity: AlertSeverity.critical,
           acknowledged: true,
           recovered: false,
-          count: 2,
+          count: 1,
         ),
+      );
+    });
+
+    test('counts only what the icon stands for', () {
+      final back = ActiveAlert(
+        nodeId: '1',
+        rule: AlertRule.signalLost,
+        severity: AlertSeverity.critical,
+        value: 'No signal',
+        since: _t0,
+        restoredAt: _t0.add(const Duration(seconds: 3)),
+      );
+      expect(alertBadge([back, a(AlertSeverity.warning)])!.count, 1);
+      expect(alertBadge([back])!.count, 1);
+      expect(
+        alertBadge([a(AlertSeverity.warning), a(AlertSeverity.warning)])!.count,
+        2,
       );
     });
 

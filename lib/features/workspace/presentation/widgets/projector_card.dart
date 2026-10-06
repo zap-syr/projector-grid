@@ -124,28 +124,33 @@ class _ProjectorCardState extends ConsumerState<ProjectorCard> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           color: colorScheme.surfaceContainerHighest,
-          child: Row(
-            children: [
-              Icon(Icons.power_settings_new, size: 14, color: powerColor),
-              const SizedBox(width: 4),
-              Icon(Icons.visibility, size: 14, color: shutterColor),
-              const SizedBox(width: 4),
-              AlertBadge(node: node),
-              const Spacer(),
-              if (node.connectionStatus == ConnectionStatus.unauthorized)
-                const Icon(Icons.lock_outline, size: 12, color: Colors.amber),
-              if (node.connectionStatus == ConnectionStatus.unprotected)
-                const Icon(Icons.lock_open, size: 12, color: Colors.blue),
-              const SizedBox(width: 4),
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: connectionColor,
-                  shape: BoxShape.circle,
+          // Fixed height: the alert badge (icon + padding) is taller than the
+          // other icons, so the bar would grow when the first alert appears.
+          child: SizedBox(
+            height: 16,
+            child: Row(
+              children: [
+                Icon(Icons.power_settings_new, size: 14, color: powerColor),
+                const SizedBox(width: 4),
+                Icon(Icons.visibility, size: 14, color: shutterColor),
+                const SizedBox(width: 4),
+                AlertBadge(node: node),
+                const Spacer(),
+                if (node.connectionStatus == ConnectionStatus.unauthorized)
+                  const Icon(Icons.lock_outline, size: 12, color: Colors.amber),
+                if (node.connectionStatus == ConnectionStatus.unprotected)
+                  const Icon(Icons.lock_open, size: 12, color: Colors.blue),
+                const SizedBox(width: 4),
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: connectionColor,
+                    shape: BoxShape.circle,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
         const Spacer(),
