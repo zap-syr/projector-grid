@@ -295,8 +295,13 @@
       <button
         class="ib"
         aria-pressed={alerts.prefs.sound}
+        class:locked={alerts.soundLocked}
         aria-label="Sound"
-        title={alerts.prefs.sound ? 'Sound on in this browser' : 'Sound off'}
+        title={alerts.soundLocked
+          ? 'Sound blocked by the browser, click to enable'
+          : alerts.prefs.sound
+            ? 'Sound on in this browser'
+            : 'Sound off'}
         onclick={() => alerts.toggleSound()}
       >
         <AlertIcon name={alerts.prefs.sound ? 'volumeOn' : 'volumeOff'} size={18} />
@@ -431,8 +436,14 @@
   {#if touch}
     <!-- Thumb zone: the actions sit on the bottom edge. -->
     <div class="foot">
-      <button class="fbtn" aria-pressed={alerts.prefs.sound} onclick={() => alerts.toggleSound()}>
-        <AlertIcon name={alerts.prefs.sound ? 'volumeOn' : 'volumeOff'} size={22} />Sound
+      <button
+        class="fbtn"
+        class:locked={alerts.soundLocked}
+        aria-pressed={alerts.prefs.sound}
+        onclick={() => alerts.toggleSound()}
+      >
+        <AlertIcon name={alerts.prefs.sound ? 'volumeOn' : 'volumeOff'} size={22} />
+        {alerts.soundLocked ? 'Tap for sound' : 'Sound'}
       </button>
       {#if operator}
         {#if unacked.length > 0}
@@ -543,6 +554,13 @@
   .ib[aria-pressed='true'] {
     background: var(--accent-soft);
     color: var(--accent);
+  }
+
+  /* Sound on but not yet allowed by the browser: needs a tap. */
+  .ib.locked,
+  .fbtn.locked {
+    background: var(--warn-soft);
+    color: var(--warn);
   }
 
   /* ── tools ── */
