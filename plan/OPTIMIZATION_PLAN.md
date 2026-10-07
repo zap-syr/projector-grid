@@ -17,6 +17,9 @@ This document outlines the identified bottlenecks, their root causes, architectu
 | 2.2 Decouple drag coords from global state | ✅ Done |
 | 3.1 Socket concurrency / batch size | ✅ Done |
 | 3.2 Lifecycle-throttled polling | ❌ Reverted (2026-10-02) — see §3.2 |
+| 2.3 Per-node poll writes rebuild the whole canvas | 🔶 Step 1 done (2026-10-07), steps 2–4 deferred — see §2.3 |
+| 3.3 NTCONTROL I/O on a worker isolate | ✅ Done (2026-10-07) |
+| 3.4 Skip near-static telemetry queries every cycle | ⏳ Planned — see §3.4 |
 
 All items reviewed against current source; per-section notes record where the audit's
 claims or code snippets needed correction. Runtime profiling (DevTools §5) not yet run.
@@ -247,6 +250,89 @@ unrelated lints as before).
 
 ---
 
+### 2.3 Per-Node Poll Writes Rebuild the Whole Canvas — 🔶 STEP 1 DONE
+
+**Step 1 implemented (2026-10-07):** `workspace_provider.dart` gained
+`_applyPollResult(id, update)`: it builds the updated node, returns early when it equals
+the current one (Freezed value equality), and otherwise replaces just that index and calls
+`_notifyStateChanged()`. All four write branches of `_pollSingleProjector` (unauthorized,
+probe offline, telemetry, telemetry failed) go through it. `dart analyze` clean;
+`test/providers` + `test/unit` pass. Checked that no `workspaceProvider` listener needs a
+per-poll tick: OSC status sends only on count changes, `alertsProvider` uses `now` only as
+an alert's start time, and project dirty-tracking compares configurable fields.
+**Profiled (2026-10-07, 150 nodes, Profile build):** the poll-time Build spikes are gone and
+real changes/alerts still arrive normally. Card drags still stall during a (manual) poll,
+but that cause is network work on the UI isolate, not rebuilds — see §3.3.
+
+**Steps 2–4 deferred (2026-10-07):** after §3.3, a mass power-on of 150 simulator nodes
+while dragging a card shows only a very slight, barely visible stutter at the warm-up → on
+transition (every node changes at once). Not worth fixing now: dragging during a mass power
+on/off is rare. Revisit with step 2 + step 4 if it becomes noticeable on real hardware.
+
+**Found (2026-10-07):** Profile build, `tool/projector_simulator.dart 150`, 150-node project.
+Each regular poll cycle causes UI jank: DevTools shows frames with a ~29 ms **Build** phase
+(raster is fine), so a card being dragged visibly stalls whenever a poll lands mid-gesture.
+With "Trace widget builds" off the Build phase is still ~15 ms — over a 120 Hz frame budget
+(8.3 ms) and close to the 60 Hz one (16.7 ms), so the stall remains visible.
+
+- **Location:** [`workspaceProvider._pollSingleProjector`](file:///D:/Flutter%20Dev/projector-grid/lib/features/workspace/presentation/providers/workspace_provider.dart#L667), [`ProjectorWorkspace.build`](file:///D:/Flutter%20Dev/projector-grid/lib/features/workspace/presentation/widgets/projector_workspace.dart#L379), [`ProjectorCard`](file:///D:/Flutter%20Dev/projector-grid/lib/features/workspace/presentation/widgets/projector_card.dart), [`MonitoringTable`](file:///D:/Flutter%20Dev/projector-grid/lib/features/workspace/presentation/widgets/monitoring_table.dart#L918)
+- **Root cause:**
+  1. **Every node's poll result emits a new list, even when nothing changed.**
+     `_pollSingleProjector` does `state = state.map(...).toList()` (plus
+     `_notifyStateChanged()`) after every response. Riverpod 3 filters updates with `==`,
+     but `List ==` is identity, so each write notifies. The simulator answers with the same
+     values every cycle, so ~150 writes per cycle are no-ops that still trigger rebuilds. The
+     unauthorized/offline branches have the same pattern.
+  2. **Each notification is expensive.** All bare `ref.watch(workspaceProvider)` widgets
+     rebuild:
+     - `ProjectorWorkspace` recreates all 150 `ProjectorCard`s. Every card gets fresh
+       closures (`onTap`, `onPanUpdate`, …), so none can be short-circuited, and each one
+       rebuilds its full subtree including `MenuAnchor`.
+     - `MonitoringTable` rebuilds too, even while hidden behind the `IndexedStack` on the
+       Controls view (`ref.watch` fires for offstage widgets).
+     - Derived providers (`statusSummaryProvider`, alerts reconciliation, `AlertBadge`) and the
+       OSC `onStateChanged` hook run on every write.
+  3. **Batches finish in bursts.** `_networkBatchSize = 100` makes responses arrive close
+     together. Several writes coalesce into one frame, and that frame pays the full
+     canvas rebuild (~29 ms).
+
+  This is the poll-cycle half of the "Additional gap" noted under §4. §2.2 fixed only the
+  drag half.
+
+- **Solution (by impact/cost):**
+  1. **Skip no-op writes.** Build the updated node first and compare it to the current one
+     (Freezed value equality). If `updated == old`, leave `state` alone and skip
+     `_notifyStateChanged()`. Apply this to all three write branches of
+     `_pollSingleProjector`. In steady state this removes almost every poll-driven rebuild.
+     Cheap, `workspace_provider.dart` only.
+  2. **Coalesce poll writes.** Buffer per-node poll results and apply them in one
+     `state = ...` write per flush (≈100–200 ms timer, or at the end of each batch) instead
+     of one per node. This covers the real-change case where 1. doesn't help (e.g. 150
+     projectors powering on together). Event-log/alert side effects keep running per node.
+     Polls started by `refreshNode` (user-initiated, single node) can stay immediate.
+  3. **Per-card rebuild granularity** (larger refactor, only if jank remains after 1–2 with
+     real telemetry changes):
+     - `ProjectorWorkspace` watches only layout data (id/x/y/groupId) via `.select` with a
+       value-equal type.
+     - Each `ProjectorCard` reads its own node via
+       `workspaceProvider.select((ns) => <node by id>)`, so Freezed equality limits rebuilds
+       to cards whose node actually changed.
+     - Card callbacks stop capturing the `nodes` list and stop being recreated per build
+       (pass the id and resolve through the notifier/ref at call time).
+  4. **Don't rebuild the hidden `MonitoringTable`.** Gate its watch on the active view
+     (e.g. `appSettingsProvider` view flag), so it doesn't rebuild while Controls is shown.
+     No stale data on switching: the view flag is watched, so switching views rebuilds the
+     table, which then watches `workspaceProvider` again and reads the current list in that
+     same frame. The State stays mounted (scroll position, sort, column widths survive), so
+     don't use `Visibility(maintainState: false)`, which would throw that state away.
+
+- **Verification:** Same 150-node simulator setup, Profile build, "Trace widget builds" off.
+  Poll cycles should no longer produce janky frames, and dragging a card across a poll tick
+  should stay smooth. With "Track widget rebuilds" on, a no-change poll cycle should show no
+  `ProjectorCard` / `MonitoringTable` rebuilds.
+
+---
+
 ## 3. Network Architecture & Socket Management (NTCONTROL & Hardware Safety)
 
 ### 3.1 High Concurrency & Socket Explosion During Polling — ✅ DONE
@@ -383,6 +469,89 @@ immediately on return.
 
 ---
 
+### 3.3 NTCONTROL Network Work Saturates the UI Isolate — ✅ DONE
+
+**Verified in the app (2026-10-07):** Profile build, 150 simulator nodes: card drags stay
+smooth during F5 polls, and DevTools shows no poll-time spikes.
+
+**Implemented (2026-10-07):**
+- `lib/core/services/isolate_protocol_service.dart`: `IsolateProtocolService extends
+  PanasonicProtocolService`. It spawns one worker isolate holding a plain
+  `PanasonicProtocolService` and overrides every public method except `scanNetwork`
+  (the Add Projector dialog uses its own in-process instance). Each call becomes one
+  `(id, op, args)` message and one `(id, ok, result)` reply; a worker-side exception
+  is sent back as an error so the caller's future always completes.
+- `protocol_service_provider.dart` returns `IsolateProtocolService` and kills the isolate
+  on dispose. The return type is still `PanasonicProtocolService`, so no codegen change,
+  and tests keep overriding it with `FakeProtocolService`.
+- `test/unit/isolate_protocol_service_test.dart`: round trips through the worker against
+  `FakeProjectorServer` (poll, raw/preserving/quick queries, sendCommand, checkConnection,
+  20 concurrent calls matched to their own replies). Wire behaviour itself stays covered
+  by `protocol_service_test.dart`.
+- Same measurement as below, after the change (150 simulator nodes, JIT):
+
+  | Variant | Cycle | Timer ticks | Max gap | Gaps > 16 ms |
+  |---|---|---|---|---|
+  | in-process | 272–446 ms | 32–38 | 18.9–29.4 ms | 3–8 |
+  | isolate | 272–306 ms | 131–148 | 10.5–12.1 ms | 0 |
+
+  Cycle time is unchanged; the UI isolate now gets ~4x the timer ticks (close to the
+  nominal 1 per 2 ms) and no frame-sized gaps.
+- Still to do: check card drags during F5 in the Profile build.
+
+**Found (2026-10-07):** after §2.3 step 1, DevTools at 150 nodes shows no long frames during
+a poll, but a card dragged during a manual poll (F5) still visibly stalls. The frames aren't
+long, they're late or skipped, so the frame chart doesn't show them.
+
+**Measured:** a scratch script ran one full poll cycle exactly like the app (batches of 100,
+concurrency 2, 13 queries per node) against `tool/projector_simulator.dart 150`, while a
+2 ms `Timer.periodic` sampled the event loop (JIT, `dart run`):
+
+| Run | Cycle | Timer ticks (of ~200 expected) | Max gap |
+|---|---|---|---|
+| 1 | 443 ms | 37 | 32.6 ms |
+| 2 | 382 ms | 35 | 24.8 ms |
+| 3 | 316 ms | 36 | 19.1 ms |
+
+The isolate is busy for nearly the whole cycle. ~1,950 TCP connections per cycle (connect,
+socket callbacks, ascii decode, timeouts, futures) all run on the same isolate as pointer
+events and frame scheduling. Loopback answers instantly, so the work is packed into ~0.4 s.
+Real projectors spread the same work over several seconds: smaller stalls, same total cost.
+The signal watch (`QVX:NSGS1` every 2 s per powered-on projector) adds the same kind of
+load continuously.
+
+- **Location:** [`PanasonicProtocolService`](file:///D:/Flutter%20Dev/projector-grid/lib/core/services/panasonic_protocol_service.dart), [`protocolServiceProvider`](file:///D:/Flutter%20Dev/projector-grid/lib/features/workspace/presentation/providers/protocol_service_provider.dart)
+- **Solution:** run the NTCONTROL transport on a long-lived worker isolate. The UI isolate
+  sends one request per public call and gets one result back (~150 messages per poll cycle
+  instead of ~2,000 socket events). The public API of `PanasonicProtocolService` stays the
+  same, so callers and `FakeProtocolService` in tests are unaffected.
+- **Not chosen:** pacing the burst (lower batch size / global socket cap) only lengthens
+  the cycle and keeps the work on the UI isolate. §2.3 step 2 (coalescing state writes)
+  doesn't address this either: state updates are already cheap after step 1.
+- **Verification:** same 150-node simulator, Profile build: drag a card while pressing F5
+  repeatedly; the drag should stay smooth.
+
+---
+
+### 3.4 Skip Near-Static Telemetry Queries Every Cycle — ⏳ PLANNED
+
+A complement to §3.3, not a fix on its own: fewer connections per cycle means less work
+wherever it runs, and less load on the projector's TCP stack.
+
+- **Location:** [`PanasonicProtocolService.pollProjectorTelemetry`](file:///D:/Flutter%20Dev/projector-grid/lib/core/services/panasonic_protocol_service.dart), [`workspaceProvider._pollSingleProjector`](file:///D:/Flutter%20Dev/projector-grid/lib/features/workspace/presentation/providers/workspace_provider.dart)
+- **Problem:** every cycle sends all 13 queries to every projector. Some answers practically
+  never change: `QSN` (serial number) is fixed for the device, and the runtime counters
+  (`QVX:RTMS1`, `QVX:LRTS3=00`) move by at most an hour between polls.
+- **Solution:** query `QSN` only until the node has a serial number (first successful poll,
+  or after an IP change), and refresh the runtime counters every Nth cycle instead of every
+  cycle. `QID` stays every cycle since it doubles as the reachability/auth probe.
+  Roughly 15–25 % fewer connections per cycle.
+- **Check before implementing:** whether anything relies on the serial number being
+  re-read (e.g. a projector swapped at the same IP), and what the Monitoring table shows
+  for runtime between refreshes.
+
+---
+
 ## 4. Prioritized Implementation Roadmap
 
 | Priority | Task | Status | Complexity | Impact | Target Files |
@@ -393,6 +562,9 @@ immediately on return.
 | **P1 (High)** | Add fine-grained `statusSummaryProvider` to decouple `StatusBar` from node telemetry changes — **also narrow `TopMenuBar`'s bare `workspaceProvider` watch to an `editHistoryStatusProvider`** (same defect, confirmed via rebuild counts) | ✅ Done | Low (45 mins) | Prevents unnecessary `StatusBar` **and menu-bar/toolbar** rebuilds/repaints on every telemetry tick and card-drag tick | [`status_bar.dart`](file:///D:/Flutter%20Dev/projector-grid/lib/features/workspace/presentation/widgets/status_bar.dart), [`top_menu_bar.dart`](file:///D:/Flutter%20Dev/projector-grid/lib/features/workspace/presentation/widgets/top_menu_bar.dart), `status_summary_provider.dart` |
 | **P2 (Medium)** | Decouple interactive card dragging coordinates from global Riverpod state until `onPanEnd` | ✅ Done | Medium (2 hours) | Eliminates global Riverpod rebuild cycles on mouse moves | [`projector_workspace.dart`](file:///D:/Flutter%20Dev/projector-grid/lib/features/workspace/presentation/widgets/projector_workspace.dart), [`workspace_provider.dart`](file:///D:/Flutter%20Dev/projector-grid/lib/features/workspace/presentation/providers/workspace_provider.dart) |
 | **P2 (Medium)** | Separate Marquee Selection rubber-band rectangle from `ProjectorWorkspace` `setState` | ✅ Done | Low (45 mins) | Prevents card widget reconstruction during area selections | [`projector_workspace.dart`](file:///D:/Flutter%20Dev/projector-grid/lib/features/workspace/presentation/widgets/projector_workspace.dart) |
+| **P1 (High)** | Stop per-node poll writes from rebuilding the whole canvas: skip no-op writes, coalesce writes, then (if needed) per-card `.select` and no hidden `MonitoringTable` rebuilds | 🔶 Step 1 done, 2–4 deferred | Low for steps 1–2; Medium–High for 3 | Removes ~29 ms Build frames on every poll cycle at 150 nodes (card drag stalls) | [`workspace_provider.dart`](file:///D:/Flutter%20Dev/projector-grid/lib/features/workspace/presentation/providers/workspace_provider.dart), [`projector_workspace.dart`](file:///D:/Flutter%20Dev/projector-grid/lib/features/workspace/presentation/widgets/projector_workspace.dart), [`projector_card.dart`](file:///D:/Flutter%20Dev/projector-grid/lib/features/workspace/presentation/widgets/projector_card.dart), [`monitoring_table.dart`](file:///D:/Flutter%20Dev/projector-grid/lib/features/workspace/presentation/widgets/monitoring_table.dart) |
+| **P1 (High)** | Move NTCONTROL transport to a worker isolate | ✅ Done | Medium | Card drags stay smooth during poll cycles (UI isolate no longer handles ~2,000 socket events per cycle) | [`panasonic_protocol_service.dart`](file:///D:/Flutter%20Dev/projector-grid/lib/core/services/panasonic_protocol_service.dart), [`protocol_service_provider.dart`](file:///D:/Flutter%20Dev/projector-grid/lib/features/workspace/presentation/providers/protocol_service_provider.dart) |
+| **P3 (Low)** | Skip near-static telemetry queries (`QSN`, runtime counters) on most cycles | ⏳ Planned | Low | ~15–25 % fewer NTCONTROL connections per cycle | [`panasonic_protocol_service.dart`](file:///D:/Flutter%20Dev/projector-grid/lib/core/services/panasonic_protocol_service.dart), [`workspace_provider.dart`](file:///D:/Flutter%20Dev/projector-grid/lib/features/workspace/presentation/providers/workspace_provider.dart) |
 | **P3 (Low)** | Add desktop lifecycle throttling for auto-polling when window is minimized | ✅ Done | Low (30 mins) | ❌ Reverted 2026-10-02: delayed alerts while unfocused (§3.2) | [`workspace_provider.dart`](file:///D:/Flutter%20Dev/projector-grid/lib/features/workspace/presentation/providers/workspace_provider.dart) |
 
 > **Review notes (not in original audit):**
@@ -406,7 +578,7 @@ immediately on return.
 >   this specifically for *dragging* (drags no longer touch `workspaceProvider` mid-gesture), but
 >   the poll-cycle case remains. A full fix needs layout state (id/x/y/groupId) split from
 >   per-node telemetry (`.select` or a family provider) — larger refactor, worth scheduling as
->   its own item.
+>   its own item. **Now scheduled as §2.3** (confirmed by profiling at 150 nodes, 2026-10-07).
 > - **Shared constant:** `_dispatchToNodes` also uses `_networkBatchSize = 100` (1 socket
 >   per node, less severe than polling's 10×), so lowering that constant helps both paths.
 
