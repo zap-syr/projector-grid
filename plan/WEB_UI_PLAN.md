@@ -237,7 +237,7 @@ Then the existing `build_runner → format → analyze → flutter test`. The re
    auto-fit, fit-to-width, density, group-by; status colours; filters + search. Reorder is by dragging headers
    only, like the app — the Columns popover has no drag list. Group sections collapse and
    show the app's worst-status pill.
-4. `[~]` **Alerts** (F5 is done; design decided 2026-10-06, ROADMAP §5 *Alerts*, mockup
+4. `[x]` **Alerts** (F5 is done; design decided 2026-10-06, ROADMAP §5 *Alerts*, mockup
    https://claude.ai/artifact/N6goiSv7DuMTYT15rophYT). Order:
    - `[x]` API (2026-10-06): `GET /api/alerts` (`{now, alerts}`, the app's clock so a
      phone with a wrong clock shows right durations), SSE `alerts`,
@@ -256,8 +256,13 @@ Then the existing `build_runner → format → analyze → flutter test`. The re
    - Checked in Chrome with `dev:mock` at phone 360/390/430 and 740/844/932 wide,
      tablet 768/820/1024 upright and 1024/1180/1366 sideways (touch emulated), desktop
      1024–1920: no clipped button text in the alerts UI; the header stays one row
-     everywhere but upright phones and tablets (two rows by design). Still to do: a
-     check against the real app.
+     everywhere but upright phones and tablets (two rows by design). Checked against the
+     real app with the simulator (2026-10-07, owner): error and signal-loss alerts, no
+     bugs found.
+   - `[x]` After that check (2026-10-07): the bottom alerts sheet keeps a fixed height
+     (88dvh, 70dvh on tablets), so switching the grouping or folding everything no longer
+     shrinks it; the sheets' drag handle is gone (they can't be swiped away, and both
+     have a close button).
 5. `[x]` **Operator auth:** *Allow control* + Operator PIN, operator role on sessions,
    *Unlock control* / *Lock*, phone PIN pad. `dev:mock`: Viewer PIN 1234, Operator PIN
    5678. Notes: `POST /api/unlock` / `/api/lock` return
@@ -374,8 +379,8 @@ Then the existing `build_runner → format → analyze → flutter test`. The re
     done after step 7. One projector, for both roles; Pre-show for operators only.
     Owner's review (2026-10-01): power moved into the header after the IP, no shutter
     status under the image (the frame's colour says it); the browser's tap highlight is
-    off page-wide, since it painted a tapped row over the dialog. Not yet tried against a
-    real projector's image.
+    off page-wide, since it painted a tapped row over the dialog. Checked against a real
+    projector (2026-10-07, owner).
     - **App side:**
       - `GET /api/preview/{id}` as SSE, with `frame` (base64 JPEG) and `status` events;
       - one shared `RemotePreviewController` per projector, via the existing
@@ -409,6 +414,10 @@ Then the existing `build_runner → format → analyze → flutter test`. The re
      against the committed one, then `check`, `lint`, `test`, `build`.
    - `release.yml`: both platforms build `web_ui/` before the Flutter build, since
      `assets/web/` isn't in git and a release would otherwise ship without the page.
+
+12. `[ ]` **Manual status refresh** (owner, 2026-10-07; ROADMAP §5 *Manual status
+    refresh*): an operator-only button that polls the projectors now, over a new `POST`
+    route calling the app's `refreshAll`; progress while it runs, no repeat presses.
 
 ## 11. Open points
 

@@ -1236,6 +1236,17 @@ may come later as a separate step.
   - Pre-show is sent through the app (`POST /api/preview/{id}/preshow`), which logs it as a
     web command; the app's dialog and the pages share one pre-show state.
 
+#### Manual status refresh (operator) `[ ]` (owner, 2026-10-07)
+A button on the page that polls the projectors' status now instead of waiting for the next
+poll cycle, the web counterpart of the app's `F5` (`WorkspaceNotifier.refreshAll`).
+- Operators only (it adds NTCONTROL traffic), so behind the same guard as other `POST`s;
+  404 without *Allow control*.
+- Server route calls `refreshAll` (or `refreshNode` for the selection, to be decided), no
+  polling logic in the server; results arrive over the existing SSE node events.
+- While a refresh runs, the button shows progress and ignores repeat presses, so a phone
+  can't queue a burst.
+- Logged in the Event Log with the web source, like other web commands.
+
 - The app shows a small "Web access on · 3 clients (1 operator)" indicator in the status bar.
 - Live updates via **Server-Sent Events** (simpler than WebSocket, auto-reconnect in browsers).
 
