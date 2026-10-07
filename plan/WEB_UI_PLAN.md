@@ -263,6 +263,12 @@ Then the existing `build_runner → format → analyze → flutter test`. The re
      (88dvh, 70dvh on tablets), so switching the grouping or folding everything no longer
      shrinks it; the sheets' drag handle is gone (they can't be swiped away, and both
      have a close button).
+   - `[x]` Sound on iPhone (2026-10-07): it never played there, since iOS unlocks audio per
+     element and each alert made a new `Audio`. Now one `AudioContext` with the two sounds
+     decoded once, unlocked by the Sound tap or any tap after a reload; the button turns
+     amber ("Tap for sound") while the browser still blocks it. Not done, by the owner's
+     choice: playing through the silent switch (`audioSession`), sound with the screen
+     off or the browser in the background.
 5. `[x]` **Operator auth:** *Allow control* + Operator PIN, operator role on sessions,
    *Unlock control* / *Lock*, phone PIN pad. `dev:mock`: Viewer PIN 1234, Operator PIN
    5678. Notes: `POST /api/unlock` / `/api/lock` return
