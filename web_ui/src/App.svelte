@@ -172,6 +172,7 @@
       label="Alerts"
       placement={device.control === 'right' ? 'right' : 'bottom'}
       wide
+      fixed
       onclose={() => (alerts.sheet = false)}
     >
       <AlertsPanel

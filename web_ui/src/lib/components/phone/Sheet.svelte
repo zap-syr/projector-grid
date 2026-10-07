@@ -1,7 +1,9 @@
 <!--
   A touch-screen sheet over a scrim: from the bottom on phones and portrait
   tablets, from the right on a phone held sideways (too short for a bottom
-  sheet). The scrim, the handle and Esc close it.
+  sheet). The scrim, the content's own close button and Esc close it. No drag
+  handle: the sheet can't be swiped away, so a grabber would promise a gesture
+  that does nothing.
 -->
 <script lang="ts">
   import type { Snippet } from 'svelte';
@@ -12,6 +14,7 @@
     label,
     placement,
     wide = false,
+    fixed = false,
     onclose,
     children,
   }: {
@@ -19,6 +22,11 @@
     placement: 'bottom' | 'right';
     /** The right-hand sheet at 470 px (Alerts, whose rows need the room). */
     wide?: boolean;
+    /**
+     * A bottom sheet at its full height whatever the content, so folding or
+     * regrouping the list doesn't make it jump (Alerts).
+     */
+    fixed?: boolean;
     onclose: () => void;
     children: Snippet;
   } = $props();
@@ -36,10 +44,7 @@
 
 <div class="wrap {placement}">
   <button class="scrim" aria-label="Close {label}" tabindex="-1" onclick={onclose}></button>
-  <div class="sheet" class:wide role="dialog" aria-modal="true" aria-label={label}>
-    {#if placement === 'bottom'}
-      <button class="handle" aria-label="Close {label}" onclick={onclose}><span></span></button>
-    {/if}
+  <div class="sheet" class:wide class:fixed role="dialog" aria-modal="true" aria-label={label}>
     {@render children()}
   </div>
 </div>
@@ -79,15 +84,24 @@
 
   .bottom .sheet {
     max-height: 88dvh;
+    padding-top: 10px;
     border-radius: 16px 16px 0 0;
     padding-bottom: env(safe-area-inset-bottom);
     animation: rise 0.22s ease-out;
+  }
+
+  .bottom .sheet.fixed {
+    height: 88dvh;
   }
 
   /* A tablet keeps the cards above the sheet in view. */
   @media (min-width: 601px) {
     .bottom .sheet {
       max-height: 70dvh;
+    }
+
+    .bottom .sheet.fixed {
+      height: 70dvh;
     }
   }
 
@@ -102,23 +116,6 @@
 
   .right .sheet.wide {
     width: min(470px, 100%);
-  }
-
-  .handle {
-    display: flex;
-    justify-content: center;
-    flex: none;
-    padding: 8px 0 2px;
-    border: 0;
-    background: none;
-    cursor: pointer;
-  }
-
-  .handle span {
-    width: 40px;
-    height: 4px;
-    border-radius: 2px;
-    background: var(--line-strong);
   }
 
   @keyframes rise {
