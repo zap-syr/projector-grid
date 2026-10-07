@@ -120,6 +120,9 @@ undoing a layout change never rolls back power/temperature readings.
   right after the response; there is no persistent per-projector socket. Auth = MD5 hash of a
   challenge token. Commands are plain text (`PON` power on, `OSH:1` shutter close). See the
   `panasonic-ntcontrol` skill for the full wire format and connection-concurrency limits.
+  The app's instance (`protocolServiceProvider`) is an `IsolateProtocolService`
+  (`isolate_protocol_service.dart`) that runs every call on a worker isolate so polling
+  doesn't stall the UI — a new public method on the service must be routed there too.
 - **`osc_service.dart`** — UDP. Inbound: maps OSC addresses to projector actions; custom commands get slugs
   like `/pgrid/custom/dynamic-contrast`. Outbound: broadcasts `/pgrid/status/{online,offline,critical,warning}` to a
   configured send IP/port on every status change (`critical`/`warning` count unacknowledged alerts), and
