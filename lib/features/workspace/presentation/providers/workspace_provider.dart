@@ -211,6 +211,23 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
 
   void _notifyStateChanged() => onStateChanged?.call();
 
+  /// Writes a poll result for node [id] only if it changed the node. Most
+  /// poll cycles read back exactly what's already shown, and a new list
+  /// always notifies (List == is identity), rebuilding the whole canvas per
+  /// node — at 150 projectors that stalled card drags on every cycle.
+  void _applyPollResult(
+    String id,
+    ProjectorNode Function(ProjectorNode n) update,
+  ) {
+    final index = state.indexWhere((n) => n.id == id);
+    if (index == -1) return;
+    final current = state[index];
+    final updated = update(current);
+    if (updated == current) return;
+    state = [...state]..[index] = updated;
+    _notifyStateChanged();
+  }
+
   void _logEvent(LogEvent event) {
     ref.read(eventLogProvider.notifier).log(event);
   }
@@ -558,17 +575,13 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
           ),
         );
       }
-      state = state
-          .map(
-            (n) => n.id == node.id
-                ? n.copyWith(
-                    connectionStatus: ConnectionStatus.unauthorized,
-                    polled: true,
-                  )
-                : n,
-          )
-          .toList();
-      _notifyStateChanged();
+      _applyPollResult(
+        node.id,
+        (n) => n.copyWith(
+          connectionStatus: ConnectionStatus.unauthorized,
+          polled: true,
+        ),
+      );
       return;
     }
 
@@ -584,17 +597,13 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
           ),
         );
       }
-      state = state
-          .map(
-            (n) => n.id == node.id
-                ? n.copyWith(
-                    connectionStatus: ConnectionStatus.offline,
-                    polled: true,
-                  )
-                : n,
-          )
-          .toList();
-      _notifyStateChanged();
+      _applyPollResult(
+        node.id,
+        (n) => n.copyWith(
+          connectionStatus: ConnectionStatus.offline,
+          polled: true,
+        ),
+      );
       return;
     }
 
@@ -664,76 +673,72 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
         );
       }
 
-      state = state.map((n) {
-        if (n.id == node.id) {
-          // Parse Input / Signal — prefer the web status (real in every power
-          // state) over NTCONTROL's reading whenever one was fetched/given.
-          // Otherwise, defer to a just-applied web value per-field only while
-          // NTCONTROL's own reading still matches what it read before that
-          // write (see withinWebSignalGrace / webSignalBaseline above).
-          final ntInput = mapInputCode(telemetry['input'] ?? n.input);
-          final ntSignal = formatSignal(rawSignal, fallback: n.signal);
-          final deferInput =
-              withinWebSignalGrace && ntInput == webSignalBaseline.input;
-          final deferSignal =
-              withinWebSignalGrace && ntSignal == webSignalBaseline.signal;
-          final input = webSignal != null
-              ? _formatWebInput(webSignal, ntInput)
-              : (deferInput ? n.input : ntInput);
-          final signal = webSignal != null
-              ? _formatWebSignal(webSignal)
-              : (deferSignal ? n.signal : ntSignal);
+      _applyPollResult(node.id, (n) {
+        // Parse Input / Signal — prefer the web status (real in every power
+        // state) over NTCONTROL's reading whenever one was fetched/given.
+        // Otherwise, defer to a just-applied web value per-field only while
+        // NTCONTROL's own reading still matches what it read before that
+        // write (see withinWebSignalGrace / webSignalBaseline above).
+        final ntInput = mapInputCode(telemetry['input'] ?? n.input);
+        final ntSignal = formatSignal(rawSignal, fallback: n.signal);
+        final deferInput =
+            withinWebSignalGrace && ntInput == webSignalBaseline.input;
+        final deferSignal =
+            withinWebSignalGrace && ntSignal == webSignalBaseline.signal;
+        final input = webSignal != null
+            ? _formatWebInput(webSignal, ntInput)
+            : (deferInput ? n.input : ntInput);
+        final signal = webSignal != null
+            ? _formatWebSignal(webSignal)
+            : (deferSignal ? n.signal : ntSignal);
 
-          final runtime = formatRuntime(
-            telemetry['runtime'] as String?,
-            fallback: n.runtime,
-          );
-          final lightRuntime = formatLightRuntime(
-            telemetry['lightRuntime'] as String?,
-            fallback: n.lightRuntime,
-          );
-          final intake = formatTemperature(
-            telemetry['intakeTemp'] as String?,
-            fallback: n.intakeTemp,
-          );
-          final exhaust = formatTemperature(
-            telemetry['exhaustTemp'] as String?,
-            fallback: n.exhaustTemp,
-          );
-          final voltage = formatVoltage(
-            telemetry['acVoltage'] as String?,
-            fallback: n.acVoltage,
-          );
-          final errors = formatErrors(
-            telemetry['errors'] as String?,
-            fallback: n.errors,
-          );
+        final runtime = formatRuntime(
+          telemetry['runtime'] as String?,
+          fallback: n.runtime,
+        );
+        final lightRuntime = formatLightRuntime(
+          telemetry['lightRuntime'] as String?,
+          fallback: n.lightRuntime,
+        );
+        final intake = formatTemperature(
+          telemetry['intakeTemp'] as String?,
+          fallback: n.intakeTemp,
+        );
+        final exhaust = formatTemperature(
+          telemetry['exhaustTemp'] as String?,
+          fallback: n.exhaustTemp,
+        );
+        final voltage = formatVoltage(
+          telemetry['acVoltage'] as String?,
+          fallback: n.acVoltage,
+        );
+        final errors = formatErrors(
+          telemetry['errors'] as String?,
+          fallback: n.errors,
+        );
 
-          return n.copyWith(
-            name: telemetry['modelName'] ?? n.name,
-            serialNumber: telemetry['serialNumber'] ?? n.serialNumber,
-            powerStatus: powerStatus,
-            shutterStatus: shutterClosed
-                ? ShutterStatus.closed
-                : ShutterStatus.open,
-            input: input,
-            signal: signal,
-            runtime: runtime,
-            lightRuntime: lightRuntime,
-            intakeTemp: intake,
-            exhaustTemp: exhaust,
-            acVoltage: voltage,
-            errors: errors,
-            testPattern:
-                parseTestPattern(telemetry['testPattern'] as String?) ??
-                n.testPattern,
-            connectionStatus: targetStatus,
-            polled: true,
-          );
-        }
-        return n;
-      }).toList();
-      _notifyStateChanged();
+        return n.copyWith(
+          name: telemetry['modelName'] ?? n.name,
+          serialNumber: telemetry['serialNumber'] ?? n.serialNumber,
+          powerStatus: powerStatus,
+          shutterStatus: shutterClosed
+              ? ShutterStatus.closed
+              : ShutterStatus.open,
+          input: input,
+          signal: signal,
+          runtime: runtime,
+          lightRuntime: lightRuntime,
+          intakeTemp: intake,
+          exhaustTemp: exhaust,
+          acVoltage: voltage,
+          errors: errors,
+          testPattern:
+              parseTestPattern(telemetry['testPattern'] as String?) ??
+              n.testPattern,
+          connectionStatus: targetStatus,
+          polled: true,
+        );
+      });
 
       // Log new hardware errors detected during this poll
       final updatedNode = state.firstWhere(
@@ -766,16 +771,13 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
           ),
         );
       }
-      state = state.map((n) {
-        if (n.id == node.id) {
-          return n.copyWith(
-            connectionStatus: ConnectionStatus.offline,
-            polled: true,
-          );
-        }
-        return n;
-      }).toList();
-      _notifyStateChanged();
+      _applyPollResult(
+        node.id,
+        (n) => n.copyWith(
+          connectionStatus: ConnectionStatus.offline,
+          polled: true,
+        ),
+      );
     }
   }
 
