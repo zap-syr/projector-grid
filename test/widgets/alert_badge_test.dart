@@ -78,12 +78,25 @@ void main() {
     expect(find.byType(Icon), findsNothing);
   });
 
-  testWidgets('critical sets the colour and the count shows from two up', (
+  testWidgets('critical sets the colour; a warning beside it is not counted', (
     tester,
   ) async {
     await pump(tester, [
       _alert(AlertRule.exhaustTemp, AlertSeverity.warning, '58 °C'),
       _alert(AlertRule.offline, AlertSeverity.critical, 'No answer'),
+    ]);
+    expect(find.byIcon(Icons.error), findsOneWidget);
+    // One critical: the count shows from two up.
+    expect(find.byType(Text), findsNothing);
+  });
+
+  testWidgets('the count is the alerts of the icon\'s severity', (
+    tester,
+  ) async {
+    await pump(tester, [
+      _alert(AlertRule.intakeTemp, AlertSeverity.warning, '41 °C'),
+      _alert(AlertRule.offline, AlertSeverity.critical, 'No answer'),
+      _alert(AlertRule.error, AlertSeverity.critical, 'F305', item: 'F305'),
     ]);
     expect(find.byIcon(Icons.error), findsOneWidget);
     expect(find.text('2'), findsOneWidget);
