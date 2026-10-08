@@ -421,9 +421,14 @@ Then the existing `build_runner → format → analyze → flutter test`. The re
    - `release.yml`: both platforms build `web_ui/` before the Flutter build, since
      `assets/web/` isn't in git and a release would otherwise ship without the page.
 
-12. `[ ]` **Manual status refresh** (owner, 2026-10-07; ROADMAP §5 *Manual status
-    refresh*): an operator-only button that polls the projectors now, over a new `POST`
-    route calling the app's `refreshAll`; progress while it runs, no repeat presses.
+12. `[x]` **Manual status refresh** (owner, 2026-10-07; ROADMAP §5 *Manual status
+    refresh*): an operator-only header button beside *Alignment* (at the end of the
+    filter row on upright phones) that polls every projector
+    now through `POST /api/refresh` (the app's `refreshAll`); it spins until the cycle is
+    done and ignores presses meanwhile, then shows a green check for 1.5 s instead of a
+    toast (owner); a locked control still gets a toast. openapi, mock (1.5 s delay), route tests. Checked
+    in Chrome with `dev:mock` on desktop and at 360 / 390 px phone width; not yet against
+    the real app.
 
 ## 11. Open points
 

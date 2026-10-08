@@ -1236,16 +1236,21 @@ may come later as a separate step.
   - Pre-show is sent through the app (`POST /api/preview/{id}/preshow`), which logs it as a
     web command; the app's dialog and the pages share one pre-show state.
 
-#### Manual status refresh (operator) `[ ]` (owner, 2026-10-07)
+#### Manual status refresh (operator) `[x]` (owner, 2026-10-07)
 A button on the page that polls the projectors' status now instead of waiting for the next
 poll cycle, the web counterpart of the app's `F5` (`WorkspaceNotifier.refreshAll`).
+- **All projectors**, not the selection (owner): `refreshNode` has an 8 s cooldown and
+  skips while a cycle runs, so a per-selection refresh would be unpredictable.
 - Operators only (it adds NTCONTROL traffic), so behind the same guard as other `POST`s;
   404 without *Allow control*.
-- Server route calls `refreshAll` (or `refreshNode` for the selection, to be decided), no
-  polling logic in the server; results arrive over the existing SSE node events.
-- While a refresh runs, the button shows progress and ignores repeat presses, so a phone
-  can't queue a burst.
-- Logged in the Event Log with the web source, like other web commands.
+- `POST /api/refresh` calls `refreshAll`, no polling logic in the server; it replies when
+  the cycle is done (`{"polled": true}`). If a cycle is already running it waits for that
+  one instead (`{"polled": false}`). Results arrive over the existing SSE node events.
+- An icon button in the header beside *Alignment* (owner: the header, not the toolbar).
+  On an upright phone the first header row is full, so it closes the filter row instead
+  (owner's suggestion, 2026-10-07); the filters scroll sideways before anything wraps.
+  While the request is out it spins and ignores more presses.
+- Logged in the Event Log with the web source ("Web · IP · operator · Refresh status").
 
 - The app shows a small "Web access on · 3 clients (1 operator)" indicator in the status bar.
 - Live updates via **Server-Sent Events** (simpler than WebSocket, auto-reconnect in browsers).
@@ -1270,6 +1275,7 @@ poll cycle, the web counterpart of the app's `F5` (`WorkspaceNotifier.refreshAll
 | POST | `/api/preview/{id}/retry` | reconnect a watched feed (any role) |
 | POST | `/api/preview/{id}/preshow` | `{ "on": bool }` — operators only, Standby with the feed up |
 | POST | `/api/actions` | `{ "targets": [ids] \| {"group": id} \| "all", "action": … }` — see below |
+| POST | `/api/refresh` | poll every projector now (the app's F5), replies when the cycle is done; operators only |
 | POST | `/api/alignment/{op}` | `enter` (`{"targets": [ids]}` — the page's selection), `exit`, `next`, `prev`, `focus` (`{"id"}`), `neighbours`, `diagonals`, `showAll`, `preset` (`{"preset"}`), `focusedPattern` / `othersPattern` (`{"code"}`); replies with the new state |
 
 Not in the first version (owner, 2026-09-29): `POST /api/cues/{id}/fire` is added together
