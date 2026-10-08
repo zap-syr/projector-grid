@@ -112,7 +112,13 @@
   />
 {/snippet}
 
-<aside class="panel" class:sheet class:embedded aria-label={lensOnly ? 'Lens' : 'Control'}>
+<aside
+  class="panel"
+  class:sheet
+  class:embedded
+  class:touch={touchLens}
+  aria-label={lensOnly ? 'Lens' : 'Control'}
+>
   {#if !embedded}
     <header>
       <!-- The toolbar's bulk selector shows the count. -->
@@ -124,10 +130,10 @@
       <button
         class="x"
         aria-label={sheet ? 'Close' : 'Hide control panel'}
-        title={sheet ? 'Close' : 'Hide'}
+        title={touchLens ? undefined : sheet ? 'Close' : 'Hide'}
         onclick={onclose}
       >
-        <Icon name="close" size={15} />
+        <Icon name="close" size={touchLens ? 24 : 15} />
       </button>
     </header>
   {/if}
@@ -374,6 +380,25 @@
   }
 
   .x:hover {
+    background: var(--hover);
+    color: var(--text);
+  }
+
+  /* Touch: the Alerts panel's header, a 44 px close a finger can hit. */
+  .touch header {
+    padding: 8px 12px 8px 18px;
+  }
+
+  .touch h3 {
+    font-size: 19px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+
+  .touch .x {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
     background: var(--hover);
     color: var(--text);
   }
