@@ -127,6 +127,26 @@ void main() {
       expect(auth.touch(b), isNull);
     });
 
+    test('onChange fires when sessions start, end or change role', () {
+      var changes = 0;
+      auth = WebAuth(clock: () => now, onChange: () => changes++);
+      final session = (login('1234') as LoginOk).session;
+      expect(changes, 1);
+      login('0000');
+      auth.touch(session.token);
+      expect(changes, 1, reason: 'wrong PINs and plain use change nothing');
+      auth.unlock(session, '9876', operatorHash);
+      auth.lock(session);
+      expect(changes, 3);
+      auth.logout(session.token);
+      auth.logout(session.token);
+      expect(changes, 4, reason: 'an unknown token changes nothing');
+      login('1234');
+      auth.revokeAll();
+      auth.revokeAll();
+      expect(changes, 6);
+    });
+
     group('operator', () {
       test('the Operator PIN logs in as operator, only while allowed', () {
         final ok = login('9876') as LoginOk;

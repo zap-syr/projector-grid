@@ -70,6 +70,25 @@ void main() {
     expect(idle, 2);
   });
 
+  test('counts pages per session and reports every change', () async {
+    var changes = 0;
+    final hub = WebEventHub(onChange: () => changes++);
+    final a1 = hub.subscribe('a', const []).listen((_) {});
+    hub.subscribe('a', const []).listen((_) {});
+    hub.subscribe('b', const []).listen((_) {});
+    expect(hub.pagesOf('a'), 2);
+    expect(hub.pagesOf('b'), 1);
+    expect(hub.pagesOf('c'), 0);
+    expect(changes, 3);
+
+    await a1.cancel();
+    expect(hub.pagesOf('a'), 1);
+    hub.close('b');
+    await pumpEventQueue();
+    expect(hub.pagesOf('b'), 0);
+    expect(changes, 5);
+  });
+
   test('heartbeat pings live sessions and drops dead ones', () async {
     var alive = true;
     final touched = <String>[];

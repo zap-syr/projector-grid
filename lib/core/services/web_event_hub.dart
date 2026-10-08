@@ -19,12 +19,16 @@ class WebEventHub {
     this.heartbeat = const Duration(seconds: 15),
     this.onHeartbeat,
     this.onIdle,
+    this.onChange,
   });
 
   final Duration heartbeat;
 
   /// Called when the last client's stream ends.
   final void Function()? onIdle;
+
+  /// Called whenever a page connects or its stream ends.
+  final void Function()? onChange;
 
   /// Called per client on every heartbeat — keeps the session of a page
   /// that only listens from idling out. Returning false (session gone)
@@ -36,6 +40,9 @@ class WebEventHub {
 
   int get clientCount => _clients.length;
 
+  /// Open pages (tabs) of [token]'s session.
+  int pagesOf(String token) => _clients.where((c) => c.token == token).length;
+
   Stream<List<int>> subscribe(String token, Iterable<WebEvent> initial) {
     late final _Client client;
     final controller = StreamController<List<int>>(
@@ -46,6 +53,7 @@ class WebEventHub {
     _timer ??= Timer.periodic(heartbeat, (_) => _beat());
     controller.add(utf8.encode('retry: 3000\n\n'));
     initial.map(encodeSseEvent).forEach(controller.add);
+    onChange?.call();
     return controller.stream;
   }
 
@@ -87,6 +95,7 @@ class WebEventHub {
       _timer = null;
       onIdle?.call();
     }
+    onChange?.call();
   }
 
   void _beat() {

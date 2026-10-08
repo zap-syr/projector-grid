@@ -4,11 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/services/web_auth.dart';
 import '../../domain/alert_rule.dart';
+import '../../domain/web_clients.dart';
 import '../../domain/web_pins.dart';
 import '../providers/alert_delivery_providers.dart';
 import '../providers/app_settings_provider.dart';
 import '../providers/osc_provider.dart';
+import '../providers/web_clients_provider.dart';
 import '../providers/web_server_provider.dart';
 import '../providers/workspace_provider.dart';
 import 'dialog_title_bar.dart';
@@ -29,14 +32,17 @@ enum _Section {
 }
 
 class PreferencesDialog extends ConsumerStatefulWidget {
-  const PreferencesDialog({super.key});
+  const PreferencesDialog({super.key, this.openWebAccess = false});
+
+  /// Opens on the Web Access tab (the status bar's web clients item).
+  final bool openWebAccess;
 
   @override
   ConsumerState<PreferencesDialog> createState() => _PreferencesDialogState();
 }
 
 class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
-  var _section = _Section.general;
+  late var _section = widget.openWebAccess ? _Section.web : _Section.general;
 
   // General
   late final TextEditingController _intervalController;
@@ -734,10 +740,51 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
                 child: const Text('Sign out all'),
               ),
             ),
+            if (running) ..._clientRows(),
           ],
         ),
       ],
     );
+  }
+
+  List<Widget> _clientRows() {
+    final clients = ref.watch(webClientsProvider);
+    if (clients.isEmpty) {
+      return const [
+        SettingsRow(
+          label: 'No clients signed in',
+          leading: SizedBox(width: 16),
+          controlWidth: 40,
+          control: SizedBox.shrink(),
+        ),
+      ];
+    }
+    final notifier = ref.read(webServerProvider.notifier);
+    return [
+      for (final c in clients)
+        SettingsRow(
+          label: c.ip,
+          hint: _clientStatus(c),
+          leading: _ClientDot(online: c.online),
+          controlWidth: 40,
+          control: IconButton(
+            icon: const Icon(Icons.logout, size: 18),
+            tooltip: 'Sign out ${c.ip}',
+            visualDensity: VisualDensity.compact,
+            onPressed: () => notifier.signOut(c.id),
+          ),
+        ),
+    ];
+  }
+
+  static String _clientStatus(WebClient c) {
+    final role = c.role == WebRole.operator ? 'Operator' : 'Viewer';
+    if (c.online) {
+      return c.pages == 1 ? '$role, page open' : '$role, ${c.pages} pages open';
+    }
+    String two(int n) => n.toString().padLeft(2, '0');
+    final seen = '${two(c.lastSeen.hour)}:${two(c.lastSeen.minute)}';
+    return '$role, page closed, last seen $seen';
   }
 
   @override
@@ -871,6 +918,27 @@ class _SeverityIcon extends StatelessWidget {
   Widget build(BuildContext context) => severity == AlertSeverity.critical
       ? Icon(Icons.error, size: size, color: Colors.red)
       : Icon(Icons.warning, size: size, color: Colors.orange);
+}
+
+/// Green while the client has a page open, a ring while only its session
+/// is left.
+class _ClientDot extends StatelessWidget {
+  const _ClientDot({required this.online});
+
+  final bool online;
+
+  @override
+  Widget build(BuildContext context) {
+    if (online) return const StatusDot(color: Colors.green);
+    return Container(
+      width: 8,
+      height: 8,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: Theme.of(context).colorScheme.outline),
+      ),
+    );
+  }
 }
 
 /// The Web Access link: read-only, so a quieter surface than the editable

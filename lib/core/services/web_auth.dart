@@ -79,7 +79,7 @@ class _Attempts {
 /// app restart signs every client out, which a phone recovers from with one
 /// PIN entry.
 class WebAuth {
-  WebAuth({DateTime Function()? clock, this.onLockout})
+  WebAuth({DateTime Function()? clock, this.onLockout, this.onChange})
     : _now = clock ?? DateTime.now;
 
   static const idleTimeout = Duration(hours: 12);
@@ -92,6 +92,10 @@ class WebAuth {
 
   final DateTime Function() _now;
   final void Function(String ip, Duration lockout)? onLockout;
+
+  /// Called when a session starts, ends or changes role; not when it's
+  /// merely seen, which happens on every request and heartbeat.
+  final void Function()? onChange;
   final _sessions = <String, WebSession>{};
   final _attempts = <String, _Attempts>{};
   final _random = Random.secure();
@@ -128,14 +132,21 @@ class WebAuth {
       });
 
   /// *Lock*: back to viewer, same session.
-  void lock(WebSession session) => session.role = WebRole.viewer;
+  void lock(WebSession session) {
+    session.role = WebRole.viewer;
+    onChange?.call();
+  }
 
   /// *Allow control* turned off: every operator drops to viewer. Returns the
   /// sessions that changed.
-  List<WebSession> demoteOperators() => [
-    for (final s in _sessions.values)
-      if (s.role == WebRole.operator) s..role = WebRole.viewer,
-  ];
+  List<WebSession> demoteOperators() {
+    final demoted = [
+      for (final s in _sessions.values)
+        if (s.role == WebRole.operator) s..role = WebRole.viewer,
+    ];
+    if (demoted.isNotEmpty) onChange?.call();
+    return demoted;
+  }
 
   /// Runs [check] unless [ip] is locked out; a null result is a wrong PIN.
   LoginResult _attempt(String ip, WebSession? Function() check) {
@@ -149,6 +160,7 @@ class WebAuth {
     final session = check();
     if (session != null) {
       _attempts.remove(ip);
+      onChange?.call();
       return LoginOk(session);
     }
 
@@ -175,15 +187,22 @@ class WebAuth {
     final now = _now();
     if (now.difference(session.lastSeen) > idleTimeout) {
       _sessions.remove(token);
+      onChange?.call();
       return null;
     }
     session.lastSeen = now;
     return session;
   }
 
-  void logout(String token) => _sessions.remove(token);
+  void logout(String token) {
+    if (_sessions.remove(token) != null) onChange?.call();
+  }
 
-  void revokeAll() => _sessions.clear();
+  void revokeAll() {
+    if (_sessions.isEmpty) return;
+    _sessions.clear();
+    onChange?.call();
+  }
 
   /// Sessions not yet idle past [idleTimeout].
   List<WebSession> get sessions {

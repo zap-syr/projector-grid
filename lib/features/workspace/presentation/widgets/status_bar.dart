@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/poll_status_provider.dart';
 import '../providers/status_summary_provider.dart';
 import 'status_bar_alerts_button.dart';
+import 'status_bar_web_clients.dart';
 
 class StatusBar extends ConsumerWidget {
   const StatusBar({super.key});
@@ -41,6 +42,7 @@ class StatusBar extends ConsumerWidget {
           const SizedBox(width: 14),
           const StatusBarAlertsButton(),
           const Spacer(),
+          const StatusBarWebClients(),
           _RefreshStatusItem(pollStatus: pollStatus),
         ],
       ),

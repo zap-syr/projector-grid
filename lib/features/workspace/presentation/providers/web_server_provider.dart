@@ -16,6 +16,7 @@ import '../../domain/projector_node.dart';
 import '../../domain/web_actions.dart';
 import '../../domain/web_alignment.dart';
 import '../../domain/web_api_dto.dart';
+import '../../domain/web_clients.dart';
 import 'alerts_provider.dart';
 import 'alignment_provider.dart';
 import 'app_settings_provider.dart';
@@ -24,6 +25,7 @@ import 'poll_status_provider.dart';
 import 'pre_show_provider.dart';
 import 'project_provider.dart';
 import 'remote_preview_provider.dart';
+import 'web_clients_provider.dart';
 import 'web_preview_feeds.dart';
 import 'workspace_provider.dart';
 
@@ -40,10 +42,13 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
       LogSeverity.warning,
       'Web · $ip locked out for ${lockout.inSeconds} s after wrong PINs',
     ),
+    onChange: _publishClients,
   );
   late final WebEventHub _hub = WebEventHub(
     onHeartbeat: (token) => _auth.touch(token) != null,
+    onChange: _publishClients,
   );
+  var _disposed = false;
   late final WebPreviewFeeds _previews = WebPreviewFeeds(
     ref,
     onHeartbeat: (token) => _auth.touch(token) != null,
@@ -56,6 +61,7 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
   @override
   bool build() {
     ref.onDispose(() {
+      _disposed = true;
       _hub.closeAll();
       _previews.closeAll();
       _service.stop();
@@ -160,6 +166,27 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
     final hadClients = _auth.sessions.isNotEmpty;
     _endAllSessions();
     if (hadClients) _log(LogSeverity.info, 'Web · all clients signed out');
+  }
+
+  /// Signs one client out from Preferences: its pages go back to the PIN.
+  void signOut(String token) {
+    final session = _auth.sessions.where((s) => s.token == token).firstOrNull;
+    // The list in Preferences can be a moment behind an idle expiry.
+    if (session == null) return;
+    _auth.logout(token);
+    _hub.close(
+      token,
+      last: (name: WebEvents.signedOut, data: const <String, Object?>{}),
+    );
+    _log(LogSeverity.info, 'Web · ${session.ip} signed out from the app');
+  }
+
+  void _publishClients() {
+    // Ending every stream on dispose lands here, when no provider may change.
+    if (_disposed) return;
+    ref
+        .read(webClientsProvider.notifier)
+        .set(webClients(_auth.sessions, _hub.pagesOf));
   }
 
   void _endAllSessions() {
