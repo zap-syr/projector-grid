@@ -939,7 +939,10 @@ Models that don't support a command answer `ERR1`/`ER401` → the rule is shown 
 
 ---
 
-## 5. `[~]` F7 (reframed) — Local Web Monitor & HTTP API
+## 5. `[x]` F7 (reframed) — Local Web Monitor & HTTP API
+
+Done 2026-10-08. Left for later: the QR code (owner decides), multiview preview, cues and
+Identify on the web (with F3 and §3.1), and `/pgrid/query/<projector>` over OSC.
 
 ### Why
 Monitoring from any device on the show network — a phone at FOH, a laptop in the projection
@@ -973,8 +976,8 @@ Two roles, each with its own PIN:
 
 ### UX
 - **Preferences → "Web Access" tab:** *Enable* switch, port (default 8080), **Viewer PIN**,
-  *Allow control* switch → **Operator PIN**, *Sign out all clients*, connected clients list
-  (IP, role, last seen), and the URL (`http://<this-machine-ip>:8080`) with a drop-down of
+  *Allow control* switch → **Operator PIN**, *Sign out all clients*, signed-in clients list
+  (IP, role, open pages or last seen, sign out one; done 2026-10-08), and the URL (`http://<this-machine-ip>:8080`) with a drop-down of
   this machine's IPv4 addresses (show PCs often have several NICs). A **QR code** for the
   selected URL is `[later]` — the owner decides later (it needs a new dependency).
 - **Web page** (served by the app, responsive). Mockup: artifact *Projector Grid Web Monitor*
@@ -1252,7 +1255,13 @@ poll cycle, the web counterpart of the app's `F5` (`WorkspaceNotifier.refreshAll
   While the request is out it spins and ignores more presses.
 - Logged in the Event Log with the web source ("Web · IP · operator · Refresh status").
 
-- The app shows a small "Web access on · 3 clients (1 operator)" indicator in the status bar.
+- `[x]` (2026-10-08) The app's status bar shows *Web: 3 (1 operator)* while Web Access runs
+  (*Web: no clients* in grey). It counts browsers with the page open, not sessions whose page
+  is closed; the tooltip lists them and a click opens Preferences on Web Access.
+- `[x]` (2026-10-08) Preferences → Web Access → Sessions lists every signed-in client: a
+  green dot with the page open or a ring once only the session is left, the IP, role, open
+  pages or when it was last seen, and an icon button that signs that one client out (logged),
+  under the existing *Sign out all*.
 - Live updates via **Server-Sent Events** (simpler than WebSocket, auto-reconnect in browsers).
 
 ### API (same server)
