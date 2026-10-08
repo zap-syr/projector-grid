@@ -20,6 +20,7 @@ import 'alerts_provider.dart';
 import 'alignment_provider.dart';
 import 'app_settings_provider.dart';
 import 'event_log_provider.dart';
+import 'poll_status_provider.dart';
 import 'pre_show_provider.dart';
 import 'project_provider.dart';
 import 'remote_preview_provider.dart';
@@ -261,6 +262,36 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
           source: 'Web · ${session.ip} · ${session.role.name}',
         );
     return {'acknowledged': count};
+  }
+
+  @override
+  Future<Json> refresh(WebSession session) async {
+    // A cycle already running answers this request too: wait for it instead
+    // of being refused, so the page's spinner stops once the data is fresh.
+    if (ref.read(pollStatusProvider).isPolling) {
+      await _pollFinished();
+      return {'polled': false};
+    }
+    _log(
+      LogSeverity.info,
+      'Web · ${session.ip} · ${session.role.name} · Refresh status',
+    );
+    await ref.read(workspaceProvider.notifier).refreshAll();
+    return {'polled': true};
+  }
+
+  Future<void> _pollFinished() {
+    final done = Completer<void>();
+    late final ProviderSubscription<bool> sub;
+    sub = ref.listen(pollStatusProvider.select((s) => s.isPolling), (
+      _,
+      polling,
+    ) {
+      if (polling) return;
+      sub.close();
+      done.complete();
+    });
+    return done.future;
   }
 
   @override

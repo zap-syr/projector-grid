@@ -56,6 +56,14 @@ class _Source implements WebApiSource {
     return {'acknowledged': 2};
   }
 
+  /// How many times [refresh] ran.
+  var refreshes = 0;
+  @override
+  Future<Json> refresh(WebSession session) async {
+    refreshes++;
+    return {'polled': true};
+  }
+
   /// (op, body) pairs [alignmentOp] was handed; the op `bad` counts as invalid.
   final alignmentOps = <(String, Object?)>[];
   @override
@@ -404,6 +412,37 @@ void main() {
         await unlock(token, '9876');
         source.controlAllowed = false;
         expect((await ack(token, {'all': true})).statusCode, 404);
+      });
+    });
+
+    group('/api/refresh', () {
+      Future<Response> refresh(String token) => send(
+        'POST',
+        '/api/refresh',
+        headers: {'authorization': 'Bearer $token'},
+      );
+
+      test('operators only: a viewer gets 403, nothing is polled', () async {
+        final r = await refresh(await loginToken());
+        expect(r.statusCode, 403);
+        expect(source.refreshes, 0);
+      });
+
+      test('an operator polls, with no body', () async {
+        final token = await loginToken();
+        await unlock(token, '9876');
+        final r = await refresh(token);
+        expect(r.statusCode, 200);
+        expect(await jsonOf(r), {'polled': true});
+        expect(source.refreshes, 1);
+      });
+
+      test('no route at all while Allow control is off', () async {
+        final token = await loginToken();
+        await unlock(token, '9876');
+        source.controlAllowed = false;
+        expect((await refresh(token)).statusCode, 404);
+        expect(source.refreshes, 0);
       });
     });
 

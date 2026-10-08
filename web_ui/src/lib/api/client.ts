@@ -12,6 +12,7 @@ import type {
   LoginResponse,
   PreShowRequest,
   Projector,
+  RefreshResult,
   Session,
 } from './types';
 
@@ -46,6 +47,7 @@ export const api = {
   unlock: (pin: string) => request<Access>('POST', '/api/unlock', { pin }),
   lock: () => request<Access>('POST', '/api/lock'),
   act: (req: ActionRequest) => request<DispatchResult>('POST', '/api/actions', req),
+  refresh: () => request<RefreshResult>('POST', '/api/refresh'),
   config: () => request<Config>('GET', '/api/config'),
   projectors: () => request<Projector[]>('GET', '/api/projectors'),
   groups: () => request<Group[]>('GET', '/api/groups'),

@@ -32,6 +32,7 @@ export type AlertSeverity = Schemas['AlertSeverity'];
 export type ErrorItem = Schemas['ErrorItem'];
 export type AcknowledgeRequest = Schemas['AcknowledgeRequest'];
 export type AcknowledgeResult = Schemas['AcknowledgeResult'];
+export type RefreshResult = Schemas['RefreshResult'];
 /** Columns with a value per projector: all but Preview's button. */
 export type DataColumn = Exclude<ColumnId, 'preview'>;
 export type AlignmentOp =

@@ -541,6 +541,15 @@ components:
           type: integer
           description: How many were unacknowledged and now are.
 
+    RefreshResult:
+      type: object
+      additionalProperties: false
+      required: [polled]
+      properties:
+        polled:
+          type: boolean
+          description: False when a poll cycle was already running and the request waited for it.
+
     SnapshotEvent:
       type: object
       additionalProperties: false
@@ -1106,6 +1115,36 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Viewer session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: '*Allow control* is off.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/refresh:
+    post:
+      summary: Poll every projector now (operator only)
+      description: |
+        Only exists while *Allow control* is on (404 otherwise). A viewer session gets 403.
+        The app's F5: one poll cycle over every projector, logged in the Event Log with the web
+        source. Replies when the cycle has finished; the new values reach the pages as the usual
+        `projector` events. No body.
+      responses:
+        '200':
+          description: The cycle finished.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshResult'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':

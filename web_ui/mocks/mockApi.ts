@@ -536,6 +536,11 @@ export function mockApi(): Plugin {
               : projectors.filter((p) => p.groupId === (body.targets as { group: string }).group);
         return send(res, 200, applyAction(body.action, targets));
       }
+      case '/api/refresh':
+        if (role !== 'operator') return send(res, 403, { error: 'forbidden' });
+        // About as long as a real cycle over a small project.
+        await new Promise((r) => setTimeout(r, 1500));
+        return send(res, 200, { polled: true });
       case '/api/logout':
         sessions.delete(token(req) ?? '');
         return send(res, 204, undefined, { 'set-cookie': 'pg_session=; Path=/; Max-Age=0' });

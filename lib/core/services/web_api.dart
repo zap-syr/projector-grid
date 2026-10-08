@@ -73,6 +73,11 @@ abstract interface class WebApiSource {
   /// JSON. Null when it doesn't name alerts, else how many were acknowledged.
   Future<Json?> acknowledgeAlerts(Object? body, WebSession session);
 
+  /// `POST /api/refresh` from an operator: polls every projector now, like
+  /// F5 in the app, and completes when the data is fresh. `polled` is false
+  /// when a cycle was already running and this request waited for it.
+  Future<Json> refresh(WebSession session);
+
   /// Alignment mode's state (`GET /api/alignment`).
   Json alignment();
 
@@ -115,6 +120,17 @@ class WebApi {
           ..post('/api/unlock', _authed(_unlock))
           ..post('/api/lock', _authed((_, s) => _lock(s)))
           ..post('/api/actions', _authed(_actions))
+          ..post(
+            '/api/refresh',
+            _authed(
+              (r, s) => _operatorPost(
+                r,
+                s,
+                (_) => source.refresh(s),
+                allowEmpty: true,
+              ),
+            ),
+          )
           ..get(
             '/api/alignment',
             _authed((_, _) => _json(200, source.alignment())),

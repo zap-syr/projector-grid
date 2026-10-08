@@ -33,6 +33,7 @@
     left: '<path d="M15 6l-6 6 6 6"/>',
     right: '<path d="M9 6l6 6-6 6"/>',
     home: '<path d="M4 11l8-7 8 7"/><path d="M6 10v10h12V10"/>',
+    refresh: '<path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v5h-5"/>',
     logout:
       '<path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/><path d="M10 17l-5-5 5-5M5 12h11"/>',
     warn: '<path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17v.01"/>',

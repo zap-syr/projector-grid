@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { api, ApiError } from '../../api/client';
   import { statusSummary } from '../../logic/status';
+  import { control } from '../../state/control.svelte';
   import { alignment } from '../../state/alignment.svelte';
   import { live } from '../../state/live.svelte';
   import { session } from '../../state/session.svelte';
@@ -15,6 +17,28 @@
   let { operator }: { operator: boolean } = $props();
 
   let unlocking = $state(false);
+  /** A refresh request is out: the button spins and ignores more presses. */
+  let refreshing = $state(false);
+  /** Briefly green after a finished poll, in place of a toast. */
+  let refreshed = $state(false);
+  let refreshedTimer: ReturnType<typeof setTimeout> | undefined;
+
+  async function refresh() {
+    clearTimeout(refreshedTimer);
+    refreshed = false;
+    refreshing = true;
+    try {
+      await api.refresh();
+      refreshed = true;
+      refreshedTimer = setTimeout(() => (refreshed = false), 1500);
+    } catch (e) {
+      if (!(e instanceof ApiError)) throw e;
+      // 403/404: control was locked or switched off meanwhile.
+      control.notify({ text: 'Not refreshed, control is locked', ok: false });
+    } finally {
+      refreshing = false;
+    }
+  }
   /** Phones and portrait tablets: short labels, icons for the rest. */
   const compact = $derived(device.cardsOnly);
 
@@ -106,6 +130,19 @@
       onclick={() => (alignment.active ? alignment.exit() : alignment.enter())}
     >
       <Icon name="target" size={16} /><span class="at">Alignment</span>
+    </button>
+    <!-- The app's F5: polls every projector now, not just the selection. On
+         an upright phone it moves to the end of the filter row. -->
+    <button
+      class="refresh"
+      class:spin={refreshing}
+      class:done={refreshed}
+      disabled={refreshing}
+      aria-label={refreshed ? 'Status refreshed' : 'Refresh status'}
+      title={refreshing ? 'Polling projectors…' : 'Refresh status of all projectors'}
+      onclick={refresh}
+    >
+      <Icon name={refreshed ? 'check' : 'refresh'} size={16} />
     </button>
   {/if}
   <span class="live" class:off={live.connection !== 'live'} title={liveText}>
@@ -227,6 +264,69 @@
     width: 36px;
     padding: 0;
     justify-content: center;
+  }
+
+  .refresh {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 36px;
+    height: 34px;
+    border: 1px solid var(--line-strong);
+    border-radius: 9px;
+    background: var(--surface);
+    cursor: pointer;
+    transition:
+      background-color 0.3s,
+      border-color 0.3s,
+      color 0.3s;
+  }
+
+  .refresh:hover:not(:disabled) {
+    background: var(--hover);
+  }
+
+  .refresh:disabled {
+    cursor: progress;
+  }
+
+  .refresh.done,
+  .refresh.done:hover {
+    background: var(--ok-soft);
+    border-color: var(--ok);
+    color: var(--ok);
+  }
+
+  .refresh.spin :global(svg) {
+    animation: spin 0.9s linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .refresh.spin :global(svg) {
+      animation: none;
+      opacity: 0.5;
+    }
+  }
+
+  /* Upright phone: the first row is full, so the button closes the filter
+     row instead, the filters scrolling sideways before it would wrap. */
+  .phone.op .filters {
+    flex: 1 1 calc(100% - 46px);
+    min-width: 0;
+  }
+
+  .phone .refresh {
+    order: 2;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
   }
 
   .compact .proj b {

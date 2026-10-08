@@ -734,6 +734,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Poll every projector now (operator only)
+         * @description Only exists while *Allow control* is on (404 otherwise). A viewer session gets 403.
+         *     The app's F5: one poll cycle over every projector, logged in the Event Log with the web
+         *     source. Replies when the cycle has finished; the new values reach the pages as the usual
+         *     `projector` events. No body.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The cycle finished. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RefreshResult"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                /** @description Viewer session. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description *Allow control* is off. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/events": {
         parameters: {
             query?: never;
@@ -1182,6 +1243,10 @@ export interface components {
         AcknowledgeResult: {
             /** @description How many were unacknowledged and now are. */
             acknowledged: number;
+        };
+        RefreshResult: {
+            /** @description False when a poll cycle was already running and the request waited for it. */
+            polled: boolean;
         };
         SnapshotEvent: {
             projectName: string;
