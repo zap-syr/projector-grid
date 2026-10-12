@@ -37,6 +37,7 @@ const bool runWriteTests = false; // Phase 2 — changes projector state
 const bool probeLimits = true; // binary-search Start/Width/Border ceilings
 const bool probeRgbw = true; // RGBW round-trip + Interlocked behavior
 const bool probeModeOff = true; // which registers answer while EDBI0 = Off
+const bool probeQpd = true; // limits with Quad Pixel Drive on vs off
 
 // Upper bound for the ceiling search — legacy start/border commands only
 // carry 4 digits, so nothing above 9999 is expressible on the wire.
@@ -124,8 +125,10 @@ List<Reg> get allRegs => [
 String f4(int v) => v.toString().padLeft(4, '0');
 String f5(int v) => '${v < 0 ? '-' : '+'}${v.abs().toString().padLeft(5, '0')}';
 
+// `ER\d+` only — a bare `ER` prefix would also match the valid reply
+// `ERWI0=…` (Right width).
 bool isError(String r) =>
-    r == 'Timeout' || r.startsWith('Error') || r.startsWith('ER');
+    r == 'Timeout' || r.startsWith('Error') || RegExp(r'^ER\d+$').hasMatch(r);
 
 /// One command per TCP connection, as the app does. Returns the reply with
 /// the leading `00` stripped (same rule as `_sendSingleCommandEx`), or
@@ -263,14 +266,30 @@ Future<String> overshoot(Reg r, int max) async {
   return 'write ${max + 1} → "$w", read back "$back"';
 }
 
-Future<void> probeEdgeLimits() async {
-  header('Phase 2a — Start / Width ceilings per edge');
+Reg startReg(int i) => Reg('${edges[i]} start', startKeys[i], Fmt.legacyInt4);
+Reg widthReg(int i) => Reg('${edges[i]} width', widthKeys[i], Fmt.vxxInt);
+Reg borderWidthReg(int i) =>
+    Reg('${edges[i]} border width', borderWidthKeys[i], Fmt.legacyInt4);
+
+/// Zeroes every start/width/border width. Opposite edges share the raster
+/// (a first run on an RQ25K showed Upper + Lower zones capped at 2400 in
+/// total), so a zone left over from an earlier step skews the next ceiling.
+Future<void> zeroZones() async {
   for (var i = 0; i < 4; i++) {
-    final start = Reg('${edges[i]} start', startKeys[i], Fmt.legacyInt4);
-    final width = Reg('${edges[i]} width', widthKeys[i], Fmt.vxxInt);
+    await send(borderWidthReg(i).write(0));
+    await send(startReg(i).write(0));
+    await send(widthReg(i).write(0));
+  }
+}
+
+Future<void> probeEdgeLimits() async {
+  header('Phase 2a — Start / Width ceilings per edge (others zeroed)');
+  for (var i = 0; i < 4; i++) {
+    final start = startReg(i);
+    final width = widthReg(i);
     stdout.writeln('\n${edges[i]}:');
 
-    await send(width.write(0));
+    await zeroZones();
     final maxStart = await findCeiling(start);
     note('${edges[i]} start ceiling (width=0): $maxStart');
     if (maxStart != null && maxStart < searchCeiling) {
@@ -298,18 +317,48 @@ Future<void> probeEdgeLimits() async {
     }
   }
 
+  header('Phase 2a\' — opposite edges share the raster?');
+  // Pairs: (Upper, Lower), (Left, Right). Park a 1000-wide zone on one
+  // edge, then measure the opposite edge's width ceiling.
+  for (final (a, b) in [(0, 1), (2, 3)]) {
+    await zeroZones();
+    final wa = await send(widthReg(a).write(1000));
+    final maxB = await findCeiling(widthReg(b));
+    note('${edges[a]} width=1000 ("$wa") → ${edges[b]} width ceiling: $maxB');
+    await send(startReg(a).write(200));
+    final maxB2 = await findCeiling(widthReg(b));
+    note(
+      '${edges[a]} start=200 width=1000 → ${edges[b]} width ceiling: $maxB2',
+    );
+  }
+
   header('Phase 2b — Black border width ceilings');
   for (var i = 0; i < 4; i++) {
-    final bw = Reg(
-      '${edges[i]} border width',
-      borderWidthKeys[i],
-      Fmt.legacyInt4,
-    );
+    final bw = borderWidthReg(i);
+    final enable = Reg('${edges[i]} enable', enableKeys[i], Fmt.legacyBool);
+    await zeroZones();
+
+    // Edge disabled, no blend zone: the first run rejected every write here.
+    final disabled = await send(bw.write(10));
+    // Edge enabled with a blend zone — is the border bound to either?
+    final en = await send(enable.write(1));
+    final enabledNoZone = await send(bw.write(10));
+    await send(widthReg(i).write(200));
     final max = await findCeiling(bw);
-    note('${edges[i]} border width ceiling: $max');
+    note(
+      '${edges[i]} border width=10: disabled → "$disabled", '
+      'enabled ("$en") width=0 → "$enabledNoZone"; '
+      'ceiling with width=200: $max',
+    );
     if (max != null && max < searchCeiling) {
       note('${edges[i]} border width overshoot: ${await overshoot(bw, max)}');
     }
+
+    // Border area adjust answered ER401 on 3 of 4 edges in Phase 1.
+    if (max != null && max > 0) await send(bw.write(max));
+    final area = await send(Reg('', areaKeys[i], Fmt.vxxInt).query);
+    note('${edges[i]} ${areaKeys[i]} with edge enabled + border > 0: "$area"');
+    await send(enable.write(0));
   }
 }
 
@@ -356,6 +405,9 @@ Future<void> probeRgbwRoundTrip() async {
 // ── Phase 2: behavior while Edge Blending is Off ─────────────────────────────
 Future<void> probeWhileOff() async {
   header('Phase 2d — registers while EDBI0 = Off');
+  // Zones zeroed first so a write rejected here can't be the shared-raster
+  // cap instead of the mode.
+  await zeroZones();
   await send(modeReg.write(0));
   final failing = <String>[];
   for (final r in allRegs.where((r) => r != modeReg)) {
@@ -375,9 +427,121 @@ Future<void> probeWhileOff() async {
   );
 }
 
+// ── Phase 2: Quad Pixel Drive on vs off ──────────────────────────────────────
+/// Measures Upper/Left ceilings in both QPD states, and whether toggling QPD
+/// rescales stored values. QPDI1 only answers while geometry mode (GMMI0) is
+/// Off — see plan/QUAD_PIXEL_DRIVE_CORNER_LIMITS.md.
+Future<void> probeQuadPixelDrive() async {
+  header('Phase 2e — Quad Pixel Drive on vs off');
+  const gmReg = Reg('Geometry mode', 'GMMI0', Fmt.vxxInt);
+  const qpdReg = Reg('Quad Pixel Drive', 'QPDI1', Fmt.vxxInt);
+  final gm = await send(gmReg.query);
+  final qpd = await send(qpdReg.query);
+  note('geometry mode "$gm", QPDI1 "$qpd"');
+  final originalGm = intOf(gm, gmReg.key);
+  if (originalGm == null) {
+    note('GMMI0 unreadable — skipping QPD probe');
+    return;
+  }
+
+  // Geometry values the app edits — compared after restoring GMMI0 to show
+  // the Off round trip didn't lose them.
+  const geometryKeys = [
+    'GMFI1', 'GMFI2', 'GMFI3', 'GMFI4', 'GMFI5', 'GMFI6', 'GMFI7', 'GMFI8',
+    'GMFI9', 'GMFIA', 'GMFIB', 'GMFIC', 'GMFID', 'GMFIE', 'GMFIF', //
+    'GMKS0', 'GMKI4', 'GMKI7', 'GMKS8', 'GMKS9',
+  ];
+  Future<List<String>> geometrySnapshot() async => [
+    for (final k in geometryKeys) await send('QVX:$k'),
+  ];
+  final geoBefore = await geometrySnapshot();
+
+  if (originalGm != 0) {
+    // QPDI1 answers ER401 while any geometry mode is active.
+    final w = await send(gmReg.write(0));
+    await Future<void>.delayed(const Duration(seconds: 2));
+    note('GMMI0 → 0: "$w"');
+  }
+  final original = intOf(await send(qpdReg.query), qpdReg.key);
+  if (original == null) {
+    note('QPDI1 unreadable even with geometry Off');
+    await restoreGeometry(gmReg, originalGm, geometrySnapshot, geoBefore);
+    return;
+  }
+  note('QPDI1 with geometry Off: $original');
+  try {
+    for (final state in [original, 1 - original]) {
+      if (state != original) {
+        // Marker values: does the toggle rescale what's stored?
+        await zeroZones();
+        await send(widthReg(0).write(500));
+        await send(widthReg(2).write(800));
+        final w = await send(qpdReg.write(state));
+        // QPD switching re-inits the video path; give it time.
+        await Future<void>.delayed(const Duration(seconds: 3));
+        note(
+          'QPDI1 → $state: "$w", read back "${await send(qpdReg.query)}"; '
+          'Upper width 500 → ${await readInt(widthReg(0))}, '
+          'Left width 800 → ${await readInt(widthReg(2))}',
+        );
+      }
+      await zeroZones();
+      final us = await findCeiling(startReg(0));
+      await zeroZones();
+      final uw = await findCeiling(widthReg(0));
+      await zeroZones();
+      final ls = await findCeiling(startReg(2));
+      await zeroZones();
+      final lw = await findCeiling(widthReg(2));
+      note(
+        'QPD=$state: Upper start ≤ $us, width ≤ $uw; '
+        'Left start ≤ $ls, width ≤ $lw',
+      );
+    }
+  } finally {
+    final w = await send(qpdReg.write(original));
+    await Future<void>.delayed(const Duration(seconds: 3));
+    note(
+      'QPDI1 restored to $original: "$w", '
+      'read back "${await send(qpdReg.query)}"',
+    );
+    // QPD first: Tier A refuses to enter a geometry mode while QPD is off.
+    await restoreGeometry(gmReg, originalGm, geometrySnapshot, geoBefore);
+  }
+}
+
+Future<void> restoreGeometry(
+  Reg gmReg,
+  int originalGm,
+  Future<List<String>> Function() snapshot,
+  List<String> before,
+) async {
+  if (originalGm != 0) {
+    final w = await send(gmReg.write(originalGm));
+    await Future<void>.delayed(const Duration(seconds: 2));
+    note(
+      'GMMI0 restored to $originalGm: "$w", '
+      'read back "${await send(gmReg.query)}"',
+    );
+  }
+  final after = await snapshot();
+  final changed = [
+    for (var i = 0; i < before.length; i++)
+      if (before[i] != after[i]) '"${before[i]}" → "${after[i]}"',
+  ];
+  note(
+    changed.isEmpty
+        ? 'geometry values unchanged (${before.length} registers)'
+        : 'geometry values CHANGED: ${changed.join(', ')}',
+  );
+}
+
 // ── Restore ──────────────────────────────────────────────────────────────────
 Future<void> restore(Map<Reg, String> snap) async {
   header('Restore');
+  // Zones zeroed first: restoring one edge while the opposite one still holds
+  // a probe-sized zone would hit the shared-raster cap (ER402).
+  await zeroZones();
   // Mode last — some registers may only accept writes while blending is on.
   final order = [...snap.keys.where((r) => r != modeReg), modeReg];
   for (final r in order) {
@@ -425,6 +589,7 @@ Future<void> main(List<String> args) async {
         if (probeLimits) await probeEdgeLimits();
         if (probeRgbw) await probeRgbwRoundTrip();
         if (probeModeOff) await probeWhileOff();
+        if (probeQpd) await probeQuadPixelDrive();
       } finally {
         await restore(snap);
       }
