@@ -10,12 +10,14 @@ part of 'protocol_service_provider.dart';
 // ignore_for_file: type=lint, type=warning
 /// The NTCONTROL client shared by the workspace. A provider rather than a
 /// field so tests can override it with a fake that never opens a socket.
+/// The real one runs on a worker isolate so polling doesn't stall the UI.
 
 @ProviderFor(protocolService)
 final protocolServiceProvider = ProtocolServiceProvider._();
 
 /// The NTCONTROL client shared by the workspace. A provider rather than a
 /// field so tests can override it with a fake that never opens a socket.
+/// The real one runs on a worker isolate so polling doesn't stall the UI.
 
 final class ProtocolServiceProvider
     extends
@@ -27,6 +29,7 @@ final class ProtocolServiceProvider
     with $Provider<PanasonicProtocolService> {
   /// The NTCONTROL client shared by the workspace. A provider rather than a
   /// field so tests can override it with a fake that never opens a socket.
+  /// The real one runs on a worker isolate so polling doesn't stall the UI.
   ProtocolServiceProvider._()
     : super(
         from: null,
@@ -61,4 +64,4 @@ final class ProtocolServiceProvider
   }
 }
 
-String _$protocolServiceHash() => r'2b1d738c1787acda1bc788d22dee2ebb1df626d7';
+String _$protocolServiceHash() => r'7b674660ea3293708635e4a3feefe42e40fc957b';

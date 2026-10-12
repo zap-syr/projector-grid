@@ -81,7 +81,7 @@ final class SignalWatchNotifierProvider
 }
 
 String _$signalWatchNotifierHash() =>
-    r'9dd32ac4df185b4838c04e06e9acd93e6fc7a4d3';
+    r'fbabf6b573f6ae9c0b235a0e692e8fc627299e1d';
 
 /// Queries `QVX:NSGS1` on every powered-on projector every [period] while
 /// the Signal lost rule is on, and keeps each projector's latest dropout.
