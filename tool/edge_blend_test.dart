@@ -16,6 +16,10 @@
 //     Interlocked does to R/G/B, and check which registers answer while
 //     Edge Blending is Off (the QPDI1 ER401 trap from
 //     plan/QUAD_PIXEL_DRIVE_CORNER_LIMITS.md).
+//   Phase 2f (probeOpposite): own Start vs the opposite edge's zone, whether
+//     zone-end lines may cross, and whether enabling an edge changes the
+//     shared-raster cap. To run only this phase, set the other probe* flags
+//     to false (2f needs no earlier phase).
 //
 // Phase 2 visibly changes the projected image while it runs. Use a unit that
 // is not in a live show. Every register it touches is restored from the
@@ -38,6 +42,7 @@ const bool probeLimits = true; // binary-search Start/Width/Border ceilings
 const bool probeRgbw = true; // RGBW round-trip + Interlocked behavior
 const bool probeModeOff = true; // which registers answer while EDBI0 = Off
 const bool probeQpd = true; // limits with Quad Pixel Drive on vs off
+const bool probeOpposite = true; // start/width vs the opposite edge, enable
 
 // Upper bound for the ceiling search — legacy start/border commands only
 // carry 4 digits, so nothing above 9999 is expressible on the wire.
@@ -125,10 +130,12 @@ List<Reg> get allRegs => [
 String f4(int v) => v.toString().padLeft(4, '0');
 String f5(int v) => '${v < 0 ? '-' : '+'}${v.abs().toString().padLeft(5, '0')}';
 
-// `ER\d+` only — a bare `ER` prefix would also match the valid reply
-// `ERWI0=…` (Right width).
+// The whole reply (`ERR1`…`ERR5`, `ERRA`, `ER401`, `ER402`) — a bare `ER`
+// prefix would also match the valid reply `ERWI0=…` (Right width).
 bool isError(String r) =>
-    r == 'Timeout' || r.startsWith('Error') || RegExp(r'^ER\d+$').hasMatch(r);
+    r == 'Timeout' ||
+    r.startsWith('Error') ||
+    RegExp(r'^ER(R[0-9A-Z]|\d+)$').hasMatch(r);
 
 /// One command per TCP connection, as the app does. Returns the reply with
 /// the leading `00` stripped (same rule as `_sendSingleCommandEx`), or
@@ -427,6 +434,84 @@ Future<void> probeWhileOff() async {
   );
 }
 
+// ── Phase 2: opposite edges, start and enable ────────────────────────────────
+Reg enableReg(int i) =>
+    Reg('${edges[i]} enable', enableKeys[i], Fmt.legacyBool);
+
+/// What Phase 2a' left open (plan/EDGE_BLENDING_PLAN.md §8 "Not probed"):
+/// does an edge's own Start count against the opposite edge's zone, can the
+/// two zone-end lines cross once Starts are non-zero (Geometry Manager Pro
+/// stops a width line at the opposite one), and does enabling either edge
+/// change any of it. Each finding prints the candidate rules' predictions so
+/// the measured ceiling can be matched to one.
+Future<void> probeOppositeEdges() async {
+  header('Phase 2f — start / width vs the opposite edge, enabled vs not');
+  for (final (a, b) in [(0, 1), (2, 3)]) {
+    final ea = edges[a], eb = edges[b];
+    stdout.writeln('\n$ea / $eb:');
+    await zeroZones();
+    for (final i in [a, b]) {
+      await send(enableReg(i).write(0));
+    }
+    final r = await findCeiling(startReg(a));
+    await send(startReg(a).write(0));
+    note('$ea/$eb raster span: $r');
+    if (r == null) continue;
+
+    // 1. Own start vs the opposite width.
+    await zeroZones();
+    await send(widthReg(a).write(1000));
+    await send(widthReg(b).write(200));
+    final s1 = await findCeiling(startReg(b));
+    note(
+      '$ea width=1000, $eb width=200 → $eb start ceiling: $s1 '
+      '(opposite not counted: ${r - 200}; '
+      'opposite width counted: ${r - 1200})',
+    );
+
+    // 2. Own start vs the opposite zone end (start + width).
+    await zeroZones();
+    await send(startReg(a).write(300));
+    await send(widthReg(a).write(500));
+    final s2 = await findCeiling(startReg(b));
+    note(
+      '$ea start=300 width=500, $eb width=0 → $eb start ceiling: $s2 '
+      '(no rule: $r; opposite width: ${r - 500}; '
+      'opposite zone end: ${r - 800})',
+    );
+
+    // 3. Both starts non-zero: can the zone-end lines cross?
+    await zeroZones();
+    await send(startReg(a).write(300));
+    await send(widthReg(a).write(500));
+    await send(startReg(b).write(300));
+    final w3 = await findCeiling(widthReg(b));
+    note(
+      '$ea start=300 width=500, $eb start=300 → $eb width ceiling: $w3 '
+      '(widths share the raster: ${r - 500}; '
+      'own start + opposite width: ${r - 800}; '
+      'lines can\'t cross: ${r - 300 - 800})',
+    );
+
+    // 4. Does enabling either edge change the shared-raster cap?
+    for (final (enA, enB) in [(false, true), (true, false), (true, true)]) {
+      await zeroZones();
+      await send(enableReg(a).write(enA ? 1 : 0));
+      await send(enableReg(b).write(enB ? 1 : 0));
+      await send(widthReg(a).write(1000));
+      final w4 = await findCeiling(widthReg(b));
+      note(
+        '$ea ${enA ? 'on' : 'off'} width=1000, $eb ${enB ? 'on' : 'off'} '
+        '→ $eb width ceiling: $w4 (both off measured ${r - 1000} in 2a\')',
+      );
+    }
+    await zeroZones();
+    for (final i in [a, b]) {
+      await send(enableReg(i).write(0));
+    }
+  }
+}
+
 // ── Phase 2: Quad Pixel Drive on vs off ──────────────────────────────────────
 /// Measures Upper/Left ceilings in both QPD states, and whether toggling QPD
 /// rescales stored values. QPDI1 only answers while geometry mode (GMMI0) is
@@ -590,6 +675,7 @@ Future<void> main(List<String> args) async {
         if (probeRgbw) await probeRgbwRoundTrip();
         if (probeModeOff) await probeWhileOff();
         if (probeQpd) await probeQuadPixelDrive();
+        if (probeOpposite) await probeOppositeEdges();
       } finally {
         await restore(snap);
       }
