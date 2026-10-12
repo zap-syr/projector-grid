@@ -248,6 +248,42 @@ Any fade time > 0 applies to every `OSH` command, so a shutter "blink" is not in
 | `VXX:OPEI1=+nnnnn` | Operating mode (`+00000` normal, `+00001` eco, `+00021` quiet, `+00101`…`+00103` user 1–3) |
 | `VXX:LOPI2=+nnnnn` | Light output, `+00050` (8 %)…`+01000` (100 %) |
 
+### Edge Blending
+Live-tested on PT-RQ25K and PT-RZ34K (2026-10-12, `tool/edge_blend_test.dart`); full results
+in `plan/EDGE_BLENDING_PLAN.md` §8. Edge keys in the app: `BlendEdge` (`domain/blend_edge.dart`).
+Three reply families:
+
+| Family | Set | Query reply |
+|---|---|---|
+| VXX | `VXX:KEY=+0000N` | `KEY=+0000N` |
+| Legacy short | `VEU:0010` (4 digits, no sign) | bare and **unpadded**: `QEU` → `10`, `QGU` → `1` |
+| RGBW tuple | `VJI:050,010,020,030`, `VXX:EBBS0=…` | `050,010,020,030` (`QJI`/`QJO`, not the sheet's bare `0`), `EBBS0=050,…` |
+
+| Parameter | Set / query | Values |
+|---|---|---|
+| Mode Off / On / User | `VXX:EDBI0` | `0` / `1` / `2` |
+| Edge enable U / Lo / L / R | `VGU` `VGB` `VGL` `VGR`, `Q…` | `0` / `1` |
+| Start U / Lo / L / R | `VEU` `VEB` `VEL` `VER`, `Q…` | 4-digit write |
+| Width U / Lo / L / R | `VXX:EUWI0` `EBWI0` `ELWI0` `ERWI0` | |
+| Markers | `VGM`, `QGM` | `0` / `1` |
+| Auto test pattern | `VXX:EATI1` | `0` / `1` |
+| Black level mode | `VXX:EBMI1` | `0` soft edge + black level, `1` black level only |
+| Non-overlapped / black border level | `VJI` / `VJO`, `QJI` / `QJO` | W,R,G,B 0–255 |
+| Interlocked: non-overlapped, border, overlapped U/Lo/L/R | `VXX:EBII1`, `EBII2`, `EBII3..6` | `0` / `1`; **not enforced** by the projector |
+| Black border width U / Lo / L / R | `VJU` `VJB` `VJL` `VJR`, `Q…` | 4-digit write |
+| Overlapped black level U / Lo / L / R | `VXX:EBBS0..3` | W,R,G,B |
+| Border area adjust / free-shape points / execute | `VXX:EBFI1..4` / `EFPI1..4` / `EFII1..4=+00001` | `EBFI1..3` can answer ER401 (precondition unknown) |
+
+Limits (`R` = raster width for Left/Right, height for Upper/Lower; raster 3840×2400 on Quad
+Pixel Drive models, 1920×1200 on WUXGA, from `edgeBlendRasterFor`, independent of the `QPDI1`
+toggle): Start ≤ R − own width; width ≤ min(R − own start, R − opposite width); black border
+width ≤ R − own width. Out of range → **ER402, value unchanged** (no clamping). Every command
+works while the mode is Off.
+
+**`ER` prefix trap:** `QVX:ERWI0` answers `ERWI0=+00384`, a valid reply that starts with `ER`
+(as does `ERRS2=…`). Error detection must match the whole reply (`^ER(R[0-9A-Z]|\d+)$`, as
+`_isFailureResponse` does), never `startsWith('ER')`.
+
 ---
 
 ## Finding Commands for Unlisted Features

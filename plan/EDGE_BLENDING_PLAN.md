@@ -7,9 +7,9 @@ PT-RZ34K) directly from Projector Grid instead of opening VSS or Geometry Manage
 
 - Command source: `d:\Flutter\support files\Panasonic - Edge Blending - Sheet1.csv`.
 - UI references:
-  - **Mockup** (interactive, Claude Design canvas): <https://claude.ai/artifact/BaMmVBj2LTZQFdsFijHDW6>,
-    artboard *Edge Blending dialog*. The canvas's other artboards (*Alignment …*) belong to
-    Alignment mode, not this plan.
+  - **Mockup** (Claude Design canvas): <https://claude.ai/artifact/BaMmVBj2LTZQFdsFijHDW6>,
+    artboard *Edge Blending dialog*. An early draft for the general look only, not kept up to
+    date: **where it differs from this plan, this plan wins** (decided 2026-10-12).
   - **Geometry Manager Pro** — large canvas with start/width lines drawn over the raster; below
     it, a table Upper/Lower/Left/Right × Enable/Start/Width, plus an "Overlapped Black Level"
     R/G/B block with per-edge "Interlocked" checkboxes; separate "Black Level Adjustment" tab.
@@ -66,26 +66,33 @@ Three syntax families — important for parsing:
 | Black border width U/L/L/R | `VJU/VJB/VJL/VJR:NNNN` | `QJU/…` (same limits as Start) |
 | Overlapped black level U/L/L/R (W,R,G,B) | `VXX:EBBS0..3=W,R,G,B` | `QVX:EBBS0..3` |
 | ↳ Interlocked U/L/L/R | `VXX:EBII3..6` | `QVX:EBII3..6` |
-| Black border area adjust U/L/L/R on/off | `VXX:EBFI1..4` | `QVX:EBFI1..4` |
-| ↳ Free-shape adjustment points (2/3/5/9/17) | `VXX:EFPI1..4` | `QVX:EFPI1..4` |
-| ↳ Execute (no query) | `VXX:EFII1..4=+00001` | — |
+| Black border area adjust U/L/L/R on/off *(later)* | `VXX:EBFI1..4` | `QVX:EBFI1..4` |
+| ↳ Free-shape adjustment points (2/3/5/9/17) *(later)* | `VXX:EFPI1..4` | `QVX:EFPI1..4` |
+| ↳ Execute (no query) *(later)* | `VXX:EFII1..4=+00001` | — |
+
+Black border area adjust is **not in the first iteration** (decided 2026-10-12); the rows stay
+here as the command reference for when it's picked up.
 
 **Interlocked semantics:** ON → the W slider moves R/G/B together (single slider); OFF → four
 independent channels. In the UI this toggles the same card between "1 slider" and "4 sliders".
+The projector doesn't enforce it (§8), so the dialog does:
+- Every write while Interlocked is ON sends `W,W,W,W`.
+- Turning it ON writes the flag, then the tuple with R/G/B set to the current W.
+- Turning it OFF writes only the flag; the four values stay as they are.
+- Loaded with the flag ON but unequal channels (set elsewhere): show W, leave the projector
+  alone until the user changes something.
 
 **Not available over the protocol:** free-shape point coordinates and the user blending curve
 (*User* mode) — they can only be selected/executed, not edited. In the UI: *User* is just a mode
-segment (tooltip: "curve is defined on the projector"); free shape = point-count dropdown +
-Execute button, no point editor.
+segment (tooltip: "curve is defined on the projector").
 
 ---
 
 ## 2. UX / interface
 
-Visual reference for this section: the *Edge Blending dialog* artboard in the
-[mockup](https://claude.ai/artifact/BaMmVBj2LTZQFdsFijHDW6). Where the mockup and this text
-disagree, settle it before stage 3 (§5). Slider ranges in the mockup are illustrative only — the
-app implements the real limits from §8.
+This section is the spec; the mockup is only an early draft of the look (see Context). Slider
+ranges come from the limits in §8. UI text uses commas, colons and parentheses as separators,
+never `·` or `—`.
 
 ### Entry point
 `projector_card.dart` — new `MenuItemButton` **Edge Blending** directly after *Geometry
@@ -107,34 +114,46 @@ callback is wired the same way as `onGeometryCorrection` (`projector_workspace.d
 │                               │  (Lower / Left / Right — same)       │
 └───────────────────────────────┴──────────────────────────────────────┘
 ```
-- Mode `Off` → controls dimmed (like `_buildOffBody` in geometry), but the canvas stays
-  visible so the user still sees the current zones.
+- Mode `Off` → the right-hand controls of **both tabs** are dimmed and disabled (like
+  `_buildOffBody` in geometry), but the canvas stays visible so the user still sees the
+  current zones. A UX choice: the projector itself accepts writes while Off (§8).
+- No legend and no status badges on or around the canvas.
+- **Esc:** clears the canvas edge selection if there is one; otherwise closes the dialog
+  (the default dialog behaviour). Handled by a key handler at the dialog root, so it works
+  wherever focus is in the dialog; a field that handles Esc itself still gets it first.
 - Size: `minWidth 560, maxWidth 960, maxHeight 0.9 × screen` — same as geometry.
 
 ### Edge Blending canvas (the main visual element)
 - Raster rectangle in the model's **real aspect ratio** (16:10 for 3840×2400 / 1920×1200),
   scaled via `FittedBox` + `_renderScale` exactly like `_CornerCorrectionCanvas`.
-- For each enabled edge: the **blend zone** is filled with a gradient (transparent → dark,
-  `ui.Gradient.linear`) from the Start line to Start+Width; Start line in primary color, zone
-  end line in tertiary (equivalent of GMP's red/green lines).
+- For each enabled edge: the **blend zone** between the Start line and Start+Width is filled
+  with a gradient (`ui.Gradient.linear`), dark at the Start line fading to transparent at
+  Start+Width, i.e. dark towards the raster edge. Start line in primary color, zone end line
+  in tertiary (equivalent of GMP's red/green lines). Whether the band between the raster
+  edge and Start is output black on the projector is confirmed in §7 step 4 (markers on);
+  until then it is drawn unfilled.
 - Disabled edge — dashed outline of the zone at its stored values (shows what enabling it will
   do), no fill.
 - **Dragging:** handles at the midpoints of the lines. Dragging the Start line moves the whole
   zone (width preserved); dragging the outer line changes width. Cursors
   `SystemMouseCursors.resizeLeftRight / resizeUpDown`.
 - Clicking a zone/handle selects that edge (highlights its card on the right via a shared
-  `selectedEdge`); **arrow keys** ±1 unit, **Shift+arrows** ±10; hold → auto-repeat (reuse the
-  hold/repeat logic from `_CornerCorrectionCanvasState`).
+  `selectedEdge`); **arrow keys** ±1 unit, **Shift+arrows** ±10; hold → auto-repeat (the
+  hold/repeat logic of `_CornerCorrectionCanvasState`). Arrows change the **last selected
+  part** of the selected edge: Start or Width, whichever handle was grabbed last (Start after
+  a click on the zone). The arrow pointing inward increases. On the Black Level tab they
+  change the selected edge's black border width.
 - Double-click a handle → reset that edge's start/width to 0.
 - Value labels next to the handles while dragging (`TextPainter` in the painter).
 - ↺ "Reset all edges" button in the panel corner (like Corner Correction).
 
 ### Edge Blending controls panel
 - Toggle row: **Markers** (`VGM`) and **Auto test pattern** (`EATI1`) — labeled `Switch`es.
-- 4 **section cards** (reuse the `_sectionCard` style from `color_correction_dialog.dart:519`):
-  edge title + enable `Switch`; inside, two rows *Start* / *Width* = `Slider` +
-  `SleekStepperInput` (the `_labeledSlider` pattern from geometry). When disabled —
-  `IgnorePointer + Opacity 0.38` (same trick as `_sliderRow`, so State isn't recreated).
+- 4 **section cards** (`SectionCard`, `common/section_card.dart`): a small side icon (a
+  rectangle with the edge's side thick, primary when enabled), edge title and enable `Switch`;
+  inside, two rows *Start* / *Width* = `LabeledSliderRow` (`common/labeled_slider_row.dart`),
+  passing null callbacks while the edge is disabled (it keeps the stepper's State). The
+  selected edge's card gets a primary border.
 - VSS-style Upper/Left/Right/Lower "cross" — **not needed**: the canvas itself does that job
   (clicking an edge selects/enables it). Less duplication.
 
@@ -146,14 +165,15 @@ Black border widths are draggable via handles.
 Right, top to bottom:
 1. **Mode**: `SegmentedButton` *Soft edge + Black level* / *Black level only* (`EBMI1`).
 2. **Non-overlapped black level** card: `Interlocked` checkbox; ON → single W slider (0–255);
-   OFF → W/R/G/B sliders with colored channel dots (like the swatches in color cards).
-3. **Overlapped black level** — compact GMP-style table (row = edge, columns R G B +
-   Interlocked checkbox) to keep height down.
-4. **Black border** card: level (W,R,G,B + Interlocked) + 4 widths.
-5. **Black border area adjust** — 4 rows: `Switch` (EBFI) + `DropdownMenu` of points
-   2/3/5/9/17 (EFPI) + **Execute** button (EFII).
+   OFF → W/R/G/B sliders (`LabeledSliderRow`, `SliderLabelLayout.inline`, coloured labels).
+3. **Overlapped black level**: compact GMP-style table, row = edge, columns Interlocked
+   checkbox, W, R, G, B (steppers only, no sliders, to keep height down). Interlocked ON →
+   only W is editable, R/G/B show W dimmed. Rows of disabled edges are dimmed.
+4. **Black border** card: level (W,R,G,B + Interlocked, as in 2) + 4 widths (max from §8).
 
-This tab loads **lazily** on first open (as in Color Correction) — ~30 queries aren't spent
+Interlocked behaviour for all three: §1. Black border area adjust is deferred (§1).
+
+This tab loads **lazily** on first open (as in Color Correction): ~20 queries aren't spent
 if the user never opens it.
 
 ---
@@ -170,39 +190,65 @@ lines — don't repeat that):
 | File | Contents |
 |---|---|
 | `lib/features/workspace/presentation/widgets/edge_blending/edge_blending_dialog.dart` | `EdgeBlendingDialog` — loading, sending, skeleton, TabBar |
-| `…/edge_blending/edge_blend_state.dart` | plain-Dart holders: `EdgeBlendState` (4× `EdgeSettings{enabled,start,width}`, marker, autoPattern, mode), `BlackLevelState` (`RgbwLevel{w,r,g,b,interlocked}`, border widths, area adjust) + enum `BlendEdge {upper,lower,left,right}` carrying command keys (`enableCmd:'GU'`, `startCmd:'EU'`, `widthKey:'EUWI0'`, …) — the whole command table in one place |
+| `…/edge_blending/edge_blend_state.dart` | plain-Dart holders: `EdgeBlendState` (4× `EdgeSettings{enabled,start,width}`, marker, autoPattern, mode), `BlackLevelState` (mode, `RgbwLevel{w,r,g,b,interlocked}` for non-overlapped, border and 4× overlapped, border widths), keyed by `BlendEdge` |
+| `lib/features/workspace/domain/blend_edge.dart` | enum `BlendEdge {upper,lower,left,right}` carrying command keys (`enableCmd:'GU'`, `startCmd:'EU'`, `widthKey:'EUWI0'`, …) — the whole command table in one place — plus `isHorizontal` and `opposite`. In `domain/` because the limits need it |
 | `…/edge_blending/edge_blend_canvas.dart` | `EdgeBlendCanvas` (StatefulWidget: drag, focus, keys) + `_EdgeBlendPainter` |
 | `…/edge_blending/edge_blend_panel.dart` | right-hand panel of the Edge Blending tab |
 | `…/edge_blending/black_level_panel.dart` | right-hand panel of the Black Level tab, `RgbwLevelCard` |
-| `lib/features/workspace/domain/edge_blend_limits.dart` | pure functions, unit-tested: `edgeBlendRasterFor(String model)` → `(h, v)` built on the existing `quadPixelTierFor` (`geometry_values.dart`) — Tier A 3840×2400, Tier B 5120×3200 (unverified), none 1920×1200 — so model detection stays in one place; plus the shared-raster max rules from §8 (Start/Width/Border max per edge from the current state). Read-back after ER402 covers anything not modeled |
+| `lib/features/workspace/domain/edge_blend_limits.dart` | pure functions, unit-tested: `edgeBlendRasterFor(String model)` → `(h, v)` built on the existing `quadPixelTierFor` (`geometry_values.dart`) — Tier A 3840×2400, Tier B 5120×3200 (unverified), none 1920×1200 (also when `QID` fails) — so model detection stays in one place; plus the shared-raster max rules from §8 (Start/Width/Border max per edge from the current state). Read-back after ER402 covers anything not modeled |
+| `lib/features/workspace/domain/edge_blend_values.dart` | pure, unit-tested wire helpers: `formatNt4(int)` (`10` → `0010`), `parseRgbw(String?)` / `formatRgbw(...)` (`WWW,RRR,GGG,BBB`, also after a `KEY=` prefix) |
 
 Modified files:
-- `projector_card.dart` — menu item + `onEdgeBlending`.
-- `projector_workspace.dart` — `showDialog(EdgeBlendingDialog(node: node))`.
-- `panasonic_protocol_service.dart` — extract the ≤8 batching (currently inline in
-  `_loadCorner`, `geometry_correction_dialog.dart:214`) into a public
-  `Future<List<String?>> sendRawCommandsBatched(ip, port, login, password, List<String> cmds, {int maxConcurrent = 8})`;
-  switch geometry over to it.
+- `projector_card.dart` — menu item + `onEdgeBlending` (menu at `:269`, next to
+  `onGeometryCorrection`).
+- `projector_workspace.dart` — `showDialog(EdgeBlendingDialog(node: node))` (`:1038`).
+- `panasonic_protocol_service.dart` — **bug fix first:** `_isFailureResponse` uses
+  `startsWith('ER')`, so the valid reply `ERWI0=+00384` (Right width) becomes a failure /
+  null. Match the whole reply, `^ER(R[0-9A-Z]|\d+)$` (keeps `ERR1..5` / `ERRA` failures),
+  with a unit test.
+- `common/projector_settings_client.dart` — add `queryWithCode(cmd)` /
+  `writeRawWithCode(cmd)` on `sendRawCommandPreservingErrorCodes` (already routed through
+  `IsolateProtocolService`), returning the reply or the `ERxxx` code, null only on transport
+  failure. The dialog needs it to tell ER402 (out of range → read back and sync, no failure
+  notice) from a timeout (→ `notifyCommandFailure`).
 - `.claude/skills/panasonic-ntcontrol/references/command_reference.md` — add the edge
-  blending commands and reply formats (legacy short / RGBW tuple).
+  blending commands and reply formats (legacy short / RGBW tuple), and the `ER` prefix trap.
 
 ### Reuse
-- `DialogTitleBar`, `SleekStepperInput`, `CustomTooltip`, `notifyCommandFailure`
-  (`command_failure_notice.dart`).
-- `_parseValue/_parseInt/_fmtInt` logic from geometry; for legacy replies (`QGU` → `1`)
-  `_parseValue` already works (no `=` → whole reply). Add `_fmt4(int)` (`0716`) and
-  `_fmtRgbw(RgbwLevel)` (`000,000,000,000`).
-- Arrow-key hold/repeat and pointer→canvas scaling from `_CornerCorrectionCanvasState`.
+- `DialogTitleBar`, `DialogSplitLayout` (canvas flex 5 + scrollable controls flex 4),
+  `SectionCard`, `LabeledSliderRow`, `SleekStepperInput`, `CustomTooltip`,
+  `notifyCommandFailure` (`command_failure_notice.dart`).
+- `ProjectorSettingsClient` (`common/projector_settings_client.dart`): `queryAll` (batches of
+  8), `readInt`, `writeInt`, `writeBool`. `parseKeyedValue` / `parseKeyedInt` /
+  `formatNtInt` (`geometry_values.dart`) already handle legacy replies (`QEU` → `10`: no `=`
+  → whole reply).
+- Arrow-key hold/repeat and pointer→canvas scaling from `_CornerCorrectionCanvasState`
+  (private in `geometry_correction_dialog.dart`): move the hold/repeat into a small shared
+  helper both canvases use instead of copying it.
 
 ### Data flow
-1. `initState` → `sendRawCommandsBatched([QVX:EDBI0, QID, QGU…QGR, QEU…QER, QVX:E?WI0×4, QGM, QVX:EATI1])`
-   (~16 commands, 2 batches).
+1. `initState` → `queryAll([QVX:EDBI0, QID, QGU…QGR, QEU…QER, QVX:E?WI0×4, QGM, QVX:EATI1])`
+   (16 commands, 2 batches).
 2. On change: optimistic local `setState` → command sent on `onChangeEnd` / handle release /
    key-up (like Corner — never on every drag frame).
-3. **Read-back after writing** Start/Width (one `Q…` query): the projector clamps values itself
-   (e.g. start+width > max) — the UI syncs to the actual value; this also covers inaccurate
-   per-model limits.
-4. Write failure → `notifyCommandFailure`.
+3. **Writes are serialized** through one queue per dialog: reset-all sends 8 commands, and
+   concurrent Start/Width writes for one edge could hit ER402 in the wrong order. Order for
+   a reset: widths and starts both go to 0, always valid.
+4. **ER402** (out of range): read the value back (one `Q…` query) and sync the UI to it. The
+   UI already clamps to §8, so this only covers what §8 doesn't model.
+5. Transport failure → `notifyCommandFailure`.
+
+### Groundwork for pair mode (§9), built in the first iteration
+The first iteration ships single-projector only, but is shaped so §9 adds a second projector
+without a rewrite:
+- `EdgeBlendingDialog` takes `List<ProjectorNode> nodes` (length 1 for now; asserted ≤ 2),
+  not a single `node`.
+- Per-projector data lives in one `EdgeBlendSide` (node, `ProjectorSettingsClient`, raster,
+  `EdgeBlendState`, `BlackLevelState`, load state, its own write queue); the dialog holds a
+  list of them and an `active` index. Panels render `sides[active]`.
+- The canvas paints a list of sides through a layout (`EdgeBlendLayout`: one raster, or two
+  arranged per §9); the single case is a layout with one entry.
+- Edge selection is `(sideIndex, BlendEdge)`, not just `BlendEdge`.
 
 ---
 
@@ -219,9 +265,9 @@ dependencies**:
 | Hover highlight | `MouseRegion.onHover` + zone hit-test in state | highlight the edge under the pointer (desktop expectation) |
 | Keyboard | `Focus(onKeyEvent)` + `HardwareKeyboard.instance.isShiftPressed` for ×10 step | same as Corner; doesn't clash with global `Shortcuts` (dialog is its own route) |
 | Frequent repaints during drag | local `setState` only inside the canvas State (like Corner); the right panel's steppers listen to a `ValueNotifier<EdgeBlendState>` via `ValueListenableBuilder`, parent `setState` only on pointer-up | avoids rebuilding the whole panel on every pointer-move |
-| Modes / toggles | `SegmentedButton`, `Switch`, `Checkbox`, `DropdownMenu` (M3) | consistent with the rest of the app |
+| Modes / toggles | `SegmentedButton`, `Switch`, `Checkbox` (M3) | consistent with the rest of the app |
 | Tabs | `DefaultTabController` + `TabBar/TabBarView` | same as Color Correction |
-| Section cards | `_sectionCard` style (surfaceContainerHighest + outlineVariant) | visual consistency |
+| Section cards | `SectionCard` (`common/section_card.dart`) | visual consistency |
 | Accessibility | `Semantics(label: 'Upper blend start', value: '716', onIncrease/onDecrease)` on handles | CustomPaint handles are otherwise invisible to screen readers |
 | Animation | `AnimatedOpacity`/`AnimatedSwitcher` (150 ms) for Off↔On and edge enable | soft transitions without distraction |
 
@@ -232,29 +278,41 @@ already fits the panel, zoom isn't needed.
 
 ## 5. Implementation stages
 
-1. **Protocol:** `sendRawCommandsBatched` in the service, migrate `_loadCorner`;
-   `edge_blend_limits.dart`; update `command_reference.md`.
-2. **State/model:** `edge_blend_state.dart` (enum `BlendEdge` with command keys, holders,
-   formatters).
-3. **Dialog skeleton:** title, mode SegmentedButton, TabBar, loading, menu item + opening from
-   the workspace.
+1. `[x]` **Protocol** (2026-10-12): `_isFailureResponse` matches the whole reply
+   (`^ER(R[0-9A-Z]|\d+)$`, so `ERR1..5`/`ERRA` stay failures) + tests in
+   `protocol_service_test.dart`; `queryWithCode` / `writeRawWithCode` in
+   `ProjectorSettingsClient`; `blend_edge.dart`, `edge_blend_limits.dart`,
+   `edge_blend_values.dart` with `test/unit/edge_blend_test.dart`; `command_reference.md`
+   Edge Blending section.
+2. **State/model:** `edge_blend_state.dart` (holders keyed by `BlendEdge`, `EdgeBlendSide`).
+3. **Dialog skeleton:** title, mode SegmentedButton, TabBar, loading, write queue, Esc
+   handling, menu item + opening from the workspace.
 4. **Edge Blending panel** (right-hand controls) — fully functional without the canvas.
-5. **Edge Blending canvas:** painting → drag → keyboard → labels/hover → reset.
-6. **Black Level tab:** lazy load, `RgbwLevelCard` with Interlocked, border widths, area
-   adjust + Execute; black-level canvas mode.
+5. **Edge Blending canvas:** painting → drag → keyboard → labels/hover → reset (shared
+   hold/repeat helper extracted from the Corner canvas).
+6. **Black Level tab:** lazy load, `RgbwLevelCard` with Interlocked, overlapped table, border
+   widths; black-level canvas mode.
 7. `dart format .`, `flutter analyze`, review with the `reviewer` agent.
 
-Later (not in this iteration): apply to group/selection, OSC addresses `/pgrid/blend/...`,
-saving blend presets in the project file.
+**Unit tests** (pure functions only, per CLAUDE.md): `edgeBlendRasterFor` per tier and for an
+empty model; the §8 max rules (each edge, opposite-edge sharing, border vs own width);
+`formatNt4`, `parseRgbw` (bare tuple, `EBBS0=` prefix, garbage → null), `formatRgbw`;
+`_isFailureResponse` no longer failing `ERWI0=+00384` but still failing `ER401` / `ER402`.
+
+Later (not in this iteration): **pair mode, two projectors in one dialog (§9)**, Black border area adjust (EBFI / EFPI / EFII; treat ER401 on
+`EBFI` as "unavailable", see §8), apply to group/selection, OSC addresses `/pgrid/blend/...`,
+saving blend presets in the project file, an Edge Blending entry in the Alignment banner
+(`alignment_banner.dart`, next to Geometry).
 
 ---
 
 ## 6. Critical files
-- `lib/features/workspace/presentation/widgets/geometry_correction_dialog.dart` — reference pattern (loading, batching, canvas, keys)
-- `lib/features/workspace/presentation/widgets/color_correction_dialog.dart` — TabBar, `_sectionCard`, lazy loading
-- `lib/features/workspace/presentation/widgets/projector_card.dart:235` — context menu
-- `lib/features/workspace/presentation/widgets/projector_workspace.dart:940` — dialog opening
-- `lib/core/services/panasonic_protocol_service.dart:266` — `sendRawCommand`
+- `lib/features/workspace/presentation/widgets/geometry_correction_dialog.dart` — reference pattern (loading, canvas, keys)
+- `lib/features/workspace/presentation/widgets/color_correction_dialog.dart` — TabBar, lazy loading
+- `lib/features/workspace/presentation/widgets/common/` — `ProjectorSettingsClient`, `SectionCard`, `LabeledSliderRow`, `DialogSplitLayout`
+- `lib/features/workspace/presentation/widgets/projector_card.dart:269` — context menu
+- `lib/features/workspace/presentation/widgets/projector_workspace.dart:1038` — dialog opening
+- `lib/core/services/panasonic_protocol_service.dart:246` — `_isFailureResponse` (the `ER` prefix bug), `sendRawCommandPreservingErrorCodes`
 
 ---
 
@@ -391,3 +449,92 @@ vs after: unchanged.
   limit = full raster, not −128.
 - The panel recomputes every slider's max from the table above on each change; ER402 →
   read-back and sync.
+
+---
+
+## 9. `[later]` Pair mode: two projectors in one dialog
+
+### Why
+Blending is always set up between neighbours: Left projector's Right edge and Right
+projector's Left edge must get the same width, and the operator wants both projectors' markers
+and zones in view while adjusting. Two dialogs side by side don't fit and drift apart. The
+limit is **two projectors**: that is one overlap, which is what the dialog has room for. A
+wall of 3+ projectors is set up pair by pair.
+
+### Opening
+- Same rule as Remote Preview (`onRemotePreview` in `projector_workspace.dart`): the clicked
+  card is part of a selection → the selection, else just the clicked card.
+- Selection of exactly 2 → pair mode. Selection of 3+ → the menu item stays enabled but
+  opens single mode for the clicked card, with a one-line note in the dialog header:
+  "Pair mode takes 2 projectors, opened PRJ-03 only". Disabling the item would leave no way
+  to open it from a big selection.
+- Menu label in a 2-selection: **Edge Blending (2 projectors)**.
+- Title: `Edge Blending - PRJ-01, PRJ-02`.
+
+### Arrangement
+The two projectors meet along one edge pair, the **facing edges**:
+- Side by side: A.Right ↔ B.Left. Stacked: A.Lower ↔ B.Upper.
+- Initial guess from the cards on the workspace (`ProjectorNode.x/y`): the axis with the
+  bigger centre distance wins; A is the left / upper card.
+- A small control above the canvas fixes a wrong guess: `SegmentedButton` *Side by side /
+  Stacked* + a *Swap* icon button. Not saved anywhere (presets are a later item).
+
+### Canvas
+- Both rasters drawn in one canvas, each in its real aspect ratio, overlapping by the
+  facing width (A's when they differ), so the shared blend zone sits over both. Two 16:10
+  rasters side by side need ~2× the width: the layout fits them into the same canvas area
+  (they get smaller; `FittedBox` scaling as before).
+- Each raster has its projector's name in a corner; the **active** projector's raster and
+  handles are drawn normally, the other one's at reduced opacity.
+- Clicking a zone or handle of the other projector makes it active (the panel switches with
+  it). Dragging works on either projector's handles.
+- Non-facing edges (e.g. A.Left) behave exactly as in single mode.
+
+### Right panel
+- A projector switch at the top of the panel (`SegmentedButton` with the two names) picks
+  the **active** projector; the cards below show its values. Keeps the panel as narrow as
+  today: no second column.
+- **Shared** controls write to both projectors and sit above the switch: mode
+  (Off / On / User), Markers, Test pattern. Mixed state (one On, one Off) shows no segment
+  selected / the switch off; picking a value writes it to both.
+- The facing edge's card shows a **Link** toggle (`link` / `link_off` icon), on by default:
+  - Linked: enable, Width and the overlapped black level of the facing edge are mirrored
+    to the other projector's facing edge (A.Right width 480 → B.Left width 480). Start
+    stays per projector (it compensates each projector's own position).
+  - The max of a linked value is the smaller of the two projectors' §8 maxima.
+  - Turning Link on with different values copies the active projector's values to the
+    other one.
+  - Only possible when both rasters are equal (`edgeBlendRasterFor`). Mixed tiers (e.g.
+    RQ35K + RZ34K) disable it with a tooltip: widths are in each projector's own raster
+    units, and a fixed ratio would be a guess.
+- With Link off and the facing widths different, a warning line under the card:
+  "Widths differ: PRJ-01 480, PRJ-02 400".
+
+### Black Level tab
+- Per projector through the same switch: non-overlapped and border levels and border
+  widths stay individual (each projector's black floor is matched by eye).
+- The facing edge's overlapped level follows the Link toggle above.
+- Loads lazily per projector, the first time that projector is active on this tab.
+
+### Data flow
+- Both projectors load in parallel at open (each its own `queryAll`; the 8-wide batch
+  limit is per projector, so two projectors don't contend).
+- Each projector keeps its own serialized write queue. A linked change enqueues the write
+  on both; the canvas shows it at once on both (optimistic).
+- ER402 on one side of a linked pair → read back that side; if the two now differ, Link
+  stays on but the warning line shows until the next successful linked write.
+- One projector offline: its side shows the error state, the other stays usable; shared
+  and linked writes go only to the reachable one, with `notifyCommandFailure` for the
+  other.
+
+### Esc and keyboard
+Same as single mode (§2); arrows act on the selected `(side, edge)` part. A linked width
+moved by arrows mirrors on key-up together with the write.
+
+### Tests
+- Pure: arrangement guess from two card positions (`domain/edge_blend_pair.dart`), facing
+  edges per arrangement, linked max (min of both), Link availability by raster.
+- Manual: `tool/projector_simulator.dart` doesn't answer the blending commands yet. Adding
+  them (registers + the §8 limits with ER402) lets pair mode be tested on 2 simulated
+  projectors; on hardware check the RQ25K + RZ34K pair (Link disabled, mixed tier) and two
+  equal projectors.

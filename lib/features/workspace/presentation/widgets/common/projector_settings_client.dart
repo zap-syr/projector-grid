@@ -25,6 +25,19 @@ class ProjectorSettingsClient {
     cmd,
   );
 
+  /// Like [query], but an `ERxxx` reply comes back as-is instead of null, so
+  /// a caller can tell "the projector refused this value" (`ER402`) or "not
+  /// available right now" (`ER401`) from "no answer". Null = transport
+  /// failure only.
+  Future<String?> queryWithCode(String cmd) =>
+      service.sendRawCommandPreservingErrorCodes(
+        node.ipAddress,
+        node.port,
+        node.login,
+        node.password,
+        cmd,
+      );
+
   /// Runs [cmds] in batches of [maxConcurrent], results in the same order.
   /// A wide burst stalls some queries on flagships and hits ERR3 outright
   /// on weaker models (see tool/projector_stress_test.dart).
@@ -57,6 +70,14 @@ class ProjectorSettingsClient {
       return false;
     }
     return true;
+  }
+
+  /// Sends [cmd] and returns its reply with any `ERxxx` code kept (see
+  /// [queryWithCode]); reports and returns null only when no reply came back.
+  Future<String?> writeRawWithCode(String cmd) async {
+    final response = await queryWithCode(cmd);
+    if (response == null) onFailure(cmd);
+    return response;
   }
 
   Future<bool> writeInt(String key, int v) =>
