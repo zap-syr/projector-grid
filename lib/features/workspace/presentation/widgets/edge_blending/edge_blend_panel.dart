@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 
 import '../../../domain/blend_edge.dart';
@@ -59,6 +61,7 @@ class EdgeBlendPanel extends StatelessWidget {
           _EdgeCard(
             edge: edge,
             settings: state[edge],
+            span: edgeBlendSpan(raster, edge),
             maxStart: state.maxFor(edge, EdgePart.start, raster),
             maxWidth: state.maxFor(edge, EdgePart.width, raster),
             selected: edge == selectedEdge,
@@ -100,6 +103,7 @@ class _EdgeCard extends StatelessWidget {
   const _EdgeCard({
     required this.edge,
     required this.settings,
+    required this.span,
     required this.maxStart,
     required this.maxWidth,
     required this.selected,
@@ -110,6 +114,9 @@ class _EdgeCard extends StatelessWidget {
 
   final BlendEdge edge;
   final EdgeSettings settings;
+
+  /// The raster length along this edge: every slider's fixed range.
+  final int span;
   final int maxStart;
   final int maxWidth;
   final bool selected;
@@ -139,26 +146,32 @@ class _EdgeCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 4),
-          _row(EdgePart.start, 'Start', maxStart),
-          _row(EdgePart.width, 'Width', maxWidth),
+          _row(context, EdgePart.start, 'Start', maxStart),
+          _row(context, EdgePart.width, 'Width', maxWidth),
         ],
       ),
     );
   }
 
-  Widget _row(EdgePart part, String label, int max) {
-    // A ceiling of 0 (e.g. Start while Width fills the raster) can't be a
-    // slider range; the row is shown disabled at 0 instead.
-    final active = settings.enabled && max > 0;
+  Widget _row(BuildContext context, EdgePart part, String label, int limit) {
+    final enabled = settings.enabled;
+    // The range is the whole raster, not the §8 limit: that limit moves with
+    // the other values (Width's with Start), and a moving range would slide
+    // the thumb while its value stays put. The limit is a stop instead.
     return LabeledSliderRow(
       label: label,
       value: settings.valueOf(part).toDouble(),
       min: 0,
-      max: max > 0 ? max.toDouble() : 1,
+      max: span.toDouble(),
       layout: SliderLabelLayout.inline,
       inlineLabelWidth: 44,
-      onChanged: active ? (v) => onValueChanged(part, v.round()) : null,
-      onChangeEnd: active ? (_) => onValueCommitted(part) : null,
+      // Without an accent the inactive track takes the theme's colour, which
+      // disappears on the card background.
+      color: Theme.of(context).colorScheme.primary,
+      onChanged: enabled
+          ? (v) => onValueChanged(part, min(v.round(), limit))
+          : null,
+      onChangeEnd: enabled ? (_) => onValueCommitted(part) : null,
     );
   }
 }

@@ -129,9 +129,8 @@ callback is wired the same way as `onGeometryCorrection` (`projector_workspace.d
 - For each enabled edge: the **blend zone** between the Start line and Start+Width is filled
   with a gradient (`ui.Gradient.linear`), dark at the Start line fading to transparent at
   Start+Width, i.e. dark towards the raster edge. Start line in primary color, zone end line
-  in tertiary (equivalent of GMP's red/green lines). Whether the band between the raster
-  edge and Start is output black on the projector is confirmed in §7 step 4 (markers on);
-  until then it is drawn unfilled.
+  in tertiary (equivalent of GMP's red/green lines). The band between the raster edge and
+  Start is filled solid dark (decided 2026-10-12).
 - Disabled edge — dashed outline of the zone at its stored values (shows what enabling it will
   do), no fill.
 - **Dragging:** handles at the midpoints of the lines. Dragging the Start line moves the whole
@@ -299,8 +298,28 @@ already fits the panel, zoom isn't needed.
    `LabeledSliderRow` inline with `inlineLabelWidth`), selected card highlighted
    (`SectionCard.highlighted`). Touching a slider selects that edge and part. Canvas and
    Black Level tab are still empty placeholders.
-5. **Edge Blending canvas:** painting → drag → keyboard → labels/hover → reset (shared
-   hold/repeat helper extracted from the Corner canvas).
+5. `[x]` **Edge Blending canvas** (2026-10-12): `edge_blend_canvas.dart`. Built differently
+   from the Corner canvas: one `CustomPaint` + one `GestureDetector` with its own
+   hit-testing (`_RasterBox` maps units ↔ pixels from the layout size), no `FittedBox` /
+   `_renderScale`. Deviations from §2 / §4:
+   - Both handles sit at their line's midpoint; when they overlap (small Width) the Width
+     handle is on top and wins, so the first drag pulls Width out and Start is reachable
+     after (2026-10-12, after a first look: handles spread to 40 % / 60 % read as noise).
+   - The band from the raster edge to Start is solid dark, the gradient runs Start →
+     Start + Width (the gap read as grey on the first look). A click anywhere in that
+     whole band selects the edge.
+   - Clicking a disabled edge's zone only selects it (no enabling from the canvas).
+   - Mode Off: zones drawn, no handles, no drag / keys; Reset all disabled.
+   - Previews rebuild the whole dialog through `EdgeBlendSide` notifications (no separate
+     `ValueNotifier` for the panel): the tree is small and the steppers follow the drag.
+   - Semantics: one label for the canvas; the panel's sliders are the accessible controls.
+   - Dragging a slider logs `Failed to update ui::AXTree` on Windows: every `Slider` keeps
+     an always-shown `OverlayPortal` for its value indicator (Flutter `slider.dart`), the
+     upstream engine bug already tracked in `IMPROVEMENT_PLAN.md` for Geometry / Brightness.
+     Console-only, not fixable from app code.
+   Arrow hold/repeat moved to `common/key_hold_repeater.dart` (`KeyHoldRepeater`), the
+   Corner canvas uses it too. `TabBarView` has `NeverScrollableScrollPhysics` so a handle
+   drag never swipes tabs. Tests: `test/widgets/edge_blend_canvas_test.dart`.
 6. **Black Level tab:** lazy load, `RgbwLevelCard` with Interlocked, overlapped table, border
    widths; black-level canvas mode.
 7. `dart format .`, `flutter analyze`, review with the `reviewer` agent.
@@ -418,6 +437,14 @@ Left↔Right; `R` = `V` for Upper/Lower, `H` for Left/Right):
 All values ≥ 0. Not probed: whether Black border width also counts against the opposite edge,
 or Start(e) against Width(ē) when both are non-zero — the read-back after ER402 covers it.
 
+With a non-zero Start the projector's rule lets the two zone-end lines **cross** (Upper
+start 200 + width 1000 ends 1200 from the top, Lower width 1400 ends 1000 from the top),
+while Geometry Manager Pro stops a width line at the opposite one — so that GMP rule looks
+like its own software limit. **Pending:** `tool/edge_blend_test.dart` Phase 2f (added
+2026-10-12, not run yet) measures own Start vs the opposite zone, crossing lines with both
+Starts non-zero, and the cap with either edge enabled. Decide after it whether the app keeps
+the projector's rule or adopts GMP's.
+
 ### Cross-check with Geometry Correction
 
 `geometry_values.dart` already classifies models by `quadPixelTierFor`, and the live results
@@ -458,8 +485,10 @@ vs after: unchanged.
 ### Implications for §3
 - `edge_blend_limits.dart` derives the raster from `quadPixelTierFor` (no second model table);
   limit = full raster, not −128.
-- The panel recomputes every slider's max from the table above on each change; ER402 →
-  read-back and sync.
+- The panel recomputes every value's limit from the table above on each change; ER402 →
+  read-back and sync. The **slider range stays the full raster span**, the limit is a stop
+  the value can't pass (2026-10-12): a range that followed the limit slid Width's thumb
+  whenever Start moved, with Width's value unchanged.
 
 ---
 

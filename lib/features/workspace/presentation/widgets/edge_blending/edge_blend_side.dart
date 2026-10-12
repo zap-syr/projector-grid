@@ -72,6 +72,15 @@ class EdgeBlendSide extends ChangeNotifier {
 
   void commit(BlendEdge edge, EdgePart part) => _send(_partField(edge, part));
 
+  /// Start and Width to 0. Width goes first, but both only shrink, so
+  /// neither write can be out of range in either order.
+  void resetEdge(BlendEdge edge) {
+    _blend = blend.withEdge(edge, blend[edge].copyWith(start: 0, width: 0));
+    notifyListeners();
+    _send(_partField(edge, EdgePart.width));
+    _send(_partField(edge, EdgePart.start));
+  }
+
   void _set<T>(_Field<T> field, T v) {
     _blend = field.set(blend, v);
     notifyListeners();

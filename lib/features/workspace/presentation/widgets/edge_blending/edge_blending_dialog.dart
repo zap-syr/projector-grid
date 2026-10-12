@@ -8,7 +8,9 @@ import '../../providers/protocol_service_provider.dart';
 import '../command_failure_notice.dart';
 import '../common/dialog_split_layout.dart';
 import '../common/projector_settings_client.dart';
+import '../custom_tooltip.dart';
 import '../dialog_title_bar.dart';
+import 'edge_blend_canvas.dart';
 import 'edge_blend_panel.dart';
 import 'edge_blend_side.dart';
 import 'edge_blend_state.dart';
@@ -139,9 +141,12 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
                   const Divider(height: 1),
                   Expanded(
                     child: TabBarView(
+                      // Horizontal handle drags on the canvas must never
+                      // turn into a tab swipe.
+                      physics: const NeverScrollableScrollPhysics(),
                       children: [
                         DialogSplitLayout(
-                          left: const SizedBox.shrink(),
+                          left: _buildBlendCanvas(side),
                           right: _dimmedWhenOff(_buildBlendPanel(side)),
                         ),
                         const SizedBox.shrink(),
@@ -169,6 +174,47 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
         duration: const Duration(milliseconds: 150),
         child: child,
       ),
+    );
+  }
+
+  Widget _buildBlendCanvas(EdgeBlendSide side) {
+    final selection = _selection;
+    final interactive = side.blend.mode != EdgeBlendMode.off;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Align(
+          alignment: Alignment.topRight,
+          child: CustomTooltip(
+            message: 'Reset all edges',
+            child: IconButton(
+              icon: const Icon(Icons.restart_alt),
+              iconSize: 20,
+              onPressed: interactive
+                  ? () => BlendEdge.values.forEach(side.resetEdge)
+                  : null,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
+            child: EdgeBlendCanvas(
+              state: side.blend,
+              raster: side.raster,
+              interactive: interactive,
+              selection: selection != null && selection.side == _active
+                  ? (edge: selection.edge, part: selection.part)
+                  : null,
+              onSelect: _select,
+              onClearSelection: () => setState(() => _selection = null),
+              onPreview: side.preview,
+              onCommit: side.commit,
+              onResetEdge: side.resetEdge,
+            ),
+          ),
+        ),
+      ],
     );
   }
 

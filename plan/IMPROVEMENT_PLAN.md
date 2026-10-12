@@ -604,7 +604,10 @@ fixed; one pre-existing rendering issue flagged for later, not fixed here.
   is an upstream Flutter/Windows engine bug.** Still occurs in Geometry
   Correction (corner-handle drag + Manual mode) and Brightness Control
   (User 1/2/3 modes) after the code-quality pass below — confirmed by
-  testing, the pass did not resolve it. Researched and traced to a known,
+  testing, the pass did not resolve it. Also seen 2026-10-12 while dragging
+  an Edge Blending slider: every `Slider` keeps an always-shown
+  `OverlayPortal` for its value indicator (Flutter `slider.dart`), so any
+  slider in a frequently rebuilding dialog can hit it. Researched and traced to a known,
   currently-open Flutter engine defect (not fixable from application code):
   Windows' `ui::AXTree` sync breaks when an `OverlayPortal`-backed floating
   subtree (a `Tooltip`, or `DropdownMenu`'s popup via `MenuAnchor`) has its

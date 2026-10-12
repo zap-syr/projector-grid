@@ -11,6 +11,7 @@ import '../../domain/projector_node.dart';
 import '../providers/protocol_service_provider.dart';
 import 'command_failure_notice.dart';
 import 'common/dialog_split_layout.dart';
+import 'common/key_hold_repeater.dart';
 import 'common/labeled_slider_row.dart';
 import 'common/projector_settings_client.dart';
 import 'custom_tooltip.dart';
@@ -1206,15 +1207,13 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
   DateTime? _lastTapTime;
 
   final FocusNode _focusNode = FocusNode();
-  Timer?
-  _keyHoldTimer; // fires after hold threshold to begin continuous movement
-  Timer? _keyTimer; // drives continuous movement once hold threshold is reached
-  LogicalKeyboardKey? _heldKey;
-
-  // Short tap → 1 step only. Hold past this delay → continuous movement.
-  static const _keyHoldDelay = Duration(milliseconds: 400);
-  // Continuous movement rate — intentionally slow for fine control.
-  static const _keyRepeatInterval = Duration(milliseconds: 40);
+  late final _keys = KeyHoldRepeater(
+    onStep: (key) {
+      final (dh, dv) = _keyRawDelta(key);
+      _applyRawStep(dh, dv);
+    },
+    onRelease: _commitSelected,
+  );
 
   static final _arrowKeys = {
     LogicalKeyboardKey.arrowLeft,
@@ -1240,8 +1239,7 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
 
   @override
   void dispose() {
-    _keyHoldTimer?.cancel();
-    _keyTimer?.cancel();
+    _keys.dispose();
     _focusNode.dispose();
     super.dispose();
   }
@@ -1300,47 +1298,23 @@ class _CornerCorrectionCanvasState extends State<_CornerCorrectionCanvas> {
     setState(() {});
   }
 
-  void _startKeyMovement(LogicalKeyboardKey key) {
-    if (_heldKey == key) return;
-    _keyHoldTimer?.cancel();
-    _keyTimer?.cancel();
-    _heldKey = key;
-    final (dh, dv) = _keyRawDelta(key);
-
-    // Immediate single step on first press.
-    _applyRawStep(dh, dv);
-
-    // After hold delay, begin slow continuous movement.
-    _keyHoldTimer = Timer(_keyHoldDelay, () {
-      _keyTimer = Timer.periodic(
-        _keyRepeatInterval,
-        (_) => _applyRawStep(dh, dv),
-      );
-    });
-  }
-
-  Future<void> _stopKeyMovement() async {
-    _keyHoldTimer?.cancel();
-    _keyHoldTimer = null;
-    _keyTimer?.cancel();
-    _keyTimer = null;
-    _heldKey = null;
+  void _commitSelected() {
     final commands = <(String, int)>[];
     for (final c in _selected) {
       commands.addAll(_commandsFor(c));
     }
-    await widget.onCornerCommit(commands);
+    widget.onCornerCommit(commands);
   }
 
   KeyEventResult _onKeyEvent(FocusNode node, KeyEvent event) {
     if (!_arrowKeys.contains(event.logicalKey)) return KeyEventResult.ignored;
     if (_selected.isEmpty) return KeyEventResult.ignored;
     if (event is KeyDownEvent) {
-      _startKeyMovement(event.logicalKey);
+      _keys.press(event.logicalKey);
       return KeyEventResult.handled;
     }
     if (event is KeyUpEvent) {
-      _stopKeyMovement();
+      _keys.release();
       return KeyEventResult.handled;
     }
     if (event is KeyRepeatEvent) return KeyEventResult.handled;
