@@ -241,12 +241,17 @@ class PanasonicProtocolService {
   /// True when [response] is a failure sentinel from [_sendSingleCommandEx]
   /// rather than a projector reply: a transport `'Timeout'`, an `'Error: …'`
   /// handshake/auth sentinel, or a projector `ERxxx` code. The `'Error:'`
-  /// sentinels start with a lowercase `r`, so `startsWith('ER')` alone never
-  /// catches them — both prefixes must be checked.
+  /// sentinels start with a lowercase `r`, so the `ER` code pattern never
+  /// catches them — both must be checked.
   static bool _isFailureResponse(String response) =>
       response == 'Timeout' ||
       response.startsWith('Error:') ||
-      response.startsWith('ER');
+      _errorCode.hasMatch(response);
+
+  /// `ERR1`…`ERR5`, `ERRA`, `ER401`, `ER402` — the whole reply, not a prefix:
+  /// valid replies like `ERWI0=+00384` (edge blend Right width) and
+  /// `ERRS2=…` (self-diagnosis) also start with `ER`.
+  static final _errorCode = RegExp(r'^ER(R[0-9A-Z]|\d+)$');
 
   /// Narrower than [_isFailureResponse]: true only when the transport itself
   /// failed to get a reply (socket timeout/handshake error), not when the

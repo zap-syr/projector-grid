@@ -100,6 +100,22 @@ void main() {
       expect(await raw('QVX:NSGS1'), isNull);
     });
 
+    test('sendRawCommand drops ERR codes and ER402', () async {
+      projector.responses['QVX:EUWI0'] = 'ER402';
+      projector.responses['QGU'] = 'ERR2';
+      projector.responses['QGB'] = 'ERRA';
+      expect(await raw('QVX:EUWI0'), isNull);
+      expect(await raw('QGU'), isNull);
+      expect(await raw('QGB'), isNull);
+    });
+
+    test('a reply whose key starts with ER is data, not a code', () async {
+      projector.responses['QVX:ERWI0'] = 'ERWI0=+00384';
+      projector.responses['QVX:ERRS2'] = 'ERRS2=F305';
+      expect(await raw('QVX:ERWI0'), 'ERWI0=+00384');
+      expect(await raw('QVX:ERRS2'), 'ERRS2=F305');
+    });
+
     test('preserving variant keeps ER401 as data', () async {
       projector.responses['QVX:NSGS1'] = 'ER401';
       expect(
