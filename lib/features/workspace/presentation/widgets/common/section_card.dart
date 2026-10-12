@@ -6,7 +6,11 @@ import 'package:flutter/material.dart';
 class SectionCard extends StatelessWidget {
   final Widget child;
 
-  const SectionCard({super.key, required this.child});
+  /// Primary border, for the card tied to what's selected elsewhere (e.g.
+  /// the edge picked on the Edge Blending canvas).
+  final bool highlighted;
+
+  const SectionCard({super.key, required this.child, this.highlighted = false});
 
   @override
   Widget build(BuildContext context) {
@@ -20,7 +24,9 @@ class SectionCard extends StatelessWidget {
         color: colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.9),
+          color: highlighted
+              ? colorScheme.primary
+              : colorScheme.outlineVariant.withValues(alpha: 0.9),
         ),
         boxShadow: [
           BoxShadow(

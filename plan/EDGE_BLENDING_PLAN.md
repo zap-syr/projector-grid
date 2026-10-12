@@ -84,7 +84,7 @@ The projector doesn't enforce it (§8), so the dialog does:
 
 **Not available over the protocol:** free-shape point coordinates and the user blending curve
 (*User* mode) — they can only be selected/executed, not edited. In the UI: *User* is just a mode
-segment (tooltip: "curve is defined on the projector").
+segment, no tooltip (dropped 2026-10-12).
 
 ---
 
@@ -284,10 +284,21 @@ already fits the panel, zoom isn't needed.
    `ProjectorSettingsClient`; `blend_edge.dart`, `edge_blend_limits.dart`,
    `edge_blend_values.dart` with `test/unit/edge_blend_test.dart`; `command_reference.md`
    Edge Blending section.
-2. **State/model:** `edge_blend_state.dart` (holders keyed by `BlendEdge`, `EdgeBlendSide`).
-3. **Dialog skeleton:** title, mode SegmentedButton, TabBar, loading, write queue, Esc
-   handling, menu item + opening from the workspace.
-4. **Edge Blending panel** (right-hand controls) — fully functional without the canvas.
+2. `[x]` **State/model** (2026-10-12): `edge_blend_state.dart` (`EdgeBlendMode`,
+   `EdgeSettings`, `EdgeBlendState` with `maxFor`, the load query list and its parser);
+   `edge_blend_side.dart` (`EdgeBlendSide`, a `ChangeNotifier` per projector: load, writes
+   through `SerialQueue` (`common/serial_queue.dart`), ER-code read-back, a commit equal to
+   the projector's value sends nothing). `BlackLevelState` arrives with stage 6. Tests:
+   `test/unit/edge_blend_side_test.dart`.
+3. `[x]` **Dialog skeleton** (2026-10-12): `EdgeBlendingDialog(nodes: [...])`, mode
+   SegmentedButton, TabBar, loading, "No reply" + Retry, Esc (clears the selection, else
+   closes), Off dims the controls; menu item *Edge Blending* (`Icons.gradient`) after
+   Geometry Correction. `PanasonicProtocolService.isErrorCode` made public for the side.
+4. `[x]` **Edge Blending panel** (2026-10-12): `edge_blend_panel.dart`, Markers / Auto
+   test pattern switches, four `SectionCard`s (side icon, enable switch, Start / Width via
+   `LabeledSliderRow` inline with `inlineLabelWidth`), selected card highlighted
+   (`SectionCard.highlighted`). Touching a slider selects that edge and part. Canvas and
+   Black Level tab are still empty placeholders.
 5. **Edge Blending canvas:** painting → drag → keyboard → labels/hover → reset (shared
    hold/repeat helper extracted from the Corner canvas).
 6. **Black Level tab:** lazy load, `RgbwLevelCard` with Interlocked, overlapped table, border

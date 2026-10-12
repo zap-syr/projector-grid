@@ -29,6 +29,10 @@ class LabeledSliderRow extends StatelessWidget {
   /// Accent for the label and slider track/thumb (inline RGB rows).
   final Color? color;
 
+  /// Label column width in the inline layout: 14 fits a channel letter,
+  /// wider for a word (Edge Blending's Start / Width).
+  final double inlineLabelWidth;
+
   const LabeledSliderRow({
     super.key,
     required this.label,
@@ -41,6 +45,7 @@ class LabeledSliderRow extends StatelessWidget {
     this.snap = true,
     this.layout = SliderLabelLayout.above,
     this.color,
+    this.inlineLabelWidth = 14,
   });
 
   static String _cleanStr(double v) {
@@ -123,7 +128,7 @@ class LabeledSliderRow extends StatelessWidget {
         child: Row(
           children: [
             SizedBox(
-              width: 14,
+              width: inlineLabelWidth,
               child: Text(
                 label,
                 style: TextStyle(

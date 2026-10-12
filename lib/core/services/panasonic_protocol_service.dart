@@ -246,11 +246,14 @@ class PanasonicProtocolService {
   static bool _isFailureResponse(String response) =>
       response == 'Timeout' ||
       response.startsWith('Error:') ||
-      _errorCode.hasMatch(response);
+      isErrorCode(response);
 
-  /// `ERR1`…`ERR5`, `ERRA`, `ER401`, `ER402` — the whole reply, not a prefix:
-  /// valid replies like `ERWI0=+00384` (edge blend Right width) and
-  /// `ERRS2=…` (self-diagnosis) also start with `ER`.
+  /// True for a projector error reply — `ERR1`…`ERR5`, `ERRA`, `ER401`,
+  /// `ER402` — matched as the whole reply, not a prefix: valid replies like
+  /// `ERWI0=+00384` (edge blend Right width) and `ERRS2=…` (self-diagnosis)
+  /// also start with `ER`.
+  static bool isErrorCode(String response) => _errorCode.hasMatch(response);
+
   static final _errorCode = RegExp(r'^ER(R[0-9A-Z]|\d+)$');
 
   /// Narrower than [_isFailureResponse]: true only when the transport itself

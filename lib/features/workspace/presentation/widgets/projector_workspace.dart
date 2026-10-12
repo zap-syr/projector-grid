@@ -16,6 +16,7 @@ import 'projector_card.dart';
 import 'edit_projector_dialog.dart';
 import 'color_correction_dialog.dart';
 import 'brightness_control_dialog.dart';
+import 'edge_blending/edge_blending_dialog.dart';
 import 'geometry_correction_dialog.dart';
 import 'manage_groups_dialog.dart';
 import 'remote_preview_dialog.dart';
@@ -1041,6 +1042,15 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
                                                 builder: (_) =>
                                                     GeometryCorrectionDialog(
                                                       node: node,
+                                                    ),
+                                              );
+                                            },
+                                            onEdgeBlending: () {
+                                              showDialog(
+                                                context: context,
+                                                builder: (_) =>
+                                                    EdgeBlendingDialog(
+                                                      nodes: [node],
                                                     ),
                                               );
                                             },

@@ -230,6 +230,7 @@ void main() {
                   onColorCorrection: () {},
                   onBrightnessControl: () {},
                   onGeometryCorrection: () {},
+                  onEdgeBlending: () {},
                   onRemotePreview: () {},
                   onSelectGroup: null,
                   buildGroupMenuItems: () => [],

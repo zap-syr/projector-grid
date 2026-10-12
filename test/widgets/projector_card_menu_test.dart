@@ -37,6 +37,7 @@ void main() {
                   onColorCorrection: record('color'),
                   onBrightnessControl: record('brightness'),
                   onGeometryCorrection: record('geometry'),
+                  onEdgeBlending: record('edgeBlending'),
                   onRemotePreview: record('preview'),
                   onSelectGroup: hasGroup ? record('selectGroup') : null,
                   buildGroupMenuItems: () => [
@@ -64,6 +65,7 @@ void main() {
     'Brightness Control',
     'Color Correction',
     'Geometry Correction',
+    'Edge Blending',
     'Remote Preview',
     'Open in Browser',
     'Select in Group',
@@ -84,6 +86,7 @@ void main() {
     'Brightness Control': 'brightness',
     'Color Correction': 'color',
     'Geometry Correction': 'geometry',
+    'Edge Blending': 'edgeBlending',
     'Remote Preview': 'preview',
     'Select in Group': 'selectGroup',
     'Delete': 'delete',
