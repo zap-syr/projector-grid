@@ -10,6 +10,7 @@ import '../common/dialog_split_layout.dart';
 import '../common/projector_settings_client.dart';
 import '../custom_tooltip.dart';
 import '../dialog_title_bar.dart';
+import 'black_level_panel.dart';
 import 'edge_blend_canvas.dart';
 import 'edge_blend_panel.dart';
 import 'edge_blend_side.dart';
@@ -72,8 +73,26 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
 
   void _onSideChanged() => setState(() {});
 
-  void _select(BlendEdge edge, EdgePart part) =>
-      setState(() => _selection = (side: _active, edge: edge, part: part));
+  /// The selection keeps the last blend part (Start / Width) even when the
+  /// Black Level tab picks the edge: arrows there move the border anyway,
+  /// and back on the blend tab they act on what was grabbed last.
+  void _select(BlendEdge edge, EdgePart part) {
+    final keep = _selection?.edge == edge ? _selection!.part : EdgePart.start;
+    setState(
+      () => _selection = (
+        side: _active,
+        edge: edge,
+        part: part == EdgePart.border ? keep : part,
+      ),
+    );
+  }
+
+  BlendEdge? get _selectedEdge {
+    final selection = _selection;
+    return selection != null && selection.side == _active
+        ? selection.edge
+        : null;
+  }
 
   /// Esc clears the selection first; only an Esc with nothing selected
   /// bubbles on and closes the dialog.
@@ -115,7 +134,7 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
                     child: Center(child: CircularProgressIndicator()),
                   )
                 else if (side.unreachable)
-                  Expanded(child: _buildUnreachable(side))
+                  Expanded(child: _buildNoReply(side, side.load))
                 else ...[
                   Padding(
                     padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
@@ -131,6 +150,11 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
                   ),
                   const Divider(height: 1),
                   TabBar(
+                    // Black Level loads on its first open: its ~17 queries
+                    // are wasted if the user never goes there.
+                    onTap: (i) {
+                      if (i == 1 && side.black == null) side.loadBlack();
+                    },
                     tabs: const [
                       Tab(text: 'Edge Blending'),
                       Tab(text: 'Black Level'),
@@ -146,10 +170,10 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
                       physics: const NeverScrollableScrollPhysics(),
                       children: [
                         DialogSplitLayout(
-                          left: _buildBlendCanvas(side),
+                          left: _buildCanvas(side, blackTab: false),
                           right: _dimmedWhenOff(_buildBlendPanel(side)),
                         ),
-                        const SizedBox.shrink(),
+                        _buildBlackTab(side),
                       ],
                     ),
                   ),
@@ -177,21 +201,24 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
     );
   }
 
-  Widget _buildBlendCanvas(EdgeBlendSide side) {
-    final selection = _selection;
+  /// The same canvas on both tabs; on Black Level its handles move the
+  /// border widths, so the selection is shown as [EdgePart.border] there.
+  Widget _buildCanvas(EdgeBlendSide side, {required bool blackTab}) {
+    final edge = _selectedEdge;
     final interactive = side.blend.mode != EdgeBlendMode.off;
+    final reset = blackTab ? side.resetBorder : side.resetEdge;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Align(
           alignment: Alignment.topRight,
           child: CustomTooltip(
-            message: 'Reset all edges',
+            message: blackTab ? 'Reset all border widths' : 'Reset all edges',
             child: IconButton(
               icon: const Icon(Icons.restart_alt),
               iconSize: 20,
               onPressed: interactive
-                  ? () => BlendEdge.values.forEach(side.resetEdge)
+                  ? () => BlendEdge.values.forEach(reset)
                   : null,
             ),
           ),
@@ -201,16 +228,20 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
             padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
             child: EdgeBlendCanvas(
               state: side.blend,
+              black: blackTab ? side.black : null,
               raster: side.raster,
               interactive: interactive,
-              selection: selection != null && selection.side == _active
-                  ? (edge: selection.edge, part: selection.part)
-                  : null,
+              selection: edge == null
+                  ? null
+                  : (
+                      edge: edge,
+                      part: blackTab ? EdgePart.border : _selection!.part,
+                    ),
               onSelect: _select,
               onClearSelection: () => setState(() => _selection = null),
               onPreview: side.preview,
               onCommit: side.commit,
-              onResetEdge: side.resetEdge,
+              onResetEdge: reset,
             ),
           ),
         ),
@@ -218,14 +249,43 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
     );
   }
 
+  Widget _buildBlackTab(EdgeBlendSide side) {
+    final black = side.black;
+    if (side.blackUnreachable) return _buildNoReply(side, side.loadBlack);
+    if (black == null) return const Center(child: CircularProgressIndicator());
+    return DialogSplitLayout(
+      left: _buildCanvas(side, blackTab: true),
+      right: _dimmedWhenOff(
+        BlackLevelPanel(
+          black: black,
+          blend: side.blend,
+          raster: side.raster,
+          selectedEdge: _selectedEdge,
+          onModeChanged: side.setBlackMode,
+          onLevelChanged: (slot, channel, v) {
+            final edge = slot.edge;
+            if (edge != null && _selectedEdge != edge) {
+              _select(edge, EdgePart.border);
+            }
+            side.previewLevel(slot, channel, v);
+          },
+          onLevelCommitted: side.commitLevel,
+          onInterlockedChanged: side.setInterlocked,
+          onBorderWidthChanged: (edge, v) {
+            if (_selectedEdge != edge) _select(edge, EdgePart.border);
+            side.preview(edge, EdgePart.border, v);
+          },
+          onBorderWidthCommitted: (edge) => side.commit(edge, EdgePart.border),
+        ),
+      ),
+    );
+  }
+
   Widget _buildBlendPanel(EdgeBlendSide side) {
-    final selection = _selection;
     return EdgeBlendPanel(
       state: side.blend,
       raster: side.raster,
-      selectedEdge: selection != null && selection.side == _active
-          ? selection.edge
-          : null,
+      selectedEdge: _selectedEdge,
       onMarkersChanged: side.setMarkers,
       onAutoPatternChanged: side.setAutoPattern,
       onEnabledChanged: side.setEnabled,
@@ -239,14 +299,14 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
     );
   }
 
-  Widget _buildUnreachable(EdgeBlendSide side) {
+  Widget _buildNoReply(EdgeBlendSide side, VoidCallback onRetry) {
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Text('No reply from ${side.node.ipAddress}'),
           const SizedBox(height: 12),
-          OutlinedButton(onPressed: side.load, child: const Text('Retry')),
+          OutlinedButton(onPressed: onRetry, child: const Text('Retry')),
         ],
       ),
     );

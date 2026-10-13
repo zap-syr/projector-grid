@@ -20,7 +20,9 @@ enum EdgeBlendMode {
   };
 }
 
-enum EdgePart { start, width }
+/// What a canvas handle or a slider moves. [border] is the black border
+/// width, which lives in `BlackLevelState`, not in [EdgeSettings].
+enum EdgePart { start, width, border }
 
 @immutable
 class EdgeSettings {
@@ -34,7 +36,11 @@ class EdgeSettings {
     required this.width,
   });
 
-  int valueOf(EdgePart part) => part == EdgePart.start ? start : width;
+  int valueOf(EdgePart part) => switch (part) {
+    EdgePart.start => start,
+    EdgePart.width => width,
+    EdgePart.border => throw ArgumentError.value(part, 'part'),
+  };
 
   EdgeSettings copyWith({bool? enabled, int? start, int? width}) =>
       EdgeSettings(
@@ -43,8 +49,11 @@ class EdgeSettings {
         width: width ?? this.width,
       );
 
-  EdgeSettings withPart(EdgePart part, int v) =>
-      part == EdgePart.start ? copyWith(start: v) : copyWith(width: v);
+  EdgeSettings withPart(EdgePart part, int v) => switch (part) {
+    EdgePart.start => copyWith(start: v),
+    EdgePart.width => copyWith(width: v),
+    EdgePart.border => throw ArgumentError.value(part, 'part'),
+  };
 
   @override
   bool operator ==(Object other) =>
@@ -105,6 +114,7 @@ class EdgeBlendState {
         start: e.start,
         oppositeWidth: this[edge.opposite].width,
       ),
+      EdgePart.border => maxBorderWidth(span: span, width: e.width),
     };
   }
 }

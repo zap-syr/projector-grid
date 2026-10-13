@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import '../../../domain/blend_edge.dart';
 import '../../../domain/edge_blend_limits.dart';
 import '../common/key_hold_repeater.dart';
+import 'black_level_state.dart';
 import 'edge_blend_state.dart';
 
 typedef EdgePick = ({BlendEdge edge, EdgePart part});
@@ -17,10 +18,15 @@ typedef EdgePick = ({BlendEdge edge, EdgePart part});
 /// handles, arrows (Shift ×10) nudge the selected one. One paint pass and one
 /// gesture detector with its own hit-testing, so a drag repaints nothing but
 /// this canvas' layer.
+///
+/// Given [black], it's the Black Level tab's canvas instead: overlapped
+/// zones in their level's colour, hatched black border bands, and one
+/// handle per edge that moves the border width ([EdgePart.border]).
 class EdgeBlendCanvas extends StatefulWidget {
   const EdgeBlendCanvas({
     super.key,
     required this.state,
+    this.black,
     required this.raster,
     required this.interactive,
     required this.selection,
@@ -32,6 +38,7 @@ class EdgeBlendCanvas extends StatefulWidget {
   });
 
   final EdgeBlendState state;
+  final BlackLevelState? black;
   final EdgeBlendRaster raster;
 
   /// False while the mode is Off: the zones stay visible, nothing moves.
@@ -81,26 +88,44 @@ class _EdgeBlendCanvasState extends State<EdgeBlendCanvas> {
     super.dispose();
   }
 
+  bool get _blackMode => widget.black != null;
+
+  int _valueOf(BlendEdge edge, EdgePart part) => part == EdgePart.border
+      ? widget.black!.borderWidth(edge)
+      : widget.state[edge].valueOf(part);
+
+  /// A disabled edge's blend handles are hidden; its border width is still
+  /// accepted by the projector (§8), so the border handle never is.
+  bool _hasHandles(BlendEdge edge) => _blackMode || widget.state[edge].enabled;
+
   // ─── Hit-testing ─────────────────────────────────────────────────────────
   /// A handle (part set) beats a zone (part null); null = empty space.
   ({BlendEdge edge, EdgePart? part})? _hitTest(Offset p) {
     final box = _box;
     if (box == null || !widget.interactive) return null;
     final state = widget.state;
+    final black = widget.black;
 
     EdgePick? nearest;
     var nearestDist = _handleHitRadius;
     for (final edge in BlendEdge.values) {
-      if (!state[edge].enabled) continue;
-      // Both handles share the line's midpoint, so at a small Width they
-      // overlap: Width is drawn on top and wins, and once it's pulled away
-      // Start is reachable again.
+      if (!_hasHandles(edge)) continue;
       double dist(EdgePart part) =>
-          (box.handleAt(edge, part, state[edge]) - p).distance;
-      final widthDist = dist(EdgePart.width);
-      final (part, d) = widthDist <= _handleHitRadius
-          ? (EdgePart.width, widthDist)
-          : (EdgePart.start, dist(EdgePart.start));
+          (box.handleAt(edge, _handleUnits(state, black, edge, part)) - p)
+              .distance;
+      final EdgePart part;
+      final double d;
+      if (black != null) {
+        (part, d) = (EdgePart.border, dist(EdgePart.border));
+      } else {
+        // Both handles share the line's midpoint, so at a small Width they
+        // overlap: Width is drawn on top and wins, and once it's pulled
+        // away Start is reachable again.
+        final widthDist = dist(EdgePart.width);
+        (part, d) = widthDist <= _handleHitRadius
+            ? (EdgePart.width, widthDist)
+            : (EdgePart.start, dist(EdgePart.start));
+      }
       if (d <= nearestDist) {
         nearest = (edge: edge, part: part);
         nearestDist = d;
@@ -109,8 +134,10 @@ class _EdgeBlendCanvasState extends State<EdgeBlendCanvas> {
     if (nearest != null) return (edge: nearest.edge, part: nearest.part);
 
     for (final edge in BlendEdge.values) {
-      final s = state[edge];
-      if (box.zoneHitRect(edge, s, _minZoneHitThickness).contains(p)) {
+      final depth = black != null
+          ? black.borderWidth(edge)
+          : state[edge].start + state[edge].width;
+      if (box.bandHitRect(edge, depth, _minZoneHitThickness).contains(p)) {
         return (edge: edge, part: null);
       }
     }
@@ -154,7 +181,11 @@ class _EdgeBlendCanvasState extends State<EdgeBlendCanvas> {
       final sel = widget.selection;
       widget.onSelect(
         hit.edge,
-        sel != null && sel.edge == hit.edge ? sel.part : EdgePart.start,
+        _blackMode
+            ? EdgePart.border
+            : sel != null && sel.edge == hit.edge
+            ? sel.part
+            : EdgePart.start,
       );
       return;
     }
@@ -180,7 +211,7 @@ class _EdgeBlendCanvasState extends State<EdgeBlendCanvas> {
       _drag = (
         edge: hit.edge,
         part: part,
-        v0: widget.state[hit.edge].valueOf(part),
+        v0: _valueOf(hit.edge, part),
         in0: _box!.inward(hit.edge, details.localPosition),
       );
     });
@@ -203,7 +234,7 @@ class _EdgeBlendCanvasState extends State<EdgeBlendCanvas> {
   void _preview(BlendEdge edge, EdgePart part, int v) {
     final max = widget.state.maxFor(edge, part, widget.raster);
     final clamped = v.clamp(0, max);
-    if (clamped != widget.state[edge].valueOf(part)) {
+    if (clamped != _valueOf(edge, part)) {
       widget.onPreview(edge, part, clamped);
     }
   }
@@ -229,7 +260,7 @@ class _EdgeBlendCanvasState extends State<EdgeBlendCanvas> {
     if (target == null || !mounted) return;
     final sign = _inwardSign(target.edge, key)!;
     final step = HardwareKeyboard.instance.isShiftPressed ? 10 : 1;
-    final current = widget.state[target.edge].valueOf(target.part);
+    final current = _valueOf(target.edge, target.part);
     _preview(target.edge, target.part, current + sign * step);
   }
 
@@ -237,7 +268,7 @@ class _EdgeBlendCanvasState extends State<EdgeBlendCanvas> {
     final sel = widget.selection;
     if (!widget.interactive ||
         sel == null ||
-        !widget.state[sel.edge].enabled ||
+        !_hasHandles(sel.edge) ||
         _inwardSign(sel.edge, event.logicalKey) == null) {
       return KeyEventResult.ignored;
     }
@@ -288,6 +319,7 @@ class _EdgeBlendCanvasState extends State<EdgeBlendCanvas> {
                   painter: _EdgeBlendPainter(
                     box: box,
                     state: widget.state,
+                    black: widget.black,
                     interactive: widget.interactive,
                     selection: widget.selection,
                     hoverEdge: _hover?.edge,
@@ -367,11 +399,11 @@ class _RasterBox {
 
   Rect zone(BlendEdge e, EdgeSettings s) => band(e, s.start, s.start + s.width);
 
-  /// Everything the edge darkens, from the raster edge to Start + Width,
-  /// widened to at least [minThickness] px so a narrow one can still be
-  /// clicked.
-  Rect zoneHitRect(BlendEdge e, EdgeSettings s, double minThickness) {
-    final z = band(e, 0, s.start + s.width);
+  /// The band from the raster edge to [depth] units in (everything a blend
+  /// edge darkens, or a black border), widened to at least [minThickness]
+  /// px so a narrow one can still be clicked.
+  Rect bandHitRect(BlendEdge e, num depth, double minThickness) {
+    final z = band(e, 0, depth);
     final grow = max(
       0.0,
       (minThickness - (e.isHorizontal ? z.width : z.height)) / 2,
@@ -381,9 +413,8 @@ class _RasterBox {
         : Rect.fromLTRB(z.left, z.top - grow, z.right, z.bottom + grow);
   }
 
-  /// The midpoint of the Start or the Width (zone end) line.
-  Offset handleAt(BlendEdge e, EdgePart part, EdgeSettings s) {
-    final units = part == EdgePart.start ? s.start : s.start + s.width;
+  /// The midpoint of the line [units] in from [e].
+  Offset handleAt(BlendEdge e, num units) {
     final line = lineAt(e, units);
     return e.isHorizontal
         ? Offset(line, rect.center.dy)
@@ -391,10 +422,32 @@ class _RasterBox {
   }
 }
 
+/// How far in from [edge] the line [part]'s handle sits on: Start, the zone
+/// end (Start + Width), or the black border width.
+int _handleUnits(
+  EdgeBlendState state,
+  BlackLevelState? black,
+  BlendEdge edge,
+  EdgePart part,
+) => switch (part) {
+  EdgePart.start => state[edge].start,
+  EdgePart.width => state[edge].start + state[edge].width,
+  EdgePart.border => black!.borderWidth(edge),
+};
+
+/// The level's channels as a swatch colour; Interlocked shows W as grey.
+Color _levelColor(RgbwLevel level) => Color.fromARGB(
+  255,
+  level.shown(RgbwChannel.r),
+  level.shown(RgbwChannel.g),
+  level.shown(RgbwChannel.b),
+);
+
 class _EdgeBlendPainter extends CustomPainter {
   _EdgeBlendPainter({
     required this.box,
     required this.state,
+    required this.black,
     required this.interactive,
     required this.selection,
     required this.hoverEdge,
@@ -408,6 +461,7 @@ class _EdgeBlendPainter extends CustomPainter {
 
   final _RasterBox box;
   final EdgeBlendState state;
+  final BlackLevelState? black;
   final bool interactive;
   final EdgePick? selection;
   final BlendEdge? hoverEdge;
@@ -423,28 +477,38 @@ class _EdgeBlendPainter extends CustomPainter {
     final rect = box.rect;
     canvas.drawRect(rect, Paint()..color = raster);
 
-    for (final edge in BlendEdge.values) {
-      final s = state[edge];
-      if (s.enabled) {
-        _paintZone(canvas, edge, s);
-      } else if (s.width > 0) {
-        _dashedRect(
-          canvas,
-          box.zone(edge, s),
-          Paint()
-            ..color = idleZone
-            ..strokeWidth = 1.5,
-        );
+    final black = this.black;
+    if (black != null) {
+      _paintBlack(canvas, black);
+    } else {
+      for (final edge in BlendEdge.values) {
+        final s = state[edge];
+        if (s.enabled) {
+          _paintZone(canvas, edge, s);
+        } else if (s.width > 0) {
+          _dashedRect(
+            canvas,
+            box.zone(edge, s),
+            Paint()
+              ..color = idleZone
+              ..strokeWidth = 1.5,
+          );
+        }
       }
-      if (edge == hoverEdge) {
-        canvas.drawRect(
-          box.zoneHitRect(edge, s, 4),
-          Paint()
-            ..color = startColor.withValues(alpha: 0.6)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 1.5,
-        );
-      }
+    }
+
+    final hover = hoverEdge;
+    if (hover != null) {
+      final depth = black != null
+          ? black.borderWidth(hover)
+          : state[hover].start + state[hover].width;
+      canvas.drawRect(
+        box.bandHitRect(hover, depth, 4),
+        Paint()
+          ..color = startColor.withValues(alpha: 0.6)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5,
+      );
     }
 
     canvas.drawRect(
@@ -456,10 +520,58 @@ class _EdgeBlendPainter extends CustomPainter {
 
     if (!interactive) return;
     for (final edge in BlendEdge.values) {
-      if (state[edge].enabled) _paintHandles(canvas, edge, state[edge]);
+      if (black != null) {
+        _paintHandle(canvas, edge, EdgePart.border);
+      } else if (state[edge].enabled) {
+        // Width after Start: drawn on top, as it wins the hit test.
+        _paintHandle(canvas, edge, EdgePart.start);
+        _paintHandle(canvas, edge, EdgePart.width);
+      }
     }
     final drag = dragging;
     if (drag != null) _paintValueChip(canvas, drag.edge, drag.part);
+  }
+
+  /// Overlapped zones filled with their level's colour, then the black
+  /// border bands in the border level's colour, hatched.
+  void _paintBlack(Canvas canvas, BlackLevelState black) {
+    for (final edge in BlendEdge.values) {
+      final s = state[edge];
+      if (!s.enabled || s.width == 0) continue;
+      final zone = box.zone(edge, s);
+      final level = black[LevelSlot.overlap(edge)];
+      canvas.drawRect(
+        zone,
+        Paint()..color = _levelColor(level).withValues(alpha: 0.85),
+      );
+      _dashedRect(
+        canvas,
+        zone,
+        Paint()
+          ..color = idleZone
+          ..strokeWidth = 1,
+      );
+    }
+
+    final borderFill = _levelColor(black[LevelSlot.border]);
+    final hatch = Paint()
+      ..color = outline
+      ..strokeWidth = 1;
+    for (final edge in BlendEdge.values) {
+      final depth = black.borderWidth(edge);
+      if (depth == 0) continue;
+      final band = box.band(edge, 0, depth);
+      canvas.drawRect(band, Paint()..color = borderFill);
+      _hatch(canvas, band, hatch);
+      _line(
+        canvas,
+        edge,
+        box.lineAt(edge, depth),
+        Paint()
+          ..color = startColor
+          ..strokeWidth = selection?.edge == edge ? 2.5 : 2.0,
+      );
+    }
   }
 
   /// Solid dark from the raster edge to Start, then fading out at
@@ -508,48 +620,48 @@ class _EdgeBlendPainter extends CustomPainter {
     );
   }
 
-  void _paintHandles(Canvas canvas, BlendEdge edge, EdgeSettings s) {
+  void _paintHandle(Canvas canvas, BlendEdge edge, EdgePart part) {
     final sel = selection;
-    for (final part in EdgePart.values) {
-      final center = box.handleAt(edge, part, s);
-      final selectedEdge = sel?.edge == edge;
-      final active = selectedEdge && sel?.part == part;
-      final r = selectedEdge ? 8.0 : 7.0;
-      if (active) {
-        canvas.drawCircle(
-          center,
-          r + 5,
-          Paint()..color = startColor.withValues(alpha: 0.24),
-        );
-      }
+    final center = box.handleAt(edge, _handleUnits(state, black, edge, part));
+    final selectedEdge = sel?.edge == edge;
+    final active = selectedEdge && sel?.part == part;
+    final r = selectedEdge ? 8.0 : 7.0;
+    if (active) {
       canvas.drawCircle(
         center,
-        r,
-        Paint()
-          ..color = Colors.black.withValues(alpha: 0.25)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
-      );
-      canvas.drawCircle(
-        center,
-        r,
-        Paint()..color = part == EdgePart.start ? startColor : endColor,
-      );
-      canvas.drawCircle(
-        center,
-        r,
-        Paint()
-          ..color = Colors.white
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = selectedEdge ? 3 : 2,
+        r + 5,
+        Paint()..color = startColor.withValues(alpha: 0.24),
       );
     }
+    canvas.drawCircle(
+      center,
+      r,
+      Paint()
+        ..color = Colors.black.withValues(alpha: 0.25)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
+    );
+    canvas.drawCircle(
+      center,
+      r,
+      Paint()..color = part == EdgePart.width ? endColor : startColor,
+    );
+    canvas.drawCircle(
+      center,
+      r,
+      Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = selectedEdge ? 3 : 2,
+    );
   }
 
   void _paintValueChip(Canvas canvas, BlendEdge edge, EdgePart part) {
-    final s = state[edge];
-    final label = part == EdgePart.start
-        ? 'Start ${s.start}'
-        : 'Width ${s.width}';
+    final units = _handleUnits(state, black, edge, part);
+    final label = switch (part) {
+      EdgePart.start => 'Start ${state[edge].start}',
+      EdgePart.width => 'Width ${state[edge].width}',
+      EdgePart.border => 'Border $units',
+    };
     final text = TextPainter(
       text: TextSpan(
         text: label,
@@ -557,7 +669,7 @@ class _EdgeBlendPainter extends CustomPainter {
       ),
       textDirection: TextDirection.ltr,
     )..layout();
-    final handle = box.handleAt(edge, part, s);
+    final handle = box.handleAt(edge, units);
     const pad = EdgeInsets.symmetric(horizontal: 6, vertical: 2);
     final chipSize = Size(
       text.width + pad.horizontal,
@@ -615,10 +727,22 @@ class _EdgeBlendPainter extends CustomPainter {
     }
   }
 
+  static void _hatch(Canvas canvas, Rect r, Paint paint) {
+    const gap = 8.0;
+    canvas
+      ..save()
+      ..clipRect(r);
+    for (var x = r.left - r.height; x < r.right; x += gap) {
+      canvas.drawLine(Offset(x, r.bottom), Offset(x + r.height, r.top), paint);
+    }
+    canvas.restore();
+  }
+
   @override
   bool shouldRepaint(_EdgeBlendPainter old) =>
       old.box.rect != box.rect ||
       old.state != state ||
+      old.black != black ||
       old.interactive != interactive ||
       old.selection != selection ||
       old.hoverEdge != hoverEdge ||

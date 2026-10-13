@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:projector_grid/features/workspace/domain/blend_edge.dart';
+import 'package:projector_grid/features/workspace/presentation/widgets/edge_blending/black_level_state.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/edge_blending/edge_blend_canvas.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/edge_blending/edge_blend_state.dart';
 
@@ -18,9 +19,12 @@ void main() {
   late List<String> events;
   late EdgeBlendState state;
 
+  late BlackLevelState? black;
+
   Future<void> pumpCanvas(
     WidgetTester tester, {
     bool interactive = true,
+    bool blackLevel = false,
     EdgeSettings left = const EdgeSettings(enabled: true, start: 0, width: 192),
   }) {
     events = [];
@@ -28,6 +32,10 @@ void main() {
       List.filled(edgeBlendQueries().length, null),
     );
     state = s.copyWith(mode: EdgeBlendMode.on).withEdge(BlendEdge.left, left);
+    black = blackLevel
+        ? parseBlackLevelState(List.filled(blackLevelQueries().length, null))
+              .withBorderWidth(BlendEdge.left, 100)
+        : null;
     EdgePick? selection;
     return tester.pumpWidget(
       MaterialApp(
@@ -38,6 +46,7 @@ void main() {
               child: StatefulBuilder(
                 builder: (context, setState) => EdgeBlendCanvas(
                   state: state,
+                  black: black,
                   raster: _raster,
                   interactive: interactive,
                   selection: selection,
@@ -51,12 +60,16 @@ void main() {
                   },
                   onPreview: (edge, part, v) {
                     events.add('preview ${edge.name} ${part.name} $v');
-                    setState(
-                      () => state = state.withEdge(
-                        edge,
-                        state[edge].withPart(part, v),
-                      ),
-                    );
+                    setState(() {
+                      if (part == EdgePart.border) {
+                        black = black!.withBorderWidth(edge, v);
+                      } else {
+                        state = state.withEdge(
+                          edge,
+                          state[edge].withPart(part, v),
+                        );
+                      }
+                    });
                   },
                   onCommit: (edge, part) =>
                       events.add('commit ${edge.name} ${part.name}'),
@@ -179,6 +192,52 @@ void main() {
     await tester.tapAt(handle);
     await tester.pump();
     expect(events.last, 'reset left');
+  });
+
+  testWidgets('Black Level: the handle moves the border width, up to '
+      'raster minus blend width', (tester) async {
+    await pumpCanvas(tester, blackLevel: true);
+    final origin = tester.getTopLeft(find.byType(EdgeBlendCanvas));
+    final handle =
+        origin +
+        const Offset(
+          _rasterLeft + 100 * _scale,
+          _rasterTop + _rasterHeight / 2,
+        );
+    await tester.dragFrom(handle, const Offset(50, 0));
+    await tester.pump();
+    expect(black!.borderWidth(BlendEdge.left), inInclusiveRange(294, 300));
+    expect(state[BlendEdge.left].width, 192);
+    expect(events.last, 'commit left border');
+
+    await tester.dragFrom(
+      origin +
+          Offset(
+            _rasterLeft + black!.borderWidth(BlendEdge.left) * _scale,
+            _rasterTop + _rasterHeight / 2,
+          ),
+      const Offset(1000, 0),
+    );
+    await tester.pump();
+    expect(black!.borderWidth(BlendEdge.left), 1920 - 192);
+  });
+
+  testWidgets('Black Level: arrows step the border width', (tester) async {
+    await pumpCanvas(tester, blackLevel: true);
+    final origin = tester.getTopLeft(find.byType(EdgeBlendCanvas));
+    await tester.tapAt(
+      origin +
+          const Offset(
+            _rasterLeft + 100 * _scale,
+            _rasterTop + _rasterHeight / 2,
+          ),
+    );
+    await tester.pump();
+    expect(events, ['select left border']);
+    events.clear();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pump();
+    expect(events, ['preview left border 101', 'commit left border']);
   });
 
   testWidgets('mode Off: no handles to grab', (tester) async {

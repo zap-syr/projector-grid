@@ -8,6 +8,7 @@ import '../../../domain/geometry_values.dart';
 import '../../../domain/projector_node.dart';
 import '../common/projector_settings_client.dart';
 import '../common/serial_queue.dart';
+import 'black_level_state.dart';
 import 'edge_blend_state.dart';
 
 /// One projector in the Edge Blending dialog: its values, loading and
@@ -27,13 +28,20 @@ class EdgeBlendSide extends ChangeNotifier {
   bool unreachable = false;
   EdgeBlendRaster raster = edgeBlendRasterFor('');
 
+  bool blackLoading = false;
+  bool blackUnreachable = false;
+
   /// What the dialog shows, including drag previews not sent yet.
-  EdgeBlendState get blend => _blend!;
-  EdgeBlendState? _blend;
+  _Values? _values;
 
   /// What the projector will hold once every queued write lands. A commit
   /// equal to it sends nothing (a stepper re-commits its value on blur).
-  EdgeBlendState? _target;
+  _Values? _target;
+
+  EdgeBlendState get blend => _values!.blend;
+
+  /// Null until the Black Level tab has loaded.
+  BlackLevelState? get black => _values?.black;
 
   bool _disposed = false;
 
@@ -48,9 +56,28 @@ class EdgeBlendSide extends ChangeNotifier {
       unreachable = true;
     } else {
       final (state, raster) = parseEdgeBlendState(replies);
-      _blend = state;
-      _target = state;
+      _values = _Values(state, null);
+      _target = _values;
       this.raster = raster;
+    }
+    notifyListeners();
+  }
+
+  /// The Black Level tab's ~17 queries, sent the first time it opens.
+  Future<void> loadBlack() async {
+    if (blackLoading) return;
+    blackLoading = true;
+    blackUnreachable = false;
+    notifyListeners();
+    final replies = await client.queryAll(blackLevelQueries());
+    if (_disposed) return;
+    blackLoading = false;
+    if (replies.every((r) => r == null)) {
+      blackUnreachable = true;
+    } else {
+      final state = parseBlackLevelState(replies);
+      _values = _values!.withBlack(state);
+      _target = _target!.withBlack(state);
     }
     notifyListeners();
   }
@@ -63,10 +90,12 @@ class EdgeBlendSide extends ChangeNotifier {
 
   void setEnabled(BlendEdge edge, bool on) => _set(_enabledField(edge), on);
 
+  void setBlackMode(BlackLevelMode mode) => _set(_blackModeField, mode);
+
   /// Shows [v] without sending it — slider and handle drags call this on
   /// every move, then [commit] once at the end.
   void preview(BlendEdge edge, EdgePart part, int v) {
-    _blend = blend.withEdge(edge, blend[edge].withPart(part, v));
+    _values = _partField(edge, part).set(_values!, v);
     notifyListeners();
   }
 
@@ -75,20 +104,43 @@ class EdgeBlendSide extends ChangeNotifier {
   /// Start and Width to 0. Width goes first, but both only shrink, so
   /// neither write can be out of range in either order.
   void resetEdge(BlendEdge edge) {
-    _blend = blend.withEdge(edge, blend[edge].copyWith(start: 0, width: 0));
+    preview(edge, EdgePart.width, 0);
+    preview(edge, EdgePart.start, 0);
+    commit(edge, EdgePart.width);
+    commit(edge, EdgePart.start);
+  }
+
+  void resetBorder(BlendEdge edge) {
+    preview(edge, EdgePart.border, 0);
+    commit(edge, EdgePart.border);
+  }
+
+  /// Like [preview]; while Interlocked any channel moves all four.
+  void previewLevel(LevelSlot slot, RgbwChannel channel, int v) {
+    final level = black![slot].withChannel(channel, v);
+    _values = _values!.withBlack(black!.withLevel(slot, level));
     notifyListeners();
-    _send(_partField(edge, EdgePart.width));
-    _send(_partField(edge, EdgePart.start));
+  }
+
+  void commitLevel(LevelSlot slot) => _send(_levelField(slot));
+
+  /// ON writes the flag, then the tuple with R/G/B set to W. OFF writes only
+  /// the flag: the four channels stay as they are (§1).
+  void setInterlocked(LevelSlot slot, bool on) {
+    _set(_interlockField(slot), on);
+    if (!on) return;
+    final w = black![slot].value.w;
+    _set(_levelField(slot), (w: w, r: w, g: w, b: w));
   }
 
   void _set<T>(_Field<T> field, T v) {
-    _blend = field.set(blend, v);
+    _values = field.set(_values!, v);
     notifyListeners();
     _send(field);
   }
 
   void _send<T>(_Field<T> field) {
-    final v = field.get(blend);
+    final v = field.get(_values!);
     if (field.get(_target!) == v) return;
     _target = field.set(_target!, v);
     _writes.run(() => _write(field, v));
@@ -108,7 +160,7 @@ class EdgeBlendSide extends ChangeNotifier {
     if (reply != 'ER402') client.onFailure(cmd);
     final actual = field.parse(await client.query(field.query));
     if (_disposed || actual == null) return;
-    _blend = field.set(blend, actual);
+    _values = field.set(_values!, actual);
     _target = field.set(_target!, actual);
     notifyListeners();
   }
@@ -120,8 +172,22 @@ class EdgeBlendSide extends ChangeNotifier {
   }
 }
 
+/// Both tabs' values. [black] stays null until that tab loads; its fields
+/// are only reachable from the tab, so they never see it null.
+@immutable
+class _Values {
+  const _Values(this.blend, this.black);
+
+  final EdgeBlendState blend;
+  final BlackLevelState? black;
+
+  _Values withBlend(EdgeBlendState s) => _Values(s, black);
+
+  _Values withBlack(BlackLevelState s) => _Values(blend, s);
+}
+
 /// One writable value: how to send it, read it back and where it lives in
-/// [EdgeBlendState].
+/// [_Values].
 class _Field<T> {
   const _Field({
     required this.query,
@@ -134,16 +200,44 @@ class _Field<T> {
   final String query;
   final T? Function(String? reply) parse;
   final String Function(T v) command;
-  final T Function(EdgeBlendState s) get;
-  final EdgeBlendState Function(EdgeBlendState s, T v) set;
+  final T Function(_Values s) get;
+  final _Values Function(_Values s, T v) set;
 }
+
+_Field<T> _blendField<T>({
+  required String query,
+  required T? Function(String? reply) parse,
+  required String Function(T v) command,
+  required T Function(EdgeBlendState s) get,
+  required EdgeBlendState Function(EdgeBlendState s, T v) set,
+}) => _Field<T>(
+  query: query,
+  parse: parse,
+  command: command,
+  get: (s) => get(s.blend),
+  set: (s, v) => s.withBlend(set(s.blend, v)),
+);
+
+_Field<T> _blackField<T>({
+  required String query,
+  required T? Function(String? reply) parse,
+  required String Function(T v) command,
+  required T Function(BlackLevelState s) get,
+  required BlackLevelState Function(BlackLevelState s, T v) set,
+}) => _Field<T>(
+  query: query,
+  parse: parse,
+  command: command,
+  get: (s) => get(s.black!),
+  set: (s, v) => s.withBlack(set(s.black!, v)),
+);
 
 bool? _parseFlag(String? reply, String key) {
   final v = parseKeyedInt(reply, key);
   return v == null ? null : v == 1;
 }
 
-final _modeField = _Field<EdgeBlendMode>(
+final _modeField = _blendField<EdgeBlendMode>(
   query: 'QVX:EDBI0',
   parse: (r) {
     final v = parseKeyedInt(r, 'EDBI0');
@@ -154,7 +248,7 @@ final _modeField = _Field<EdgeBlendMode>(
   set: (s, m) => s.copyWith(mode: m),
 );
 
-final _markersField = _Field<bool>(
+final _markersField = _blendField<bool>(
   query: 'QGM',
   parse: (r) => _parseFlag(r, 'GM'),
   command: (on) => 'VGM:${on ? 1 : 0}',
@@ -162,7 +256,7 @@ final _markersField = _Field<bool>(
   set: (s, on) => s.copyWith(markers: on),
 );
 
-final _autoPatternField = _Field<bool>(
+final _autoPatternField = _blendField<bool>(
   query: 'QVX:EATI1',
   parse: (r) => _parseFlag(r, 'EATI1'),
   command: (on) => 'VXX:EATI1=${formatNtInt(on ? 1 : 0)}',
@@ -170,7 +264,7 @@ final _autoPatternField = _Field<bool>(
   set: (s, on) => s.copyWith(autoPattern: on),
 );
 
-_Field<bool> _enabledField(BlendEdge edge) => _Field<bool>(
+_Field<bool> _enabledField(BlendEdge edge) => _blendField<bool>(
   query: 'Q${edge.enableCmd}',
   parse: (r) => _parseFlag(r, edge.enableCmd),
   command: (on) => 'V${edge.enableCmd}:${on ? 1 : 0}',
@@ -179,18 +273,52 @@ _Field<bool> _enabledField(BlendEdge edge) => _Field<bool>(
 );
 
 _Field<int> _partField(BlendEdge edge, EdgePart part) => switch (part) {
-  EdgePart.start => _Field<int>(
+  EdgePart.start => _blendField<int>(
     query: 'Q${edge.startCmd}',
     parse: (r) => parseKeyedInt(r, edge.startCmd),
     command: (v) => 'V${edge.startCmd}:${formatNt4(v)}',
     get: (s) => s[edge].start,
     set: (s, v) => s.withEdge(edge, s[edge].copyWith(start: v)),
   ),
-  EdgePart.width => _Field<int>(
+  EdgePart.width => _blendField<int>(
     query: 'QVX:${edge.widthKey}',
     parse: (r) => parseKeyedInt(r, edge.widthKey),
     command: (v) => 'VXX:${edge.widthKey}=${formatNtInt(v)}',
     get: (s) => s[edge].width,
     set: (s, v) => s.withEdge(edge, s[edge].copyWith(width: v)),
   ),
+  EdgePart.border => _blackField<int>(
+    query: 'Q${edge.borderCmd}',
+    parse: (r) => parseKeyedInt(r, edge.borderCmd),
+    command: (v) => 'V${edge.borderCmd}:${formatNt4(v)}',
+    get: (s) => s.borderWidth(edge),
+    set: (s, v) => s.withBorderWidth(edge, v),
+  ),
 };
+
+final _blackModeField = _blackField<BlackLevelMode>(
+  query: 'QVX:EBMI1',
+  parse: (r) {
+    final v = parseKeyedInt(r, 'EBMI1');
+    return v == null ? null : BlackLevelMode.fromProtocol(v);
+  },
+  command: (m) => 'VXX:EBMI1=${formatNtInt(m.index)}',
+  get: (s) => s.mode,
+  set: (s, m) => s.copyWith(mode: m),
+);
+
+_Field<Rgbw> _levelField(LevelSlot slot) => _blackField<Rgbw>(
+  query: slot.query,
+  parse: parseRgbw,
+  command: slot.command,
+  get: (s) => s[slot].value,
+  set: (s, v) => s.withLevel(slot, s[slot].copyWith(value: v)),
+);
+
+_Field<bool> _interlockField(LevelSlot slot) => _blackField<bool>(
+  query: 'QVX:${slot.interlockKey}',
+  parse: (r) => _parseFlag(r, slot.interlockKey),
+  command: (on) => 'VXX:${slot.interlockKey}=${formatNtInt(on ? 1 : 0)}',
+  get: (s) => s[slot].interlocked,
+  set: (s, on) => s.withLevel(slot, s[slot].copyWith(interlocked: on)),
+);

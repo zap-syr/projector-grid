@@ -189,7 +189,8 @@ lines — don't repeat that):
 | File | Contents |
 |---|---|
 | `lib/features/workspace/presentation/widgets/edge_blending/edge_blending_dialog.dart` | `EdgeBlendingDialog` — loading, sending, skeleton, TabBar |
-| `…/edge_blending/edge_blend_state.dart` | plain-Dart holders: `EdgeBlendState` (4× `EdgeSettings{enabled,start,width}`, marker, autoPattern, mode), `BlackLevelState` (mode, `RgbwLevel{w,r,g,b,interlocked}` for non-overlapped, border and 4× overlapped, border widths), keyed by `BlendEdge` |
+| `…/edge_blending/edge_blend_state.dart` | plain-Dart holder `EdgeBlendState` (4× `EdgeSettings{enabled,start,width}`, marker, autoPattern, mode), keyed by `BlendEdge` |
+| `…/edge_blending/black_level_state.dart` | `BlackLevelState` (mode, `RgbwLevel{value: (w,r,g,b), interlocked}` per `LevelSlot`: non-overlapped, border and 4× overlapped; border widths per `BlendEdge`) |
 | `lib/features/workspace/domain/blend_edge.dart` | enum `BlendEdge {upper,lower,left,right}` carrying command keys (`enableCmd:'GU'`, `startCmd:'EU'`, `widthKey:'EUWI0'`, …) — the whole command table in one place — plus `isHorizontal` and `opposite`. In `domain/` because the limits need it |
 | `…/edge_blending/edge_blend_canvas.dart` | `EdgeBlendCanvas` (StatefulWidget: drag, focus, keys) + `_EdgeBlendPainter` |
 | `…/edge_blending/edge_blend_panel.dart` | right-hand panel of the Edge Blending tab |
@@ -320,8 +321,27 @@ already fits the panel, zoom isn't needed.
    Arrow hold/repeat moved to `common/key_hold_repeater.dart` (`KeyHoldRepeater`), the
    Corner canvas uses it too. `TabBarView` has `NeverScrollableScrollPhysics` so a handle
    drag never swipes tabs. Tests: `test/widgets/edge_blend_canvas_test.dart`.
-6. **Black Level tab:** lazy load, `RgbwLevelCard` with Interlocked, overlapped table, border
-   widths; black-level canvas mode.
+6. `[x]` **Black Level tab** (2026-10-13): `black_level_state.dart` (`BlackLevelMode`,
+   `LevelSlot` = non-overlapped / border / 4 overlapped with their commands, `RgbwLevel`,
+   `BlackLevelState`, the 17 queries and their parser), `black_level_panel.dart`
+   (`BlackLevelPanel`, `RgbwLevelCard`, the overlapped table). `EdgeBlendSide` loads it on
+   the tab's first tap (`loadBlack`, own "No reply" + Retry) and writes through the same
+   queue; Interlocked per §1. Deviations from §2 / §3:
+   - `BlackLevelState` got its own file instead of sharing `edge_blend_state.dart`.
+   - The border width is `EdgePart.border`, so `preview` / `commit` / `maxFor` and the
+     canvas handle it like Start / Width. The canvas gets `black:` to switch to Black
+     Level mode: overlapped zones filled in their level's colour, border bands in the
+     border level's colour, hatched, one handle per edge (also on disabled edges: the
+     projector accepts border widths there). Reset all resets the border widths on that
+     tab. The non-overlapped area is the plain raster, no swatch (no legend, §2).
+   - The selection keeps its last blend part when the Black Level tab picks an edge.
+   - Overlapped table: the Interlocked column header is a link icon with a tooltip; the
+     table scales down (`FittedBox`) rather than overflowing in a narrow dialog. Rows of
+     disabled edges are dimmed but stay editable (the projector keeps those levels).
+   - `EBMI1` value order (0 = Soft edge + Black level, 1 = Black level only) follows §1,
+     not confirmed live.
+   Tests: `edge_blend_side_test.dart` (parser, `RgbwLevel`, writes, Interlocked ON / OFF,
+   border width), `edge_blend_canvas_test.dart` (border drag + ceiling, arrows).
 7. `dart format .`, `flutter analyze`, review with the `reviewer` agent.
 
 **Unit tests** (pure functions only, per CLAUDE.md): `edgeBlendRasterFor` per tier and for an
@@ -574,7 +594,8 @@ moved by arrows mirrors on key-up together with the write.
 ### Tests
 - Pure: arrangement guess from two card positions (`domain/edge_blend_pair.dart`), facing
   edges per arrangement, linked max (min of both), Link availability by raster.
-- Manual: `tool/projector_simulator.dart` doesn't answer the blending commands yet. Adding
-  them (registers + the §8 limits with ER402) lets pair mode be tested on 2 simulated
-  projectors; on hardware check the RQ25K + RZ34K pair (Link disabled, mixed tier) and two
+- Manual: `tool/projector_simulator.dart` answers every blending / black level command
+  with the §8 limits and ER402 (`EdgeBlendSim`, added 2026-10-13), so pair mode can be
+  tested on 2 simulated projectors (both Tier A: add a WUXGA model there for the mixed-tier
+  case); on hardware check the RQ25K + RZ34K pair (Link disabled, mixed tier) and two
   equal projectors.

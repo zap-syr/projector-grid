@@ -14,6 +14,11 @@
 // so Alignment mode's fade zeroing and restore show up in the event log.
 // Every command is printed as it arrives.
 //
+// Edge Blending / Black Level (the Edge Blending dialog): every register in
+// its wire family, with the plan's §8 limits answered by ER402. Projector 1
+// starts blended on Left/Right with non-zero black levels and border widths;
+// the others start at the RQ25K factory values (mode Off, all levels 0).
+//
 // Self-diagnosis codes (QVX:ERRS2, see the panasonic-ntcontrol skill's
 // Self-diagnosis codes) are set while it runs, by typing into its console:
 //   err 3 F305 U200   projector 3 reports these codes
@@ -89,7 +94,11 @@ class SimProjector {
     Timer(delay, () => power = target);
   }
 
+  late final EdgeBlendSim edgeBlend = EdgeBlendSim(demo: index == 1);
+
   String reply(String cmd) {
+    final blend = edgeBlend.reply(cmd);
+    if (blend != null) return blend;
     if (cmd == 'PON') {
       if (power == 1 || power == 4) _powerTo(2, 3, warmUp);
       return 'PON';
@@ -127,6 +136,163 @@ class SimProjector {
       _ => cmd.startsWith('Q') ? 'ER401' : cmd,
     };
   }
+}
+
+/// Edge Blending and Black Level registers of a 3840x2400 (Tier A) model,
+/// in the three wire families and with the limits measured live
+/// (plan/EDGE_BLENDING_PLAN.md §1, §8): a write that breaks one is refused
+/// with ER402 and the value stays.
+class EdgeBlendSim {
+  EdgeBlendSim({required bool demo}) {
+    if (!demo) return;
+    // Projector 1: something to look at on both tabs, including an
+    // Interlocked flag with unequal channels (set "elsewhere").
+    vxx
+      ..['EDBI0'] = 1
+      ..['ELWI0'] = 600
+      ..['ERWI0'] = 600
+      ..['EBII2'] = 1
+      ..['EBII3'] = 1;
+    legacy
+      ..['GL'] = 1
+      ..['GR'] = 1
+      ..['EL'] = 40
+      ..['JL'] = 120
+      ..['JB'] = 80;
+    rgbw
+      ..['JI'] = '010,012,014,016'
+      ..['JO'] = '005,005,005,005'
+      ..['EBBS0'] = '020,030,040,050'
+      ..['EBBS2'] = '008,000,004,000'
+      ..['EBBS3'] = '000,006,000,006';
+  }
+
+  static const int h = 3840;
+  static const int v = 2400;
+
+  static const _edges = [
+    (start: 'EU', width: 'EUWI0', border: 'JU', opposite: 'EBWI0', span: v),
+    (start: 'EB', width: 'EBWI0', border: 'JB', opposite: 'EUWI0', span: v),
+    (start: 'EL', width: 'ELWI0', border: 'JL', opposite: 'ERWI0', span: h),
+    (start: 'ER', width: 'ERWI0', border: 'JR', opposite: 'ELWI0', span: h),
+  ];
+
+  /// `VXX:KEY=+0000N` / `QVX:KEY` → `KEY=+0000N`. Widths default to the
+  /// RQ25K's factory values.
+  final vxx = <String, int>{
+    'EDBI0': 0,
+    'EATI1': 0,
+    'EBMI1': 0,
+    'EUWI0': 240,
+    'EBWI0': 240,
+    'ELWI0': 384,
+    'ERWI0': 384,
+    for (var i = 1; i <= 6; i++) 'EBII$i': 0,
+  };
+
+  /// `VEU:0010` / `QEU` → bare unpadded `10`.
+  final legacy = <String, int>{
+    for (final k in ['GU', 'GB', 'GL', 'GR', 'GM']) k: 0,
+    for (final e in _edges) ...{e.start: 0, e.border: 0},
+  };
+
+  /// `VJI:W,R,G,B` / `QJI` → bare tuple; `EBBSn` goes through VXX and
+  /// answers `EBBSn=W,R,G,B`.
+  final rgbw = <String, String>{
+    for (final k in ['JI', 'JO', 'EBBS0', 'EBBS1', 'EBBS2', 'EBBS3'])
+      k: '000,000,000,000',
+  };
+
+  /// The reply, or null when [cmd] isn't an edge blending command.
+  String? reply(String cmd) {
+    if (cmd.startsWith('QVX:')) {
+      final key = cmd.substring(4);
+      if (vxx.containsKey(key)) return '$key=${_nt(vxx[key]!)}';
+      if (rgbw.containsKey(key)) return '$key=${rgbw[key]}';
+      return null;
+    }
+    if (cmd.startsWith('VXX:')) {
+      final eq = cmd.indexOf('=');
+      if (eq < 0) return null;
+      final key = cmd.substring(4, eq);
+      final value = cmd.substring(eq + 1);
+      if (vxx.containsKey(key)) {
+        final n = int.tryParse(value);
+        if (n == null || !_write(vxx, key, n)) return 'ER402';
+        return '$key=${_nt(n)}';
+      }
+      if (rgbw.containsKey(key)) {
+        if (!_validTuple(value)) return 'ER402';
+        rgbw[key] = value;
+        return '$key=$value';
+      }
+      return null;
+    }
+    if (cmd.length == 3 && cmd.startsWith('Q')) {
+      final key = cmd.substring(1);
+      if (legacy.containsKey(key)) return '${legacy[key]}';
+      if (rgbw.containsKey(key)) return rgbw[key];
+      return null;
+    }
+    if (cmd.length > 4 && cmd.startsWith('V') && cmd[3] == ':') {
+      final key = cmd.substring(1, 3);
+      final value = cmd.substring(4);
+      if (legacy.containsKey(key)) {
+        final n = int.tryParse(value);
+        if (n == null || !_write(legacy, key, n)) return 'ER402';
+        return cmd;
+      }
+      if (rgbw.containsKey(key)) {
+        if (!_validTuple(value)) return 'ER402';
+        rgbw[key] = value;
+        return cmd;
+      }
+    }
+    return null;
+  }
+
+  /// Sets [key] if the whole state still fits the §8 rules, else keeps the
+  /// old value.
+  bool _write(Map<String, int> regs, String key, int n) {
+    final old = regs[key]!;
+    regs[key] = n;
+    if (_valid()) return true;
+    regs[key] = old;
+    return false;
+  }
+
+  bool _valid() {
+    bool flag(int x, [int max = 1]) => x >= 0 && x <= max;
+    if (!flag(vxx['EDBI0']!, 2) ||
+        !flag(vxx['EATI1']!) ||
+        !flag(vxx['EBMI1']!) ||
+        [for (var i = 1; i <= 6; i++) vxx['EBII$i']!].any((x) => !flag(x)) ||
+        ['GU', 'GB', 'GL', 'GR', 'GM'].any((k) => !flag(legacy[k]!))) {
+      return false;
+    }
+    for (final e in _edges) {
+      final start = legacy[e.start]!;
+      final width = vxx[e.width]!;
+      final border = legacy[e.border]!;
+      if (start < 0 || width < 0 || border < 0) return false;
+      if (start + width > e.span) return false;
+      if (width + vxx[e.opposite]! > e.span) return false;
+      if (border + width > e.span) return false;
+    }
+    return true;
+  }
+
+  static bool _validTuple(String s) {
+    final parts = s.split(',');
+    return parts.length == 4 &&
+        parts.every((p) {
+          final n = int.tryParse(p);
+          return p.length == 3 && n != null && n >= 0 && n <= 255;
+        });
+  }
+
+  static String _nt(int n) =>
+      '${n < 0 ? '-' : '+'}${n.abs().toString().padLeft(5, '0')}';
 }
 
 /// What --demo-errors starts with, by projector number.

@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:projector_grid/features/workspace/domain/blend_edge.dart';
 import 'package:projector_grid/features/workspace/domain/projector_node.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/common/projector_settings_client.dart';
+import 'package:projector_grid/features/workspace/presentation/widgets/edge_blending/black_level_state.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/edge_blending/edge_blend_side.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/edge_blending/edge_blend_state.dart';
 
@@ -180,5 +181,137 @@ void main() {
       await settle();
       expect(sent(), ['VXX:EDBI0=+00002', 'VGM:1', 'VXX:EATI1=+00001']);
     });
+
+    group('Black Level', () {
+      setUp(() async {
+        service.rawResponses.addAll({
+          'QJI': '010,020,030,040',
+          'QVX:EBII1': 'EBII1=+00000',
+          'QJO': '005,005,005,005',
+          'QVX:EBII2': 'EBII2=+00001',
+          'QJL': '100',
+        });
+        await side.loadBlack();
+        service.sentRaw.clear();
+      });
+
+      test('loads lazily, apart from the blend tab', () {
+        expect(side.black![LevelSlot.nonOverlapped].value, (
+          w: 10,
+          r: 20,
+          g: 30,
+          b: 40,
+        ));
+        expect(side.black![LevelSlot.border].interlocked, isTrue);
+        expect(side.black!.borderWidth(BlendEdge.left), 100);
+        expect(side.blend[BlendEdge.left].width, 192);
+      });
+
+      test('an interlocked level is written as W,W,W,W', () async {
+        side.previewLevel(LevelSlot.border, RgbwChannel.w, 12);
+        side.commitLevel(LevelSlot.border);
+        await settle();
+        expect(sent(), ['VJO:012,012,012,012']);
+      });
+
+      test('a free level sends its four channels as they are', () async {
+        side.previewLevel(LevelSlot.upper, RgbwChannel.g, 7);
+        side.commitLevel(LevelSlot.upper);
+        await settle();
+        expect(sent(), ['VXX:EBBS0=000,000,007,000']);
+      });
+
+      test('Interlocked ON writes the flag, then R/G/B = W', () async {
+        side.setInterlocked(LevelSlot.nonOverlapped, true);
+        await settle();
+        expect(sent(), ['VXX:EBII1=+00001', 'VJI:010,010,010,010']);
+        expect(side.black![LevelSlot.nonOverlapped].value, (
+          w: 10,
+          r: 10,
+          g: 10,
+          b: 10,
+        ));
+      });
+
+      test('Interlocked OFF writes only the flag', () async {
+        side.setInterlocked(LevelSlot.border, false);
+        await settle();
+        expect(sent(), ['VXX:EBII2=+00000']);
+      });
+
+      test('border width uses the legacy 4-digit write', () async {
+        side.preview(BlendEdge.left, EdgePart.border, 250);
+        side.commit(BlendEdge.left, EdgePart.border);
+        side.resetBorder(BlendEdge.left);
+        await settle();
+        expect(sent(), ['VJL:0250', 'VJL:0000']);
+      });
+
+      test('mode writes EBMI1', () async {
+        side.setBlackMode(BlackLevelMode.blackOnly);
+        await settle();
+        expect(sent(), ['VXX:EBMI1=+00001']);
+      });
+    });
+  });
+
+  group('parseBlackLevelState', () {
+    test('reads tuples, flags and border widths in query order', () {
+      final replies = {
+        'QVX:EBMI1': 'EBMI1=+00001',
+        'QVX:EBBS3': 'EBBS3=001,002,003,004',
+        'QVX:EBII6': 'EBII6=+00001',
+        'QJB': '0300',
+      };
+      final state = parseBlackLevelState([
+        for (final q in blackLevelQueries()) replies[q],
+      ]);
+      expect(blackLevelQueries(), hasLength(17));
+      expect(state.mode, BlackLevelMode.blackOnly);
+      expect(
+        state[LevelSlot.right],
+        const RgbwLevel(value: (w: 1, r: 2, g: 3, b: 4), interlocked: true),
+      );
+      expect(
+        state[LevelSlot.nonOverlapped],
+        const RgbwLevel(value: (w: 0, r: 0, g: 0, b: 0), interlocked: false),
+      );
+      expect(state.borderWidth(BlendEdge.lower), 300);
+    });
+  });
+
+  group('RgbwLevel', () {
+    const free = RgbwLevel(value: (w: 5, r: 6, g: 7, b: 8), interlocked: false);
+
+    test('a free channel changes alone', () {
+      expect(free.withChannel(RgbwChannel.b, 9).value, (
+        w: 5,
+        r: 6,
+        g: 7,
+        b: 9,
+      ));
+    });
+
+    test('interlocked: shows W everywhere and moves all four', () {
+      final locked = free.copyWith(interlocked: true);
+      expect(locked.shown(RgbwChannel.r), 5);
+      expect(locked.withChannel(RgbwChannel.w, 3).value, (
+        w: 3,
+        r: 3,
+        g: 3,
+        b: 3,
+      ));
+    });
+  });
+
+  test('border width max is the raster minus the own blend width', () {
+    final (base, raster) = parseEdgeBlendState(
+      List.filled(edgeBlendQueries().length, null),
+    );
+    final state = base.withEdge(
+      BlendEdge.left,
+      const EdgeSettings(enabled: false, start: 0, width: 200),
+    );
+    expect(state.maxFor(BlendEdge.left, EdgePart.border, raster), 1720);
   });
 }

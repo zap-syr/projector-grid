@@ -133,7 +133,7 @@ class _EdgeCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              _EdgeSideIcon(edge: edge, enabled: settings.enabled),
+              EdgeSideIcon(edge: edge, enabled: settings.enabled),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -178,8 +178,8 @@ class _EdgeCard extends StatelessWidget {
 
 /// A small frame with the edge's side drawn thick, so the four cards read
 /// at a glance.
-class _EdgeSideIcon extends StatelessWidget {
-  const _EdgeSideIcon({required this.edge, required this.enabled});
+class EdgeSideIcon extends StatelessWidget {
+  const EdgeSideIcon({super.key, required this.edge, required this.enabled});
 
   final BlendEdge edge;
   final bool enabled;
