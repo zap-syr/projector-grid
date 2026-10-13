@@ -20,6 +20,13 @@
 //     zone-end lines may cross, and whether enabling an edge changes the
 //     shared-raster cap. To run only this phase, set the other probe* flags
 //     to false (2f needs no earlier phase).
+//   Phase 2g (probeWChannel, interactive): what the W in the W,R,G,B black
+//     level tuples does — Geometry Manager Pro only shows R/G/B. Writes
+//     visible levels and asks you what the screen and the OSD show, then
+//     (optional) asks you to set levels in GMP and reads back what it wrote.
+//     Also asks which EBMI1 value is which Black Level Mode. Needs a black
+//     input signal and someone watching the screen; type answers at the
+//     prompts. Runs last; set the other probe* flags to false to run it alone.
 //
 // Phase 2 visibly changes the projected image while it runs. Use a unit that
 // is not in a live show. Every register it touches is restored from the
@@ -43,6 +50,7 @@ const bool probeRgbw = true; // RGBW round-trip + Interlocked behavior
 const bool probeModeOff = true; // which registers answer while EDBI0 = Off
 const bool probeQpd = true; // limits with Quad Pixel Drive on vs off
 const bool probeOpposite = true; // start/width vs the opposite edge, enable
+const bool probeWChannel = true; // what W does (interactive, needs a viewer)
 
 // Upper bound for the ceiling search — legacy start/border commands only
 // carry 4 digits, so nothing above 9999 is expressible on the wire.
@@ -512,6 +520,101 @@ Future<void> probeOppositeEdges() async {
   }
 }
 
+// ── Phase 2: what W does (interactive) ───────────────────────────────────────
+/// Prints [prompt], waits for a line on stdin and records it as a finding.
+/// An empty line is recorded as "no answer".
+String ask(String label, String prompt) {
+  stdout.write('\n  $prompt\n  > ');
+  final answer = stdin.readLineSync()?.trim() ?? '';
+  note('$label: ${answer.isEmpty ? '(no answer)' : answer}');
+  return answer;
+}
+
+/// Geometry Manager Pro shows only R/G/B for every black level, while the
+/// protocol carries W,R,G,B (plan/EDGE_BLENDING_PLAN.md §8 "W channel").
+/// Either W is only the OSD's "all channels" slider and the image uses R/G/B,
+/// or W is an offset on top of them. The projector can't tell us which, so a
+/// person watching the screen does.
+Future<void> probeWMeaning() async {
+  header('Phase 2g — what W does in the black level tuples (interactive)');
+  stdout.writeln(
+    '  Feed a full-screen BLACK signal and watch the screen. Blend zones are\n'
+    '  zeroed, so the Non-overlapped level covers the whole image.',
+  );
+  await zeroZones();
+  await send(nonOvIlReg.write(0));
+
+  Future<void> show(String tuple, String label, String question) async {
+    final w = await send(nonOvReg.write(tuple));
+    final back = await send(nonOvReg.query);
+    stdout.writeln('\n  VJI:$tuple → "$w", read back "$back"');
+    ask(label, question);
+  }
+
+  await show(
+    '000,000,000,000',
+    'baseline 000,000,000,000',
+    'Baseline (all 0). Note how dark black is (Enter to continue).',
+  );
+  await show(
+    '100,000,000,000',
+    'W=100 only',
+    'W=100, R=G=B=0. Did black rise vs the baseline? Gray / tinted / no change?',
+  );
+  ask(
+    'OSD with W=100 only',
+    'Open the OSD Black Level Adjustment > Non-overlapped menu: what values '
+        'does it show (WHITE/RED/GREEN/BLUE or other)?',
+  );
+  await show(
+    '000,100,000,000',
+    'R=100 only',
+    'R=100, W=G=B=0. Did black turn red?',
+  );
+  await show(
+    '100,100,000,000',
+    'W=100 R=100',
+    'W=100, R=100. Same as R=100 alone, or brighter / whiter?',
+  );
+  await show(
+    '000,100,100,100',
+    'R=G=B=100, W=0',
+    'R=G=B=100, W=0. Same gray as W=100 only, or different?',
+  );
+  await send(nonOvReg.write('000,000,000,000'));
+
+  // What GMP writes — the dialog should write the same so the two agree.
+  final gmp = ask(
+    'GMP free write',
+    'Optional, needs Geometry Manager Pro connected to this projector. In GMP '
+        'Black Level Adjustment, untick Interlocked on Non-Overlapped and set '
+        'R=10, G=20, B=30, then press Enter (type s to skip the GMP steps).',
+  );
+  if (gmp.toLowerCase() != 's') {
+    note(
+      'after GMP R=10 G=20 B=30: QJI "${await send(nonOvReg.query)}", '
+      'EBII1 "${await send(nonOvIlReg.query)}"',
+    );
+    ask(
+      'GMP interlocked write',
+      'In GMP tick Interlocked on Non-Overlapped and set R=40, then press '
+          'Enter.',
+    );
+    note(
+      'after GMP Interlocked R=40: QJI "${await send(nonOvReg.query)}", '
+      'EBII1 "${await send(nonOvIlReg.query)}"',
+    );
+  }
+
+  // EBMI1 order: the sheet says 0 = Soft edge + Black level, unconfirmed.
+  const blackModeReg = Reg('Black level mode', 'EBMI1', Fmt.vxxInt);
+  for (final v in [0, 1]) {
+    final w = await send(blackModeReg.write(v));
+    stdout.writeln('\n  VXX:EBMI1=${f5(v)} → "$w"');
+    ask('EBMI1=$v', 'Which Black Level Mode does the OSD (or GMP) show now?');
+  }
+}
+
 // ── Phase 2: Quad Pixel Drive on vs off ──────────────────────────────────────
 /// Measures Upper/Left ceilings in both QPD states, and whether toggling QPD
 /// rescales stored values. QPDI1 only answers while geometry mode (GMMI0) is
@@ -676,6 +779,7 @@ Future<void> main(List<String> args) async {
         if (probeModeOff) await probeWhileOff();
         if (probeQpd) await probeQuadPixelDrive();
         if (probeOpposite) await probeOppositeEdges();
+        if (probeWChannel) await probeWMeaning();
       } finally {
         await restore(snap);
       }
