@@ -92,6 +92,12 @@ class _ProjectorCardState extends ConsumerState<ProjectorCard> {
     final isSelected = ref.watch(
       selectionProvider.select((ids) => ids.contains(node.id)),
     );
+    // Edge Blending opens pair mode for exactly this selection.
+    final inPair = ref.watch(
+      selectionProvider.select(
+        (ids) => ids.length == 2 && ids.contains(node.id),
+      ),
+    );
     final alignmentRole = ref.watch(
       alignmentProvider.select((s) => s.roles[node.id]),
     );
@@ -275,7 +281,9 @@ class _ProjectorCardState extends ConsumerState<ProjectorCard> {
                   MenuItemButton(
                     onPressed: () => _closeAndRun(widget.onEdgeBlending),
                     leadingIcon: const Icon(Icons.gradient),
-                    child: const Text('Edge Blending'),
+                    child: Text(
+                      inPair ? 'Edge Blending (2 projectors)' : 'Edge Blending',
+                    ),
                   ),
                   MenuItemButton(
                     onPressed: () => _closeAndRun(widget.onRemotePreview),

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/blend_edge.dart';
+import '../../../domain/edge_blend_pair.dart';
 import '../../../domain/projector_node.dart';
 import '../../providers/protocol_service_provider.dart';
 import '../command_failure_notice.dart';
@@ -20,11 +21,12 @@ import 'edge_blend_state.dart';
 /// Esc clears it.
 typedef EdgeSelection = ({int side, BlendEdge edge, EdgePart part});
 
-/// Edge Blending and Black Level for one projector. Takes a list so pair
-/// mode (two projectors, plan §9) can be added without reshaping it.
+/// Edge Blending and Black Level for one projector, or for two in pair mode
+/// (plan §9): both rasters on one canvas, the panel shows the active one,
+/// and mode, Markers and Auto test pattern are written to both.
 class EdgeBlendingDialog extends ConsumerStatefulWidget {
   const EdgeBlendingDialog({super.key, required this.nodes})
-    : assert(nodes.length == 1, 'pair mode (plan §9) is not built yet');
+    : assert(nodes.length == 1 || nodes.length == 2);
 
   final List<ProjectorNode> nodes;
 
@@ -33,28 +35,51 @@ class EdgeBlendingDialog extends ConsumerStatefulWidget {
 }
 
 class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
-  late final List<EdgeBlendSide> _sides = [
-    for (final node in widget.nodes)
-      EdgeBlendSide(
-        node: node,
-        client: ProjectorSettingsClient(
-          service: ref.read(protocolServiceProvider),
-          node: node,
-          onFailure: (cmd) {
-            if (mounted) notifyCommandFailure(context, cmd);
-          },
-        ),
-      ),
-  ];
+  /// In pair mode A (left / upper) first.
+  late List<EdgeBlendSide> _sides;
+  PairArrangement _arrangement = PairArrangement.sideBySide;
 
-  final int _active = 0;
+  int _active = 0;
+  int _tab = 0;
   EdgeSelection? _selection;
 
   EdgeBlendSide get _side => _sides[_active];
 
+  bool get _pair => _sides.length == 2;
+
+  /// Shared writes skip a projector that never answered: it shows its own
+  /// "No reply" and gets the values on Retry from the projector itself.
+  Iterable<EdgeBlendSide> get _reachable =>
+      _sides.where((s) => !s.loading && !s.unreachable);
+
   @override
   void initState() {
     super.initState();
+    final service = ref.read(protocolServiceProvider);
+    var nodes = widget.nodes;
+    if (nodes.length == 2) {
+      final guess = guessPairArrangement(
+        (x: nodes[0].x, y: nodes[0].y),
+        (x: nodes[1].x, y: nodes[1].y),
+      );
+      _arrangement = guess.arrangement;
+      if (guess.swapped) nodes = nodes.reversed.toList();
+    }
+    _sides = [
+      for (final node in nodes)
+        EdgeBlendSide(
+          node: node,
+          client: ProjectorSettingsClient(
+            service: service,
+            node: node,
+            onFailure: (cmd) {
+              if (mounted) notifyCommandFailure(context, cmd);
+            },
+          ),
+        ),
+    ];
+    // Each side's queryAll batches on its own projector, so the two loads
+    // run in parallel without contending.
     for (final side in _sides) {
       side.addListener(_onSideChanged);
       side.load();
@@ -72,6 +97,41 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
   }
 
   void _onSideChanged() => setState(() {});
+
+  void _setActive(int index) {
+    if (index == _active) return;
+    setState(() => _active = index);
+    _loadBlackIfShown();
+  }
+
+  /// Black Level loads per projector, the first time it's shown on that
+  /// tab: its ~17 queries are wasted if the user never goes there.
+  void _loadBlackIfShown() {
+    final side = _side;
+    if (_tab == 1 && side.black == null && !side.unreachable) {
+      side.loadBlack();
+    }
+  }
+
+  /// The selection follows its projector, so A and B swap places in the
+  /// list but each keeps what was picked on it.
+  void _swap() {
+    setState(() {
+      _sides = _sides.reversed.toList();
+      _active = 1 - _active;
+      final s = _selection;
+      if (s != null) {
+        _selection = (side: 1 - s.side, edge: s.edge, part: s.part);
+      }
+    });
+  }
+
+  /// One value across the reachable projectors, or null when they differ
+  /// (nothing shown as selected; picking a value writes it to both).
+  T? _shared<T>(T Function(EdgeBlendSide s) get) {
+    final values = _reachable.map(get).toSet();
+    return values.length == 1 ? values.first : null;
+  }
 
   /// The selection keeps the last blend part (Start / Width) even when the
   /// Black Level tab picks the edge: arrows there move the border anyway,
@@ -109,7 +169,9 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
-    final side = _side;
+    final title = _pair
+        ? _sides.map((s) => s.node.name).join(', ')
+        : _side.node.ipAddress;
 
     return Focus(
       canRequestFocus: false,
@@ -128,13 +190,17 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                DialogTitleBar(title: 'Edge Blending - ${side.node.ipAddress}'),
-                if (side.loading)
-                  const Expanded(
-                    child: Center(child: CircularProgressIndicator()),
+                DialogTitleBar(title: 'Edge Blending - $title'),
+                if (_reachable.isEmpty)
+                  Expanded(
+                    child: _sides.any((s) => s.loading)
+                        ? const Center(child: CircularProgressIndicator())
+                        : _buildNoReply(_sides, () {
+                            for (final s in _sides) {
+                              s.load();
+                            }
+                          }),
                   )
-                else if (side.unreachable)
-                  Expanded(child: _buildNoReply(side, side.load))
                 else ...[
                   Padding(
                     padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
@@ -143,17 +209,23 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
                         for (final m in EdgeBlendMode.values)
                           ButtonSegment(value: m, label: Text(m.label)),
                       ],
-                      selected: {side.blend.mode},
+                      selected: {?_shared((s) => s.blend.mode)},
+                      // Mixed modes in a pair: no segment is selected.
+                      emptySelectionAllowed: true,
                       showSelectedIcon: false,
-                      onSelectionChanged: (s) => side.setMode(s.first),
+                      onSelectionChanged: (s) {
+                        if (s.isEmpty) return;
+                        for (final side in _reachable) {
+                          side.setMode(s.first);
+                        }
+                      },
                     ),
                   ),
                   const Divider(height: 1),
                   TabBar(
-                    // Black Level loads on its first open: its ~17 queries
-                    // are wasted if the user never goes there.
                     onTap: (i) {
-                      if (i == 1 && side.black == null) side.loadBlack();
+                      _tab = i;
+                      _loadBlackIfShown();
                     },
                     tabs: const [
                       Tab(text: 'Edge Blending'),
@@ -168,13 +240,7 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
                       // Horizontal handle drags on the canvas must never
                       // turn into a tab swipe.
                       physics: const NeverScrollableScrollPhysics(),
-                      children: [
-                        DialogSplitLayout(
-                          left: _buildCanvas(side, blackTab: false),
-                          right: _dimmedWhenOff(_buildBlendPanel(side)),
-                        ),
-                        _buildBlackTab(side),
-                      ],
+                      children: [_buildBlendTab(), _buildBlackTab()],
                     ),
                   ),
                 ],
@@ -201,93 +267,229 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
     );
   }
 
-  /// The same canvas on both tabs; on Black Level its handles move the
-  /// border widths, so the selection is shown as [EdgePart.border] there.
-  Widget _buildCanvas(EdgeBlendSide side, {required bool blackTab}) {
+  /// The active projector's own load state on the Edge Blending tab, or
+  /// null once it's ready. In a pair the other projector stays usable.
+  Widget? _blendStatus(EdgeBlendSide side) {
+    if (side.loading) return const Center(child: CircularProgressIndicator());
+    if (side.unreachable) return _buildNoReply([side], side.load);
+    return null;
+  }
+
+  Widget? _blackStatus(EdgeBlendSide side) {
+    final status = _blendStatus(side);
+    if (status != null) return status;
+    if (side.blackUnreachable) return _buildNoReply([side], side.loadBlack);
+    if (side.black == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    return null;
+  }
+
+  Widget _buildBlendTab() {
+    final side = _side;
+    final status = _blendStatus(side);
+    return DialogSplitLayout(
+      left: _buildLeft(blackTab: false, status: status),
+      right: _buildRight(status == null ? _buildBlendPanel(side) : null),
+    );
+  }
+
+  /// The pair controls and Reset all over the canvas, which is the same on
+  /// both tabs; on Black Level its handles move the border widths, so the
+  /// selection is shown as [EdgePart.border] there. [status] stands in for
+  /// the canvas while the active projector isn't ready, with the pair
+  /// controls still there to switch to the other one.
+  Widget _buildLeft({required bool blackTab, required Widget? status}) {
+    final side = _side;
     final edge = _selectedEdge;
-    final interactive = side.blend.mode != EdgeBlendMode.off;
+    final interactive = status == null && side.blend.mode != EdgeBlendMode.off;
     final reset = blackTab ? side.resetBorder : side.resetEdge;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Align(
-          alignment: Alignment.topRight,
-          child: CustomTooltip(
-            message: blackTab ? 'Reset all border widths' : 'Reset all edges',
-            child: IconButton(
-              icon: const Icon(Icons.restart_alt),
-              iconSize: 20,
-              onPressed: interactive
-                  ? () => BlendEdge.values.forEach(reset)
-                  : null,
+        Row(
+          children: [
+            if (_pair) ...[
+              const SizedBox(width: 12),
+              SegmentedButton<PairArrangement>(
+                segments: [
+                  for (final a in PairArrangement.values)
+                    ButtonSegment(value: a, label: Text(a.label)),
+                ],
+                selected: {_arrangement},
+                showSelectedIcon: false,
+                style: const ButtonStyle(visualDensity: VisualDensity.compact),
+                onSelectionChanged: (s) =>
+                    setState(() => _arrangement = s.first),
+              ),
+              CustomTooltip(
+                message: 'Swap projectors',
+                child: IconButton(
+                  icon: const Icon(Icons.swap_horiz),
+                  iconSize: 20,
+                  onPressed: _swap,
+                ),
+              ),
+            ],
+            const Spacer(),
+            CustomTooltip(
+              message: blackTab ? 'Reset all border widths' : 'Reset all edges',
+              child: IconButton(
+                icon: const Icon(Icons.restart_alt),
+                iconSize: 20,
+                onPressed: interactive
+                    ? () => BlendEdge.values.forEach(reset)
+                    : null,
+              ),
             ),
-          ),
+          ],
         ),
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
-            child: EdgeBlendCanvas(
-              state: side.blend,
-              black: blackTab ? side.black : null,
-              raster: side.raster,
-              interactive: interactive,
-              selection: edge == null
-                  ? null
-                  : (
-                      edge: edge,
-                      part: blackTab ? EdgePart.border : _selection!.part,
-                    ),
-              onSelect: _select,
-              onClearSelection: () => setState(() => _selection = null),
-              onPreview: side.preview,
-              onCommit: side.commit,
-              onResetEdge: reset,
+        if (_pair)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+            child: Wrap(
+              spacing: 8,
+              children: [
+                for (var i = 0; i < _sides.length; i++)
+                  _ProjectorPill(
+                    node: _sides[i].node,
+                    active: i == _active,
+                    onTap: () => _setActive(i),
+                  ),
+              ],
             ),
           ),
+        Expanded(
+          child:
+              status ??
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
+                child: EdgeBlendCanvas(
+                  state: side.blend,
+                  black: blackTab ? side.black : null,
+                  raster: side.raster,
+                  interactive: interactive,
+                  selection: edge == null
+                      ? null
+                      : (
+                          edge: edge,
+                          part: blackTab ? EdgePart.border : _selection!.part,
+                        ),
+                  onSelect: _select,
+                  onClearSelection: () => setState(() => _selection = null),
+                  onPreview: side.preview,
+                  onCommit: side.commit,
+                  onResetEdge: reset,
+                ),
+              ),
         ),
       ],
     );
   }
 
-  Widget _buildBlackTab(EdgeBlendSide side) {
-    final black = side.black;
-    if (side.blackUnreachable) return _buildNoReply(side, side.loadBlack);
-    if (black == null) return const Center(child: CircularProgressIndicator());
-    return DialogSplitLayout(
-      left: _buildCanvas(side, blackTab: true),
-      right: _dimmedWhenOff(
-        BlackLevelPanel(
-          black: black,
-          blend: side.blend,
-          raster: side.raster,
-          selectedEdge: _selectedEdge,
-          onModeChanged: side.setBlackMode,
-          onLevelChanged: (slot, channel, v) {
-            final edge = slot.edge;
-            if (edge != null && _selectedEdge != edge) {
-              _select(edge, EdgePart.border);
-            }
-            side.previewLevel(slot, channel, v);
-          },
-          onLevelCommitted: side.commitLevel,
-          onInterlockedChanged: side.setInterlocked,
-          onBorderWidthChanged: (edge, v) {
-            if (_selectedEdge != edge) _select(edge, EdgePart.border);
-            side.preview(edge, EdgePart.border, v);
-          },
-          onBorderWidthCommitted: (edge) => side.commit(edge, EdgePart.border),
-        ),
+  /// The panel, under the active projector's header in a pair. The header
+  /// isn't dimmed by Off: it names whose values these are.
+  Widget _buildRight(Widget? panel) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (_pair) _buildPanelHeader(),
+        if (panel != null) _dimmedWhenOff(panel),
+      ],
+    );
+  }
+
+  Widget _buildPanelHeader() {
+    final theme = Theme.of(context);
+    final muted = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    final node = _side.node;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Flexible(
+                child: Text(
+                  node.name,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(node.ipAddress, style: muted),
+              const Spacer(),
+              Text('Switch on the canvas', style: muted),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Divider(height: 1),
+        ],
       ),
     );
   }
 
+  Widget _buildBlackTab() {
+    final side = _side;
+    final status = _blackStatus(side);
+    final black = side.black;
+    return DialogSplitLayout(
+      left: _buildLeft(blackTab: true, status: status),
+      right: _buildRight(
+        status != null || black == null
+            ? null
+            : BlackLevelPanel(
+                black: black,
+                blend: side.blend,
+                raster: side.raster,
+                selectedEdge: _selectedEdge,
+                onModeChanged: side.setBlackMode,
+                onLevelChanged: (slot, channel, v) {
+                  final edge = slot.edge;
+                  if (edge != null && _selectedEdge != edge) {
+                    _select(edge, EdgePart.border);
+                  }
+                  side.previewLevel(slot, channel, v);
+                },
+                onLevelCommitted: side.commitLevel,
+                onInterlockedChanged: side.setInterlocked,
+                onBorderWidthChanged: (edge, v) {
+                  if (_selectedEdge != edge) _select(edge, EdgePart.border);
+                  side.preview(edge, EdgePart.border, v);
+                },
+                onBorderWidthCommitted: (edge) =>
+                    side.commit(edge, EdgePart.border),
+              ),
+      ),
+    );
+  }
+
+  /// Markers and Auto test pattern are shared: they show on only when on
+  /// for both, and a toggle writes both.
   Widget _buildBlendPanel(EdgeBlendSide side) {
     return EdgeBlendPanel(
-      state: side.blend,
+      state: side.blend.copyWith(
+        markers: _shared((s) => s.blend.markers) ?? false,
+        autoPattern: _shared((s) => s.blend.autoPattern) ?? false,
+      ),
       raster: side.raster,
       selectedEdge: _selectedEdge,
-      onMarkersChanged: side.setMarkers,
-      onAutoPatternChanged: side.setAutoPattern,
+      onMarkersChanged: (on) {
+        for (final s in _reachable) {
+          s.setMarkers(on);
+        }
+      },
+      onAutoPatternChanged: (on) {
+        for (final s in _reachable) {
+          s.setAutoPattern(on);
+        }
+      },
       onEnabledChanged: side.setEnabled,
       onValueChanged: (edge, part, v) {
         if (_selection?.edge != edge || _selection?.part != part) {
@@ -299,15 +501,47 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
     );
   }
 
-  Widget _buildNoReply(EdgeBlendSide side, VoidCallback onRetry) {
+  Widget _buildNoReply(List<EdgeBlendSide> sides, VoidCallback onRetry) {
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('No reply from ${side.node.ipAddress}'),
+          Text(
+            'No reply from ${sides.map((s) => s.node.ipAddress).join(', ')}',
+          ),
           const SizedBox(height: 12),
           OutlinedButton(onPressed: onRetry, child: const Text('Retry')),
         ],
+      ),
+    );
+  }
+}
+
+/// Picks the active projector in a pair. Filled with a primary outline when
+/// active, outlined otherwise.
+class _ProjectorPill extends StatelessWidget {
+  const _ProjectorPill({
+    required this.node,
+    required this.active,
+    required this.onTap,
+  });
+
+  final ProjectorNode node;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return CustomTooltip(
+      message: '${node.name}, ${node.ipAddress}',
+      child: ChoiceChip(
+        label: Text(node.name),
+        selected: active,
+        showCheckmark: false,
+        visualDensity: VisualDensity.compact,
+        side: BorderSide(color: active ? scheme.primary : scheme.outline),
+        onSelected: (_) => onTap(),
       ),
     );
   }

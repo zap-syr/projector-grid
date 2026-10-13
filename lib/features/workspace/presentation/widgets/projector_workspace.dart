@@ -10,6 +10,7 @@ import '../providers/alignment_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../providers/selection_provider.dart';
 import '../../domain/card_layout.dart';
+import '../../domain/edge_blend_pair.dart';
 import '../../domain/projector_node.dart';
 import '../../domain/projector_group.dart';
 import 'projector_card.dart';
@@ -1046,11 +1047,16 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
                                               );
                                             },
                                             onEdgeBlending: () {
+                                              final targets = edgeBlendTargets(
+                                                node,
+                                                ref.read(selectionProvider),
+                                                nodes,
+                                              );
                                               showDialog(
                                                 context: context,
                                                 builder: (_) =>
                                                     EdgeBlendingDialog(
-                                                      nodes: [node],
+                                                      nodes: targets,
                                                     ),
                                               );
                                             },

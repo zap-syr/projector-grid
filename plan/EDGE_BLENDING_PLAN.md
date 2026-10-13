@@ -563,9 +563,8 @@ wall of 3+ projectors is set up pair by pair.
 - Same rule as Remote Preview (`onRemotePreview` in `projector_workspace.dart`): the clicked
   card is part of a selection → the selection, else just the clicked card.
 - Selection of exactly 2 → pair mode. Selection of 3+ → the menu item stays enabled but
-  opens single mode for the clicked card, with a one-line note in the dialog header:
-  "Pair mode takes 2 projectors, opened PRJ-03 only". Disabling the item would leave no way
-  to open it from a big selection.
+  opens single mode for the clicked card, with no note (dropped 2026-10-13). Disabling
+  the item would leave no way to open it from a big selection.
 - Menu label in a 2-selection: **Edge Blending (2 projectors)**.
 - Title: `Edge Blending - PRJ-01, PRJ-02`.
 
@@ -654,6 +653,28 @@ The two projectors meet along one edge pair, the **facing edges**:
 ### Esc and keyboard
 Same as single mode (§2); arrows act on the selected `(side, edge)` part. A linked width
 moved by arrows mirrors on key-up together with the write.
+
+### Stages
+1. `[x]` **Pair domain** (2026-10-13): `domain/edge_blend_pair.dart` — `PairArrangement`
+   (facing edges), `edgeBlendTargets` (the opening rule), `guessPairArrangement`,
+   `canLinkRasters`, `linkedMax`, `pairOffsetB` / `pairExtent` (canvas layout in raster
+   lengths, each value as a fraction of its own span so mixed rasters line up). Tests:
+   `test/unit/edge_blend_pair_test.dart`.
+2. `[x]` **Opening + dialog plumbing** (2026-10-13): menu label in a 2-selection, pair
+   title; sides ordered A/B by the guess; parallel load, each side's own
+   loading / "No reply" with the pair controls still usable; shared mode / Markers / Auto
+   test pattern (mixed → nothing selected / off, a pick writes every reachable side);
+   panel header row; *Side by side / Stacked* + *Swap* above the canvas; Black Level
+   lazy per projector. **Temporary:** the canvas still draws only the active projector,
+   and the pills sit in a row above it until stage 3 places them by the rasters.
+3. `[ ]` **Pair canvas**: both rasters on the fixed-scale layout, inactive one dimmed,
+   pills outside the rasters, clicks / drags on either projector, B slides with A's
+   facing Start / Width.
+4. `[ ]` **Link**: toggle on the facing card, mirroring enable / Width / overlapped
+   level, linked max, mixed-tier disable + tooltip, "Widths differ" line, ER402 on one
+   side, linked row icon and `Icons.join_inner` header in the Overlapped table.
+5. `[ ]` Simulator WUXGA model, tests (`edge_blend_side_test` / canvas), format,
+   analyze, review, GUI check on 2 simulated projectors.
 
 ### Tests
 - Pure: arrangement guess from two card positions (`domain/edge_blend_pair.dart`), facing
