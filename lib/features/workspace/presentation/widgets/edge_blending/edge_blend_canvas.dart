@@ -8,47 +8,80 @@ import 'package:flutter/services.dart';
 
 import '../../../domain/blend_edge.dart';
 import '../../../domain/edge_blend_limits.dart';
+import '../../../domain/edge_blend_pair.dart';
+import '../../../domain/projector_node.dart';
 import '../common/key_hold_repeater.dart';
+import '../custom_tooltip.dart';
 import 'black_level_state.dart';
 import 'edge_blend_state.dart';
 
 typedef EdgePick = ({BlendEdge edge, EdgePart part});
+
+/// The edge picked on the canvas or in the panel, on projector [side]:
+/// arrows act on its [part], Esc clears it.
+typedef EdgeSelection = ({int side, BlendEdge edge, EdgePart part});
+
+/// One projector as the canvas draws it. [state] is null until it has
+/// loaded; the raster is then a placeholder labelled [status].
+@immutable
+class BlendCanvasSide {
+  const BlendCanvasSide({
+    required this.node,
+    required this.raster,
+    this.state,
+    this.black,
+    this.status = '',
+  });
+
+  final ProjectorNode node;
+  final EdgeBlendRaster raster;
+  final EdgeBlendState? state;
+
+  /// Null until this projector's Black Level values have loaded.
+  final BlackLevelState? black;
+  final String status;
+}
 
 /// The projector raster with each edge's blend zone: drag the Start / Width
 /// handles, arrows (Shift ×10) nudge the selected one. One paint pass and one
 /// gesture detector with its own hit-testing, so a drag repaints nothing but
 /// this canvas' layer.
 ///
-/// Given [black], it's the Black Level tab's canvas instead: overlapped
+/// With [blackTab] it's the Black Level tab's canvas instead: overlapped
 /// zones in their level's colour, hatched black border bands, and one
 /// handle per edge that moves the border width ([EdgePart.border]).
+///
+/// Two [sides] are pair mode (plan §9): both rasters on one fixed scale,
+/// overlapping by the facing edges' Start + Width + Start so the two ramps
+/// land on the same pixels; the [active] one is drawn normally, the other
+/// dimmed on top of it, and a pill by each raster switches between them.
 class EdgeBlendCanvas extends StatefulWidget {
   const EdgeBlendCanvas({
     super.key,
-    required this.state,
-    this.black,
-    required this.raster,
-    required this.interactive,
+    required this.sides,
+    this.active = 0,
+    this.arrangement = PairArrangement.sideBySide,
+    this.blackTab = false,
     required this.selection,
+    this.onActivate,
     required this.onSelect,
     required this.onClearSelection,
     required this.onPreview,
     required this.onCommit,
     required this.onResetEdge,
-  });
+  }) : assert(sides.length == 1 || sides.length == 2);
 
-  final EdgeBlendState state;
-  final BlackLevelState? black;
-  final EdgeBlendRaster raster;
-
-  /// False while the mode is Off: the zones stay visible, nothing moves.
-  final bool interactive;
-  final EdgePick? selection;
-  final void Function(BlendEdge edge, EdgePart part) onSelect;
+  final List<BlendCanvasSide> sides;
+  final int active;
+  final PairArrangement arrangement;
+  final bool blackTab;
+  final EdgeSelection? selection;
+  final ValueChanged<int>? onActivate;
+  final void Function(int side, BlendEdge edge, EdgePart part) onSelect;
   final VoidCallback onClearSelection;
-  final void Function(BlendEdge edge, EdgePart part, int v) onPreview;
-  final void Function(BlendEdge edge, EdgePart part) onCommit;
-  final void Function(BlendEdge edge) onResetEdge;
+  final void Function(int side, BlendEdge edge, EdgePart part, int v) onPreview;
+  final void Function(int side, BlendEdge edge, EdgePart part) onCommit;
+  final void Function(int side, BlendEdge edge) onResetEdge;
 
   @override
   State<EdgeBlendCanvas> createState() => _EdgeBlendCanvasState();
@@ -60,25 +93,38 @@ class _EdgeBlendCanvasState extends State<EdgeBlendCanvas> {
   static const double _handleHitRadius = 12;
   static const double _minZoneHitThickness = 10;
 
+  // Pair mode keeps the pills outside the rasters: a band above them side
+  // by side, to their left stacked.
+  static const double _pillBandTop = 36;
+  static const double _pillBandLeft = 132;
+  static const double _pillGap = 6;
+
   final _focusNode = FocusNode();
   late final _keys = KeyHoldRepeater(
     onStep: _onKeyStep,
     onRelease: () {
       final target = _keyTarget;
-      if (target != null) widget.onCommit(target.edge, target.part);
+      if (target != null) {
+        widget.onCommit(target.side, target.edge, target.part);
+      }
       _keyTarget = null;
     },
   );
 
-  _RasterBox? _box;
-  EdgePick? _hover;
+  List<_RasterBox> _boxes = const [];
+  EdgeSelection? _hover;
   bool _hoverOnHandle = false;
-  ({BlendEdge edge, EdgePart part, int v0, double in0})? _drag;
-  EdgePick? _keyTarget;
+
+  /// The box is the one at drag start: a facing Start or the wider facing
+  /// Width moves both rasters while it's dragged, and measuring against
+  /// the moving box would feed that back into the value. So the value
+  /// follows the pointer, and the handle moves half as far.
+  ({EdgeSelection pick, int v0, double in0, _RasterBox box})? _drag;
+  EdgeSelection? _keyTarget;
 
   // Manual double-click tracking, as in the Corner canvas: onDoubleTap
   // would delay every single click by kDoubleTapTimeout.
-  EdgePick? _lastTapped;
+  EdgeSelection? _lastTapped;
   DateTime? _lastTapTime;
 
   @override
@@ -87,10 +133,13 @@ class _EdgeBlendCanvasState extends State<EdgeBlendCanvas> {
     // Esc or a click elsewhere while an arrow is held: its key-up may never
     // reach us as a step for this edge, so end the hold (and send) now.
     // onCommit only queues the write, nothing rebuilds during this build.
-    if (widget.selection != old.selection || !widget.interactive) {
+    final target = _keyTarget;
+    if (widget.selection != old.selection ||
+        (target != null && !_editable(target.side))) {
       _keys.release();
     }
-    if (!widget.interactive) _hover = null;
+    final hover = _hover;
+    if (hover != null && !_editable(hover.side)) _hover = null;
   }
 
   @override
@@ -100,67 +149,153 @@ class _EdgeBlendCanvasState extends State<EdgeBlendCanvas> {
     super.dispose();
   }
 
-  bool get _blackMode => widget.black != null;
+  bool get _pair => widget.sides.length == 2;
 
-  int _valueOf(BlendEdge edge, EdgePart part) => part == EdgePart.border
-      ? widget.black!.borderWidth(edge)
-      : widget.state[edge].valueOf(part);
+  /// Loaded, not Off and, on Black Level, with that tab's values: its
+  /// zones and handles take clicks, drags and keys.
+  bool _editable(int side) {
+    if (side >= widget.sides.length) return false;
+    final s = widget.sides[side];
+    final state = s.state;
+    return state != null &&
+        state.mode != EdgeBlendMode.off &&
+        (!widget.blackTab || s.black != null);
+  }
 
   /// A disabled edge's blend handles are hidden; its border width is still
   /// accepted by the projector (§8), so the border handle never is.
-  bool _hasHandles(BlendEdge edge) => _blackMode || widget.state[edge].enabled;
+  bool _hasHandles(int side, BlendEdge edge) =>
+      _editable(side) &&
+      (widget.blackTab || widget.sides[side].state![edge].enabled);
+
+  int _valueOf(int side, BlendEdge edge, EdgePart part) {
+    final s = widget.sides[side];
+    return part == EdgePart.border
+        ? s.black!.borderWidth(edge)
+        : s.state![edge].valueOf(part);
+  }
+
+  /// The active projector first: its handles are drawn on top, so they win
+  /// where the two overlap.
+  List<int> get _hitOrder => [
+    widget.active,
+    for (var i = 0; i < widget.sides.length; i++)
+      if (i != widget.active) i,
+  ];
+
+  // ─── Layout ──────────────────────────────────────────────────────────────
+  List<_RasterBox> _layout(Size size) {
+    if (!_pair) {
+      final raster = widget.sides.single.raster;
+      return [_RasterBox.fit(size, raster, _margin)];
+    }
+    final a = widget.sides[0];
+    final b = widget.sides[1];
+    final arrangement = widget.arrangement;
+    final sideBySide = arrangement == PairArrangement.sideBySide;
+    final bandTop = sideBySide ? _pillBandTop : 0.0;
+    final bandLeft = sideBySide ? 0.0 : _pillBandLeft;
+    final availW = max(0.0, size.width - 2 * _margin - bandLeft);
+    final availH = max(0.0, size.height - 2 * _margin - bandTop);
+    // Every supported raster is 16:10; both are drawn the same size, each
+    // mapping its own units.
+    final aspect = a.raster.v / a.raster.h;
+    final extent = pairExtent(arrangement);
+    final unitW = min(availW / extent.h, availH / (extent.v * aspect));
+    final unitH = unitW * aspect;
+    final origin = Rect.fromLTWH(
+      _margin + bandLeft + (availW - extent.h * unitW) / 2,
+      _margin + bandTop + (availH - extent.v * unitH) / 2,
+      unitW,
+      unitH,
+    );
+    FacingEdge? facing(BlendCanvasSide s, BlendEdge edge) {
+      final e = s.state?[edge];
+      return e == null
+          ? null
+          : (
+              enabled: e.enabled,
+              start: e.start,
+              width: e.width,
+              span: edgeBlendSpan(s.raster, edge),
+            );
+    }
+
+    final fa = facing(a, arrangement.facingA);
+    final fb = facing(b, arrangement.facingB);
+    // Until both have loaded there is no overlap to show: they just touch.
+    final pos = pairPositions(
+      fa == null || fb == null ? 0 : pairOverlap(fa, fb),
+    );
+    Rect at(double p) =>
+        origin.shift(sideBySide ? Offset(p * unitW, 0) : Offset(0, p * unitH));
+    return [_RasterBox(at(pos.a), a.raster), _RasterBox(at(pos.b), b.raster)];
+  }
 
   // ─── Hit-testing ─────────────────────────────────────────────────────────
   /// A handle (part set) beats a zone (part null); null = empty space.
-  ({BlendEdge edge, EdgePart? part})? _hitTest(Offset p) {
-    final box = _box;
-    if (box == null || !widget.interactive) return null;
-    final state = widget.state;
-    final black = widget.black;
-
-    EdgePick? nearest;
-    var nearestDist = _handleHitRadius;
-    for (final edge in BlendEdge.values) {
-      if (!_hasHandles(edge)) continue;
-      double dist(EdgePart part) =>
-          (box.handleAt(edge, _handleUnits(state, black, edge, part)) - p)
-              .distance;
-      final EdgePart part;
-      final double d;
-      if (black != null) {
-        (part, d) = (EdgePart.border, dist(EdgePart.border));
-      } else {
-        // Both handles share the line's midpoint, so at a small Width they
-        // overlap: Width is drawn on top and wins, and once it's pulled
-        // away Start is reachable again.
-        final widthDist = dist(EdgePart.width);
-        (part, d) = widthDist <= _handleHitRadius
-            ? (EdgePart.width, widthDist)
-            : (EdgePart.start, dist(EdgePart.start));
+  ({int side, BlendEdge edge, EdgePart? part})? _hitTest(Offset p) {
+    for (final i in _hitOrder) {
+      if (!_editable(i)) continue;
+      final s = widget.sides[i];
+      final box = _boxes[i];
+      EdgePick? nearest;
+      var nearestDist = _handleHitRadius;
+      for (final edge in BlendEdge.values) {
+        if (!_hasHandles(i, edge)) continue;
+        double dist(EdgePart part) =>
+            (box.handleAt(edge, _handleUnits(s.state!, s.black, edge, part)) -
+                    p)
+                .distance;
+        final EdgePart part;
+        final double d;
+        if (widget.blackTab) {
+          (part, d) = (EdgePart.border, dist(EdgePart.border));
+        } else {
+          // Both handles share the line's midpoint, so at a small Width they
+          // overlap: Width is drawn on top and wins, and once it's pulled
+          // away Start is reachable again.
+          final widthDist = dist(EdgePart.width);
+          (part, d) = widthDist <= _handleHitRadius
+              ? (EdgePart.width, widthDist)
+              : (EdgePart.start, dist(EdgePart.start));
+        }
+        if (d <= nearestDist) {
+          nearest = (edge: edge, part: part);
+          nearestDist = d;
+        }
       }
-      if (d <= nearestDist) {
-        nearest = (edge: edge, part: part);
-        nearestDist = d;
+      if (nearest != null) {
+        return (side: i, edge: nearest.edge, part: nearest.part);
       }
     }
-    if (nearest != null) return (edge: nearest.edge, part: nearest.part);
 
-    for (final edge in BlendEdge.values) {
-      final depth = black != null
-          ? black.borderWidth(edge)
-          : state[edge].start + state[edge].width;
-      if (box.bandHitRect(edge, depth, _minZoneHitThickness).contains(p)) {
-        return (edge: edge, part: null);
+    for (final i in _hitOrder) {
+      if (!_editable(i)) continue;
+      final s = widget.sides[i];
+      for (final edge in BlendEdge.values) {
+        final depth = _zoneDepth(s, edge);
+        if (_boxes[i]
+            .bandHitRect(edge, depth, _minZoneHitThickness)
+            .contains(p)) {
+          return (side: i, edge: edge, part: null);
+        }
       }
     }
     return null;
   }
 
+  /// Everything a click on [edge] covers: the band a blend edge darkens,
+  /// or the black border.
+  int _zoneDepth(BlendCanvasSide s, BlendEdge edge) => widget.blackTab
+      ? s.black!.borderWidth(edge)
+      : s.state![edge].start + s.state![edge].width;
+
   void _updateHover(Offset p) {
     final hit = _hitTest(p);
     final next = hit == null
         ? null
-        : (edge: hit.edge, part: hit.part ?? EdgePart.start);
+        : (side: hit.side, edge: hit.edge, part: hit.part ?? EdgePart.start);
     final onHandle = hit?.part != null;
     if (next != _hover || onHandle != _hoverOnHandle) {
       setState(() {
@@ -192,16 +327,17 @@ class _EdgeBlendCanvasState extends State<EdgeBlendCanvas> {
       // A click on a zone keeps the part already chosen on that edge.
       final sel = widget.selection;
       widget.onSelect(
+        hit.side,
         hit.edge,
-        _blackMode
+        widget.blackTab
             ? EdgePart.border
-            : sel != null && sel.edge == hit.edge
+            : sel != null && sel.side == hit.side && sel.edge == hit.edge
             ? sel.part
             : EdgePart.start,
       );
       return;
     }
-    final pick = (edge: hit.edge, part: part);
+    final pick = (side: hit.side, edge: hit.edge, part: part);
     final now = DateTime.now();
     final isDouble =
         _lastTapped == pick &&
@@ -209,8 +345,8 @@ class _EdgeBlendCanvasState extends State<EdgeBlendCanvas> {
         now.difference(_lastTapTime!) <= kDoubleTapTimeout;
     _lastTapped = pick;
     _lastTapTime = now;
-    widget.onSelect(pick.edge, pick.part);
-    if (isDouble) widget.onResetEdge(pick.edge);
+    widget.onSelect(pick.side, pick.edge, pick.part);
+    if (isDouble) widget.onResetEdge(pick.side, pick.edge);
   }
 
   void _onPanStart(DragStartDetails details) {
@@ -218,13 +354,14 @@ class _EdgeBlendCanvasState extends State<EdgeBlendCanvas> {
     final part = hit?.part;
     if (hit == null || part == null) return;
     _focusNode.requestFocus();
-    widget.onSelect(hit.edge, part);
+    widget.onSelect(hit.side, hit.edge, part);
+    final box = _boxes[hit.side];
     setState(() {
       _drag = (
-        edge: hit.edge,
-        part: part,
-        v0: _valueOf(hit.edge, part),
-        in0: _box!.inward(hit.edge, details.localPosition),
+        pick: (side: hit.side, edge: hit.edge, part: part),
+        v0: _valueOf(hit.side, hit.edge, part),
+        in0: box.inward(hit.edge, details.localPosition),
+        box: box,
       );
     });
   }
@@ -232,22 +369,24 @@ class _EdgeBlendCanvasState extends State<EdgeBlendCanvas> {
   void _onPanUpdate(DragUpdateDetails details) {
     final drag = _drag;
     if (drag == null) return;
-    final moved = _box!.inward(drag.edge, details.localPosition) - drag.in0;
-    _preview(drag.edge, drag.part, (drag.v0 + moved).round());
+    final pick = drag.pick;
+    final moved = drag.box.inward(pick.edge, details.localPosition) - drag.in0;
+    _preview(pick.side, pick.edge, pick.part, (drag.v0 + moved).round());
   }
 
   void _onPanEnd() {
     final drag = _drag;
     if (drag == null) return;
     setState(() => _drag = null);
-    widget.onCommit(drag.edge, drag.part);
+    widget.onCommit(drag.pick.side, drag.pick.edge, drag.pick.part);
   }
 
-  void _preview(BlendEdge edge, EdgePart part, int v) {
-    final max = widget.state.maxFor(edge, part, widget.raster);
+  void _preview(int side, BlendEdge edge, EdgePart part, int v) {
+    final s = widget.sides[side];
+    final max = s.state!.maxFor(edge, part, s.raster);
     final clamped = v.clamp(0, max);
-    if (clamped != _valueOf(edge, part)) {
-      widget.onPreview(edge, part, clamped);
+    if (clamped != _valueOf(side, edge, part)) {
+      widget.onPreview(side, edge, part, clamped);
     }
   }
 
@@ -272,8 +411,8 @@ class _EdgeBlendCanvasState extends State<EdgeBlendCanvas> {
     if (target == null || !mounted) return;
     final sign = _inwardSign(target.edge, key)!;
     final step = HardwareKeyboard.instance.isShiftPressed ? 10 : 1;
-    final current = _valueOf(target.edge, target.part);
-    _preview(target.edge, target.part, current + sign * step);
+    final current = _valueOf(target.side, target.edge, target.part);
+    _preview(target.side, target.edge, target.part, current + sign * step);
   }
 
   KeyEventResult _onKeyEvent(FocusNode node, KeyEvent event) {
@@ -283,9 +422,8 @@ class _EdgeBlendCanvasState extends State<EdgeBlendCanvas> {
       return KeyEventResult.handled;
     }
     final sel = widget.selection;
-    if (!widget.interactive ||
-        sel == null ||
-        !_hasHandles(sel.edge) ||
+    if (sel == null ||
+        !_hasHandles(sel.side, sel.edge) ||
         _inwardSign(sel.edge, event.logicalKey) == null) {
       return KeyEventResult.ignored;
     }
@@ -305,6 +443,14 @@ class _EdgeBlendCanvasState extends State<EdgeBlendCanvas> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final colors = (
+      raster: scheme.surfaceContainerHighest,
+      outline: scheme.outline,
+      start: scheme.primary,
+      end: scheme.tertiary,
+      idle: scheme.outlineVariant,
+      text: scheme.onSurfaceVariant,
+    );
     return Focus(
       focusNode: _focusNode,
       onKeyEvent: _onKeyEvent,
@@ -316,14 +462,13 @@ class _EdgeBlendCanvasState extends State<EdgeBlendCanvas> {
         label: 'Edge blend preview',
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final box = _RasterBox.fit(
-              constraints.biggest,
-              widget.raster,
-              _margin,
-            );
-            _box = box;
-            final drag = _drag;
-            return MouseRegion(
+            final size = constraints.biggest;
+            final boxes = _layout(size);
+            _boxes = boxes;
+            final drag = _drag?.pick;
+            final sel = widget.selection;
+            final hover = _hover;
+            final canvas = MouseRegion(
               cursor: _cursor,
               onHover: (e) => _updateHover(e.localPosition),
               onExit: (_) => setState(() => _hover = null),
@@ -336,36 +481,111 @@ class _EdgeBlendCanvasState extends State<EdgeBlendCanvas> {
                 onPanEnd: (_) => _onPanEnd(),
                 onPanCancel: _onPanEnd,
                 child: CustomPaint(
-                  size: constraints.biggest,
+                  size: size,
                   painter: _EdgeBlendPainter(
-                    box: box,
-                    state: widget.state,
-                    black: widget.black,
-                    interactive: widget.interactive,
-                    selection: widget.selection,
-                    hoverEdge: _hover?.edge,
-                    dragging: drag == null
-                        ? null
-                        : (edge: drag.edge, part: drag.part),
-                    raster: scheme.surfaceContainerHighest,
-                    outline: scheme.outline,
-                    startColor: scheme.primary,
-                    endColor: scheme.tertiary,
-                    idleZone: scheme.outlineVariant,
+                    sides: [
+                      for (var i = 0; i < widget.sides.length; i++)
+                        (
+                          box: boxes[i],
+                          state: widget.sides[i].state,
+                          black: widget.blackTab ? widget.sides[i].black : null,
+                          status: widget.sides[i].status,
+                          editable: _editable(i),
+                          selection: sel != null && sel.side == i
+                              ? (edge: sel.edge, part: sel.part)
+                              : null,
+                          hoverEdge: hover != null && hover.side == i
+                              ? hover.edge
+                              : null,
+                          dragging: drag != null && drag.side == i
+                              ? (edge: drag.edge, part: drag.part)
+                              : null,
+                        ),
+                    ],
+                    active: widget.active,
+                    blackTab: widget.blackTab,
+                    colors: colors,
                   ),
                 ),
               ),
+            );
+            if (!_pair) return canvas;
+            return Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Positioned.fill(child: ClipRect(child: canvas)),
+                for (var i = 0; i < 2; i++) _pill(i, boxes[i].rect, size),
+              ],
             );
           },
         ),
       ),
     );
   }
+
+  /// Side by side: above A's left corner and B's right one; stacked: left of
+  /// A's top and B's bottom. Opposite corners, so the two never collide.
+  Widget _pill(int i, Rect rect, Size size) {
+    final pill = ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: _pillBandLeft - 2 * _pillGap),
+      child: _ProjectorPill(
+        node: widget.sides[i].node,
+        active: i == widget.active,
+        onTap: () => widget.onActivate?.call(i),
+      ),
+    );
+    final first = i == 0;
+    return switch (widget.arrangement) {
+      PairArrangement.sideBySide => Positioned(
+        left: first ? rect.left : null,
+        right: first ? null : size.width - rect.right,
+        bottom: size.height - rect.top + _pillGap,
+        child: pill,
+      ),
+      PairArrangement.stacked => Positioned(
+        right: size.width - rect.left + _pillGap,
+        top: first ? rect.top : null,
+        bottom: first ? null : size.height - rect.bottom,
+        child: pill,
+      ),
+    };
+  }
+}
+
+/// Picks the active projector in a pair. Filled with a primary outline when
+/// active, outlined otherwise.
+class _ProjectorPill extends StatelessWidget {
+  const _ProjectorPill({
+    required this.node,
+    required this.active,
+    required this.onTap,
+  });
+
+  final ProjectorNode node;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return CustomTooltip(
+      message: '${node.name}, ${node.ipAddress}',
+      child: ChoiceChip(
+        label: Text(node.name, overflow: TextOverflow.ellipsis),
+        selected: active,
+        showCheckmark: false,
+        visualDensity: VisualDensity.compact,
+        side: BorderSide(color: active ? scheme.primary : scheme.outline),
+        onSelected: (_) => onTap(),
+      ),
+    );
+  }
 }
 
 /// The raster's on-screen rectangle and the unit ↔ pixel mapping.
+@immutable
 class _RasterBox {
-  _RasterBox(this.rect, this.raster);
+  const _RasterBox(this.rect, this.raster);
 
   /// The largest rectangle with the raster's aspect ratio that fits [size]
   /// minus [margin] on every side, centred.
@@ -441,6 +661,13 @@ class _RasterBox {
         ? Offset(line, rect.center.dy)
         : Offset(rect.center.dx, line);
   }
+
+  @override
+  bool operator ==(Object other) =>
+      other is _RasterBox && other.rect == rect && other.raster == raster;
+
+  @override
+  int get hashCode => Object.hash(rect, raster);
 }
 
 /// How far in from [edge] the line [part]'s handle sits on: Start, the zone
@@ -464,98 +691,154 @@ Color _levelColor(RgbwLevel level) => Color.fromARGB(
   level.shown(RgbwChannel.b),
 );
 
+/// One projector's share of a paint pass. [black] is null on the Edge
+/// Blending tab, and on Black Level until that projector's values load.
+typedef _PaintSide = ({
+  _RasterBox box,
+  EdgeBlendState? state,
+  BlackLevelState? black,
+  String status,
+  bool editable,
+  EdgePick? selection,
+  BlendEdge? hoverEdge,
+  EdgePick? dragging,
+});
+
+typedef _CanvasColors = ({
+  Color raster,
+  Color outline,
+  Color start,
+  Color end,
+  Color idle,
+  Color text,
+});
+
 class _EdgeBlendPainter extends CustomPainter {
   _EdgeBlendPainter({
-    required this.box,
-    required this.state,
-    required this.black,
-    required this.interactive,
-    required this.selection,
-    required this.hoverEdge,
-    required this.dragging,
-    required this.raster,
-    required this.outline,
-    required this.startColor,
-    required this.endColor,
-    required this.idleZone,
+    required this.sides,
+    required this.active,
+    required this.blackTab,
+    required this.colors,
   });
 
-  final _RasterBox box;
-  final EdgeBlendState state;
-  final BlackLevelState? black;
-  final bool interactive;
-  final EdgePick? selection;
-  final BlendEdge? hoverEdge;
-  final EdgePick? dragging;
-  final Color raster;
-  final Color outline;
-  final Color startColor;
-  final Color endColor;
-  final Color idleZone;
+  final List<_PaintSide> sides;
+  final int active;
+  final bool blackTab;
+  final _CanvasColors colors;
+
+  /// How much of the inactive projector shows through, drawn over the
+  /// active one so the shared zone reads as both.
+  static const double _inactiveOpacity = 0.45;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final rect = box.rect;
-    canvas.drawRect(rect, Paint()..color = raster);
+    final main = sides[active];
+    _paintBody(canvas, main);
+    for (var i = 0; i < sides.length; i++) {
+      if (i == active) continue;
+      canvas.saveLayer(
+        null,
+        Paint()..color = Color.fromRGBO(0, 0, 0, _inactiveOpacity),
+      );
+      _paintBody(canvas, sides[i]);
+      _paintHandles(canvas, sides[i]);
+      canvas.restore();
+    }
+    _paintHandles(canvas, main);
+    for (final side in sides) {
+      final drag = side.dragging;
+      if (drag != null) _paintValueChip(canvas, side, drag.edge, drag.part);
+    }
+  }
 
-    final black = this.black;
-    if (black != null) {
-      _paintBlack(canvas, black);
+  void _paintBody(Canvas canvas, _PaintSide side) {
+    final box = side.box;
+    final rect = box.rect;
+    canvas.drawRect(rect, Paint()..color = colors.raster);
+
+    final state = side.state;
+    if (state == null) {
+      _paintStatus(canvas, rect, side.status);
     } else {
-      for (final edge in BlendEdge.values) {
-        final s = state[edge];
-        if (s.enabled) {
-          _paintZone(canvas, edge, s);
-        } else if (s.width > 0) {
-          _dashedRect(
-            canvas,
-            box.zone(edge, s),
-            Paint()
-              ..color = idleZone
-              ..strokeWidth = 1.5,
-          );
+      final black = side.black;
+      if (black != null) {
+        _paintBlack(canvas, side, state, black);
+      } else {
+        for (final edge in BlendEdge.values) {
+          final s = state[edge];
+          // On Black Level before its values load, zones are outlines only.
+          if (s.enabled && !blackTab) {
+            _paintZone(canvas, side, edge, s);
+          } else if (s.width > 0) {
+            _dashedRect(
+              canvas,
+              box.zone(edge, s),
+              Paint()
+                ..color = colors.idle
+                ..strokeWidth = 1.5,
+            );
+          }
         }
       }
-    }
 
-    final hover = hoverEdge;
-    if (hover != null) {
-      final depth = black != null
-          ? black.borderWidth(hover)
-          : state[hover].start + state[hover].width;
-      canvas.drawRect(
-        box.bandHitRect(hover, depth, 4),
-        Paint()
-          ..color = startColor.withValues(alpha: 0.6)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.5,
-      );
+      final hover = side.hoverEdge;
+      if (hover != null) {
+        final depth = black != null
+            ? black.borderWidth(hover)
+            : state[hover].start + state[hover].width;
+        canvas.drawRect(
+          box.bandHitRect(hover, depth, 4),
+          Paint()
+            ..color = colors.start.withValues(alpha: 0.6)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.5,
+        );
+      }
     }
 
     canvas.drawRect(
       rect,
       Paint()
-        ..color = outline
+        ..color = colors.outline
         ..style = PaintingStyle.stroke,
     );
+  }
 
-    if (!interactive) return;
+  void _paintStatus(Canvas canvas, Rect rect, String status) {
+    final text = TextPainter(
+      text: TextSpan(
+        text: status,
+        style: TextStyle(color: colors.text, fontSize: 12),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: rect.width);
+    text.paint(canvas, rect.center - Offset(text.width / 2, text.height / 2));
+  }
+
+  void _paintHandles(Canvas canvas, _PaintSide side) {
+    final state = side.state;
+    if (!side.editable || state == null) return;
+    final black = side.black;
     for (final edge in BlendEdge.values) {
-      if (black != null) {
-        _paintHandle(canvas, edge, EdgePart.border);
+      if (blackTab) {
+        if (black != null) _paintHandle(canvas, side, edge, EdgePart.border);
       } else if (state[edge].enabled) {
         // Width after Start: drawn on top, as it wins the hit test.
-        _paintHandle(canvas, edge, EdgePart.start);
-        _paintHandle(canvas, edge, EdgePart.width);
+        _paintHandle(canvas, side, edge, EdgePart.start);
+        _paintHandle(canvas, side, edge, EdgePart.width);
       }
     }
-    final drag = dragging;
-    if (drag != null) _paintValueChip(canvas, drag.edge, drag.part);
   }
 
   /// Overlapped zones filled with their level's colour, then the black
   /// border bands in the border level's colour, hatched.
-  void _paintBlack(Canvas canvas, BlackLevelState black) {
+  void _paintBlack(
+    Canvas canvas,
+    _PaintSide side,
+    EdgeBlendState state,
+    BlackLevelState black,
+  ) {
+    final box = side.box;
     for (final edge in BlendEdge.values) {
       final s = state[edge];
       if (!s.enabled || s.width == 0) continue;
@@ -569,14 +852,14 @@ class _EdgeBlendPainter extends CustomPainter {
         canvas,
         zone,
         Paint()
-          ..color = idleZone
+          ..color = colors.idle
           ..strokeWidth = 1,
       );
     }
 
     final borderFill = _levelColor(black[LevelSlot.border]);
     final hatch = Paint()
-      ..color = outline
+      ..color = colors.outline
       ..strokeWidth = 1;
     for (final edge in BlendEdge.values) {
       final depth = black.borderWidth(edge);
@@ -586,19 +869,26 @@ class _EdgeBlendPainter extends CustomPainter {
       _hatch(canvas, band, hatch);
       _line(
         canvas,
+        box,
         edge,
         box.lineAt(edge, depth),
         Paint()
-          ..color = startColor
-          ..strokeWidth = selection?.edge == edge ? 2.5 : 2.0,
+          ..color = colors.start
+          ..strokeWidth = side.selection?.edge == edge ? 2.5 : 2.0,
       );
     }
   }
 
   /// Solid dark from the raster edge to Start, then fading out at
   /// Start + Width, as the projector darkens towards its own edge.
-  void _paintZone(Canvas canvas, BlendEdge edge, EdgeSettings s) {
+  void _paintZone(
+    Canvas canvas,
+    _PaintSide side,
+    BlendEdge edge,
+    EdgeSettings s,
+  ) {
     const dark = Color(0xD9000000); // black at 85 %
+    final box = side.box;
     if (s.start > 0) {
       canvas.drawRect(box.band(edge, 0, s.start), Paint()..color = dark);
     }
@@ -621,29 +911,39 @@ class _EdgeBlendPainter extends CustomPainter {
           ]),
       );
     }
-    final selected = selection?.edge == edge;
+    final selected = side.selection?.edge == edge;
     final width = selected ? 2.5 : 2.0;
     _line(
       canvas,
+      box,
       edge,
       a,
       Paint()
-        ..color = startColor
+        ..color = colors.start
         ..strokeWidth = width,
     );
     _dashedLine(
       canvas,
+      box,
       edge,
       b,
       Paint()
-        ..color = endColor
+        ..color = colors.end
         ..strokeWidth = width,
     );
   }
 
-  void _paintHandle(Canvas canvas, BlendEdge edge, EdgePart part) {
-    final sel = selection;
-    final center = box.handleAt(edge, _handleUnits(state, black, edge, part));
+  void _paintHandle(
+    Canvas canvas,
+    _PaintSide side,
+    BlendEdge edge,
+    EdgePart part,
+  ) {
+    final sel = side.selection;
+    final center = side.box.handleAt(
+      edge,
+      _handleUnits(side.state!, side.black, edge, part),
+    );
     final selectedEdge = sel?.edge == edge;
     final active = selectedEdge && sel?.part == part;
     final r = selectedEdge ? 8.0 : 7.0;
@@ -651,7 +951,7 @@ class _EdgeBlendPainter extends CustomPainter {
       canvas.drawCircle(
         center,
         r + 5,
-        Paint()..color = startColor.withValues(alpha: 0.24),
+        Paint()..color = colors.start.withValues(alpha: 0.24),
       );
     }
     canvas.drawCircle(
@@ -664,7 +964,7 @@ class _EdgeBlendPainter extends CustomPainter {
     canvas.drawCircle(
       center,
       r,
-      Paint()..color = part == EdgePart.width ? endColor : startColor,
+      Paint()..color = part == EdgePart.width ? colors.end : colors.start,
     );
     canvas.drawCircle(
       center,
@@ -676,8 +976,14 @@ class _EdgeBlendPainter extends CustomPainter {
     );
   }
 
-  void _paintValueChip(Canvas canvas, BlendEdge edge, EdgePart part) {
-    final units = _handleUnits(state, black, edge, part);
+  void _paintValueChip(
+    Canvas canvas,
+    _PaintSide side,
+    BlendEdge edge,
+    EdgePart part,
+  ) {
+    final state = side.state!;
+    final units = _handleUnits(state, side.black, edge, part);
     final label = switch (part) {
       EdgePart.start => 'Start ${state[edge].start}',
       EdgePart.width => 'Width ${state[edge].width}',
@@ -690,7 +996,7 @@ class _EdgeBlendPainter extends CustomPainter {
       ),
       textDirection: TextDirection.ltr,
     )..layout();
-    final handle = box.handleAt(edge, units);
+    final handle = side.box.handleAt(edge, units);
     const pad = EdgeInsets.symmetric(horizontal: 6, vertical: 2);
     final chipSize = Size(
       text.width + pad.horizontal,
@@ -704,7 +1010,7 @@ class _EdgeBlendPainter extends CustomPainter {
       BlendEdge.lower => Offset(-chipSize.width / 2, -12 - chipSize.height),
     };
     var topLeft = handle + inwardOffset;
-    final r = box.rect;
+    final r = side.box.rect;
     topLeft = Offset(
       topLeft.dx.clamp(r.left, max(r.left, r.right - chipSize.width)),
       topLeft.dy.clamp(r.top, max(r.top, r.bottom - chipSize.height)),
@@ -716,21 +1022,33 @@ class _EdgeBlendPainter extends CustomPainter {
     text.paint(canvas, topLeft + Offset(pad.left, pad.top));
   }
 
-  void _line(Canvas canvas, BlendEdge edge, double at, Paint paint) {
+  static void _line(
+    Canvas canvas,
+    _RasterBox box,
+    BlendEdge edge,
+    double at,
+    Paint paint,
+  ) {
     final r = box.rect;
     edge.isHorizontal
         ? canvas.drawLine(Offset(at, r.top), Offset(at, r.bottom), paint)
         : canvas.drawLine(Offset(r.left, at), Offset(r.right, at), paint);
   }
 
-  void _dashedLine(Canvas canvas, BlendEdge edge, double at, Paint paint) {
+  static void _dashedLine(
+    Canvas canvas,
+    _RasterBox box,
+    BlendEdge edge,
+    double at,
+    Paint paint,
+  ) {
     final r = box.rect;
     edge.isHorizontal
         ? _dashes(canvas, Offset(at, r.top), Offset(at, r.bottom), paint)
         : _dashes(canvas, Offset(r.left, at), Offset(r.right, at), paint);
   }
 
-  void _dashedRect(Canvas canvas, Rect r, Paint paint) {
+  static void _dashedRect(Canvas canvas, Rect r, Paint paint) {
     _dashes(canvas, r.topLeft, r.topRight, paint);
     _dashes(canvas, r.topRight, r.bottomRight, paint);
     _dashes(canvas, r.bottomRight, r.bottomLeft, paint);
@@ -761,16 +1079,16 @@ class _EdgeBlendPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_EdgeBlendPainter old) =>
-      old.box.rect != box.rect ||
-      old.state != state ||
-      old.black != black ||
-      old.interactive != interactive ||
-      old.selection != selection ||
-      old.hoverEdge != hoverEdge ||
-      old.dragging != dragging ||
-      old.raster != raster ||
-      old.outline != outline ||
-      old.startColor != startColor ||
-      old.endColor != endColor ||
-      old.idleZone != idleZone;
+      !_sameSides(old.sides, sides) ||
+      old.active != active ||
+      old.blackTab != blackTab ||
+      old.colors != colors;
+
+  static bool _sameSides(List<_PaintSide> a, List<_PaintSide> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
 }

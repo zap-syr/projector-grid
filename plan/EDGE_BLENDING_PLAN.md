@@ -577,14 +577,25 @@ The two projectors meet along one edge pair, the **facing edges**:
   Stacked* + a *Swap* icon button. Not saved anywhere (presets are a later item).
 
 ### Canvas
-- Both rasters drawn in one canvas, each in its real aspect ratio. They overlap by
-  **Start(A) + Width(A) + Start(B)** of the facing edges, so the two ramps land on the same
-  canvas pixels (A's width when the widths differ). The band from each raster edge to its
-  Start is the masked part outside the shared zone.
-- **Fixed scale:** the scale fits two rasters with no overlap (2 × raster along the
-  arrangement axis) into the canvas area. Moving a facing Start or Width only slides the
-  other raster; nothing rescales mid-drag. Two 16:10 rasters side by side come out ~half
-  the single-mode width; stacked uses the height and comes out larger.
+- Both rasters drawn in one canvas, each in its real aspect ratio.
+- **What the overlap is (2026-10-13).** Start and Width only shape each projector's own
+  image, in its own pixels from its own edge: full brightness, then the ramp (Width)
+  falling to black, then black up to the edge (Start). Neither moves the image; the real
+  overlap comes from mounting / zoom / lens shift / geometry and is always set on the
+  screen with the markers, never known in pixels. A correct blend needs equal facing
+  widths and Start(A) + Width + Start(B) = the real overlap, so a change of Start(A)
+  alone would un-align the ramps on the screen.
+- The canvas therefore shows **what the settings describe**, not the screen: the rasters
+  overlap by **Start(A) + Start(B) + max(Width(A), Width(B))** of the facing edges (a
+  disabled facing edge adds nothing), `pairOverlap`. Different widths stay visible as
+  ramps that don't match; whether the values match the screen is the markers' job, the
+  canvas doesn't flag alignment errors. No separate Overlap parameter (considered and
+  dropped 2026-10-13: an unmeasured number would only give false warnings).
+- **Fixed scale, centred:** the scale fits two rasters with no overlap (2 × raster along
+  the arrangement axis). A change of the overlap moves **both** rasters by half of it,
+  towards or away from each other (`pairPositions`); nothing rescales mid-drag. The
+  narrower facing Width moves nothing. Two 16:10 rasters side by side come out ~half the
+  single-mode width; stacked uses the height and comes out larger.
 - The **active** projector's raster and handles are drawn normally, the other one's at
   reduced opacity (drawn over the active raster, its handles under the active ones).
 - **Projector pills** with the name sit **outside** the rasters, so they never cover lines
@@ -592,8 +603,7 @@ The two projectors meet along one edge pair, the **facing edges**:
   active-projector switch: the active pill is filled (primary outline), the other one
   outlined; tooltip `PRJ-02, 192.168.0.108`. Clicking a zone or handle of the other
   projector also makes it active. Dragging works on either projector's handles.
-- Start never mirrors through Link: dragging A.Right's Start moves A's zone (width kept)
-  and B's raster slides with it to keep the ramps aligned.
+- Start never mirrors through Link.
 - Non-facing edges (e.g. A.Left) behave exactly as in single mode.
 
 ### Right panel
@@ -657,19 +667,34 @@ moved by arrows mirrors on key-up together with the write.
 ### Stages
 1. `[x]` **Pair domain** (2026-10-13): `domain/edge_blend_pair.dart` — `PairArrangement`
    (facing edges), `edgeBlendTargets` (the opening rule), `guessPairArrangement`,
-   `canLinkRasters`, `linkedMax`, `pairOffsetB` / `pairExtent` (canvas layout in raster
-   lengths, each value as a fraction of its own span so mixed rasters line up). Tests:
+   `canLinkRasters`, `linkedMax`, `pairOverlap` / `pairPositions` / `pairExtent` (canvas
+   layout in raster lengths, each value as a fraction of its own span so mixed rasters
+   line up). Tests:
    `test/unit/edge_blend_pair_test.dart`.
 2. `[x]` **Opening + dialog plumbing** (2026-10-13): menu label in a 2-selection, pair
    title; sides ordered A/B by the guess; parallel load, each side's own
    loading / "No reply" with the pair controls still usable; shared mode / Markers / Auto
    test pattern (mixed → nothing selected / off, a pick writes every reachable side);
    panel header row; *Side by side / Stacked* + *Swap* above the canvas; Black Level
-   lazy per projector. **Temporary:** the canvas still draws only the active projector,
-   and the pills sit in a row above it until stage 3 places them by the rasters.
-3. `[ ]` **Pair canvas**: both rasters on the fixed-scale layout, inactive one dimmed,
-   pills outside the rasters, clicks / drags on either projector, B slides with A's
-   facing Start / Width.
+   lazy per projector.
+3. `[x]` **Pair canvas** (2026-10-13): `EdgeBlendCanvas` takes a list of
+   `BlendCanvasSide`s + `active` + `arrangement` + `blackTab`; callbacks carry the side
+   index, `EdgeSelection` moved into the canvas file. Both rasters on the fixed-scale,
+   centred layout (`pairOverlap`, `pairPositions`), the inactive one in a 45 % layer over the active
+   one, its handles under the active ones; hit-testing tries the active projector first.
+   Pills are widgets in a `Stack` over the canvas: side by side above A's left / B's
+   right corner, stacked left of A's top / B's bottom. Picking the other projector's
+   zone or handle makes it active. Deviations:
+   - A drag measures against the raster box at drag start: a facing Start or the wider
+     facing Width moves both rasters, and the moving box would feed back into the
+     value. The value follows the pointer; the handle moves half as far.
+   - A projector that hasn't loaded (or answered "No reply") is a labelled placeholder
+     raster at the touching position, its load state / Retry in the panel, so the
+     pills stay usable. On Black Level a projector whose tab values haven't loaded
+     shows dashed zones, no handles.
+   Tests: pair group in `edge_blend_canvas_test.dart` (active wins a shared handle, the
+   other projector's handle, B's facing Start drag, the wider Width moves both rasters,
+   the narrower doesn't, pill).
 4. `[ ]` **Link**: toggle on the facing card, mirroring enable / Width / overlapped
    level, linked max, mixed-tier disable + tooltip, "Widths differ" line, ER402 on one
    side, linked row icon and `Icons.join_inner` header in the Overlapped table.
@@ -679,7 +704,8 @@ moved by arrows mirrors on key-up together with the write.
 ### Tests
 - Pure: arrangement guess from two card positions (`domain/edge_blend_pair.dart`), facing
   edges per arrangement, linked max (min of both), Link availability by raster, the
-  canvas layout (overlap = Start(A) + Width(A) + Start(B), fixed scale per arrangement).
+  canvas layout (overlap = Start(A) + Start(B) + max(Width(A), Width(B)), centred, fixed
+  scale per arrangement).
 - Manual: `tool/projector_simulator.dart` answers every blending / black level command
   with the §8 limits and ER402 (`EdgeBlendSim`, added 2026-10-13), so pair mode can be
   tested on 2 simulated projectors (both Tier A: add a WUXGA model there for the mixed-tier

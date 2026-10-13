@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:projector_grid/features/workspace/domain/blend_edge.dart';
+import 'package:projector_grid/features/workspace/domain/projector_node.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/edge_blending/black_level_state.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/edge_blending/edge_blend_canvas.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/edge_blending/edge_blend_state.dart';
@@ -15,28 +16,51 @@ const _rasterLeft = 16.0;
 const _rasterTop = 17.5;
 const _rasterHeight = 305.0;
 
+ProjectorNode _node(String name) =>
+    ProjectorNode(id: name, name: name, ipAddress: '10.0.0.1', x: 0, y: 0);
+
+EdgeBlendState _blankState() =>
+    parseEdgeBlendState(List.filled(edgeBlendQueries().length, null)).$1
+        .copyWith(mode: EdgeBlendMode.on);
+
+/// Single-mode events carry no side; pair mode prefixes the side index.
+String _ev(List<String> parts, int side, bool pair) =>
+    (pair ? ['$side', ...parts] : parts).join(' ');
+
 void main() {
   late List<String> events;
+  late List<EdgeBlendState> states;
+  late List<BlackLevelState?> blacks;
+  late int active;
+
+  // Side 0, for the single-mode tests.
   late EdgeBlendState state;
-
   late BlackLevelState? black;
+  void sync() {
+    state = states[0];
+    black = blacks[0];
+  }
 
-  Future<void> pumpCanvas(
+  Future<void> pump(
     WidgetTester tester, {
-    bool interactive = true,
+    required List<EdgeBlendState> initial,
     bool blackLevel = false,
-    EdgeSettings left = const EdgeSettings(enabled: true, start: 0, width: 192),
+    int activeSide = 0,
   }) {
     events = [];
-    final (s, _) = parseEdgeBlendState(
-      List.filled(edgeBlendQueries().length, null),
-    );
-    state = s.copyWith(mode: EdgeBlendMode.on).withEdge(BlendEdge.left, left);
-    black = blackLevel
-        ? parseBlackLevelState(List.filled(blackLevelQueries().length, null))
-              .withBorderWidth(BlendEdge.left, 100)
-        : null;
-    EdgePick? selection;
+    states = [...initial];
+    active = activeSide;
+    blacks = [
+      for (final _ in initial)
+        blackLevel
+            ? parseBlackLevelState(
+                List.filled(blackLevelQueries().length, null),
+              ).withBorderWidth(BlendEdge.left, 100)
+            : null,
+    ];
+    sync();
+    final pair = initial.length == 2;
+    EdgeSelection? selection;
     return tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -45,41 +69,73 @@ void main() {
               size: _canvasSize,
               child: StatefulBuilder(
                 builder: (context, setState) => EdgeBlendCanvas(
-                  state: state,
-                  black: black,
-                  raster: _raster,
-                  interactive: interactive,
+                  sides: [
+                    for (var i = 0; i < states.length; i++)
+                      BlendCanvasSide(
+                        node: _node(i == 0 ? 'A' : 'B'),
+                        raster: _raster,
+                        state: states[i],
+                        black: blacks[i],
+                      ),
+                  ],
+                  active: active,
+                  blackTab: blackLevel,
                   selection: selection,
-                  onSelect: (edge, part) {
-                    events.add('select ${edge.name} ${part.name}');
-                    setState(() => selection = (edge: edge, part: part));
+                  onActivate: (i) {
+                    events.add('activate $i');
+                    setState(() => active = i);
+                  },
+                  onSelect: (i, edge, part) {
+                    events.add(_ev(['select', edge.name, part.name], i, pair));
+                    setState(
+                      () => selection = (side: i, edge: edge, part: part),
+                    );
                   },
                   onClearSelection: () {
                     events.add('clear');
                     setState(() => selection = null);
                   },
-                  onPreview: (edge, part, v) {
-                    events.add('preview ${edge.name} ${part.name} $v');
+                  onPreview: (i, edge, part, v) {
+                    events.add(
+                      _ev(['preview', edge.name, part.name, '$v'], i, pair),
+                    );
                     setState(() {
                       if (part == EdgePart.border) {
-                        black = black!.withBorderWidth(edge, v);
+                        blacks[i] = blacks[i]!.withBorderWidth(edge, v);
                       } else {
-                        state = state.withEdge(
+                        states[i] = states[i].withEdge(
                           edge,
-                          state[edge].withPart(part, v),
+                          states[i][edge].withPart(part, v),
                         );
                       }
+                      sync();
                     });
                   },
-                  onCommit: (edge, part) =>
-                      events.add('commit ${edge.name} ${part.name}'),
-                  onResetEdge: (edge) => events.add('reset ${edge.name}'),
+                  onCommit: (i, edge, part) => events.add(
+                    _ev(['commit', edge.name, part.name], i, pair),
+                  ),
+                  onResetEdge: (i, edge) =>
+                      events.add(_ev(['reset', edge.name], i, pair)),
                 ),
               ),
             ),
           ),
         ),
       ),
+    );
+  }
+
+  Future<void> pumpCanvas(
+    WidgetTester tester, {
+    bool interactive = true,
+    bool blackLevel = false,
+    EdgeSettings left = const EdgeSettings(enabled: true, start: 0, width: 192),
+  }) {
+    final s = _blankState().withEdge(BlendEdge.left, left);
+    return pump(
+      tester,
+      initial: [interactive ? s : s.copyWith(mode: EdgeBlendMode.off)],
+      blackLevel: blackLevel,
     );
   }
 
@@ -265,5 +321,102 @@ void main() {
     await tester.dragFrom(leftWidthHandle(tester), const Offset(50, 0));
     await tester.pump();
     expect(events.where((e) => e.startsWith('preview')), isEmpty);
+  });
+
+  group('pair, side by side', () {
+    // Same 520×340 canvas, 36 px pill band on top: each raster 244×152.5,
+    // the 488 px extent from x 16, y 111.75. Facing widths 192 (0.1 of the
+    // raster) overlap the pair by 24.4 px, centred: A at 16 + 12.2, B at
+    // 16 + 244 − 12.2.
+    const unit = 244 / 1920;
+    const aRight = 16 + 12.2 + 244;
+    const bLeft = 16 + 244 - 12.2;
+    const midY = 111.75 + 152.5 / 2;
+    const facing = EdgeSettings(enabled: true, start: 0, width: 192);
+
+    Future<void> pumpPair(
+      WidgetTester tester, {
+      int activeSide = 0,
+      int widthB = 192,
+    }) => pump(
+      tester,
+      initial: [
+        _blankState().withEdge(BlendEdge.right, facing),
+        _blankState()
+            .withEdge(BlendEdge.left, facing.copyWith(width: widthB))
+            .withEdge(BlendEdge.right, facing),
+      ],
+      activeSide: activeSide,
+    );
+
+    Offset at(WidgetTester tester, double x) =>
+        tester.getTopLeft(find.byType(EdgeBlendCanvas)) + Offset(x, midY);
+
+    testWidgets('the ramps share pixels: active projector wins the handle', (
+      tester,
+    ) async {
+      // A's Start line (A.Right) and B's zone end (B.Left width) share x.
+      await pumpPair(tester);
+      await tester.tapAt(at(tester, aRight));
+      await tester.pump();
+      expect(events, ['0 select right start']);
+
+      await pumpPair(tester, activeSide: 1);
+      await tester.tapAt(at(tester, aRight));
+      await tester.pump();
+      expect(events, ['1 select left width']);
+    });
+
+    testWidgets("the other projector's own handle is reachable", (
+      tester,
+    ) async {
+      await pumpPair(tester);
+      // B.Right zone end: 192 units in from B's right edge.
+      await tester.tapAt(at(tester, bLeft + 244 - 192 * unit));
+      await tester.pump();
+      expect(events, ['1 select right width']);
+    });
+
+    testWidgets("dragging B's facing Start follows the pointer, though both "
+        'rasters move with it', (tester) async {
+      await pumpPair(tester, activeSide: 1);
+      // B.Start and A's zone end share x; B is active, so its Start.
+      await tester.dragFrom(at(tester, bLeft), const Offset(24.4, 0));
+      await tester.pump();
+      expect(states[1][BlendEdge.left].start, inInclusiveRange(188, 196));
+      expect(events.last, '1 commit left start');
+    });
+
+    testWidgets('the wider facing Width moves both rasters by half', (
+      tester,
+    ) async {
+      await pumpPair(tester);
+      // A.Right zone end, dragged 24.4 px inward: width 192 → 384.
+      await tester.dragFrom(at(tester, bLeft), const Offset(-24.4, 0));
+      await tester.pump();
+      expect(states[0][BlendEdge.right].width, inInclusiveRange(380, 388));
+      events.clear();
+      // Overlap 0.2: A's right edge, and its Start line, 12.2 px further
+      // right.
+      await tester.tapAt(at(tester, aRight + 12.2));
+      await tester.pump();
+      expect(events, ['0 select right start']);
+    });
+
+    testWidgets("the narrower facing Width doesn't move the rasters", (
+      tester,
+    ) async {
+      await pumpPair(tester, widthB: 96);
+      await tester.tapAt(at(tester, aRight));
+      await tester.pump();
+      expect(events, ['0 select right start']);
+    });
+
+    testWidgets('a pill switches the active projector', (tester) async {
+      await pumpPair(tester);
+      await tester.tap(find.text('B'));
+      await tester.pump();
+      expect(events, ['activate 1']);
+    });
   });
 }

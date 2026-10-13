@@ -84,39 +84,45 @@ void main() {
   });
 
   group('pair layout', () {
+    FacingEdge edge(int start, int width, {int span = 3840, bool on = true}) =>
+        (enabled: on, start: start, width: width, span: span);
+
     test('no blend: the rasters just touch', () {
-      expect(
-        pairOffsetB(startA: 0, widthA: 0, spanA: 3840, startB: 0, spanB: 3840),
-        1,
-      );
+      expect(pairOverlap(edge(0, 0), edge(0, 0)), 0);
+      expect(pairPositions(0), (a: 0, b: 1));
     });
 
-    test('overlap is Start(A) + Width(A) + Start(B)', () {
-      // 0.1 + 0.125 + 0.05 of a raster
+    test('overlap is Start(A) + Start(B) + the wider width', () {
+      // 0.1 + 0.05 + max(0.125, 0.0625)
+      expect(pairOverlap(edge(384, 480), edge(192, 240)), closeTo(0.275, 1e-9));
+    });
+
+    test("the narrower width doesn't move anything", () {
+      final wide = edge(0, 480);
+      expect(pairOverlap(wide, edge(0, 0)), pairOverlap(wide, edge(0, 400)));
+    });
+
+    test('a disabled facing edge adds nothing', () {
       expect(
-        pairOffsetB(
-          startA: 384,
-          widthA: 480,
-          spanA: 3840,
-          startB: 192,
-          spanB: 3840,
-        ),
-        closeTo(1 - 0.275, 1e-9),
+        pairOverlap(edge(384, 480, on: false), edge(192, 240)),
+        closeTo(0.05 + 0.0625, 1e-9),
       );
     });
 
     test('mixed rasters overlap by their own fractions', () {
       // A: 480 / 3840 = 0.125, B: 120 / 1920 = 0.0625
       expect(
-        pairOffsetB(
-          startA: 0,
-          widthA: 480,
-          spanA: 3840,
-          startB: 120,
-          spanB: 1920,
-        ),
-        closeTo(1 - 0.1875, 1e-9),
+        pairOverlap(edge(0, 480), edge(120, 0, span: 1920)),
+        closeTo(0.1875, 1e-9),
       );
+    });
+
+    test('the pair is centred: both rasters move by half the overlap', () {
+      final p = pairPositions(0.2);
+      expect(p.a, closeTo(0.1, 1e-9));
+      expect(p.b, closeTo(0.9, 1e-9));
+      // B ends as far from the extent's end as A starts from its start.
+      expect(2 - (p.b + 1), closeTo(p.a, 1e-9));
     });
 
     test('extent fits two rasters along the axis', () {

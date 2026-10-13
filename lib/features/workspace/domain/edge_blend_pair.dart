@@ -64,23 +64,31 @@ bool canLinkRasters(EdgeBlendRaster a, EdgeBlendRaster b) => a == b;
 /// A linked value has to fit both projectors.
 int linkedMax(int a, int b) => min(a, b);
 
-/// The pair canvas in raster lengths along the arrangement axis (one raster
-/// = 1): A sits at 0, B at the returned offset. The rasters overlap by
-/// Start(A) + Width(A) + Start(B) of the facing edges, so A's zone end lands
-/// on B's Start line and the two ramps cover the same pixels (A's width when
-/// the widths differ). Each value is taken as a fraction of its own
-/// projector's span, so mixed rasters line up too.
-double pairOffsetB({
-  required int startA,
-  required int widthA,
-  required int spanA,
-  required int startB,
-  required int spanB,
-}) => 1 - ((startA + widthA) / spanA + startB / spanB);
+/// One facing edge as the pair layout reads it. A disabled edge darkens
+/// nothing on the projector, so it adds nothing to the overlap.
+typedef FacingEdge = ({bool enabled, int start, int width, int span});
+
+/// The overlap the facing settings imply, in raster lengths (one raster
+/// = 1): Start(A) + Start(B) + the wider of the two widths. The real
+/// overlap is set on the screen with the markers and never known in
+/// pixels, so this only shows what the values describe, not whether they
+/// match the screen. Each value is a fraction of its own projector's span,
+/// so mixed rasters line up too.
+double pairOverlap(FacingEdge a, FacingEdge b) {
+  double start(FacingEdge e) => e.enabled ? e.start / e.span : 0;
+  double width(FacingEdge e) => e.enabled ? e.width / e.span : 0;
+  return start(a) + start(b) + max(width(a), width(b));
+}
+
+/// Where A and B start along the axis, in raster lengths inside
+/// [pairExtent]: the pair is centred, so a change in [overlap] moves both
+/// rasters by half of it, towards or away from each other.
+({double a, double b}) pairPositions(double overlap) =>
+    (a: overlap / 2, b: 1 - overlap / 2);
 
 /// The fixed extent the canvas scales to, in raster lengths: two rasters
-/// with no overlap along the axis. Moving a facing value only slides B
-/// inside it, nothing rescales mid-drag.
+/// with no overlap along the axis. A change in the overlap only moves the
+/// rasters inside it, nothing rescales mid-drag.
 ({double h, double v}) pairExtent(PairArrangement arrangement) =>
     switch (arrangement) {
       PairArrangement.sideBySide => (h: 2, v: 1),
