@@ -163,6 +163,7 @@ class _EdgeCard extends StatelessWidget {
       value: settings.valueOf(part).toDouble(),
       min: 0,
       max: span.toDouble(),
+      limit: limit.toDouble(),
       layout: SliderLabelLayout.inline,
       inlineLabelWidth: 44,
       // Without an accent the inactive track takes the theme's colour, which

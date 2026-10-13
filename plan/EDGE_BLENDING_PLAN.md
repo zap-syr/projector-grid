@@ -342,7 +342,18 @@ already fits the panel, zoom isn't needed.
      not confirmed live.
    Tests: `edge_blend_side_test.dart` (parser, `RgbwLevel`, writes, Interlocked ON / OFF,
    border width), `edge_blend_canvas_test.dart` (border drag + ceiling, arrows).
-7. `dart format .`, `flutter analyze`, review with the `reviewer` agent.
+7. `[x]` `dart format .`, `flutter analyze`, review with the `reviewer` agent
+   (2026-10-13). Fixed from the review:
+   - An ER read-back no longer overwrites a later queued write to the same field
+     (per-field pending count in `EdgeBlendSide`); a write with no reply (or a failed
+     read-back) restores the expected value, so committing the same value again resends.
+   - A held arrow key stops when the selection changes, the mode goes Off or the canvas
+     loses focus; its key-up is matched before the selection checks.
+   - `LabeledSliderRow.limit`: the stepper's max follows the §8 limit, so its text can't
+     run past it (closes the known stepper issue).
+   - Hover outline cleared when the mode goes Off.
+   Left as is: Interlocked ON queues the tuple even if the flag write fails (harmless),
+   and `loadBlack` may briefly overlap one queued write (9 in flight, within tolerance).
 
 **Unit tests** (pure functions only, per CLAUDE.md): `edgeBlendRasterFor` per tier and for an
 empty model; the §8 max rules (each edge, opposite-edge sharing, border vs own width);

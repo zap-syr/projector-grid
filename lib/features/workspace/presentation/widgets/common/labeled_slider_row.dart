@@ -33,6 +33,11 @@ class LabeledSliderRow extends StatelessWidget {
   /// wider for a word (Edge Blending's Start / Width).
   final double inlineLabelWidth;
 
+  /// A stop below [max] that moves with other values (Edge Blending's §8
+  /// limits). The slider keeps the full range and the caller clamps its
+  /// value; the stepper gets it as its max, or its own text would run past.
+  final double? limit;
+
   const LabeledSliderRow({
     super.key,
     required this.label,
@@ -46,6 +51,7 @@ class LabeledSliderRow extends StatelessWidget {
     this.layout = SliderLabelLayout.above,
     this.color,
     this.inlineLabelWidth = 14,
+    this.limit,
   });
 
   static String _cleanStr(double v) {
@@ -88,7 +94,7 @@ class LabeledSliderRow extends StatelessWidget {
         child: SleekStepperInput(
           initialValue: _cleanStr(value),
           min: min,
-          max: max,
+          max: limit ?? max,
           step: step,
           onValueChanged: (s) {
             final v = double.tryParse(s);

@@ -141,28 +141,50 @@ class EdgeBlendSide extends ChangeNotifier {
 
   void _send<T>(_Field<T> field) {
     final v = field.get(_values!);
-    if (field.get(_target!) == v) return;
+    final before = field.get(_target!);
+    if (before == v) return;
     _target = field.set(_target!, v);
-    _writes.run(() => _write(field, v));
+    _pending.update(field.query, (n) => n + 1, ifAbsent: () => 1);
+    _writes.run(() => _write(field, v, before));
   }
 
-  Future<void> _write<T>(_Field<T> field, T v) async {
+  /// Queued or running writes per field (keyed by its query): a failed
+  /// write only touches the field when no later one will overwrite it.
+  final _pending = <String, int>{};
+
+  bool _isLastWrite<T>(_Field<T> field) => _pending[field.query] == 1;
+
+  Future<void> _write<T>(_Field<T> field, T v, T before) async {
     final cmd = field.command(v);
-    final reply = await client.writeRawWithCode(cmd);
-    // null: no reply at all, already reported by the client.
-    if (_disposed ||
-        reply == null ||
-        !PanasonicProtocolService.isErrorCode(reply)) {
-      return;
+    try {
+      final reply = await client.writeRawWithCode(cmd);
+      if (_disposed) return;
+      if (reply == null) {
+        // No reply, already reported by the client. The projector still
+        // holds the old value, so re-entering [v] has to send it again.
+        if (_isLastWrite(field)) _target = field.set(_target!, before);
+        return;
+      }
+      if (!PanasonicProtocolService.isErrorCode(reply)) return;
+      // ER402 is an out-of-range value the §8 limits didn't foresee:
+      // expected often enough not to be worth a notice, the read-back shows
+      // the result.
+      if (reply != 'ER402') client.onFailure(cmd);
+      // A later write to this field decides what the projector ends up
+      // with; reading back now would show a value about to be replaced.
+      if (!_isLastWrite(field)) return;
+      final actual = field.parse(await client.query(field.query));
+      if (_disposed || !_isLastWrite(field)) return;
+      if (actual == null) {
+        _target = field.set(_target!, before);
+        return;
+      }
+      _values = field.set(_values!, actual);
+      _target = field.set(_target!, actual);
+      notifyListeners();
+    } finally {
+      _pending.update(field.query, (n) => n - 1);
     }
-    // ER402 is an out-of-range value the §8 limits didn't foresee: expected
-    // often enough not to be worth a notice, the read-back shows the result.
-    if (reply != 'ER402') client.onFailure(cmd);
-    final actual = field.parse(await client.query(field.query));
-    if (_disposed || actual == null) return;
-    _values = field.set(_values!, actual);
-    _target = field.set(_target!, actual);
-    notifyListeners();
   }
 
   @override

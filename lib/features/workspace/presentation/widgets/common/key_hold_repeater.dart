@@ -22,6 +22,9 @@ class KeyHoldRepeater {
   Timer? _repeatTimer;
   LogicalKeyboardKey? _held;
 
+  /// The key being stepped, null when none is down.
+  LogicalKeyboardKey? get held => _held;
+
   void press(LogicalKeyboardKey key) {
     if (_held == key) return;
     _cancel();

@@ -82,6 +82,18 @@ class _EdgeBlendCanvasState extends State<EdgeBlendCanvas> {
   DateTime? _lastTapTime;
 
   @override
+  void didUpdateWidget(EdgeBlendCanvas old) {
+    super.didUpdateWidget(old);
+    // Esc or a click elsewhere while an arrow is held: its key-up may never
+    // reach us as a step for this edge, so end the hold (and send) now.
+    // onCommit only queues the write, nothing rebuilds during this build.
+    if (widget.selection != old.selection || !widget.interactive) {
+      _keys.release();
+    }
+    if (!widget.interactive) _hover = null;
+  }
+
+  @override
   void dispose() {
     _keys.dispose();
     _focusNode.dispose();
@@ -265,6 +277,11 @@ class _EdgeBlendCanvasState extends State<EdgeBlendCanvas> {
   }
 
   KeyEventResult _onKeyEvent(FocusNode node, KeyEvent event) {
+    // The held key's release ends the hold whatever is selected by then.
+    if (event is KeyUpEvent && event.logicalKey == _keys.held) {
+      _keys.release();
+      return KeyEventResult.handled;
+    }
     final sel = widget.selection;
     if (!widget.interactive ||
         sel == null ||
@@ -291,6 +308,10 @@ class _EdgeBlendCanvasState extends State<EdgeBlendCanvas> {
     return Focus(
       focusNode: _focusNode,
       onKeyEvent: _onKeyEvent,
+      // A key-up that lands elsewhere would leave the hold running.
+      onFocusChange: (focused) {
+        if (!focused) _keys.release();
+      },
       child: Semantics(
         label: 'Edge blend preview',
         child: LayoutBuilder(

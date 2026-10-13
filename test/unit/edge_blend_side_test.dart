@@ -163,6 +163,29 @@ void main() {
       expect(sent(), hasLength(2));
     });
 
+    test('a refused write queued before another of the same field is not '
+        'read back over it', () async {
+      service.rawResponses['VXX:ELWI0=+01900'] = 'ER402';
+      side.preview(BlendEdge.left, EdgePart.width, 1900);
+      side.commit(BlendEdge.left, EdgePart.width);
+      side.preview(BlendEdge.left, EdgePart.width, 1200);
+      side.commit(BlendEdge.left, EdgePart.width);
+      await settle();
+      expect(sent(), ['VXX:ELWI0=+01900', 'VXX:ELWI0=+01200']);
+      expect(side.blend[BlendEdge.left].width, 1200);
+    });
+
+    test('a write with no reply is sent again on the next commit', () async {
+      side.preview(BlendEdge.left, EdgePart.start, 500);
+      side.commit(BlendEdge.left, EdgePart.start); // unscripted: no reply
+      await settle();
+      expect(failures, ['VEL:0500']);
+      service.rawResponses['VEL:0500'] = 'VEL:0500';
+      side.commit(BlendEdge.left, EdgePart.start);
+      await settle();
+      expect(sent(), ['VEL:0500', 'VEL:0500']);
+    });
+
     test('other error codes are reported and read back', () async {
       service.rawResponses['VGU:1'] = 'ERR3';
       service.rawResponses['QGU'] = '0';

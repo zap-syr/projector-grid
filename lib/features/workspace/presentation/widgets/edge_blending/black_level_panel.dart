@@ -109,6 +109,7 @@ class BlackLevelPanel extends StatelessWidget {
       value: black.borderWidth(edge).toDouble(),
       min: 0,
       max: edgeBlendSpan(raster, edge).toDouble(),
+      limit: limit.toDouble(),
       layout: SliderLabelLayout.inline,
       inlineLabelWidth: 44,
       color: Theme.of(context).colorScheme.primary,

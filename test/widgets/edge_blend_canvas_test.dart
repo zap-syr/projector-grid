@@ -154,6 +154,26 @@ void main() {
     ]);
   });
 
+  testWidgets('clearing the selection mid-hold ends the hold and sends', (
+    tester,
+  ) async {
+    await pumpCanvas(tester);
+    await tester.tapAt(leftWidthHandle(tester));
+    await tester.pump();
+    events.clear();
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pump();
+    final origin = tester.getTopLeft(find.byType(EdgeBlendCanvas));
+    await tester.tapAt(origin + const Offset(260, 170));
+    await tester.pump(); // the rebuild with no selection
+    await tester.pump(const Duration(seconds: 1)); // past the hold delay
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pump();
+
+    expect(events, ['preview left width 193', 'clear', 'commit left width']);
+  });
+
   testWidgets('arrows on the other axis are ignored', (tester) async {
     await pumpCanvas(tester);
     await tester.tapAt(leftWidthHandle(tester));
