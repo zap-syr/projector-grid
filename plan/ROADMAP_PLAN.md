@@ -33,6 +33,7 @@ accepted item so each can be picked up independently. Edge Blending has its own 
 | U4 | Side panel instead of modal dialogs | `[dropped]` | Doesn't fit the current layout; dialogs are open → adjust → close, rarely revisited |
 | U5 | Command palette (Ctrl+K) | **Accepted** → §11 | Owner asked for UX + code design |
 | U6 | Monitoring table keyboard/filter/export | `[later]` | Already tracked in `MONITORING_UI_PLAN.md` §5/§7/§9 |
+| U7 | Dialog redesign (Add / Edit Projector, Groups, Scheduled Tasks, Brightness Control, Color Correction; icon title bar for all dialogs) | **Accepted** → §13 | Design approved 2026-10-13 from the mockups; full plan in `DIALOG_REDESIGN_PLAN.md` |
 
 Suggested order (value ÷ effort, and what unblocks what):
 **U1 → U2 → (Edge Blending) → F1 → F4 → U3 → F5 → F3 → U5 → F7/§5 → R6 in parallel throughout.**
@@ -1562,3 +1563,34 @@ Today `_dispatchToNodes` logs one event per node and returns nothing; on a 30-pr
   shows the projector name on the image (F4).
 - Alert default thresholds per model family, if the defaults in §4 don't fit.
 - Go / no-go on §6 (error handler + log file).
+
+---
+
+## 13. `[ ]` U7 — Dialog Redesign
+
+Approved 2026-10-13 from the mockups at https://claude.ai/artifact/AL2c8Kh9aoXrrv2eUmVdcJ.
+The design and the implementation steps live in their own plan, **`DIALOG_REDESIGN_PLAN.md`**,
+because the work is large. In short:
+- **All dialogs:** `DialogTitleBar` gets an icon tile, so every dialog takes the new look;
+  radius 20 set once in the theme; the six confirmation `AlertDialog`s move to a shared
+  `ConfirmDialog` with a "What changes" box.
+- **Add Projectors:** tabs Address / IP range / Discover; optional login fields prefilled
+  with the last used credentials instead of a Protected mode switch; IP range preview strip.
+- **Edit Projector:** the same look, simpler: projector card with status, IP + port (port
+  becomes editable), the shared login card, a wrong-login state.
+- **Groups:** width 560, inline editing without the OSC field, 48-colour palette (16 hues ×
+  3 tones) with used-colour dots, animated new-group form, compact context-menu dialog that
+  lists the joining projectors by IP.
+- **Scheduled Tasks:** one master-detail dialog, command picker panel (search, categories,
+  tiles, no command codes), several target groups per task (model change), Completed and
+  Missed lists. Behaviour change: a run missed while the app was closed is never executed
+  late (today a one-time task fires on the next app start); it is recorded as missed.
+- **Brightness Control:** projector card instead of the IP in the title, mode tiles instead of
+  the dropdown, slider cards with − / + steps, Max light output locked in place outside User
+  modes, skeleton while loading, no footer button.
+- **Color Correction:** projector card, tabs with a state pill each, colour tiles with an
+  editor for the selected colour instead of 21 sliders in a scroll, white balance as one
+  High / Low table, Kelvin presets, per-colour Reset, stepper inputs on every value.
+
+Order: foundation → Groups → Add / Edit Projector → Brightness Control → Color Correction →
+Scheduled Tasks (plan §7).
