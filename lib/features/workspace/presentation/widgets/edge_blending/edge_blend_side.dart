@@ -122,7 +122,22 @@ class EdgeBlendSide extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Shows a whole tuple at once, as a linked level mirrors the other
+  /// projector's (the channel-wise [previewLevel] would apply this side's
+  /// own Interlocked to it).
+  void previewLevelValue(LevelSlot slot, Rgbw value) {
+    _values = _levelField(slot).set(_values!, value);
+    notifyListeners();
+  }
+
   void commitLevel(LevelSlot slot) => _send(_levelField(slot));
+
+  /// Takes over [level] as it is, flag and tuple: only what differs is
+  /// written.
+  void copyLevel(LevelSlot slot, RgbwLevel level) {
+    _set(_interlockField(slot), level.interlocked);
+    _set(_levelField(slot), level.value);
+  }
 
   /// ON writes the flag, then the tuple with R/G/B set to W. OFF writes only
   /// the flag: the four channels stay as they are (§1).

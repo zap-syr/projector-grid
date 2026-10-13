@@ -21,6 +21,7 @@ class BlackLevelPanel extends StatelessWidget {
     required this.blend,
     required this.raster,
     required this.selectedEdge,
+    this.linked,
     required this.onModeChanged,
     required this.onLevelChanged,
     required this.onLevelCommitted,
@@ -28,6 +29,10 @@ class BlackLevelPanel extends StatelessWidget {
     required this.onBorderWidthChanged,
     required this.onBorderWidthCommitted,
   });
+
+  /// Pair mode's linked facing edge, whose overlapped level mirrors to the
+  /// other projector, and the tooltip naming where it goes.
+  final ({BlendEdge edge, String tooltip})? linked;
 
   final BlackLevelState black;
 
@@ -69,6 +74,7 @@ class BlackLevelPanel extends StatelessWidget {
           black: black,
           blend: blend,
           selectedEdge: selectedEdge,
+          linked: linked,
           onLevelChanged: onLevelChanged,
           onLevelCommitted: onLevelCommitted,
           onInterlockedChanged: onInterlockedChanged,
@@ -228,18 +234,23 @@ class _OverlappedCard extends StatelessWidget {
     required this.black,
     required this.blend,
     required this.selectedEdge,
+    required this.linked,
     required this.onLevelChanged,
     required this.onLevelCommitted,
     required this.onInterlockedChanged,
   });
 
   static const double _edgeColumn = 64;
+
+  /// Pair mode's Link icon; empty otherwise, so the columns don't shift.
+  static const double _linkColumn = 20;
   static const double _checkColumn = 40;
   static const double _valueColumn = 64;
 
   final BlackLevelState black;
   final EdgeBlendState blend;
   final BlendEdge? selectedEdge;
+  final ({BlendEdge edge, String tooltip})? linked;
   final void Function(LevelSlot slot, RgbwChannel channel, int v)
   onLevelChanged;
   final void Function(LevelSlot slot) onLevelCommitted;
@@ -281,12 +292,13 @@ class _OverlappedCard extends StatelessWidget {
     final muted = Theme.of(context).colorScheme.onSurfaceVariant;
     return Row(
       children: [
-        const SizedBox(width: _edgeColumn),
+        const SizedBox(width: _edgeColumn + _linkColumn),
         SizedBox(
           width: _checkColumn,
+          // Not a link icon: pair mode's Link uses that on the rows.
           child: CustomTooltip(
             message: 'Interlocked',
-            child: Icon(Icons.link, size: 16, color: muted),
+            child: Icon(Icons.join_inner, size: 16, color: muted),
           ),
         ),
         for (final c in RgbwChannel.values)
@@ -335,6 +347,16 @@ class _OverlappedCard extends StatelessWidget {
                   Text(edge.label, style: const TextStyle(fontSize: 12)),
                 ],
               ),
+            ),
+            SizedBox(
+              width: _linkColumn,
+              child: switch (linked) {
+                (:final tooltip, edge: final e) when e == edge => CustomTooltip(
+                  message: tooltip,
+                  child: Icon(Icons.link, size: 16, color: scheme.primary),
+                ),
+                _ => null,
+              },
             ),
             SizedBox(
               width: _checkColumn,

@@ -63,6 +63,7 @@ class EdgeBlendCanvas extends StatefulWidget {
     this.arrangement = PairArrangement.sideBySide,
     this.blackTab = false,
     required this.selection,
+    this.maxFor,
     this.onActivate,
     required this.onSelect,
     required this.onClearSelection,
@@ -76,6 +77,10 @@ class EdgeBlendCanvas extends StatefulWidget {
   final PairArrangement arrangement;
   final bool blackTab;
   final EdgeSelection? selection;
+
+  /// The limit a drag or arrow stops at; defaults to the side's own §8
+  /// limit (a linked Width also has to fit the other projector).
+  final int Function(int side, BlendEdge edge, EdgePart part)? maxFor;
   final ValueChanged<int>? onActivate;
   final void Function(int side, BlendEdge edge, EdgePart part) onSelect;
   final VoidCallback onClearSelection;
@@ -383,7 +388,9 @@ class _EdgeBlendCanvasState extends State<EdgeBlendCanvas> {
 
   void _preview(int side, BlendEdge edge, EdgePart part, int v) {
     final s = widget.sides[side];
-    final max = s.state!.maxFor(edge, part, s.raster);
+    final max =
+        widget.maxFor?.call(side, edge, part) ??
+        s.state!.maxFor(edge, part, s.raster);
     final clamped = v.clamp(0, max);
     if (clamped != _valueOf(side, edge, part)) {
       widget.onPreview(side, edge, part, clamped);

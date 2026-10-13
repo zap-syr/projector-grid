@@ -6,7 +6,17 @@ import '../../../domain/blend_edge.dart';
 import '../../../domain/edge_blend_limits.dart';
 import '../common/labeled_slider_row.dart';
 import '../common/section_card.dart';
+import '../custom_tooltip.dart';
 import 'edge_blend_state.dart';
+
+/// Pair mode's Link toggle, on the facing edge's card. [onChanged] is null
+/// when Link isn't possible ([tooltip] says why).
+typedef EdgeLinkControl = ({
+  BlendEdge edge,
+  bool on,
+  String tooltip,
+  ValueChanged<bool>? onChanged,
+});
 
 /// Right-hand controls of the Edge Blending tab: Markers, Auto test pattern
 /// and one card per edge.
@@ -16,6 +26,8 @@ class EdgeBlendPanel extends StatelessWidget {
     required this.state,
     required this.raster,
     required this.selectedEdge,
+    this.maxFor,
+    this.link,
     required this.onMarkersChanged,
     required this.onAutoPatternChanged,
     required this.onEnabledChanged,
@@ -26,6 +38,11 @@ class EdgeBlendPanel extends StatelessWidget {
   final EdgeBlendState state;
   final EdgeBlendRaster raster;
   final BlendEdge? selectedEdge;
+
+  /// The limit of each value; defaults to this projector's own §8 limit
+  /// (a linked Width also has to fit the other projector).
+  final int Function(BlendEdge edge, EdgePart part)? maxFor;
+  final EdgeLinkControl? link;
   final ValueChanged<bool> onMarkersChanged;
   final ValueChanged<bool> onAutoPatternChanged;
   final void Function(BlendEdge edge, bool on) onEnabledChanged;
@@ -38,6 +55,9 @@ class EdgeBlendPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final maxFor =
+        this.maxFor ?? (edge, part) => state.maxFor(edge, part, raster);
+    final link = this.link;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -62,9 +82,10 @@ class EdgeBlendPanel extends StatelessWidget {
             edge: edge,
             settings: state[edge],
             span: edgeBlendSpan(raster, edge),
-            maxStart: state.maxFor(edge, EdgePart.start, raster),
-            maxWidth: state.maxFor(edge, EdgePart.width, raster),
+            maxStart: maxFor(edge, EdgePart.start),
+            maxWidth: maxFor(edge, EdgePart.width),
             selected: edge == selectedEdge,
+            link: link?.edge == edge ? link : null,
             onEnabledChanged: (on) => onEnabledChanged(edge, on),
             onValueChanged: (part, v) => onValueChanged(edge, part, v),
             onValueCommitted: (part) => onValueCommitted(edge, part),
@@ -107,6 +128,7 @@ class _EdgeCard extends StatelessWidget {
     required this.maxStart,
     required this.maxWidth,
     required this.selected,
+    required this.link,
     required this.onEnabledChanged,
     required this.onValueChanged,
     required this.onValueCommitted,
@@ -114,6 +136,7 @@ class _EdgeCard extends StatelessWidget {
 
   final BlendEdge edge;
   final EdgeSettings settings;
+  final EdgeLinkControl? link;
 
   /// The raster length along this edge: every slider's fixed range.
   final int span;
@@ -142,6 +165,7 @@ class _EdgeCard extends StatelessWidget {
                       ?.copyWith(fontWeight: FontWeight.bold),
                 ),
               ),
+              if (link case final link?) _LinkToggle(link: link),
               Switch(value: settings.enabled, onChanged: onEnabledChanged),
             ],
           ),
@@ -173,6 +197,28 @@ class _EdgeCard extends StatelessWidget {
           ? (v) => onValueChanged(part, min(v.round(), limit))
           : null,
       onChangeEnd: enabled ? (_) => onValueCommitted(part) : null,
+    );
+  }
+}
+
+class _LinkToggle extends StatelessWidget {
+  const _LinkToggle({required this.link});
+
+  final EdgeLinkControl link;
+
+  @override
+  Widget build(BuildContext context) {
+    final onChanged = link.onChanged;
+    return CustomTooltip(
+      message: link.tooltip,
+      child: IconButton(
+        isSelected: link.on,
+        icon: const Icon(Icons.link_off),
+        selectedIcon: const Icon(Icons.link),
+        iconSize: 20,
+        visualDensity: VisualDensity.compact,
+        onPressed: onChanged == null ? null : () => onChanged(!link.on),
+      ),
     );
   }
 }

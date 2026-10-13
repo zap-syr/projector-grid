@@ -13,6 +13,7 @@ import '../custom_tooltip.dart';
 import '../dialog_title_bar.dart';
 import 'black_level_panel.dart';
 import 'edge_blend_canvas.dart';
+import 'edge_blend_link.dart';
 import 'edge_blend_panel.dart';
 import 'edge_blend_side.dart';
 import 'edge_blend_state.dart';
@@ -39,7 +40,18 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
   int _tab = 0;
   EdgeSelection? _selection;
 
+  /// Pair mode's Link toggle, on by default (plan §9).
+  bool _linkOn = true;
+
+  /// The side whose overlapped level Link copies once both projectors'
+  /// Black Level values have loaded (Link turned on before that).
+  int? _levelCopyFrom;
+
   EdgeBlendSide get _side => _sides[_active];
+
+  /// Every edit goes through here, so a linked facing edge mirrors.
+  EdgeBlendLink get _link =>
+      EdgeBlendLink(sides: _sides, arrangement: _arrangement, on: _linkOn);
 
   bool get _pair => _sides.length == 2;
 
@@ -93,10 +105,16 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
   }
 
   /// A projector that finishes loading while it's active on Black Level
-  /// starts that tab's load right away.
+  /// starts that tab's load right away; a level copy waiting for it runs.
   void _onSideChanged() {
     setState(() {});
     _loadBlackIfShown();
+    final from = _levelCopyFrom;
+    // Cleared first: the copy's own writes notify straight back here.
+    if (from != null && _sides.every((s) => s.black != null)) {
+      _levelCopyFrom = null;
+      _link.copyLevelFrom(from);
+    }
   }
 
   void _setActive(int index) {
@@ -106,18 +124,57 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
   }
 
   /// Black Level loads per projector, the first time it's shown on that
-  /// tab: its ~17 queries are wasted if the user never goes there. After a
-  /// failed load only Retry tries again.
+  /// tab: its ~17 queries are wasted if the user never goes there. While
+  /// linked the other projector loads too, so the overlapped level can
+  /// mirror into it. After a failed load only Retry tries again.
   void _loadBlackIfShown() {
-    final side = _side;
-    if (_tab == 1 &&
-        !side.loading &&
-        !side.unreachable &&
-        side.black == null &&
-        !side.blackLoading &&
-        !side.blackUnreachable) {
-      side.loadBlack();
+    if (_tab != 1) return;
+    final link = _link;
+    for (final side in _sides) {
+      if (side != _side && !link.linked) continue;
+      if (!side.loading &&
+          !side.unreachable &&
+          side.black == null &&
+          !side.blackLoading &&
+          !side.blackUnreachable) {
+        side.loadBlack();
+      }
     }
+  }
+
+  /// Turning Link on with different values copies the active projector's
+  /// facing edge to the other one. Its overlapped level waits for both
+  /// Black Level loads when they haven't happened yet.
+  void _setLink(bool on) {
+    setState(() => _linkOn = on);
+    _levelCopyFrom = null;
+    if (on) {
+      final link = _link..copyFrom(_active);
+      if (!link.copyLevelFrom(_active)) _levelCopyFrom = _active;
+    }
+    _loadBlackIfShown();
+  }
+
+  /// The facing edge's Link toggle for the active projector's panel; null
+  /// in single mode.
+  EdgeLinkControl? _linkControl() {
+    if (!_pair) return null;
+    final link = _link;
+    final other = 1 - _active;
+    final otherName = _sides[other].node.name;
+    final otherEdge = _arrangement.facingOf(other).label;
+    return (
+      edge: _arrangement.facingOf(_active),
+      on: link.linked,
+      tooltip: link.mixedRasters
+          ? "Different rasters: widths are in each projector's own units"
+          : !link.available
+          ? 'Link needs both projectors'
+          : link.linked
+          ? 'Linked with $otherName $otherEdge'
+          : 'Link with $otherName $otherEdge',
+      onChanged: link.available ? _setLink : null,
+    );
   }
 
   /// The selection follows its projector, so A and B swap places in the
@@ -126,6 +183,8 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
     setState(() {
       _sides = _sides.reversed.toList();
       _active = 1 - _active;
+      final from = _levelCopyFrom;
+      if (from != null) _levelCopyFrom = 1 - from;
       final s = _selection;
       if (s != null) {
         _selection = (side: 1 - s.side, edge: s.edge, part: s.part);
@@ -390,11 +449,12 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
                       edge: sel.edge,
                       part: blackTab ? EdgePart.border : sel.part,
                     ),
+              maxFor: _link.maxFor,
               onActivate: _setActive,
               onSelect: _select,
               onClearSelection: () => setState(() => _selection = null),
-              onPreview: (i, edge, part, v) => _sides[i].preview(edge, part, v),
-              onCommit: (i, edge, part) => _sides[i].commit(edge, part),
+              onPreview: _link.preview,
+              onCommit: _link.commit,
               onResetEdge: (i, edge) => _reset(i, edge, blackTab: blackTab),
             ),
           ),
@@ -404,8 +464,7 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
   }
 
   void _reset(int side, BlendEdge edge, {required bool blackTab}) {
-    final s = _sides[side];
-    blackTab ? s.resetBorder(edge) : s.resetEdge(edge);
+    blackTab ? _sides[side].resetBorder(edge) : _link.resetEdge(side, edge);
   }
 
   /// The panel, under the active projector's header in a pair. The header
@@ -463,6 +522,9 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
   Widget _buildBlackTab() {
     final side = _side;
     final status = _blackStatus(side);
+    final link = _link;
+    final linkedEdge = _arrangement.facingOf(_active);
+    final other = 1 - _active;
     return DialogSplitLayout(
       left: _buildLeft(blackTab: true, ready: status == null),
       right: _buildRight(
@@ -473,16 +535,25 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
               blend: side.blend,
               raster: side.raster,
               selectedEdge: _selectedEdge,
+              linked: link.linked
+                  ? (
+                      edge: linkedEdge,
+                      tooltip:
+                          'Linked with ${_sides[other].node.name} '
+                          '${_arrangement.facingOf(other).label}',
+                    )
+                  : null,
               onModeChanged: side.setBlackMode,
               onLevelChanged: (slot, channel, v) {
                 final edge = slot.edge;
                 if (edge != null && _selectedEdge != edge) {
                   _select(_active, edge, EdgePart.border);
                 }
-                side.previewLevel(slot, channel, v);
+                link.previewLevel(_active, slot, channel, v);
               },
-              onLevelCommitted: side.commitLevel,
-              onInterlockedChanged: side.setInterlocked,
+              onLevelCommitted: (slot) => link.commitLevel(_active, slot),
+              onInterlockedChanged: (slot, on) =>
+                  link.setInterlocked(_active, slot, on),
               onBorderWidthChanged: (edge, v) {
                 if (_selectedEdge != edge) {
                   _select(_active, edge, EdgePart.border);
@@ -499,6 +570,7 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
   /// Markers and Auto test pattern are shared: they show on only when on
   /// for both, and a toggle writes both.
   Widget _buildBlendPanel(EdgeBlendSide side) {
+    final link = _link;
     return EdgeBlendPanel(
       state: side.blend.copyWith(
         markers: _shared((s) => s.blend.markers) ?? false,
@@ -506,6 +578,8 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
       ),
       raster: side.raster,
       selectedEdge: _selectedEdge,
+      maxFor: (edge, part) => link.maxFor(_active, edge, part),
+      link: _linkControl(),
       onMarkersChanged: (on) {
         for (final s in _reachable) {
           s.setMarkers(on);
@@ -516,14 +590,14 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
           s.setAutoPattern(on);
         }
       },
-      onEnabledChanged: side.setEnabled,
+      onEnabledChanged: (edge, on) => link.setEnabled(_active, edge, on),
       onValueChanged: (edge, part, v) {
         if (_selectedEdge != edge || _selection?.part != part) {
           _select(_active, edge, part);
         }
-        side.preview(edge, part, v);
+        link.preview(_active, edge, part, v);
       },
-      onValueCommitted: side.commit,
+      onValueCommitted: (edge, part) => link.commit(_active, edge, part),
     );
   }
 

@@ -363,7 +363,7 @@ empty model; the §8 max rules (each edge, opposite-edge sharing, border vs own 
 `formatNt4`, `parseRgbw` (bare tuple, `EBBS0=` prefix, garbage → null), `formatRgbw`;
 `_isFailureResponse` no longer failing `ERWI0=+00384` but still failing `ER401` / `ER402`.
 
-Later (not in this iteration): **pair mode, two projectors in one dialog (§9)**, Black border area adjust (EBFI / EFPI / EFII; treat ER401 on
+Later (not in this iteration): Black border area adjust (EBFI / EFPI / EFII; treat ER401 on
 `EBFI` as "unavailable", see §8), apply to group/selection, OSC addresses `/pgrid/blend/...`,
 saving blend presets in the project file, an Edge Blending entry in the Alignment banner
 (`alignment_banner.dart`, next to Geometry).
@@ -545,7 +545,7 @@ vs after: unchanged.
 
 ---
 
-## 9. `[later]` Pair mode: two projectors in one dialog
+## 9. `[x]` Pair mode: two projectors in one dialog
 
 **Mockup:** artboard *Edge Blending · Pair mode* on the canvas linked in Context (Edge
 Blending side by side, Edge Blending stacked, Black Level), drawn 2026-10-13. It is a
@@ -630,8 +630,8 @@ The two projectors meet along one edge pair, the **facing edges**:
   - Only possible when both rasters are equal (`edgeBlendRasterFor`). Mixed tiers (e.g.
     RQ35K + RZ34K) disable it with a tooltip: widths are in each projector's own raster
     units, and a fixed ratio would be a guess.
-- With Link off and the facing widths different, a warning line under the card:
-  "Widths differ: PRJ-01 480, PRJ-02 400".
+- No "Widths differ" warning line (dropped 2026-10-13): it shifted the cards as it came
+  and went, and different widths already show as two ramps of different width.
 
 ### Black Level tab
 - Same pair canvas as the Edge Blending tab (both rasters, inactive one dimmed, same
@@ -655,7 +655,7 @@ The two projectors meet along one edge pair, the **facing edges**:
 - Each projector keeps its own serialized write queue. A linked change enqueues the write
   on both; the canvas shows it at once on both (optimistic).
 - ER402 on one side of a linked pair → read back that side; if the two now differ, Link
-  stays on but the warning line shows until the next successful linked write.
+  stays on and the canvas shows the two widths.
 - One projector offline: its side shows the error state, the other stays usable; shared
   and linked writes go only to the reachable one, with `notifyCommandFailure` for the
   other.
@@ -695,11 +695,35 @@ moved by arrows mirrors on key-up together with the write.
    Tests: pair group in `edge_blend_canvas_test.dart` (active wins a shared handle, the
    other projector's handle, B's facing Start drag, the wider Width moves both rasters,
    the narrower doesn't, pill).
-4. `[ ]` **Link**: toggle on the facing card, mirroring enable / Width / overlapped
-   level, linked max, mixed-tier disable + tooltip, "Widths differ" line, ER402 on one
-   side, linked row icon and `Icons.join_inner` header in the Overlapped table.
-5. `[ ]` Simulator WUXGA model, tests (`edge_blend_side_test` / canvas), format,
-   analyze, review, GUI check on 2 simulated projectors.
+4. `[x]` **Link** (2026-10-13): `edge_blend_link.dart` (`EdgeBlendLink`, built per use
+   from the sides, arrangement and toggle) routes every edit of the dialog, canvas and
+   both panels, so the facing edge's enable, Width (preview, commit, arrow keys, reset)
+   and overlapped level (tuple + Interlocked) mirror; Start and the border never do.
+   Linked max = `linkedMax` of both §8 limits (panel slider + canvas clamp via a
+   `maxFor` parameter). Link toggle (`link` / `link_off` `IconButton`) on the facing
+   card, disabled with a tooltip on mixed rasters or while a projector isn't loaded;
+   turning it on copies the active projector's facing edge (`copyFrom`), a Width over
+   the other's own limit stops at it. Black Level: linked row shows a `link` icon,
+   the Interlocked header is `Icons.join_inner` (single mode too); the link icon has
+   its own 20 px column, empty when not linked, so the columns never shift.
+   Deviations:
+   - No "Widths differ" line (built, then dropped after the GUI check).
+   - While linked, the Black Level tab also loads the other projector, so the level
+     can mirror into it; a level whose partner hasn't loaded yet isn't mirrored.
+   - Interlocked mirrors with the overlapped level (`copyLevel`): the two rows stay
+     the same level, not just the same numbers.
+   Tests: `test/unit/edge_blend_link_test.dart`, `test/widgets/black_level_panel_test.dart`,
+   `test/widgets/edge_blending_dialog_test.dart` (Link on by default, the linked row's
+   icon for either active projector).
+5. `[x]` **Wrap-up** (2026-10-13): `dart format`, `flutter analyze` clean, Edge Blending
+   tests green; GUI check on 2 simulated projectors done by the user. The simulator's
+   WUXGA model for the mixed-tier case is skipped (not needed). Fixed from the review:
+   - Link turned on before both projectors' Black Level values had loaded (e.g. on the
+     Edge Blending tab) never copied the overlapped level. `copyFrom` now does enable +
+     Width only; `copyLevelFrom` does the level, and when it can't yet, the dialog keeps
+     `_levelCopyFrom` and runs it as soon as both have loaded (follows a Swap).
+   Tests: link test for the deferred copy, dialog test turning Link off / on and then
+   opening Black Level.
 
 ### Tests
 - Pure: arrangement guess from two card positions (`domain/edge_blend_pair.dart`), facing
