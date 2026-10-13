@@ -82,6 +82,9 @@ The projector doesn't enforce it (§8), so the dialog does:
 - Loaded with the flag ON but unequal channels (set elsewhere): show W, leave the projector
   alone until the user changes something.
 
+**Open (§8 "W channel"):** Geometry Manager Pro shows only R/G/B for all three levels; what W
+does on the image is not known yet. The UI above may change to an R/G/B model.
+
 **Not available over the protocol:** free-shape point coordinates and the user blending curve
 (*User* mode) — they can only be selected/executed, not edited. In the UI: *User* is just a mode
 segment, no tooltip (dropped 2026-10-12).
@@ -339,7 +342,7 @@ already fits the panel, zoom isn't needed.
      table scales down (`FittedBox`) rather than overflowing in a narrow dialog. Rows of
      disabled edges are dimmed but stay editable (the projector keeps those levels).
    - `EBMI1` value order (0 = Soft edge + Black level, 1 = Black level only) follows §1,
-     not confirmed live.
+     not confirmed live — `tool/edge_blend_test.dart` Phase 2g asks (§8 "W channel").
    Tests: `edge_blend_side_test.dart` (parser, `RgbwLevel`, writes, Interlocked ON / OFF,
    border width), `edge_blend_canvas_test.dart` (border drag + ceiling, arrows).
 7. `[x]` `dart format .`, `flutter analyze`, review with the `reviewer` agent
@@ -476,6 +479,25 @@ like its own software limit. **Pending:** `tool/edge_blend_test.dart` Phase 2f (
 Starts non-zero, and the cap with either edge enabled. Decide after it whether the app keeps
 the projector's rule or adopts GMP's.
 
+### W channel (pending, 2026-10-13)
+
+The protocol carries every black level as `W,R,G,B` and stores W independently (§8 Black
+levels), so the Black Level tab shows W as a fourth channel and Interlocked ON as a single W
+slider that writes `W,W,W,W`. Geometry Manager Pro shows only **R, G, B** for Non-overlapped,
+Black border and the four Overlapped levels; with Interlocked ticked all three fields stay
+editable and move together. Two readings:
+
+1. **W is only the OSD's "all channels" slider**, the image uses R/G/B. Then switch the tab
+   to GMP's model: R/G/B only; Interlocked → any of the three moves all, written as
+   `R,R,R,R` (W kept equal so the OSD agrees); free → R/G/B independent, W left as loaded.
+2. **W is an offset on top of R/G/B.** Then keep W, relabel it (e.g. "All") with a tooltip.
+
+**Pending:** `tool/edge_blend_test.dart` Phase 2g (`probeWChannel`, interactive — needs a
+black input and someone at the screen) writes W-only, R-only, W+R and R=G=B levels and asks
+what the image and the OSD show; optionally has you set levels in GMP and reads back what GMP
+wrote to W (free R=10/20/30, then Interlocked R=40); and asks which `EBMI1` value is which
+Black Level Mode. Decide the UI model after it.
+
 ### Cross-check with Geometry Correction
 
 `geometry_values.dart` already classifies models by `quadPixelTierFor`, and the live results
@@ -525,6 +547,11 @@ vs after: unchanged.
 
 ## 9. `[later]` Pair mode: two projectors in one dialog
 
+**Mockup:** artboard *Edge Blending · Pair mode* on the canvas linked in Context (Edge
+Blending side by side, Edge Blending stacked, Black Level), drawn 2026-10-13. It is a
+**reference for layout and look only**, not a spec to copy pixel for pixel: values, sizes and
+the hand-drawn icons are illustrative. Where it differs from this section, this section wins.
+
 ### Why
 Blending is always set up between neighbours: Left projector's Right edge and Right
 projector's Left edge must get the same width, and the operator wants both projectors' markers
@@ -551,27 +578,43 @@ The two projectors meet along one edge pair, the **facing edges**:
   Stacked* + a *Swap* icon button. Not saved anywhere (presets are a later item).
 
 ### Canvas
-- Both rasters drawn in one canvas, each in its real aspect ratio, overlapping by the
-  facing width (A's when they differ), so the shared blend zone sits over both. Two 16:10
-  rasters side by side need ~2× the width: the layout fits them into the same canvas area
-  (they get smaller; `FittedBox` scaling as before).
-- Each raster has its projector's name in a corner; the **active** projector's raster and
-  handles are drawn normally, the other one's at reduced opacity.
-- Clicking a zone or handle of the other projector makes it active (the panel switches with
-  it). Dragging works on either projector's handles.
+- Both rasters drawn in one canvas, each in its real aspect ratio. They overlap by
+  **Start(A) + Width(A) + Start(B)** of the facing edges, so the two ramps land on the same
+  canvas pixels (A's width when the widths differ). The band from each raster edge to its
+  Start is the masked part outside the shared zone.
+- **Fixed scale:** the scale fits two rasters with no overlap (2 × raster along the
+  arrangement axis) into the canvas area. Moving a facing Start or Width only slides the
+  other raster; nothing rescales mid-drag. Two 16:10 rasters side by side come out ~half
+  the single-mode width; stacked uses the height and comes out larger.
+- The **active** projector's raster and handles are drawn normally, the other one's at
+  reduced opacity (drawn over the active raster, its handles under the active ones).
+- **Projector pills** with the name sit **outside** the rasters, so they never cover lines
+  or handles: above each raster side by side, left of each raster stacked. They are the
+  active-projector switch: the active pill is filled (primary outline), the other one
+  outlined; tooltip `PRJ-02, 192.168.0.108`. Clicking a zone or handle of the other
+  projector also makes it active. Dragging works on either projector's handles.
+- Start never mirrors through Link: dragging A.Right's Start moves A's zone (width kept)
+  and B's raster slides with it to keep the ramps aligned.
 - Non-facing edges (e.g. A.Left) behave exactly as in single mode.
 
 ### Right panel
-- A projector switch at the top of the panel (`SegmentedButton` with the two names) picks
-  the **active** projector; the cards below show its values. Keeps the panel as narrow as
-  today: no second column.
-- **Shared** controls write to both projectors and sit above the switch: mode
-  (Off / On / User), Markers, Test pattern. Mixed state (one On, one Off) shows no segment
-  selected / the switch off; picking a value writes it to both.
+- **No projector switch in the panel** (the pills on the canvas pick the active one; a
+  `SegmentedButton` here looked like a second copy of the Black Level mode control). The
+  panel starts with a header row, the same on both tabs: active projector's name, its IP,
+  and a muted hint *Switch on the canvas* on the right; a divider under it. The cards below
+  show the active projector's values. Keeps the panel as narrow as today: no second column.
+- **Shared** controls write to both projectors: mode (Off / On / User) stays at the top of
+  the dialog; Markers and Test pattern sit under the header on the Edge Blending tab (still
+  shared, though they sit under one projector's name; accepted 2026-10-13). Mixed state
+  (one On, one Off) shows no segment selected / the switch off; picking a value writes it
+  to both.
+- Segmented buttons in the dialog show no check mark on the selected segment
+  (`showSelectedIcon: false`), as elsewhere in the app.
 - The facing edge's card shows a **Link** toggle (`link` / `link_off` icon), on by default:
   - Linked: enable, Width and the overlapped black level of the facing edge are mirrored
     to the other projector's facing edge (A.Right width 480 → B.Left width 480). Start
-    stays per projector (it compensates each projector's own position).
+    stays per projector (it compensates each projector's own position) and is never
+    mirrored.
   - The max of a linked value is the smaller of the two projectors' §8 maxima.
   - Turning Link on with different values copies the active projector's values to the
     other one.
@@ -582,9 +625,19 @@ The two projectors meet along one edge pair, the **facing edges**:
   "Widths differ: PRJ-01 480, PRJ-02 400".
 
 ### Black Level tab
-- Per projector through the same switch: non-overlapped and border levels and border
-  widths stay individual (each projector's black floor is matched by eye).
-- The facing edge's overlapped level follows the Link toggle above.
+- Same pair canvas as the Edge Blending tab (both rasters, inactive one dimmed, same
+  pills), so nothing jumps when switching tabs and the shared zone stays visible.
+- Same header row as the Edge Blending tab, then the Black Level mode `SegmentedButton`
+  (per projector), then the level cards.
+- Per projector through the active-projector pills: non-overlapped and border levels and
+  border widths stay individual (each projector's black floor is matched by eye).
+- The facing edge's overlapped level follows the Link toggle on the Edge Blending tab; its
+  row in the Overlapped table shows a `link` icon (tooltip `Linked with PRJ-02 Left`)
+  while linked, nothing when not.
+- The Overlapped table's Interlocked column header changes from the `link` icon to
+  `Icons.join_inner` (tooltip *Interlocked*), so it can't be confused with Link. This also
+  applies to single mode (`black_level_panel.dart`).
+- With every card expanded the panel is taller than a 1080p dialog allows; it scrolls.
 - Loads lazily per projector, the first time that projector is active on this tab.
 
 ### Data flow
@@ -604,7 +657,8 @@ moved by arrows mirrors on key-up together with the write.
 
 ### Tests
 - Pure: arrangement guess from two card positions (`domain/edge_blend_pair.dart`), facing
-  edges per arrangement, linked max (min of both), Link availability by raster.
+  edges per arrangement, linked max (min of both), Link availability by raster, the
+  canvas layout (overlap = Start(A) + Width(A) + Start(B), fixed scale per arrangement).
 - Manual: `tool/projector_simulator.dart` answers every blending / black level command
   with the §8 limits and ER402 (`EdgeBlendSim`, added 2026-10-13), so pair mode can be
   tested on 2 simulated projectors (both Tier A: add a WUXGA model there for the mixed-tier
