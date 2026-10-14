@@ -130,10 +130,10 @@ void main() {
 
   test('linked max is the smaller of the two §8 limits', () async {
     await load();
-    // B.Right width 1000 leaves B.Left at most 1920 − 1000.
+    // B.Right line at 1000 and B.Left start 50 leave B.Left width ≤ 870.
     sides[1].preview(BlendEdge.right, EdgePart.width, 1000);
-    expect(link().maxFor(0, BlendEdge.right, EdgePart.width), 920);
-    // A's own: 1920 − A.Left width 192.
+    expect(link().maxFor(0, BlendEdge.right, EdgePart.width), 870);
+    // A's own: 1920 − A.Left line at 192.
     expect(link(on: false).maxFor(0, BlendEdge.right, EdgePart.width), 1728);
   });
 
@@ -165,15 +165,15 @@ void main() {
     service.sentRaw.clear();
     final l = link()
       ..setInterlocked(0, LevelSlot.right, true)
-      ..previewLevel(0, LevelSlot.right, RgbwChannel.w, 12)
+      ..previewLevel(0, LevelSlot.right, RgbChannel.g, 12)
       ..commitLevel(0, LevelSlot.right);
     expect(sides[1].black![LevelSlot.left].interlocked, isTrue);
     expect(sides[1].black![LevelSlot.left].value, (w: 12, r: 12, g: 12, b: 12));
     await settle();
     expect(sentTo(_b), contains('VXX:EBBS2=012,012,012,012'));
     // The border level isn't per edge: never mirrored.
-    l.previewLevel(0, LevelSlot.border, RgbwChannel.w, 30);
-    expect(sides[1].black![LevelSlot.border].value.w, 0);
+    l.previewLevel(0, LevelSlot.border, RgbChannel.r, 30);
+    expect(sides[1].black![LevelSlot.border].value.r, 0);
   });
 
   test('the level copy waits for both Black Level loads', () async {

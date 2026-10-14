@@ -1,6 +1,7 @@
-/// Edge Blending raster and value limits, from the live tests on PT-RQ25K and
-/// PT-RZ34K (plan/EDGE_BLENDING_PLAN.md §8). Anything these rules don't model
-/// shows up as ER402, which the dialog answers with a read-back.
+/// Edge Blending raster and value limits (plan/EDGE_BLENDING_PLAN.md §8).
+/// The app follows VSS, which is stricter than the projector itself;
+/// anything set elsewhere that breaks the rule shows up as ER402 or a
+/// read-back.
 library;
 
 import 'dart:math';
@@ -25,18 +26,22 @@ EdgeBlendRaster edgeBlendRasterFor(String model) =>
 int edgeBlendSpan(EdgeBlendRaster raster, BlendEdge edge) =>
     edge.isHorizontal ? raster.h : raster.v;
 
-/// Start + own width must stay within the raster.
-int maxBlendStart({required int span, required int width}) =>
-    max(0, span - width);
-
-/// Bounded by the edge's own start and by the opposite edge's width (the two
-/// widths share the raster); the opposite edge's start doesn't count.
-int maxBlendWidth({
-  required int span,
+/// How far in from its raster edge an edge's border line sits: the black
+/// border is measured from the zone end (Start + Width), not from the
+/// raster edge (§8 "Black level zones").
+int blendLineDepth({
   required int start,
-  required int oppositeWidth,
-}) => max(0, min(span - start, span - oppositeWidth));
+  required int width,
+  required int border,
+}) => start + width + border;
 
-/// Black border width shares the raster with the edge's own blend width.
-int maxBorderWidth({required int span, required int width}) =>
-    max(0, span - width);
+/// The ceiling of one of an edge's Start, Width or Border: as in VSS, an
+/// edge's border line never passes the opposite edge's (§8 "Limits rule"),
+/// so the value gets what the span leaves after [oppositeLine] and the
+/// edge's own other two values ([ownRest]). The projector itself lets the
+/// lines cross; this rule implies every limit it enforces.
+int maxBlendValue({
+  required int span,
+  required int oppositeLine,
+  required int ownRest,
+}) => max(0, span - oppositeLine - ownRest);

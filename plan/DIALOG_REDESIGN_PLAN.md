@@ -574,6 +574,14 @@ layout is used:
 
 ---
 
+## 7a. `[ ]` Edge Blending (notes until it gets its own section)
+
+- **Black border width sliders** (owner, 2026-10-14): only edges with blending enabled are
+  active; a disabled edge's slider and field are disabled, as its canvas handle already is.
+  The value stays shown (it still counts for the limits, `EDGE_BLENDING_PLAN.md` §8).
+
+---
+
 ## 8. Order
 
 1. **Foundation** (§1): `DialogTitleBar` icon + all dialogs migrated in one go (the change is

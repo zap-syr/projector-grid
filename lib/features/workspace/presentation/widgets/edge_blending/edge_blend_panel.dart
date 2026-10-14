@@ -30,6 +30,7 @@ class EdgeBlendPanel extends StatelessWidget {
     this.link,
     required this.onMarkersChanged,
     required this.onAutoPatternChanged,
+    this.autoPatternRefused = false,
     required this.onEnabledChanged,
     required this.onValueChanged,
     required this.onValueCommitted,
@@ -45,6 +46,10 @@ class EdgeBlendPanel extends StatelessWidget {
   final EdgeLinkControl? link;
   final ValueChanged<bool> onMarkersChanged;
   final ValueChanged<bool> onAutoPatternChanged;
+
+  /// The projector refused the last Auto test pattern change (ER401, a test
+  /// pattern is on).
+  final bool autoPatternRefused;
   final void Function(BlendEdge edge, bool on) onEnabledChanged;
 
   /// Every slider move (not sent yet).
@@ -73,6 +78,9 @@ class EdgeBlendPanel extends StatelessWidget {
               label: 'Auto test pattern',
               value: state.autoPattern,
               onChanged: onAutoPatternChanged,
+              warning: autoPatternRefused
+                  ? 'Not available while a test pattern is on'
+                  : null,
             ),
           ],
         ),
@@ -101,18 +109,35 @@ class _LabeledSwitch extends StatelessWidget {
     required this.label,
     required this.value,
     required this.onChanged,
+    this.warning,
   });
 
   final String label;
   final bool value;
   final ValueChanged<bool> onChanged;
 
+  /// Shown as an icon with a tooltip after the label, so nothing below
+  /// moves when it comes and goes.
+  final String? warning;
+
   @override
   Widget build(BuildContext context) {
+    final warning = this.warning;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(label),
+        if (warning != null) ...[
+          const SizedBox(width: 4),
+          CustomTooltip(
+            message: warning,
+            child: Icon(
+              Icons.info_outline,
+              size: 16,
+              color: Theme.of(context).colorScheme.error,
+            ),
+          ),
+        ],
         const SizedBox(width: 8),
         Switch(value: value, onChanged: onChanged),
       ],

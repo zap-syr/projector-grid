@@ -35,11 +35,7 @@ void main() {
 
   // Side 0, for the single-mode tests.
   late EdgeBlendState state;
-  late BlackLevelState? black;
-  void sync() {
-    state = states[0];
-    black = blacks[0];
-  }
+  void sync() => state = states[0];
 
   Future<void> pump(
     WidgetTester tester, {
@@ -55,7 +51,7 @@ void main() {
         blackLevel
             ? parseBlackLevelState(
                 List.filled(blackLevelQueries().length, null),
-              ).withBorderWidth(BlendEdge.left, 100)
+              )
             : null,
     ];
     sync();
@@ -100,14 +96,10 @@ void main() {
                       _ev(['preview', edge.name, part.name, '$v'], i, pair),
                     );
                     setState(() {
-                      if (part == EdgePart.border) {
-                        blacks[i] = blacks[i]!.withBorderWidth(edge, v);
-                      } else {
-                        states[i] = states[i].withEdge(
-                          edge,
-                          states[i][edge].withPart(part, v),
-                        );
-                      }
+                      states[i] = states[i].withEdge(
+                        edge,
+                        states[i][edge].withPart(part, v),
+                      );
                       sync();
                     });
                   },
@@ -270,41 +262,43 @@ void main() {
     expect(events.last, 'reset left');
   });
 
-  testWidgets('Black Level: the handle moves the border width, up to '
-      'raster minus blend width', (tester) async {
-    await pumpCanvas(tester, blackLevel: true);
+  // Left: width 192, border 100, so the border line is 292 in.
+  const bordered = EdgeSettings(
+    enabled: true,
+    start: 0,
+    width: 192,
+    border: 100,
+  );
+
+  testWidgets('Black Level: the handle on the border line moves the border '
+      'width, up to the opposite border line', (tester) async {
+    await pumpCanvas(tester, blackLevel: true, left: bordered);
     final origin = tester.getTopLeft(find.byType(EdgeBlendCanvas));
-    final handle =
+    Offset lineHandle() =>
         origin +
-        const Offset(
-          _rasterLeft + 100 * _scale,
+        Offset(
+          _rasterLeft + state[BlendEdge.left].line * _scale,
           _rasterTop + _rasterHeight / 2,
         );
-    await tester.dragFrom(handle, const Offset(50, 0));
+    await tester.dragFrom(lineHandle(), const Offset(50, 0));
     await tester.pump();
-    expect(black!.borderWidth(BlendEdge.left), inInclusiveRange(294, 300));
+    expect(state[BlendEdge.left].border, inInclusiveRange(294, 300));
     expect(state[BlendEdge.left].width, 192);
     expect(events.last, 'commit left border');
 
-    await tester.dragFrom(
-      origin +
-          Offset(
-            _rasterLeft + black!.borderWidth(BlendEdge.left) * _scale,
-            _rasterTop + _rasterHeight / 2,
-          ),
-      const Offset(1000, 0),
-    );
+    await tester.dragFrom(lineHandle(), const Offset(1000, 0));
     await tester.pump();
-    expect(black!.borderWidth(BlendEdge.left), 1920 - 192);
+    // The Right edge is all 0: the line may reach the raster's far side.
+    expect(state[BlendEdge.left].border, 1920 - 192);
   });
 
   testWidgets('Black Level: arrows step the border width', (tester) async {
-    await pumpCanvas(tester, blackLevel: true);
+    await pumpCanvas(tester, blackLevel: true, left: bordered);
     final origin = tester.getTopLeft(find.byType(EdgeBlendCanvas));
     await tester.tapAt(
       origin +
           const Offset(
-            _rasterLeft + 100 * _scale,
+            _rasterLeft + 292 * _scale,
             _rasterTop + _rasterHeight / 2,
           ),
     );
@@ -314,6 +308,32 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pump();
     expect(events, ['preview left border 101', 'commit left border']);
+  });
+
+  testWidgets('Black Level: a disabled edge has no border handle', (
+    tester,
+  ) async {
+    await pumpCanvas(
+      tester,
+      blackLevel: true,
+      left: const EdgeSettings(
+        enabled: false,
+        start: 0,
+        width: 192,
+        border: 100,
+      ),
+    );
+    final origin = tester.getTopLeft(find.byType(EdgeBlendCanvas));
+    final line =
+        origin +
+        const Offset(
+          _rasterLeft + 292 * _scale,
+          _rasterTop + _rasterHeight / 2,
+        );
+    await tester.dragFrom(line, const Offset(50, 0));
+    await tester.pump();
+    expect(events.where((e) => e.startsWith('preview')), isEmpty);
+    expect(state[BlendEdge.left].border, 100);
   });
 
   testWidgets('mode Off: no handles to grab', (tester) async {

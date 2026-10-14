@@ -590,6 +590,7 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
           s.setAutoPattern(on);
         }
       },
+      autoPatternRefused: _reachable.any((s) => s.autoPatternRefused),
       onEnabledChanged: (edge, on) => link.setEnabled(_active, edge, on),
       onValueChanged: (edge, part, v) {
         if (_selectedEdge != edge || _selection?.part != part) {

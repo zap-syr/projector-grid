@@ -6,8 +6,10 @@ import 'package:flutter/gestures.dart'
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../domain/black_level_zones.dart';
 import '../../../domain/blend_edge.dart';
 import '../../../domain/edge_blend_limits.dart';
+import '../../../domain/edge_blend_values.dart';
 import '../../../domain/edge_blend_pair.dart';
 import '../../../domain/projector_node.dart';
 import '../common/key_hold_repeater.dart';
@@ -47,9 +49,10 @@ class BlendCanvasSide {
 /// gesture detector with its own hit-testing, so a drag repaints nothing but
 /// this canvas' layer.
 ///
-/// With [blackTab] it's the Black Level tab's canvas instead: overlapped
-/// zones in their level's colour, hatched black border bands, and one
-/// handle per edge that moves the border width ([EdgePart.border]).
+/// With [blackTab] it's the Black Level tab's canvas instead: each level
+/// drawn where the projector applies it (§8 "Black level zones"), and one
+/// handle per edge on its border line that moves the border width
+/// ([EdgePart.border]).
 ///
 /// Two [sides] are pair mode (plan §9): both rasters on one fixed scale,
 /// overlapping by the facing edges' Start + Width + Start so the two ramps
@@ -167,18 +170,13 @@ class _EdgeBlendCanvasState extends State<EdgeBlendCanvas> {
         (!widget.blackTab || s.black != null);
   }
 
-  /// A disabled edge's blend handles are hidden; its border width is still
-  /// accepted by the projector (§8), so the border handle never is.
+  /// A disabled edge has no handles on either tab: the projector accepts its
+  /// border width, but a disabled edge has no border band (§8).
   bool _hasHandles(int side, BlendEdge edge) =>
-      _editable(side) &&
-      (widget.blackTab || widget.sides[side].state![edge].enabled);
+      _editable(side) && widget.sides[side].state![edge].enabled;
 
-  int _valueOf(int side, BlendEdge edge, EdgePart part) {
-    final s = widget.sides[side];
-    return part == EdgePart.border
-        ? s.black!.borderWidth(edge)
-        : s.state![edge].valueOf(part);
-  }
+  int _valueOf(int side, BlendEdge edge, EdgePart part) =>
+      widget.sides[side].state![edge].valueOf(part);
 
   /// The active projector first: its handles are drawn on top, so they win
   /// where the two overlap.
@@ -249,8 +247,7 @@ class _EdgeBlendCanvasState extends State<EdgeBlendCanvas> {
       for (final edge in BlendEdge.values) {
         if (!_hasHandles(i, edge)) continue;
         double dist(EdgePart part) =>
-            (box.handleAt(edge, _handleUnits(s.state!, s.black, edge, part)) -
-                    p)
+            (box.handleAt(edge, _handleUnits(s.state!, edge, part)) - p)
                 .distance;
         final EdgePart part;
         final double d;
@@ -291,10 +288,9 @@ class _EdgeBlendCanvasState extends State<EdgeBlendCanvas> {
   }
 
   /// Everything a click on [edge] covers: the band a blend edge darkens,
-  /// or the black border.
-  int _zoneDepth(BlendCanvasSide s, BlendEdge edge) => widget.blackTab
-      ? s.black!.borderWidth(edge)
-      : s.state![edge].start + s.state![edge].width;
+  /// or on Black Level everything up to the border line.
+  int _zoneDepth(BlendCanvasSide s, BlendEdge edge) =>
+      widget.blackTab ? s.state![edge].line : s.state![edge].end;
 
   void _updateHover(Offset p) {
     final hit = _hitTest(p);
@@ -678,25 +674,17 @@ class _RasterBox {
 }
 
 /// How far in from [edge] the line [part]'s handle sits on: Start, the zone
-/// end (Start + Width), or the black border width.
-int _handleUnits(
-  EdgeBlendState state,
-  BlackLevelState? black,
-  BlendEdge edge,
-  EdgePart part,
-) => switch (part) {
-  EdgePart.start => state[edge].start,
-  EdgePart.width => state[edge].start + state[edge].width,
-  EdgePart.border => black!.borderWidth(edge),
-};
+/// end (Start + Width), or the border line (the border width from the zone
+/// end, §8).
+int _handleUnits(EdgeBlendState state, BlendEdge edge, EdgePart part) =>
+    switch (part) {
+      EdgePart.start => state[edge].start,
+      EdgePart.width => state[edge].end,
+      EdgePart.border => state[edge].line,
+    };
 
-/// The level's channels as a swatch colour; Interlocked shows W as grey.
-Color _levelColor(RgbwLevel level) => Color.fromARGB(
-  255,
-  level.shown(RgbwChannel.r),
-  level.shown(RgbwChannel.g),
-  level.shown(RgbwChannel.b),
-);
+/// A level's R, G, B as a swatch colour (W does nothing to the image).
+Color _rgbColor(Rgbw v) => Color.fromARGB(255, v.r, v.g, v.b);
 
 /// One projector's share of a paint pass. [black] is null on the Edge
 /// Blending tab, and on Black Level until that projector's values load.
@@ -790,9 +778,7 @@ class _EdgeBlendPainter extends CustomPainter {
 
       final hover = side.hoverEdge;
       if (hover != null) {
-        final depth = black != null
-            ? black.borderWidth(hover)
-            : state[hover].start + state[hover].width;
+        final depth = black != null ? state[hover].line : state[hover].end;
         canvas.drawRect(
           box.bandHitRect(hover, depth, 4),
           Paint()
@@ -827,9 +813,10 @@ class _EdgeBlendPainter extends CustomPainter {
     if (!side.editable || state == null) return;
     final black = side.black;
     for (final edge in BlendEdge.values) {
+      if (!state[edge].enabled) continue;
       if (blackTab) {
         if (black != null) _paintHandle(canvas, side, edge, EdgePart.border);
-      } else if (state[edge].enabled) {
+      } else {
         // Width after Start: drawn on top, as it wins the hit test.
         _paintHandle(canvas, side, edge, EdgePart.start);
         _paintHandle(canvas, side, edge, EdgePart.width);
@@ -837,8 +824,11 @@ class _EdgeBlendPainter extends CustomPainter {
     }
   }
 
-  /// Overlapped zones filled with their level's colour, then the black
-  /// border bands in the border level's colour, hatched.
+  /// The levels where the projector applies them (§8 "Black level zones"):
+  /// the non-overlapped level over the whole raster, then per enabled edge
+  /// black up to Start, the overlapped level to the zone end and overlapped
+  /// + border (hatched) to the border line. Drawn the same in both Black
+  /// Level Modes. A disabled edge has no bands, only its outline.
   void _paintBlack(
     Canvas canvas,
     _PaintSide side,
@@ -846,41 +836,67 @@ class _EdgeBlendPainter extends CustomPainter {
     BlackLevelState black,
   ) {
     final box = side.box;
+    canvas.drawRect(
+      box.rect,
+      Paint()..color = _rgbColor(black[LevelSlot.nonOverlapped].value),
+    );
+    final border = black[LevelSlot.border].value;
+    final hatch = Paint()
+      ..color = colors.outline.withValues(alpha: 0.5)
+      ..strokeWidth = 1;
+    final idle = Paint()
+      ..color = colors.idle
+      ..strokeWidth = 1.5;
     for (final edge in BlendEdge.values) {
       final s = state[edge];
-      if (!s.enabled || s.width == 0) continue;
-      final zone = box.zone(edge, s);
-      final level = black[LevelSlot.overlap(edge)];
-      canvas.drawRect(
-        zone,
-        Paint()..color = _levelColor(level).withValues(alpha: 0.85),
+      final bands = blendBands(
+        start: s.start,
+        width: s.width,
+        border: s.border,
       );
-      _dashedRect(
-        canvas,
-        zone,
-        Paint()
-          ..color = colors.idle
-          ..strokeWidth = 1,
-      );
+      if (!s.enabled) {
+        if (bands.line > 0) {
+          _dashedRect(canvas, box.band(edge, 0, bands.line), idle);
+        }
+        continue;
+      }
+      final overlapped = black[LevelSlot.overlap(edge)].value;
+      if (bands.start > 0) {
+        canvas.drawRect(
+          box.band(edge, 0, bands.start),
+          Paint()..color = Colors.black,
+        );
+      }
+      if (bands.end > bands.start) {
+        canvas.drawRect(
+          box.band(edge, bands.start, bands.end),
+          Paint()..color = _rgbColor(overlapped),
+        );
+      }
+      if (bands.line > bands.end) {
+        final c = box.band(edge, bands.end, bands.line);
+        canvas.drawRect(
+          c,
+          Paint()..color = _rgbColor(stackLevels(overlapped, border)),
+        );
+        _hatch(canvas, c, hatch);
+      }
+      // Where the levels change: Start and the zone end (the markers'
+      // lines on the screen), then the border line the handle moves.
+      final thin = Paint()
+        ..color = colors.idle
+        ..strokeWidth = 1;
+      _dashedLine(canvas, box, edge, box.lineAt(edge, bands.start), thin);
+      _dashedLine(canvas, box, edge, box.lineAt(edge, bands.end), thin);
     }
-
-    final borderFill = _levelColor(black[LevelSlot.border]);
-    final hatch = Paint()
-      ..color = colors.outline
-      ..strokeWidth = 1;
     for (final edge in BlendEdge.values) {
-      final depth = black.borderWidth(edge);
-      if (depth == 0) continue;
-      final band = box.band(edge, 0, depth);
-      canvas.drawRect(band, Paint()..color = borderFill);
-      _hatch(canvas, band, hatch);
       _line(
         canvas,
         box,
         edge,
-        box.lineAt(edge, depth),
+        box.lineAt(edge, state[edge].line),
         Paint()
-          ..color = colors.start
+          ..color = state[edge].enabled ? colors.start : colors.idle
           ..strokeWidth = side.selection?.edge == edge ? 2.5 : 2.0,
       );
     }
@@ -949,7 +965,7 @@ class _EdgeBlendPainter extends CustomPainter {
     final sel = side.selection;
     final center = side.box.handleAt(
       edge,
-      _handleUnits(side.state!, side.black, edge, part),
+      _handleUnits(side.state!, edge, part),
     );
     final selectedEdge = sel?.edge == edge;
     final active = selectedEdge && sel?.part == part;
@@ -990,11 +1006,11 @@ class _EdgeBlendPainter extends CustomPainter {
     EdgePart part,
   ) {
     final state = side.state!;
-    final units = _handleUnits(state, side.black, edge, part);
+    final units = _handleUnits(state, edge, part);
     final label = switch (part) {
       EdgePart.start => 'Start ${state[edge].start}',
       EdgePart.width => 'Width ${state[edge].width}',
-      EdgePart.border => 'Border $units',
+      EdgePart.border => 'Border ${state[edge].border}',
     };
     final text = TextPainter(
       text: TextSpan(

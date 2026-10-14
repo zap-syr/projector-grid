@@ -9,10 +9,17 @@ void main() {
   Future<void> pumpPanel(
     WidgetTester tester, {
     ({BlendEdge edge, String tooltip})? linked,
+    bool interlocked = false,
   }) {
-    final black = parseBlackLevelState(
+    var black = parseBlackLevelState(
       List.filled(blackLevelQueries().length, null),
     );
+    for (final slot in LevelSlot.values) {
+      black = black.withLevel(
+        slot,
+        black[slot].copyWith(interlocked: interlocked),
+      );
+    }
     final blend = parseEdgeBlendState(
       List.filled(edgeBlendQueries().length, null),
     ).$1;
@@ -55,6 +62,17 @@ void main() {
       linked: (edge: BlendEdge.left, tooltip: 'Linked with PRJ-01 Right'),
     );
     expect(find.byIcon(Icons.link), findsOneWidget);
+  });
+
+  testWidgets('Interlocked keeps every R, G, B control in place, no W', (
+    tester,
+  ) async {
+    for (final interlocked in [false, true]) {
+      await pumpPanel(tester, interlocked: interlocked);
+      // Non-overlapped and border: 3 sliders each, plus 4 border widths.
+      expect(find.byType(Slider), findsNWidgets(10), reason: '$interlocked');
+      expect(find.text('W'), findsNothing);
+    }
   });
 
   testWidgets('no link icon when not linked', (tester) async {

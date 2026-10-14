@@ -26,7 +26,9 @@
 //     (optional) asks you to set levels in GMP and reads back what it wrote.
 //     Also asks which EBMI1 value is which Black Level Mode. Needs a black
 //     input signal and someone watching the screen; type answers at the
-//     prompts. Runs last; set the other probe* flags to false to run it alone.
+//     prompts. Set the other probe* flags to false to run it alone.
+//   Phase 2h (probeBlackZonesFlag, interactive): whether a disabled edge's
+//     overlapped and border levels still show. Same setup as 2g.
 //
 // Phase 2 visibly changes the projected image while it runs. Use a unit that
 // is not in a live show. Every register it touches is restored from the
@@ -45,12 +47,15 @@ String login = 'dispadmin';
 String password = '@Panasonic';
 
 const bool runWriteTests = false; // Phase 2 — changes projector state
-const bool probeLimits = true; // binary-search Start/Width/Border ceilings
-const bool probeRgbw = true; // RGBW round-trip + Interlocked behavior
-const bool probeModeOff = true; // which registers answer while EDBI0 = Off
-const bool probeQpd = true; // limits with Quad Pixel Drive on vs off
-const bool probeOpposite = true; // start/width vs the opposite edge, enable
-const bool probeWChannel = true; // what W does (interactive, needs a viewer)
+const bool probeLimits = false; // binary-search Start/Width/Border ceilings
+const bool probeRgbw = false; // RGBW round-trip + Interlocked behavior
+const bool probeModeOff = false; // which registers answer while EDBI0 = Off
+const bool probeQpd = false; // limits with Quad Pixel Drive on vs off
+// Superseded: the app uses VSS's stricter no-crossing rule (plan §8).
+const bool probeOpposite = false; // start/width vs the opposite edge, enable
+// 2g and 2h answered by hand on the RQ25K (plan §8, 2026-10-14).
+const bool probeWChannel = false; // what W does (interactive, needs a viewer)
+const bool probeBlackZonesFlag = false; // levels on a disabled edge (viewer)
 
 // Upper bound for the ceiling search — legacy start/border commands only
 // carry 4 digits, so nothing above 9999 is expressible on the wire.
@@ -586,9 +591,10 @@ Future<void> probeWMeaning() async {
   // What GMP writes — the dialog should write the same so the two agree.
   final gmp = ask(
     'GMP free write',
-    'Optional, needs Geometry Manager Pro connected to this projector. In GMP '
-        'Black Level Adjustment, untick Interlocked on Non-Overlapped and set '
-        'R=10, G=20, B=30, then press Enter (type s to skip the GMP steps).',
+    'Optional, needs VSS (or Geometry Manager Pro) connected to this '
+        'projector. In its Black Level tab, unlink Non-overlapped Black Level '
+        'and set R=10, G=20, B=30, then press Enter (type s to skip these '
+        'steps).',
   );
   if (gmp.toLowerCase() != 's') {
     note(
@@ -597,8 +603,7 @@ Future<void> probeWMeaning() async {
     );
     ask(
       'GMP interlocked write',
-      'In GMP tick Interlocked on Non-Overlapped and set R=40, then press '
-          'Enter.',
+      'Link Non-overlapped Black Level again and set R=40, then press Enter.',
     );
     note(
       'after GMP Interlocked R=40: QJI "${await send(nonOvReg.query)}", '
@@ -614,6 +619,52 @@ Future<void> probeWMeaning() async {
     ask('EBMI1=$v', 'Which Black Level Mode does the OSD (or GMP) show now?');
   }
 }
+
+// ── Phase 2: black levels on a disabled edge (interactive) ──────────────────
+/// The bands each level covers on an enabled edge are known
+/// (plan/EDGE_BLENDING_PLAN.md §8 "Black level zones"). The canvas keeps the
+/// border handle on disabled edges (the projector accepts the width there);
+/// this asks whether a disabled edge's levels still show.
+Future<void> probeBlackZones() async {
+  header('Phase 2h — black levels on a disabled edge (interactive)');
+  // Small enough for a WUXGA raster (1920 wide), wide enough to see.
+  const start = 200, width = 400, border = 300;
+  await zeroZones();
+  for (var i = 0; i < 4; i++) {
+    await send(enableReg(i).write(0));
+  }
+  await send(startReg(2).write(start));
+  await send(widthReg(2).write(width));
+  await send(borderWidthReg(2).write(border));
+  for (final reg in [nonOvIlReg, borderIlReg, overlapIlReg(2)]) {
+    await send(reg.write(0));
+  }
+  await send(overlapReg(2).write('000,100,000,000'));
+  await send(borderReg.write('000,000,100,000'));
+  await send(nonOvReg.write('000,000,000,100'));
+  stdout.writeln(
+    '  Feed a full-screen BLACK signal. Every edge is DISABLED; the Left edge\n'
+    '  holds Start=$start, Width=$width, border width=$border. Levels: Left\n'
+    '  overlapped RED, border GREEN, non-overlapped BLUE. On an enabled edge\n'
+    '  this would show, from the left: black, red, yellow (red + green), blue.',
+  );
+  for (final mode in [0, 1]) {
+    await send(Reg('Black level mode', 'EBMI1', Fmt.vxxInt).write(mode));
+    ask(
+      'disabled edge, EBMI1=$mode',
+      'EBMI1=$mode: what do you see from the left edge inwards (all blue, or '
+          'red / yellow bands too)?',
+    );
+  }
+  for (final reg in [overlapReg(2), borderReg, nonOvReg]) {
+    await send(reg.write('000,000,000,000'));
+  }
+}
+
+Reg overlapReg(int i) =>
+    Reg('${edges[i]} overlapped level', overlapKeys[i], Fmt.vxxRgbw);
+Reg overlapIlReg(int i) =>
+    Reg('${edges[i]} overlapped interlocked', overlapIlKeys[i], Fmt.vxxInt);
 
 // ── Phase 2: Quad Pixel Drive on vs off ──────────────────────────────────────
 /// Measures Upper/Left ceilings in both QPD states, and whether toggling QPD
@@ -780,6 +831,7 @@ Future<void> main(List<String> args) async {
         if (probeQpd) await probeQuadPixelDrive();
         if (probeOpposite) await probeOppositeEdges();
         if (probeWChannel) await probeWMeaning();
+        if (probeBlackZonesFlag) await probeBlackZones();
       } finally {
         await restore(snap);
       }

@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../domain/blend_edge.dart';
@@ -21,7 +23,7 @@ enum EdgeBlendMode {
 }
 
 /// What a canvas handle or a slider moves. [border] is the black border
-/// width, which lives in `BlackLevelState`, not in [EdgeSettings].
+/// width, edited on the Black Level tab.
 enum EdgePart { start, width, border }
 
 @immutable
@@ -30,29 +32,42 @@ class EdgeSettings {
   final int start;
   final int width;
 
+  /// The black border width, measured from the zone end (Start + Width).
+  /// Kept here, not with the levels: it moves the edge's border line, which
+  /// bounds every value of the opposite edge on both tabs (§8).
+  final int border;
+
   const EdgeSettings({
     required this.enabled,
     required this.start,
     required this.width,
+    this.border = 0,
   });
+
+  /// The zone end, Start + Width, in units in from the raster edge.
+  int get end => start + width;
+
+  /// The border line, in units in from the raster edge.
+  int get line => blendLineDepth(start: start, width: width, border: border);
 
   int valueOf(EdgePart part) => switch (part) {
     EdgePart.start => start,
     EdgePart.width => width,
-    EdgePart.border => throw ArgumentError.value(part, 'part'),
+    EdgePart.border => border,
   };
 
-  EdgeSettings copyWith({bool? enabled, int? start, int? width}) =>
+  EdgeSettings copyWith({bool? enabled, int? start, int? width, int? border}) =>
       EdgeSettings(
         enabled: enabled ?? this.enabled,
         start: start ?? this.start,
         width: width ?? this.width,
+        border: border ?? this.border,
       );
 
   EdgeSettings withPart(EdgePart part, int v) => switch (part) {
     EdgePart.start => copyWith(start: v),
     EdgePart.width => copyWith(width: v),
-    EdgePart.border => throw ArgumentError.value(part, 'part'),
+    EdgePart.border => copyWith(border: v),
   };
 
   @override
@@ -60,10 +75,11 @@ class EdgeSettings {
       other is EdgeSettings &&
       other.enabled == enabled &&
       other.start == start &&
-      other.width == width;
+      other.width == width &&
+      other.border == border;
 
   @override
-  int get hashCode => Object.hash(enabled, start, width);
+  int get hashCode => Object.hash(enabled, start, width, border);
 }
 
 /// The Edge Blending tab's values for one projector.
@@ -103,24 +119,25 @@ class EdgeBlendState {
       );
 
   /// The slider ceiling for [part] of [edge] given every other current value
-  /// (§8 rules in `edge_blend_limits.dart`).
+  /// (§8 "Limits rule": border lines never cross). A disabled edge counts
+  /// with its stored values, which come back when it's enabled. Values set
+  /// elsewhere may already break the rule; the ceiling then stays at the
+  /// current value so touching it doesn't jump, it can only go down.
   int maxFor(BlendEdge edge, EdgePart part, EdgeBlendRaster raster) {
-    final span = edgeBlendSpan(raster, edge);
     final e = this[edge];
-    return switch (part) {
-      EdgePart.start => maxBlendStart(span: span, width: e.width),
-      EdgePart.width => maxBlendWidth(
-        span: span,
-        start: e.start,
-        oppositeWidth: this[edge.opposite].width,
-      ),
-      EdgePart.border => maxBorderWidth(span: span, width: e.width),
-    };
+    final own = e.valueOf(part);
+    final rule = maxBlendValue(
+      span: edgeBlendSpan(raster, edge),
+      oppositeLine: this[edge.opposite].line,
+      ownRest: e.line - own,
+    );
+    return max(rule, own);
   }
 }
 
 /// Queries for [EdgeBlendState], in the order [parseEdgeBlendState] reads
-/// them. `QID` rides along so the raster comes with the same batch.
+/// them. `QID` rides along so the raster comes with the same batch, and the
+/// border widths because the limits need them on both tabs.
 List<String> edgeBlendQueries() => [
   'QVX:EDBI0',
   'QID',
@@ -129,6 +146,7 @@ List<String> edgeBlendQueries() => [
   for (final e in BlendEdge.values) 'QVX:${e.widthKey}',
   'QGM',
   'QVX:EATI1',
+  for (final e in BlendEdge.values) 'Q${e.borderCmd}',
 ];
 
 /// Replies of [edgeBlendQueries] → the state and the model's raster. A
@@ -145,6 +163,7 @@ List<String> edgeBlendQueries() => [
           enabled: intAt(2 + i, edges[i].enableCmd) == 1,
           start: intAt(2 + n + i, edges[i].startCmd),
           width: intAt(2 + 2 * n + i, edges[i].widthKey),
+          border: intAt(4 + 3 * n + i, edges[i].borderCmd),
         ),
     },
     markers: intAt(2 + 3 * n, 'GM') == 1,

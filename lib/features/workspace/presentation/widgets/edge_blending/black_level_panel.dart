@@ -36,16 +36,15 @@ class BlackLevelPanel extends StatelessWidget {
 
   final BlackLevelState black;
 
-  /// For the overlapped rows (dimmed while their edge is off) and the
-  /// border width limits (raster minus the edge's blend width).
+  /// For the overlapped rows (dimmed while their edge is off), the border
+  /// widths and their limits (§8).
   final EdgeBlendState blend;
   final EdgeBlendRaster raster;
   final BlendEdge? selectedEdge;
   final ValueChanged<BlackLevelMode> onModeChanged;
 
   /// Every slider move (not sent yet).
-  final void Function(LevelSlot slot, RgbwChannel channel, int v)
-  onLevelChanged;
+  final void Function(LevelSlot slot, RgbChannel channel, int v) onLevelChanged;
 
   /// Slider released or stepper value entered: send it.
   final void Function(LevelSlot slot) onLevelCommitted;
@@ -112,7 +111,7 @@ class BlackLevelPanel extends StatelessWidget {
     // Full-span range with the limit as a stop, as on the blend sliders.
     return LabeledSliderRow(
       label: edge.label,
-      value: black.borderWidth(edge).toDouble(),
+      value: blend[edge].border.toDouble(),
       min: 0,
       max: edgeBlendSpan(raster, edge).toDouble(),
       limit: limit.toDouble(),
@@ -125,17 +124,18 @@ class BlackLevelPanel extends StatelessWidget {
   }
 }
 
-Color _channelColor(BuildContext context, RgbwChannel c) => switch (c) {
-  RgbwChannel.w => Theme.of(context).colorScheme.onSurfaceVariant,
-  RgbwChannel.r => Colors.red,
-  RgbwChannel.g => Colors.green,
-  RgbwChannel.b => Colors.blue,
+Color _channelColor(RgbChannel c) => switch (c) {
+  RgbChannel.r => Colors.red,
+  RgbChannel.g => Colors.green,
+  RgbChannel.b => Colors.blue,
 };
 
-String _channelLabel(RgbwChannel c) => c.name.toUpperCase();
+String _channelLabel(RgbChannel c) => c.name.toUpperCase();
 
-/// A W,R,G,B black level with its Interlocked checkbox: one W slider while
-/// interlocked, four otherwise. [footer] goes under the sliders.
+/// A black level's R, G, B sliders with its Interlocked checkbox. The three
+/// sliders stay put either way; while interlocked, moving one moves the
+/// others (as in VSS), so nothing in the card appears or disappears.
+/// [footer] goes under the sliders.
 class RgbwLevelCard extends StatelessWidget {
   const RgbwLevelCard({
     super.key,
@@ -149,16 +149,13 @@ class RgbwLevelCard extends StatelessWidget {
 
   final String title;
   final RgbwLevel level;
-  final void Function(RgbwChannel channel, int v) onChanged;
+  final void Function(RgbChannel channel, int v) onChanged;
   final VoidCallback onCommitted;
   final ValueChanged<bool> onInterlockedChanged;
   final List<Widget> footer;
 
   @override
   Widget build(BuildContext context) {
-    final channels = level.interlocked
-        ? const [RgbwChannel.w]
-        : RgbwChannel.values;
     return SectionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -179,16 +176,14 @@ class RgbwLevelCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 4),
-          for (final c in channels)
+          for (final c in RgbChannel.values)
             LabeledSliderRow(
-              // Keyed so W keeps its stepper State when R/G/B come and go.
-              key: ValueKey(c),
               label: _channelLabel(c),
-              value: level.shown(c).toDouble(),
+              value: level.channel(c).toDouble(),
               min: 0,
               max: 255,
               layout: SliderLabelLayout.inline,
-              color: _channelColor(context, c),
+              color: _channelColor(c),
               onChanged: (v) => onChanged(c, v.round()),
               onChangeEnd: (_) => onCommitted(),
             ),
@@ -227,8 +222,8 @@ class _InterlockedToggle extends StatelessWidget {
   }
 }
 
-/// One row per edge: Interlocked, then W/R/G/B steppers (no sliders, to
-/// keep the card short). Interlocked leaves only W editable.
+/// One row per edge: Interlocked, then R/G/B steppers (no sliders, to keep
+/// the card short). Interlocked: entering one channel sets all three.
 class _OverlappedCard extends StatelessWidget {
   const _OverlappedCard({
     required this.black,
@@ -251,8 +246,7 @@ class _OverlappedCard extends StatelessWidget {
   final EdgeBlendState blend;
   final BlendEdge? selectedEdge;
   final ({BlendEdge edge, String tooltip})? linked;
-  final void Function(LevelSlot slot, RgbwChannel channel, int v)
-  onLevelChanged;
+  final void Function(LevelSlot slot, RgbChannel channel, int v) onLevelChanged;
   final void Function(LevelSlot slot) onLevelCommitted;
   final void Function(LevelSlot slot, bool on) onInterlockedChanged;
 
@@ -301,7 +295,7 @@ class _OverlappedCard extends StatelessWidget {
             child: Icon(Icons.join_inner, size: 16, color: muted),
           ),
         ),
-        for (final c in RgbwChannel.values)
+        for (final c in RgbChannel.values)
           SizedBox(
             width: _valueColumn,
             child: Text(
@@ -310,7 +304,7 @@ class _OverlappedCard extends StatelessWidget {
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.bold,
-                color: _channelColor(context, c),
+                color: _channelColor(c),
               ),
             ),
           ),
@@ -367,44 +361,25 @@ class _OverlappedCard extends StatelessWidget {
                 onChanged: (v) => onInterlockedChanged(slot, v!),
               ),
             ),
-            for (final c in RgbwChannel.values)
-              _stepper(
-                slot,
-                level,
-                c,
-                editable: !level.interlocked || c == RgbwChannel.w,
-              ),
+            for (final c in RgbChannel.values) _stepper(slot, level, c),
           ],
         ),
       ),
     );
   }
 
-  Widget _stepper(
-    LevelSlot slot,
-    RgbwLevel level,
-    RgbwChannel c, {
-    required bool editable,
-  }) {
-    // Same wrapper either way, so the stepper keeps its State when
-    // Interlocked flips.
+  Widget _stepper(LevelSlot slot, RgbwLevel level, RgbChannel c) {
     return SizedBox(
       width: _valueColumn,
       child: Center(
-        child: IgnorePointer(
-          ignoring: !editable,
-          child: Opacity(
-            opacity: editable ? 1 : 0.38,
-            child: SleekStepperInput(
-              initialValue: level.shown(c).toString(),
-              min: 0,
-              max: 255,
-              onValueChanged: (s) {
-                onLevelChanged(slot, c, double.parse(s).round());
-                onLevelCommitted(slot);
-              },
-            ),
-          ),
+        child: SleekStepperInput(
+          initialValue: level.channel(c).toString(),
+          min: 0,
+          max: 255,
+          onValueChanged: (s) {
+            onLevelChanged(slot, c, double.parse(s).round());
+            onLevelCommitted(slot);
+          },
         ),
       ),
     );

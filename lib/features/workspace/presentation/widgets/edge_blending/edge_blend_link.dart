@@ -93,7 +93,7 @@ class EdgeBlendLink {
     return (side: partner.side, slot: LevelSlot.overlap(partner.edge));
   }
 
-  void previewLevel(int side, LevelSlot slot, RgbwChannel channel, int v) {
+  void previewLevel(int side, LevelSlot slot, RgbChannel channel, int v) {
     final s = sides[side];
     s.previewLevel(slot, channel, v);
     final partner = _levelPartner(side, slot);

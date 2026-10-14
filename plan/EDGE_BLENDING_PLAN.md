@@ -73,17 +73,18 @@ Three syntax families — important for parsing:
 Black border area adjust is **not in the first iteration** (decided 2026-10-12); the rows stay
 here as the command reference for when it's picked up.
 
-**Interlocked semantics:** ON → the W slider moves R/G/B together (single slider); OFF → four
-independent channels. In the UI this toggles the same card between "1 slider" and "4 sliders".
-The projector doesn't enforce it (§8), so the dialog does:
-- Every write while Interlocked is ON sends `W,W,W,W`.
-- Turning it ON writes the flag, then the tuple with R/G/B set to the current W.
-- Turning it OFF writes only the flag; the four values stay as they are.
-- Loaded with the flag ON but unequal channels (set elsewhere): show W, leave the projector
-  alone until the user changes something.
-
-**Open (§8 "W channel"):** Geometry Manager Pro shows only R/G/B for all three levels; what W
-does on the image is not known yet. The UI above may change to an R/G/B model.
+**W and Interlocked (§8 "W channel", 2026-10-14):** W does nothing to the image; it is only
+the OSD's "all channels" slider. The UI shows **R, G, B only** and writes W the way VSS does.
+Interlocked ON → R, G, B move together; OFF → three independent channels. The projector
+doesn't enforce it (§8), so the dialog does:
+- Every write while Interlocked is ON sends `V,V,V,V` (W = R = G = B).
+- Every write while it is OFF sends `000,R,G,B` (W = 0).
+- Turning it ON writes the flag, then the tuple with W/G/B set to the current R.
+- Turning it OFF writes the flag, then the tuple with W = 0.
+- Loaded with the flag ON but unequal R/G/B (set elsewhere): show them as they are, leave
+  the projector alone until the user changes something.
+- The UI never adds or removes controls for it (owner, 2026-10-14): R, G and B are always
+  there; while Interlocked, moving one moves the other two, as in VSS.
 
 **Not available over the protocol:** free-shape point coordinates and the user blending curve
 (*User* mode) — they can only be selected/executed, not edited. In the UI: *User* is just a mode
@@ -160,18 +161,20 @@ callback is wired the same way as `onGeometryCorrection` (`projector_workspace.d
   (clicking an edge selects/enables it). Less duplication.
 
 ### Black Level tab
-Left: same canvas in "black level" mode — shows the non-overlapped area (light), overlapped
-zones (RGB swatches of current values), black border bands (hatched, width from `VJU/VJB/…`).
-Black border widths are draggable via handles.
+Left: same canvas in "black level" mode, drawing the zones as the projector applies them
+(§8 "Black level zones"): raster edge to Start black, Overlapped from Start to the border
+line, Overlapped + Border between the zone end and the border line, Non-overlapped inside.
+The border line sits Border units in from the zone end (Start + Width) and is draggable.
 
 Right, top to bottom:
 1. **Mode**: `SegmentedButton` *Soft edge + Black level* / *Black level only* (`EBMI1`).
-2. **Non-overlapped black level** card: `Interlocked` checkbox; ON → single W slider (0–255);
-   OFF → W/R/G/B sliders (`LabeledSliderRow`, `SliderLabelLayout.inline`, coloured labels).
+2. **Non-overlapped black level** card: `Interlocked` checkbox and R/G/B sliders
+   (`LabeledSliderRow`, `SliderLabelLayout.inline`, coloured labels), always all three;
+   Interlocked ON → moving one moves the others.
 3. **Overlapped black level**: compact GMP-style table, row = edge, columns Interlocked
-   checkbox, W, R, G, B (steppers only, no sliders, to keep height down). Interlocked ON →
-   only W is editable, R/G/B show W dimmed. Rows of disabled edges are dimmed.
-4. **Black border** card: level (W,R,G,B + Interlocked, as in 2) + 4 widths (max from §8).
+   checkbox, R, G, B (steppers only, no sliders, to keep height down), all editable;
+   Interlocked ON → entering one sets all three. Rows of disabled edges are dimmed.
+4. **Black border** card: level (R,G,B + Interlocked, as in 2) + 4 widths (max from §8).
 
 Interlocked behaviour for all three: §1. Black border area adjust is deferred (§1).
 
@@ -334,15 +337,16 @@ already fits the panel, zoom isn't needed.
    - The border width is `EdgePart.border`, so `preview` / `commit` / `maxFor` and the
      canvas handle it like Start / Width. The canvas gets `black:` to switch to Black
      Level mode: overlapped zones filled in their level's colour, border bands in the
-     border level's colour, hatched, one handle per edge (also on disabled edges: the
-     projector accepts border widths there). Reset all resets the border widths on that
+     border level's colour, hatched, one handle per edge (stage 8 limits it to enabled
+     edges). Reset all resets the border widths on that
      tab. The non-overlapped area is the plain raster, no swatch (no legend, §2).
    - The selection keeps its last blend part when the Black Level tab picks an edge.
    - Overlapped table: the Interlocked column header is a link icon with a tooltip; the
      table scales down (`FittedBox`) rather than overflowing in a narrow dialog. Rows of
      disabled edges are dimmed but stay editable (the projector keeps those levels).
-   - `EBMI1` value order (0 = Soft edge + Black level, 1 = Black level only) follows §1,
-     not confirmed live — `tool/edge_blend_test.dart` Phase 2g asks (§8 "W channel").
+   - `EBMI1` value order (0 = Soft edge + Black level, 1 = Black level only) follows §1;
+     consistent with VSS on the RQ25K (§8 "W channel").
+   The W model, the border position and the limits built here are reworked in stage 8.
    Tests: `edge_blend_side_test.dart` (parser, `RgbwLevel`, writes, Interlocked ON / OFF,
    border width), `edge_blend_canvas_test.dart` (border drag + ceiling, arrows).
 7. `[x]` `dart format .`, `flutter analyze`, review with the `reviewer` agent
@@ -357,6 +361,30 @@ already fits the panel, zoom isn't needed.
    - Hover outline cleared when the mode goes Off.
    Left as is: Interlocked ON queues the tuple even if the flag write fails (harmless),
    and `loadBlack` may briefly overlap one queued write (9 in flight, within tolerance).
+8. `[x]` **Rework after the VSS comparison** (§8, 2026-10-14):
+   - Limits: border lines never cross (§8 "Limits rule"). `edge_blend_limits.dart` is now
+     `blendLineDepth` + `maxBlendValue`; `EdgeBlendState.maxFor` uses them for Start,
+     Width and Border, so the panel, the canvas clamp and the pair's linked max follow.
+   - The border width moved from `BlackLevelState` into `EdgeSettings.border` (with
+     `end` / `line` getters) and loads with the first batch (`QJU…QJR`, 20 queries, 3
+     batches; Black Level is 13 now): the limits need it on both tabs.
+   - Black Level canvas per §8 "Black level zones": non-overlapped over the raster, per
+     enabled edge black to Start, overlapped to the zone end, overlapped + border
+     (hatched) to the border line, dashed lines at Start and the zone end; the handle on
+     the border line, only on enabled edges (owner, 2026-10-14; the sliders follow in the
+     dialog redesign); a disabled edge draws only a dashed outline. Bands and the stacked
+     colour are pure functions in `domain/black_level_zones.dart`, for the redesign's
+     canvas to reuse.
+   - R/G/B only (`RgbChannel`), W written as VSS writes it (§1), three controls always
+     shown (§1, §2).
+   - `EATI1` ER401: no failure notice, the switch reads back and an info icon with a
+     tooltip ("Not available while a test pattern is on") appears by its label, so
+     nothing below moves (`EdgeBlendSide.autoPatternRefused`).
+   Deviation: a value set elsewhere that already breaks the rule keeps its own value as
+   its ceiling, so touching it doesn't jump; it can only go down.
+   Tests: `edge_blend_test.dart` (limits, bands, stacking), `edge_blend_side_test.dart`
+   (maxFor, border loading, W writes, Interlocked ON / OFF, EATI1), link / canvas tests
+   updated, `black_level_panel_test.dart` (three sliders either way, no W).
 
 **Unit tests** (pure functions only, per CLAUDE.md): `edgeBlendRasterFor` per tier and for an
 empty model; the §8 max rules (each edge, opposite-edge sharing, border vs own width);
@@ -473,30 +501,94 @@ or Start(e) against Width(ē) when both are non-zero — the read-back after ER4
 
 With a non-zero Start the projector's rule lets the two zone-end lines **cross** (Upper
 start 200 + width 1000 ends 1200 from the top, Lower width 1400 ends 1000 from the top),
-while Geometry Manager Pro stops a width line at the opposite one — so that GMP rule looks
-like its own software limit. **Pending:** `tool/edge_blend_test.dart` Phase 2f (added
-2026-10-12, not run yet) measures own Start vs the opposite zone, crossing lines with both
-Starts non-zero, and the cap with either edge enabled. Decide after it whether the app keeps
-the projector's rule or adopts GMP's.
+while Geometry Manager Pro and VSS stop a width line at the opposite one.
 
-### W channel (pending, 2026-10-13)
+**Decided (2026-10-14): the app follows VSS, lines never cross.** With `end(e) = Start(e) +
+Width(e)` and `line(e) = end(e) + Border(e)` (the border is measured from the zone end, see
+"Black level zones" below):
 
-The protocol carries every black level as `W,R,G,B` and stores W independently (§8 Black
-levels), so the Black Level tab shows W as a fourth channel and Interlocked ON as a single W
-slider that writes `W,W,W,W`. Geometry Manager Pro shows only **R, G, B** for Non-overlapped,
-Black border and the four Overlapped levels; with Interlocked ticked all three fields stay
-editable and move together. Two readings:
+**Border lines never cross** (VSS checked 2026-10-14): `line(e) + line(ē) ≤ R`. Start and
+Width move the border line too, so this one rule bounds all three values (and implies that
+the zone ends never cross):
 
-1. **W is only the OSD's "all channels" slider**, the image uses R/G/B. Then switch the tab
-   to GMP's model: R/G/B only; Interlocked → any of the three moves all, written as
-   `R,R,R,R` (W kept equal so the OSD agrees); free → R/G/B independent, W left as loaded.
-2. **W is an offset on top of R/G/B.** Then keep W, relabel it (e.g. "All") with a tooltip.
+| Value | Max |
+|---|---|
+| Start(e) | `R − line(ē) − Width(e) − Border(e)` |
+| Width(e) | `R − line(ē) − Start(e) − Border(e)` |
+| Black border width(e) | `R − line(ē) − Start(e) − Width(e)` |
 
-**Pending:** `tool/edge_blend_test.dart` Phase 2g (`probeWChannel`, interactive — needs a
-black input and someone at the screen) writes W-only, R-only, W+R and R=G=B levels and asks
-what the image and the OSD show; optionally has you set levels in GMP and reads back what GMP
-wrote to W (free R=10/20/30, then Interlocked R=40); and asks which `EBMI1` value is which
-Black Level Mode. Decide the UI model after it.
+A disabled edge counts with its stored values (the projector keeps them, and the border is
+accepted on a disabled edge). This is stricter than every rule the projector enforces (all
+values ≥ 0 imply them), so ER402 should no longer happen from the app's own edits; the
+read-back stays for values set elsewhere. Phase 2f is no longer needed (flag off).
+
+### Black level zones (2026-10-14, VSS screenshots + RQ25K by eye)
+
+VSS on the RQ25K with Left / Right borders 378 / 253: the border line sits 378 / 253 units
+in from the **zone end** (Start + Width), not from the raster edge. Our canvas draws the
+border band from the raster edge (`_paintBlack`, `band(edge, 0, depth)`), which is wrong.
+
+From the raster edge inwards, per edge: A = edge to Start, B = Start to zone end,
+C = zone end to border line, D = the area inside all border lines. What each level lights
+up on the projector (user's observation):
+
+| Level | Bands | VSS draws |
+|---|---|---|
+| Overlapped (per edge) | B + C | C only in *Soft edge + Black level*; B + C in *Black level only* |
+| Black border | C | C |
+| Non-overlapped | D | D |
+| (none) | A stays black | A stays black |
+
+Confirmed on the projector (2026-10-14):
+- A stays black with a non-zero Start (Start ≈ 390 / 400 units, borders 544 / 468 from the
+  zone end).
+- In C, Overlapped and Border **add up**: Overlapped R=255 + Border B=255 shows magenta.
+- The projector applies the Overlapped level the same way in **both** Black Level Modes;
+  VSS's Soft edge drawing is a VSS bug, don't copy it.
+- The markers (`VGM`) draw Start and the zone end only, **no border line**. So on screen the
+  border line is visible only through its level; the canvas is the only place it is drawn.
+
+- A **disabled** edge has no zone at all: with Left / Right disabled (values kept,
+  Overlapped R=255, Border B=255) the image stayed black, and a Non-overlapped G=100 then
+  filled the whole raster. Its stored values still count for the limits (they come back
+  when the edge is enabled).
+
+Canvas changes: A plain black; Overlapped fill over B + C; Border level over C, the colour
+in C = Overlapped + Border, per channel, capped at 255; Non-overlapped over D; border
+handle on `line(e)`; drawn the same for both `EBMI1` values. A disabled edge draws no
+fills (D runs to the raster edge there) and no border handle, only its dashed outline.
+
+Side note from the same session: `VXX:EATI1` (Auto test pattern) answered **ER401** while a
+test pattern was on (`QTS` → `02`); the dialog should treat ER401 there as "unavailable
+now", not as a failure.
+
+### W channel (answered, RQ25K, 2026-10-14)
+
+The protocol carries every black level as `W,R,G,B` and stores W independently; VSS and
+Geometry Manager Pro show only R, G, B. Measured by hand (Phase 2g's questions): W is only
+the OSD's "all channels" slider and does nothing to the image:
+- `VJI:100,000,000,000` (W only) leaves the image fully black. The OSD shows WHITE 100
+  greyed out, R/G/B 0; VSS shows R/G/B 0.
+- OSD with Interlocked ON: WHITE is the active slider and moves R/G/B with it; the projector
+  then stores `100,100,100,100`, `EBII1=1`.
+- VSS Link ON, 40 → `040,040,040,040`, `EBII1=1`. VSS Link OFF, Red 10 →
+  `000,010,040,040`, `EBII1=0`: VSS zeroes W when unlinked.
+
+**Decided: the UI shows R, G, B only**, and writes W the way VSS does, so OSD, VSS and the
+app agree:
+- Interlocked (Link) ON: one value moves R, G and B together, written as `V,V,V,V`.
+- Interlocked OFF: R, G, B independent, W written as 0.
+- Turning it ON writes the flag, then R/G/B (and W) set to the current R. Turning it OFF
+  writes the flag, then the tuple with W = 0.
+- Loaded with the flag ON but unequal R/G/B (set elsewhere): show them as they are, leave
+  the projector alone until the user changes something.
+- The UI never adds or removes controls for it (owner, 2026-10-14): R, G and B are always
+  there; while Interlocked, moving one moves the other two, as in VSS.
+§1 (Interlocked rules) and §2 (Black Level panel) are updated to this model; the code
+follows in stage 8.
+
+`EBMI1` order: in screenshot 11 VSS drew the Soft edge view while the projector read
+`EBMI1=0`, which matches §1 (0 = Soft edge + Black level, 1 = Black level only).
 
 ### Cross-check with Geometry Correction
 

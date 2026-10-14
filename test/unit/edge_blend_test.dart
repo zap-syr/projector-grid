@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:projector_grid/features/workspace/domain/black_level_zones.dart';
 import 'package:projector_grid/features/workspace/domain/blend_edge.dart';
 import 'package:projector_grid/features/workspace/domain/edge_blend_limits.dart';
 import 'package:projector_grid/features/workspace/domain/edge_blend_values.dart';
@@ -44,39 +45,46 @@ void main() {
     });
   });
 
-  // Values below are the live results in plan/EDGE_BLENDING_PLAN.md §8.
+  // plan/EDGE_BLENDING_PLAN.md §8 "Limits rule": border lines never cross.
   group('limits', () {
+    test('the border line sits the border width in from the zone end', () {
+      // RQ25K in VSS: Left Start 391, Width 763, border 544.
+      expect(blendLineDepth(start: 391, width: 763, border: 544), 1698);
+    });
+
     test('everything at 0 reaches the full raster, no -128 margin', () {
-      expect(maxBlendStart(span: 2400, width: 0), 2400);
-      expect(maxBlendWidth(span: 3840, start: 0, oppositeWidth: 0), 3840);
+      expect(maxBlendValue(span: 2400, oppositeLine: 0, ownRest: 0), 2400);
     });
 
-    test('start + own width stay within the raster', () {
-      expect(maxBlendStart(span: 2400, width: 2400), 0);
-      expect(maxBlendWidth(span: 2400, start: 1200, oppositeWidth: 0), 1200);
-    });
-
-    test('opposite widths share the raster', () {
-      // RQ25K: Upper width 1000 → Lower width ≤ 1400.
-      expect(maxBlendWidth(span: 2400, start: 0, oppositeWidth: 1000), 1400);
-      // RZ34K: Left width 1000 → Right width ≤ 920.
-      expect(maxBlendWidth(span: 1920, start: 0, oppositeWidth: 1000), 920);
-    });
-
-    test('the tighter of own start and opposite width wins', () {
-      expect(maxBlendWidth(span: 2400, start: 1800, oppositeWidth: 1000), 600);
-      expect(maxBlendWidth(span: 2400, start: 200, oppositeWidth: 1000), 1400);
-    });
-
-    test('black border shares the raster with its own blend width', () {
-      expect(maxBorderWidth(span: 2400, width: 200), 2200);
-      expect(maxBorderWidth(span: 1920, width: 200), 1720);
+    test('the opposite border line and the own other values count', () {
+      // Lower line at 1000, Upper Start 200 + border 300 → Width ≤ 900.
+      expect(maxBlendValue(span: 2400, oppositeLine: 1000, ownRest: 500), 900);
     });
 
     test('never negative', () {
-      expect(maxBlendStart(span: 1200, width: 1500), 0);
-      expect(maxBlendWidth(span: 1200, start: 0, oppositeWidth: 1500), 0);
-      expect(maxBorderWidth(span: 1200, width: 1500), 0);
+      expect(maxBlendValue(span: 1200, oppositeLine: 1500, ownRest: 0), 0);
+    });
+  });
+
+  group('black level zones', () {
+    test('bands: Start, zone end, border line', () {
+      expect(blendBands(start: 200, width: 400, border: 300), (
+        start: 200,
+        end: 600,
+        line: 900,
+      ));
+    });
+
+    test('overlapped and border add up, capped at 255', () {
+      // Overlapped red 255 + border blue 255 showed magenta on the RQ25K.
+      expect(
+        stackLevels((w: 0, r: 255, g: 0, b: 0), (w: 0, r: 0, g: 0, b: 255)),
+        (w: 0, r: 255, g: 0, b: 255),
+      );
+      expect(
+        stackLevels((w: 0, r: 200, g: 10, b: 0), (w: 0, r: 100, g: 20, b: 0)),
+        (w: 0, r: 255, g: 30, b: 0),
+      );
     });
   });
 

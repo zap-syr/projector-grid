@@ -266,19 +266,28 @@ Three reply families:
 | Start U / Lo / L / R | `VEU` `VEB` `VEL` `VER`, `Q…` | 4-digit write |
 | Width U / Lo / L / R | `VXX:EUWI0` `EBWI0` `ELWI0` `ERWI0` | |
 | Markers | `VGM`, `QGM` | `0` / `1` |
-| Auto test pattern | `VXX:EATI1` | `0` / `1` |
+| Auto test pattern | `VXX:EATI1` | `0` / `1`; write answers **ER401** while a test pattern is on |
 | Black level mode | `VXX:EBMI1` | `0` soft edge + black level, `1` black level only |
 | Non-overlapped / black border level | `VJI` / `VJO`, `QJI` / `QJO` | W,R,G,B 0–255 |
 | Interlocked: non-overlapped, border, overlapped U/Lo/L/R | `VXX:EBII1`, `EBII2`, `EBII3..6` | `0` / `1`; **not enforced** by the projector |
-| Black border width U / Lo / L / R | `VJU` `VJB` `VJL` `VJR`, `Q…` | 4-digit write |
+| Black border width U / Lo / L / R | `VJU` `VJB` `VJL` `VJR`, `Q…` | 4-digit write; measured from the zone end (Start + Width), not the raster edge |
 | Overlapped black level U / Lo / L / R | `VXX:EBBS0..3` | W,R,G,B |
+
+**W in the tuples does nothing to the image**: it is only the OSD's "all channels" slider
+(active while Interlocked is on, it sets R/G/B). VSS writes `V,V,V,V` when interlocked and
+`000,R,G,B` when not; the app does the same. Where each level applies, from an enabled edge
+inwards: raster edge to Start black; Start to zone end the overlapped level; zone end to the
+border line overlapped + border (added); inside all border lines the non-overlapped level.
+A disabled edge has no bands. Same in both `EBMI1` modes. Markers show Start and the zone end
+only, not the border line.
 | Border area adjust / free-shape points / execute | `VXX:EBFI1..4` / `EFPI1..4` / `EFII1..4=+00001` | `EBFI1..3` can answer ER401 (precondition unknown) |
 
 Limits (`R` = raster width for Left/Right, height for Upper/Lower; raster 3840×2400 on Quad
 Pixel Drive models, 1920×1200 on WUXGA, from `edgeBlendRasterFor`, independent of the `QPDI1`
 toggle): Start ≤ R − own width; width ≤ min(R − own start, R − opposite width); black border
 width ≤ R − own width. Out of range → **ER402, value unchanged** (no clamping). Every command
-works while the mode is Off.
+works while the mode is Off. The app applies VSS's stricter rule on top: the two opposite
+border lines (Start + Width + Border from each edge) never cross (`edge_blend_limits.dart`).
 
 **`ER` prefix trap:** `QVX:ERWI0` answers `ERWI0=+00384`, a valid reply that starts with `ER`
 (as does `ERRS2=…`). Error detection must match the whole reply (`^ER(R[0-9A-Z]|\d+)$`, as

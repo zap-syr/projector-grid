@@ -115,8 +115,8 @@ class EdgeBlendSide extends ChangeNotifier {
     commit(edge, EdgePart.border);
   }
 
-  /// Like [preview]; while Interlocked any channel moves all four.
-  void previewLevel(LevelSlot slot, RgbwChannel channel, int v) {
+  /// Like [preview]; while Interlocked any channel moves the others.
+  void previewLevel(LevelSlot slot, RgbChannel channel, int v) {
     final level = black![slot].withChannel(channel, v);
     _values = _values!.withBlack(black!.withLevel(slot, level));
     notifyListeners();
@@ -139,14 +139,18 @@ class EdgeBlendSide extends ChangeNotifier {
     _set(_levelField(slot), level.value);
   }
 
-  /// ON writes the flag, then the tuple with R/G/B set to W. OFF writes only
-  /// the flag: the four channels stay as they are (§1).
+  /// Writes the flag, then the tuple as VSS leaves it: ON evens R, G, B and
+  /// W out to R, OFF sets W to 0 (§1). A tuple already like that isn't
+  /// sent again.
   void setInterlocked(LevelSlot slot, bool on) {
     _set(_interlockField(slot), on);
-    if (!on) return;
-    final w = black![slot].value.w;
-    _set(_levelField(slot), (w: w, r: w, g: w, b: w));
+    _set(_levelField(slot), black![slot].withInterlocked(on).value);
   }
+
+  /// The last Auto test pattern write was refused with ER401: the projector
+  /// does that while a test pattern is on (§8), so the panel says so instead
+  /// of reporting a failure. Cleared by the next accepted write.
+  bool autoPatternRefused = false;
 
   void _set<T>(_Field<T> field, T v) {
     _values = field.set(_values!, v);
@@ -180,11 +184,15 @@ class EdgeBlendSide extends ChangeNotifier {
         if (_isLastWrite(field)) _target = field.set(_target!, before);
         return;
       }
+      if (identical(field, _autoPatternField)) {
+        autoPatternRefused = reply == 'ER401';
+        notifyListeners();
+      }
       if (!PanasonicProtocolService.isErrorCode(reply)) return;
       // ER402 is an out-of-range value the §8 limits didn't foresee:
       // expected often enough not to be worth a notice, the read-back shows
-      // the result.
-      if (reply != 'ER402') client.onFailure(cmd);
+      // the result. ER401 on Auto test pattern is [autoPatternRefused].
+      if (reply != 'ER402' && !autoPatternRefused) client.onFailure(cmd);
       // A later write to this field decides what the projector ends up
       // with; reading back now would show a value about to be replaced.
       if (!_isLastWrite(field)) return;
@@ -324,12 +332,12 @@ _Field<int> _partField(BlendEdge edge, EdgePart part) => switch (part) {
     get: (s) => s[edge].width,
     set: (s, v) => s.withEdge(edge, s[edge].copyWith(width: v)),
   ),
-  EdgePart.border => _blackField<int>(
+  EdgePart.border => _blendField<int>(
     query: 'Q${edge.borderCmd}',
     parse: (r) => parseKeyedInt(r, edge.borderCmd),
     command: (v) => 'V${edge.borderCmd}:${formatNt4(v)}',
-    get: (s) => s.borderWidth(edge),
-    set: (s, v) => s.withBorderWidth(edge, v),
+    get: (s) => s[edge].border,
+    set: (s, v) => s.withEdge(edge, s[edge].copyWith(border: v)),
   ),
 };
 
