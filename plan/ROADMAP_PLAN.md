@@ -33,7 +33,7 @@ accepted item so each can be picked up independently. Edge Blending has its own 
 | U4 | Side panel instead of modal dialogs | `[dropped]` | Doesn't fit the current layout; dialogs are open → adjust → close, rarely revisited |
 | U5 | Command palette (Ctrl+K) | **Accepted** → §11 | Owner asked for UX + code design |
 | U6 | Monitoring table keyboard/filter/export | `[later]` | Already tracked in `MONITORING_UI_PLAN.md` §5/§7/§9 |
-| U7 | Dialog redesign (Add / Edit Projector, Groups, Scheduled Tasks, Brightness Control, Color Correction, Geometry Correction, Edge Blending; icon title bar for all dialogs) | **Accepted** → §13 | Design approved 2026-10-13 from the mockups; full plan in `DIALOG_REDESIGN_PLAN.md` |
+| U7 | Dialog redesign (Add / Edit Projector, Groups, Scheduled Tasks, Brightness Control, Color Correction, Geometry Correction, Edge Blending, Remote Preview, Custom Command, Keyboard Shortcuts, About; main toolbar; tooltip; control bar; icon title bar for all dialogs) | **Accepted** → §13 | Design approved 2026-10-13 from the mockups; full plan in `DIALOG_REDESIGN_PLAN.md` |
 
 Suggested order (value ÷ effort, and what unblocks what):
 **U1 → U2 → (Edge Blending) → F1 → F4 → U3 → F5 → F3 → U5 → F7/§5 → R6 in parallel throughout.**
@@ -1601,6 +1601,27 @@ because the work is large. In short:
   pattern as icon toggles in the same place for one projector and a pair, an A / B switch
   and an overlap readout in a pair, Black Level with R / G / B only and the border widths in
   the Edges table, an opaque Off note, a placeholder with Retry for a silent projector.
+- **Remote Preview:** projector in the title bar, restyled tags without `·`, model + IP grid
+  captions, a frame colour legend in the footer, Pre-show as a card with a subtitle per
+  state; no extra status chips.
+- **Custom Command:** wider, labels above the fields, help lines, an OSC card with the
+  all-projectors and the group address, an error that names the command holding the
+  address, a note that renaming changes the address.
+- **Keyboard Shortcuts:** search over descriptions and keys, sections as cards in two
+  columns, keys and mouse actions drawn differently, descriptions rewritten without dashes.
+- **About:** centred icon, name, version with build and "Made by", a links card (What's
+  new, project page, report a bug, third-party licenses, support the project), `© 2025–2026`
+  in the footer.
+- **Main toolbar:** borderless tool buttons, sentence-case labels, no horizontal scroll; an
+  icon-only compact mode chosen by window width (about 900 px, with hysteresis); count
+  badges over the icons so values never shift the layout, missed runs shown in amber.
+- **Tooltip:** a raised surface with a border and an arrow instead of the inverse box;
+  title, optional detail line, optional shortcut caps, a warning variant.
+- **Control bar:** segmented tabs and cards instead of uppercase rules; Power / Shutter /
+  OSD rows with more room; the 12-button lens cross kept, Home position moved to the card
+  header; Focus / Zoom with more spacing; Lens setup collapsible; test pattern favourites as
+  thumbnails; System grouped into cards; custom commands with Run and a ⋮ menu.
 
-Order: foundation → Groups → Add / Edit Projector → Brightness Control → Color Correction →
-Geometry Correction → Edge Blending → Scheduled Tasks (plan §8).
+Order: foundation (with the tooltip) → Groups → Add / Edit Projector → Brightness Control →
+Color Correction → Geometry Correction → Edge Blending → Remote Preview → Custom Command →
+Keyboard Shortcuts and About → main toolbar → control bar → Scheduled Tasks (plan §8).

@@ -3,12 +3,15 @@
 Status: `[ ]` pending · `[~]` in progress · `[x]` done · `[dropped]` not doing · `[later]` deferred
 
 Design approved by the owner on 2026-10-13. Mockups (light and dark for every board,
-Geometry Correction and Edge Blending dark only):
+Geometry Correction, Edge Blending, Remote Preview, Custom Command, Keyboard Shortcuts,
+About, the main toolbar, the tooltip and the control bar dark only):
 https://claude.ai/artifact/AL2c8Kh9aoXrrv2eUmVdcJ (canvas *Projector Grid dialogs redesign*).
 Roadmap item: `ROADMAP_PLAN.md` §13 (U7).
 
-The redesign covers eight dialogs in depth (Add Projectors, Edit Projector, Groups, Scheduled
-Tasks, Brightness Control, Color Correction, Geometry Correction, Edge Blending) and one
+The redesign covers twelve dialogs in depth (Add Projectors, Edit Projector, Groups,
+Scheduled Tasks, Brightness Control, Color Correction, Geometry Correction, Edge Blending,
+Remote Preview, Custom Command, Keyboard Shortcuts, About), the main toolbar, the
+tooltip and the control bar (§7f, §7g, §7h), and one
 change that reaches **every** dialog: the shared title bar gets an icon tile, so all dialogs
 take the new look, not just the redesigned ones.
 
@@ -19,7 +22,8 @@ General rules carried over from the review:
   a card in the body: the user already knows which projector they opened it for, and the
   height goes to the controls (owner, 2026-10-14).
 - Mockup text is English and so is the UI text below. UI text separates with commas, colons
-  and parentheses, never `·` or dashes (`ROADMAP_PLAN.md`); ranges read `0 to 255`.
+  and parentheses, never `·` or dashes (`ROADMAP_PLAN.md`); ranges read `0 to 255`. One
+  exception: the copyright year range keeps its en dash, `© 2025–2026` (owner, 2026-10-14).
 - Codes of NTCONTROL commands (`PON`, `OSH:1`, …) are not shown to the user anywhere in these
   dialogs.
 
@@ -70,16 +74,16 @@ title (`Geometry Correction - 192.168.0.11` today, in `brightness_control_dialog
 
 Both are read-only information, so the "no other controls" rule above stands. The bar keeps
 its height (title + subtitle fit the 40 px close button). Brightness Control, Color
-Correction, Geometry Correction and Edge Blending use it (§5, §6, §7, §7a; Edge Blending's
-pair variant in §7a.1).
+Correction, Geometry Correction, Edge Blending and Remote Preview use it (§5, §6, §7, §7a,
+§7b; the variants for two or more projectors in §7a.1 and §7b.1).
 
 ### 1.2 Confirmation dialogs
 Six confirmation `AlertDialog`s exist today: Delete Command (`control_bar.dart`), Delete
 Group (`manage_groups_dialog.dart`), Delete Projectors / Delete Projector
 (`projector_workspace.dart`), Delete Task (`scheduled_tasks_dialog.dart`) and Unsaved Changes
 (`top_menu_bar.dart`). (Brightness Control and Remote Preview use `AlertDialog` only as their
-container with a `DialogTitleBar`: Remote Preview just gets the icon from §1.1, Brightness
-Control is redesigned in §5.) The six move to one
+container with a `DialogTitleBar`: both are redesigned, Brightness Control in §5, Remote
+Preview in §7b.) The six move to one
 shared `ConfirmDialog` (`presentation/widgets/common/confirm_dialog.dart`), the layout of the
 approved *Groups: delete confirm* board:
 
@@ -683,11 +687,305 @@ above the edge cards, and in a pair the panel header "Switch on the canvas".
 
 ---
 
+## 7b. `[ ]` Remote Preview
+
+Boards (dark only): *Remote Preview: live, shutter open / Standby with Pre-show / not
+available / 8 projectors*. Approved 2026-10-14. Today (`remote_preview_dialog.dart`,
+`preview_viewport.dart`) it is an `AlertDialog` titled `Remote Preview - <name> <IP> · <group>`
+(several: `Remote Preview - N projectors`), a 16:9 plane with a 2 px frame, the grid with
+captions `name · group` and the IP, and a bare *Pre-show mode* row with a switch.
+
+### 7b.1 Frame
+- One projector: dialog **720×600**; several: **980×630**. Title bar icon `monitor`, title
+  **Remote Preview**, the projector in the title bar (§1.1). Several projectors: subtitle
+  `8 projectors (192.168.0.41 to .48)` (`collapseIpRanges`, §1.3), no group pill, status
+  badge `6 of 8 online`.
+- Footer: info line "Live from the projector, about 1 frame a second" and, on the right, the
+  **frame colour legend**: *Shutter open* (green), *Shutter closed* (red), *Not on* (grey).
+- No status chips under the preview: power, shutter, input and signal are already shown by
+  the title bar badge, the frame colour and the signal tag (owner, 2026-10-14). No "Live"
+  tag either.
+
+### 7b.2 Preview plane
+- Black 16:9 plane, radius 10 (8 in the grid), the 2 px frame coloured as today
+  (`_frameOpen` / `_frameClosed`, `outline` when not on).
+- Tags as today, restyled (dark translucent pill, white text): top left `PRE-SHOW`,
+  `TEST PATTERN` or `ASPECT DIFFERS` (Pre-show wins the slot); bottom right the signal, with
+  the separators of the UI text rule: `HDMI1: 3840x2160/60p (134.99 kHz, 59.99 Hz)`
+  (today `HDMI1 · 3840x2160/60p (134.99kHz/59.99Hz)`). `previewSignalTag` is shared with the
+  Web API preview stream, so the web page's tag changes with it.
+- Notices centred as today (*No signal*, *HDCP-protected content*, *Starting up*, *Image
+  rotating*); connecting: a small spinner.
+- **Not available**: monitor-off icon, "Preview not available", one line "The projector's
+  web page did not answer.", a pill **Retry** (outlined white).
+
+### 7b.3 Grid (several projectors)
+- Three columns of 300 px tiles (two up to four projectors, as today), gap 8, two rows
+  visible, the rest scrolls with an always-visible scrollbar in its own gutter (today's
+  rule).
+- Caption under each tile: group colour dot, model in bold, IP in monospace on the right
+  (replaces `name · group` + IP).
+
+### 7b.4 Pre-show card
+- One card under the preview or grid: icon tile (eye; primary container while on),
+  **Pre-show mode**, a subtitle, the switch on the right. Subtitles:
+  - on: "Only in Standby: this projector is on" (switch disabled);
+  - Standby with a live feed, on: "Keeps the input alive for preview, the projector stays
+    off. Stays on after you close this window.";
+  - no feed: "Needs the live feed and Standby" (disabled);
+  - several: "In Standby with a live feed: 1 of 8 projectors, on. Applies to every
+    projector that can take it."
+  - applying: a small spinner before the switch, as today.
+- "Stays on after you close this window" says up front what today's close snackbar
+  ("Pre-show stays active on the projector") says afterwards; the snackbar stays.
+
+### 7b.5 Behaviour changes
+- Title, captions and the signal tag follow the UI text rule (no `·`).
+- Frame colour legend in the footer, Pre-show as a card with state subtitles.
+- Everything else (sockets, signal source, pre-show eligibility, sizing to the window) is
+  unchanged (`REMOTE_PREVIEW_PLAN.md`).
+
+---
+
+## 7c. `[ ]` Custom Command (Add / Edit Command)
+
+Boards (dark only): *Add Command: empty / filled / OSC address taken*, *Edit Command*.
+Approved 2026-10-14. Today (`custom_command_dialog.dart`) it is 400 wide with two outlined
+fields (label inside), a one-line OSC preview (`/pgrid/all/custom/<slug>`) and *Cancel* /
+*Add* (*Save* when editing).
+
+### 7c.1 Layout
+- Dialog **520×500**, title bar icon `code`, title **Add Command** / **Edit Command**. No
+  projector in the title bar: a command isn't tied to one projector.
+- **Name**: label above the field (as in Groups and Add Projectors), focused on open, help
+  line "Shown on the button and used for the OSC address".
+- **Command**: monospace field, help line "Sent as is to the selected projectors, in
+  NTCONTROL form". Placeholder `OSH:1` (a known-good command; the mockup's `VXX:DYNI0=+00001`
+  was only an illustration).
+- **OSC addresses** card, always shown at its full height so nothing moves while typing:
+  header with the OSC icon and "Follow the name" on the right, two rows, label above a
+  monospace address:
+  - *All projectors*: `/pgrid/all/custom/<slug>`;
+  - *One group*: `/pgrid/group/{group-name}/custom/<slug>`, `{group-name}` in primary (the
+    address OSC already accepts, `osc_service.dart`, not shown today).
+  - No name yet: both rows read "Type a name to get the address" (muted).
+- Footer: *Cancel* and the filled **Add command** (with a + icon) or **Save**.
+
+### 7c.2 States
+- **Address taken** (the existing slug check, `_isDuplicate`): the Name field and label in
+  error colour, error line "Another command already has this OSC address", the card's
+  header says `Taken by "Shutter Close"` and its addresses are struck through and muted;
+  the add button is disabled. Replaces "Name already used", which hid that two different
+  names can give the same address.
+- **Edit**: as Add with the values filled and **Save**; the footer's left side reads
+  "Renaming changes the OSC address" (a show controller pointing at the old address stops
+  working).
+
+### 7c.3 Behaviour changes
+- The group address is shown; the error names the command that holds the address; the
+  Edit footer note. Saving, the slug rule and the duplicate check are unchanged.
+- `CustomCommand.oscAddress` (`/pgrid/custom/<slug>`) is unused and doesn't match what OSC
+  accepts; the dialog builds the two addresses from the slug instead (drop or fix the
+  getter in the same step).
+
+---
+
+## 7d. `[ ]` Keyboard Shortcuts
+
+Boards (dark only): *Keyboard Shortcuts*, *Keyboard Shortcuts: search*. Approved 2026-10-14.
+Today (`keyboard_shortcuts_dialog.dart`) it is 560×620, one long list of eight sections
+under uppercase headers, keys as monospace badges, and some descriptions with dashes
+("Lens shift — normal speed", "Zoom in / out (50 – 200%)").
+
+- Dialog **860×680**, title bar icon `keyboard`, no footer.
+- **Search field** on top, focused on open: "Search shortcuts, e.g. shutter, zoom, undo",
+  the count on the right (`33 shortcuts`; while searching `5 of 33` and a clear button).
+  It matches descriptions and keys ("ctrl g", "esc"); matched text is highlighted, each
+  section header shows `4 of 6`, sections without matches are hidden, and a hint line under
+  the results says what the search covers. Pure filter function in `domain/` (unit-tested).
+- **Sections as cards in two columns** (Project, Canvas navigation, Edit, View; Selection,
+  Projector control, Alignment, Lens shift), each with an icon tile and a title in sentence
+  case; *Projector control* adds "selected projectors" on the right. The columns scroll with
+  a scrollbar and a fade at the bottom.
+- **Keys and mouse actions look different**: keys are solid caps in monospace (`Ctrl` `S`),
+  mouse actions are dashed pills with a mouse icon (*Click*, *Drag*, *Scroll*, *Middle
+  drag*, *Click empty space*). One cap per key, no "+". macOS keeps today's mapping (`⌘`,
+  `⇧`, Redo `⌘ ⇧ Z`).
+- **Descriptions rewritten** to the UI text rule and shorter: "Zoom in or out (50 to
+  200%)", "Lens shift, normal speed", "Add or remove a projector", "Box select", "Select
+  the whole group of the selected projector", "Exit the app".
+- Behaviour change: the search; the list itself is unchanged.
+
+---
+
+## 7e. `[ ]` About
+
+Board (dark only): *About*. Approved 2026-10-14, after a look at what About windows usually
+hold (macOS: icon, name, version, copyright, optional credits; GNOME / libadwaita: centred
+header, links as rows with icons; Flutter: `showAboutDialog` with name, version, legalese
+and a licenses button). Today (`about_dialog.dart`) it is 360 wide: name, `Version x`, a
+one-line description, "Author", `© 2025-2026` and *View Licenses*.
+
+- Dialog **480×615**, title bar icon `info`, everything centred.
+- **Header**: the app icon (the launcher icon artwork, 80 px, radius 18, soft shadow),
+  **Projector Grid** (22 px, bold), a pill `Version 1.4.2 (build 11)` (`PackageInfo`
+  version and build number), and under it **Made by Aleksei Vlasov** (15.5 px, name bold).
+  No description text (owner, 2026-10-14).
+- **Links card**, one row each (icon tile, label, a muted hint, an external-link icon or a
+  chevron):
+  1. *What's new in 1.4.2*, "Release notes", opens an external page (the release notes of
+     that version);
+  2. *Project page*, `github.com/zap-syr`, opens https://github.com/zap-syr/projector-grid;
+  3. *Report a bug*, "GitHub issues", opens
+     https://github.com/zap-syr/projector-grid/issues/new;
+  4. *Third-party licenses*, chevron, opens `showLicensePage` in the app (replaces the
+     *View Licenses* button);
+  5. *Support the project*, "gumroad.com", heart icon on a pink tile, opens
+     https://projectorhub.gumroad.com/l/projectorgrid.
+- **Footer**, centred and muted: `© 2025–2026 Aleksei Vlasov`.
+- External links open in the default browser the way the app already does it
+  (`projector_card.dart`, "Open Web UI": `cmd /c start` on Windows, `open` on macOS); move
+  that into one shared helper rather than adding `url_launcher`.
+- Not added on purpose (owner, 2026-10-14): a description, platforms and protocols rows,
+  the settings folder, a copy-version button.
+
+---
+
+## 7f. `[ ]` Main toolbar
+
+Boards (dark only): *Toolbar: wide window, 1600 / 1180 / Alignment on, a missed task /
+minimum window 800, compact*. Approved 2026-10-14. Today (`toolbar.dart`) the left side is
+four outlined buttons with long labels (*Add Projectors*, *Manage Groups*, *Scheduled
+Tasks*, *Alignment*) in a horizontal `SingleChildScrollView`, the right side a
+`SegmentedButton` *Controls / Monitoring*. Around 1180 px wide the last button is already
+cut off, and the scroll doesn't show that more is there.
+
+### 7f.1 Layout
+- Height 52. Left: the filled **Add projectors** pill (icon + label, always labelled), a
+  thin vertical divider, then the **tool buttons** without outlines: *Groups* (was *Manage
+  Groups*), *Scheduled tasks*, *Alignment*, icon + label, 36 px high, radius 10, a light
+  fill on hover. Right: the **view switch** *Controls / Monitoring* (icon + label) in the
+  dialogs' segmented style. No horizontal scroll.
+- Labels in sentence case: "Add projectors", "Scheduled tasks".
+- **Alignment on**: the tool button takes the primary-container fill. Nothing else is
+  added to it (no "On" pill), so its width never changes.
+
+### 7f.2 Compact mode
+- Below the threshold the three tool buttons become **icon-only** 38 px buttons with a
+  tooltip (§7g, e.g. "Scheduled tasks, 12 active, next run at 22:30"). *Add projectors*
+  and the view switch keep their labels; at 800 px everything fits.
+- The mode is chosen from the **window width**, not from the toolbar's measured content:
+  a constant threshold of about 900 px (the full layout's width with the widest badges),
+  with hysteresis (compact below ~880, full again above ~920) so it never flickers at the
+  edge. If even the compact row can't fit some day, the extra tools go into a `⋯` menu.
+
+### 7f.3 Badges, without layout jumps
+- **Groups** shows the number of groups, **Scheduled tasks** the number of active tasks,
+  as a small round badge on the **top-right corner of the icon**, in both modes. It sits
+  over the icon (a `Stack`), outside the row's layout, so a change of value, or the badge
+  appearing or disappearing, never moves anything (owner's concern, 2026-10-14).
+- Fixed size: at least 17 px, tabular figures, `9+` above 9, a 2 px ring in the toolbar's
+  colour to cut it out of the icon. Zero shows no badge.
+- State is shown by **colour, not text**: missed runs (§4.8) turn the Scheduled tasks
+  badge amber with the same number; the tooltip says "12 active, 1 missed run".
+- The counts come from `select`-ed providers (group count, active / missed task counts),
+  so the toolbar doesn't rebuild on every polling tick.
+
+---
+
+## 7g. `[ ]` Tooltip
+
+Board (dark only): *Tooltip: variants*. Approved 2026-10-14. Today `CustomTooltip`
+(`custom_tooltip.dart`) is an `inverseSurface` box, radius 4, padding 8×5, 12 px text,
+extra lines in italic.
+
+- A raised surface instead of the inverse colour: `#2E3238` in dark (surface container
+  highest), a 1 px border (`outlineVariant`), radius 9, a soft shadow, padding 11×7, at
+  most **260 px** wide with wrapping, and a small **arrow** to its anchor.
+- Text: the first line is the title, 12.5 px semibold; an optional second line is the
+  detail, 12 px regular in `onSurfaceVariant` (replaces the italic lines). Left-aligned
+  when it has two lines.
+- Optional **shortcut** on the right of the title, as key caps in the Keyboard Shortcuts
+  style (§7d): "Enter Alignment mode" `Ctrl` `L`.
+- **Warning** variant: amber border and an amber title with a warning icon (e.g. "Auto
+  test pattern unavailable", "Not available while a test pattern is on").
+- Placement stays as today (above by default, below with `TooltipPlacement.bottom`,
+  clamped to the window); the arrow follows the side. Still ignores the pointer.
+- API: `CustomTooltip(message:, detail:, shortcut:, warning:)`; the `\n`-split italic
+  lines go. One change in one widget restyles every tooltip in the app.
+
+---
+
+## 7h. `[ ]` Control bar
+
+Boards (dark only): *Control bar: General / Lens setup open, scrolled / System / Custom*,
+each 320×970. Approved 2026-10-14. Today (`control_bar.dart`) it is the 320 px right-hand
+panel with an underlined `TabBar` (General / System / Custom), uppercase primary headers
+with a rule ("POWER ——"), pairs of outlined buttons, a lens-shift cross of 12 outlined
+round buttons with *Home Position* full width under it, *Calibration* and *Lens Type*
+always shown, 6-button Focus and Zoom rows, and *Test Patterns* with an *OFF* button,
+four favourite slots and a dropdown with *Set*.
+
+### 7h.1 Frame
+- Width stays **320**. Tabs in the segmented style of the dialogs (`SegmentedTabs`):
+  *General*, *System*, *Custom* with the command count as a pill.
+- Groups become **cards** (radius 14) with a small icon and a sentence-case title instead
+  of the uppercase headers with a rule. Content scrolls inside the panel as today.
+- No "target" card at the top (tried and dropped by the owner, 2026-10-14). With nothing
+  selected the controls are disabled as today.
+
+### 7h.2 General
+- **Power / Shutter / OSD** in one card, one row each: label on the left, two action
+  buttons with icons on the right (*On* / *Standby*, *Open* / *Close*, *On* / *Off*). Rows
+  are **50 px** with **36 px** buttons, so they are easy to hit (owner, 2026-10-14).
+- **Input**: dropdown + *Set*.
+- **Lens shift** card:
+  - **Home position** is a round 30 px icon button (house) on the right of the card
+    header, away from the arrows (owner: not in the centre of the cross, too easy to hit
+    by mistake), with the new tooltip (§7g), title only: "Home position". An icon, not a
+    labelled pill, so the header stays short (owner, 2026-10-14).
+  - The cross keeps today's 12 buttons and speeds (owner: no speed selector): per
+    direction three round 34 px buttons, slow / normal / fast from the centre outwards,
+    drawn with one, two and three chevrons; the centre is empty. 5 px between rows, 6 px
+    above the cross and 16 px below it.
+  - **Focus** and **Zoom** rows, 54 px each: label, three buttons towards near / out, a
+    gap, three towards far / in, the same chevron icons.
+  - **Lens setup**: a collapsible row (tune icon, "Lens setup", hint "Calibration, lens
+    type", chevron), **collapsed by default**. Open, it shows *Calibration* and *Lens
+    type*, each a label above a dropdown + *Set*.
+- **Test pattern** card: one row with *Off* and the four favourites as thumbnails (the
+  existing pattern icons), an empty slot drawn dashed with a + that adds the selected
+  pattern; under it the dropdown (with the pattern's thumbnail) + **Show** (was *Set*).
+
+### 7h.3 System
+- Cards: **Picture** (Picture mode), **Display** (Back color, Startup logo, Projection
+  method), **Shutter fade** (Fade in, Fade out, "seconds" in the header), and a **Quad
+  Pixel Drive** row with *On* / *Off*. Each setting is a label above a dropdown + *Set*.
+- Option labels follow the UI text rule and sentence case: "Front, ceiling" (was "Front /
+  Ceiling"), "1.5 s" (was "1.5s"), "Off" (was "0.0s (OFF)"), "Default logo", "User logo".
+
+### 7h.4 Custom
+- One card with a row per command: name (bold), the command in monospace, a **Run** pill
+  and a **⋮** menu with *Edit* and *Delete* (Delete through `ConfirmDialog`, §1.2). Under
+  the card a dashed **Add command** button and a hint that each command also answers on
+  OSC at `/pgrid/all/custom/<name>`.
+
+### 7h.5 Behaviour changes
+- Home position moves to the Lens shift header; Lens setup collapses (collapsed by
+  default); Edit / Delete of a custom command go into its ⋮ menu; *Set* becomes *Show* for
+  test patterns; option labels as in §7h.3.
+- Unchanged: commands go to the selected projectors, the motor throttle
+  (`_throttledSend`), the keyboard lens shortcuts, the favourites file
+  (`test_pattern_favorites.json`) and its add / Ctrl+click remove rules.
+
+---
+
 ## 8. Order
 
 1. **Foundation** (§1): `DialogTitleBar` icon + all dialogs migrated in one go (the change is
    mechanical: one `icon:` argument each), dialog radius in the theme, `ConfirmDialog` and the
-   six confirmations. Visible app-wide, low risk — ship it first.
+   six confirmations. Visible app-wide, low risk — ship it first. The new tooltip (§7g) goes
+   in the same step: one widget, used everywhere.
 2. **Groups** (§3): smallest of the three; brings `GroupColorPalette` and `collapseIpRanges`.
 3. **Add Projectors + Edit Projector** (§2): reuses `collapseIpRanges`; last-used
    credentials setting; the login card is one widget shared by both dialogs.
@@ -700,7 +998,15 @@ above the edge cards, and in a pair the panel header "Switch on the canvas".
 7. **Edge Blending** (§7a): the `edge_blending/` widgets; reuses the Geometry frame (mode
    tiles, canvas card + controls card). The canvas painter keeps its logic and gets the new
    colours, legend and placeholders.
-8. **Scheduled Tasks** (§4): largest; model change (`targetGroupIds`), missed runs and their
+8. **Remote Preview** (§7b): `remote_preview_dialog.dart` and `preview_viewport.dart`;
+   restyle only, no new data.
+9. **Custom Command** (§7c): one file, small; can ride along with the foundation step.
+10. **Keyboard Shortcuts and About** (§7d, §7e): two small files; the shortcut search
+    filter goes to `domain/`.
+11. **Main toolbar** (§7f): `toolbar.dart`; the missed-run badge colour waits for §4.8.
+12. **Control bar** (§7h): `control_bar.dart`; split into one widget per card while at it
+    (the file is ~1300 lines).
+13. **Scheduled Tasks** (§4): largest; model change (`targetGroupIds`), missed runs and their
    state file, one dialog instead of two, command picker.
 
 Each step: behaviour change only where this plan says so; `flutter analyze`, `dart format`,
@@ -732,6 +1038,18 @@ tests below, then a GUI check in both themes (`flutter-windows-gui-check`).
   Edge Blending: a disabled edge's card collapses and its border width field is disabled,
   the A / B segmented switches the active projector, the Markers toggle writes both in a
   pair and only the replying one when the other is silent, the Off note is shown;
+  Remote Preview: the Pre-show subtitle per state, the grid caption with model + IP, the
+  frame colour per shutter; unit test for `previewSignalTag` in its new form;
+  Custom Command: both OSC addresses follow the name, a taken address names the command
+  and disables Add, the Edit footer note; Keyboard Shortcuts: the search filters by
+  description and key and hides empty sections (plus a unit test of the filter); About:
+  version and build shown, each link row opens its target; main toolbar: compact below
+  the threshold and full above it with hysteresis, a badge value change keeps every button's
+  position (same `Offset` before and after), zero hides the badge, `9+`; tooltip: title,
+  detail, shortcut and warning variants render, the arrow follows the placement; control
+  bar: Home position sends `kLensHomeCommand`, Lens setup starts collapsed and opens, each
+  of the 12 cross buttons sends its axis / direction / speed, a custom command's ⋮ menu
+  edits and deletes (with confirm), controls disabled without a selection;
   `DialogTitleBar` with a `projector` shows model + IP, the group pill only for a grouped
   projector, and the status badge.
 
