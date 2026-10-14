@@ -3,12 +3,12 @@
 Status: `[ ]` pending · `[~]` in progress · `[x]` done · `[dropped]` not doing · `[later]` deferred
 
 Design approved by the owner on 2026-10-13. Mockups (light and dark for every board,
-Geometry Correction dark only):
+Geometry Correction and Edge Blending dark only):
 https://claude.ai/artifact/AL2c8Kh9aoXrrv2eUmVdcJ (canvas *Projector Grid dialogs redesign*).
 Roadmap item: `ROADMAP_PLAN.md` §13 (U7).
 
-The redesign covers seven dialogs in depth (Add Projectors, Edit Projector, Groups, Scheduled
-Tasks, Brightness Control, Color Correction, Geometry Correction) and one
+The redesign covers eight dialogs in depth (Add Projectors, Edit Projector, Groups, Scheduled
+Tasks, Brightness Control, Color Correction, Geometry Correction, Edge Blending) and one
 change that reaches **every** dialog: the shared title bar gets an icon tile, so all dialogs
 take the new look, not just the redesigned ones.
 
@@ -70,7 +70,8 @@ title (`Geometry Correction - 192.168.0.11` today, in `brightness_control_dialog
 
 Both are read-only information, so the "no other controls" rule above stands. The bar keeps
 its height (title + subtitle fit the 40 px close button). Brightness Control, Color
-Correction and Geometry Correction use it (§5, §6, §7).
+Correction, Geometry Correction and Edge Blending use it (§5, §6, §7, §7a; Edge Blending's
+pair variant in §7a.1).
 
 ### 1.2 Confirmation dialogs
 Six confirmation `AlertDialog`s exist today: Delete Command (`control_bar.dart`), Delete
@@ -94,7 +95,7 @@ approved *Groups: delete confirm* board:
 ### 1.3 Shared pieces built for the three dialogs
 Under `presentation/widgets/common/`, reused across the dialogs below:
 - `SegmentedTabs` — the pill tab strip (Address / IP range / Discover; Color Matching /
-  Color Temperature with a state pill per tab).
+  Color Temperature and Edge Blending / Black Level with a state pill per tab).
 - `ProjectorInfoCard` — model, IP, group chip, status badge. Edit Projector only, where it
   shows the address being edited; other per-projector dialogs use the title bar (§1.1).
 - `GroupColorPalette` — §3.2.
@@ -574,11 +575,111 @@ layout is used:
 
 ---
 
-## 7a. `[ ]` Edge Blending (notes until it gets its own section)
+## 7a. `[ ]` Edge Blending
 
-- **Black border width sliders** (owner, 2026-10-14): only edges with blending enabled are
-  active; a disabled edge's slider and field are disabled, as its canvas handle already is.
-  The value stays shown (it still counts for the limits, `EDGE_BLENDING_PLAN.md` §8).
+Boards (dark only): *Edge Blending: one projector, Right edge selected / Black Level tab /
+mode Off / pair side by side, linked / pair, B not replying*. Approved 2026-10-14, after the
+Black Level rework in `EDGE_BLENDING_PLAN.md` stage 8 (R, G, B only; zones measured from the
+zone end; limits where border lines never cross). Today (`edge_blending/`) the dialog is up
+to 960 wide and 90 % of the screen high, titled `Edge Blending - <IP>` (a pair: the two
+names), with a `SegmentedButton` Off / On / User, an underlined `TabBar`,
+`DialogSplitLayout` (canvas left, panel right), the Markers and Auto test pattern switches
+above the edge cards, and in a pair the panel header "Switch on the canvas".
+
+### 7a.1 Frame
+- Dialog **960×800**, title bar icon `gradient` (mockup: two overlapping frames), title
+  **Edge Blending**, projector in the title bar (§1.1). A pair shows both:
+  `Pair: RQ25K (192.168.0.41), RQ25K (192.168.0.42)`; the group pill when both are in the
+  same group; the status badge reads *Online* while both reply, amber *B not replying*
+  otherwise.
+- **Mode tiles** (54 px, icon + label + one muted line): *Off* "No blending", *On* "Built-in
+  blend curve", *User* "Curve stored on the projector". A pair with mixed modes selects none,
+  as today.
+- **Tabs** in `SegmentedTabs`: *Edge Blending* with a pill (`2 edges`, `Linked`, `Off`) and
+  *Black Level* with the Black Level Mode (`Soft edge + level`, `Black level only`).
+- Body: **canvas card** on the left (480 px) and a **controls card** on the right. Footer:
+  info line "Changes are sent to the projector right away", no button.
+- **Canvas card header**: left side empty for one projector; in a pair the arrangement
+  segmented *Side by side / Stacked* and the swap button. Right side, **in the same place in
+  both**: icon toggles **Markers** (a custom icon: image frame with two dashed vertical
+  lines, the Start and zone end lines the markers draw; `CustomPaint`, no Material icon fits)
+  and **Auto test pattern** (frame with a grid), then *Reset all* as an icon button. The
+  toggles' names are in their tooltips; in a pair the tooltip adds "on both projectors". The
+  `EATI1` ER401 warning moves from the label onto the Auto test pattern toggle's tooltip.
+
+### 7a.2 Edge Blending tab
+- **Start and Width have their own colours** (owner, 2026-10-14): Start amber, Width
+  primary, on the canvas lines and handles, the slider fill and thumb, a small square before
+  the slider label, and the legend.
+- **Handles at the same height** on each line, as today; where Start and Width overlap,
+  Width is on top and is picked first (today's hit order). The selected handle is filled and
+  shows its value in a pill (`Width 640`).
+- The canvas draws the band from the raster edge to Start black, the blend zone as a ramp,
+  and a dashed line at Start and the zone end. Legend: *Start*, *Width, zone end*, *Blend
+  zone*; one hint line with key caps (drag, ← → 1 step, Shift 10, double click resets an
+  edge, Esc clears).
+- **Edge cards**, one per edge: side icon, name, switch. An enabled edge shows Start and Width
+  (`LabeledSliderRow` + stepper), with a **tick at the limit** (`maxFor`, §8 "Limits rule").
+  A disabled edge **collapses to one row** with "Off" and its switch. The selected edge's
+  card has the primary border. A note under the cards: "The tick on a track is the limit:
+  the border lines of opposite edges never cross, so each edge's Start, Width and border
+  limit the other."
+
+### 7a.3 Pair
+- Canvas: pill **A** / **B** with the IP by each raster (the active one filled), a
+  **Linked** pill between them while Link is on, the inactive raster dimmed and dashed, and
+  the **overlap** under the facing edges: "Overlap 640 px, 17 % of a raster" (from the
+  pair layout functions in `domain/edge_blend_pair.dart`).
+- Controls card: an **A / B segmented** at the top (letter, IP, status dot) replaces
+  "Switch on the canvas"; clicking a raster or its pill still switches. Header "Edges of A".
+- The facing edge's card carries the Link control as a labelled chip: **Linked with B Left**
+  (primary), off as **Link with B Left**; unavailable: **Link needs B** (no reply) or the
+  mixed-raster tooltip. Note: "Linked: on, Width and the overlapped black level go to B as
+  well. Start stays per projector."
+
+### 7a.4 Black Level tab
+- Canvas per `EDGE_BLENDING_PLAN.md` §8 "Black level zones" (`domain/black_level_zones.dart`):
+  black to Start, Overlapped to the zone end, Overlapped + border (hatched) to the border
+  line, Non-overlapped inside; the border handle on the border line, enabled edges only; a
+  disabled edge draws only its dashed outline. Legend *Non-overlapped*, *Overlapped*,
+  *Overlapped + border* and one hint line: "Each area shows its own level. Drag the border
+  line to set its width." (at most two lines under the canvas).
+- Controls card, top to bottom:
+  1. **Mode**: segmented *Soft edge + Black level* / *Black level only*.
+  2. **Edges** table ("overlapped level, border width"): row per edge with side icon and
+     name, the Link icon (pair), the Interlocked checkbox, **R / G / B steppers**, then,
+     after a thin vertical divider in the field rows only, the **border width** stepper.
+     The width column header is "Width" with a ↔ icon in primary, and its fields have a
+     primary tint, so colour values and widths don't read as one group (owner, 2026-10-14).
+     The selected edge's row is highlighted. A disabled edge's row is dimmed; its levels
+     stay editable, its **width field is disabled** (the value stays shown: it still counts
+     for the limits).
+  3. **Non-overlapped area**, 0 to 255, *Interlocked* checkbox in the header, three R / G / B
+     sliders with steppers, always all three (moving one moves all while Interlocked).
+  4. **Black border level**, 0 to 255, *Interlocked*, R / G / B sliders.
+
+  Order of the groups: Edges, Non-overlapped area, Black border level (owner, 2026-10-14).
+- This replaces the four border width sliders under the Black border card: the widths live
+  with their edge, and the canvas handles stay the way to drag them.
+
+### 7a.5 Off and unreachable
+- **Off**: canvas and controls stay in place, dimmed and inert (today's `IgnorePointer` +
+  opacity), and an **opaque** note card over the canvas: "Edge blending is off. The values
+  stay on the projector and apply again when you choose On or User."
+- **Pair, one projector not replying**: the other works on its own. The silent one keeps
+  its place on the canvas as a dashed placeholder with "No reply" and **Retry**, so nothing
+  jumps when it answers; its pill and the A / B segmented show an error dot; Link shows
+  *Link needs B*; Markers and Auto test pattern go to the replying projector only (as
+  today, `_reachable`).
+- One projector not replying, or loading: today's centred states, inside the new frame.
+
+### 7a.6 Behaviour changes
+- A / B segmented in the controls card (§7a.3).
+- Border widths as steppers in the Edges table instead of sliders (§7a.4).
+- A disabled edge's card collapses to one row (§7a.2).
+- Overlap readout in a pair (§7a.3).
+- Markers / Auto test pattern as icon toggles in the canvas header (§7a.1).
+- Writes, limits and Link routing are unchanged (`EDGE_BLENDING_PLAN.md`).
 
 ---
 
@@ -596,7 +697,10 @@ layout is used:
    Brightness Control.
 6. **Geometry Correction** (§7): one file; mode tiles, grouped sliders, corner steppers,
    compact layout. The Keystone / Curved preview can follow separately after the VSS study.
-7. **Scheduled Tasks** (§4): largest; model change (`targetGroupIds`), missed runs and their
+7. **Edge Blending** (§7a): the `edge_blending/` widgets; reuses the Geometry frame (mode
+   tiles, canvas card + controls card). The canvas painter keeps its logic and gets the new
+   colours, legend and placeholders.
+8. **Scheduled Tasks** (§4): largest; model change (`targetGroupIds`), missed runs and their
    state file, one dialog instead of two, command picker.
 
 Each step: behaviour change only where this plan says so; `flutter analyze`, `dart format`,
@@ -625,6 +729,9 @@ tests below, then a GUI check in both themes (`flutter-windows-gui-check`).
   note per tier (A full, B short, none hidden), a corner H stepper sends that corner's `GMFI`
   pair clamped to the tier limit, Reset in Keystone sends the four zeros and keeps `GMKS0`,
   the Linearity / Pincushion rows are disabled in Auto, the compact layout below ~880 px;
+  Edge Blending: a disabled edge's card collapses and its border width field is disabled,
+  the A / B segmented switches the active projector, the Markers toggle writes both in a
+  pair and only the replying one when the other is silent, the Off note is shown;
   `DialogTitleBar` with a `projector` shows model + IP, the group pill only for a grouped
   projector, and the status badge.
 

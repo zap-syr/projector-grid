@@ -33,7 +33,7 @@ accepted item so each can be picked up independently. Edge Blending has its own 
 | U4 | Side panel instead of modal dialogs | `[dropped]` | Doesn't fit the current layout; dialogs are open → adjust → close, rarely revisited |
 | U5 | Command palette (Ctrl+K) | **Accepted** → §11 | Owner asked for UX + code design |
 | U6 | Monitoring table keyboard/filter/export | `[later]` | Already tracked in `MONITORING_UI_PLAN.md` §5/§7/§9 |
-| U7 | Dialog redesign (Add / Edit Projector, Groups, Scheduled Tasks, Brightness Control, Color Correction, Geometry Correction; icon title bar for all dialogs) | **Accepted** → §13 | Design approved 2026-10-13 from the mockups; full plan in `DIALOG_REDESIGN_PLAN.md` |
+| U7 | Dialog redesign (Add / Edit Projector, Groups, Scheduled Tasks, Brightness Control, Color Correction, Geometry Correction, Edge Blending; icon title bar for all dialogs) | **Accepted** → §13 | Design approved 2026-10-13 from the mockups; full plan in `DIALOG_REDESIGN_PLAN.md` |
 
 Suggested order (value ÷ effort, and what unblocks what):
 **U1 → U2 → (Edge Blending) → F1 → F4 → U3 → F5 → F3 → U5 → F7/§5 → R6 in parallel throughout.**
@@ -1596,6 +1596,11 @@ because the work is large. In short:
   Pixel Drive note by model tier, corner tiles with H / V inputs next to the canvas, Reset in
   Keystone / Curved, loading layout, compact layout for the 800×600 minimum window. Preview
   for Keystone / Curved after a study of how VSS draws it.
+- **Edge Blending:** the Geometry frame (mode tiles, canvas card + controls card), Start and
+  Width in their own colours, a disabled edge collapsed to one row, Markers / Auto test
+  pattern as icon toggles in the same place for one projector and a pair, an A / B switch
+  and an overlap readout in a pair, Black Level with R / G / B only and the border widths in
+  the Edges table, an opaque Off note, a placeholder with Retry for a silent projector.
 
 Order: foundation → Groups → Add / Edit Projector → Brightness Control → Color Correction →
-Geometry Correction → Scheduled Tasks (plan §8).
+Geometry Correction → Edge Blending → Scheduled Tasks (plan §8).
