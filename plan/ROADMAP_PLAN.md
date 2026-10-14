@@ -33,7 +33,7 @@ accepted item so each can be picked up independently. Edge Blending has its own 
 | U4 | Side panel instead of modal dialogs | `[dropped]` | Doesn't fit the current layout; dialogs are open → adjust → close, rarely revisited |
 | U5 | Command palette (Ctrl+K) | **Accepted** → §11 | Owner asked for UX + code design |
 | U6 | Monitoring table keyboard/filter/export | `[later]` | Already tracked in `MONITORING_UI_PLAN.md` §5/§7/§9 |
-| U7 | Dialog redesign (Add / Edit Projector, Groups, Scheduled Tasks, Brightness Control, Color Correction; icon title bar for all dialogs) | **Accepted** → §13 | Design approved 2026-10-13 from the mockups; full plan in `DIALOG_REDESIGN_PLAN.md` |
+| U7 | Dialog redesign (Add / Edit Projector, Groups, Scheduled Tasks, Brightness Control, Color Correction, Geometry Correction; icon title bar for all dialogs) | **Accepted** → §13 | Design approved 2026-10-13 from the mockups; full plan in `DIALOG_REDESIGN_PLAN.md` |
 
 Suggested order (value ÷ effort, and what unblocks what):
 **U1 → U2 → (Edge Blending) → F1 → F4 → U3 → F5 → F3 → U5 → F7/§5 → R6 in parallel throughout.**
@@ -1573,7 +1573,9 @@ The design and the implementation steps live in their own plan, **`DIALOG_REDESI
 because the work is large. In short:
 - **All dialogs:** `DialogTitleBar` gets an icon tile, so every dialog takes the new look;
   radius 20 set once in the theme; the six confirmation `AlertDialog`s move to a shared
-  `ConfirmDialog` with a "What changes" box.
+  `ConfirmDialog` with a "What changes" box. Per-projector dialogs show the projector in the
+  title bar (model + IP under the title, group pill, status badge) instead of the IP in the
+  title or a projector card in the body (2026-10-14).
 - **Add Projectors:** tabs Address / IP range / Discover; optional login fields prefilled
   with the last used credentials instead of a Protected mode switch; IP range preview strip.
 - **Edit Projector:** the same look, simpler: projector card with status, IP + port (port
@@ -1585,12 +1587,15 @@ because the work is large. In short:
   tiles, no command codes), several target groups per task (model change), Completed and
   Missed lists. Behaviour change: a run missed while the app was closed is never executed
   late (today a one-time task fires on the next app start); it is recorded as missed.
-- **Brightness Control:** projector card instead of the IP in the title, mode tiles instead of
-  the dropdown, slider cards with − / + steps, Max light output locked in place outside User
+- **Brightness Control:** mode tiles instead of the dropdown, slider cards with − / + steps, Max light output locked in place outside User
   modes, skeleton while loading, no footer button.
-- **Color Correction:** projector card, tabs with a state pill each, colour tiles with an
+- **Color Correction:** tabs with a state pill each, colour tiles with an
   editor for the selected colour instead of 21 sliders in a scroll, white balance as one
   High / Low table, Kelvin presets, per-colour Reset, stepper inputs on every value.
+- **Geometry Correction:** mode tiles, preview card left and grouped sliders right, Quad
+  Pixel Drive note by model tier, corner tiles with H / V inputs next to the canvas, Reset in
+  Keystone / Curved, loading layout, compact layout for the 800×600 minimum window. Preview
+  for Keystone / Curved after a study of how VSS draws it.
 
 Order: foundation → Groups → Add / Edit Projector → Brightness Control → Color Correction →
-Scheduled Tasks (plan §7).
+Geometry Correction → Scheduled Tasks (plan §8).

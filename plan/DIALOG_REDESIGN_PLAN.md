@@ -2,18 +2,22 @@
 
 Status: `[ ]` pending · `[~]` in progress · `[x]` done · `[dropped]` not doing · `[later]` deferred
 
-Design approved by the owner on 2026-10-13. Mockups (light and dark for every board):
+Design approved by the owner on 2026-10-13. Mockups (light and dark for every board,
+Geometry Correction dark only):
 https://claude.ai/artifact/AL2c8Kh9aoXrrv2eUmVdcJ (canvas *Projector Grid dialogs redesign*).
 Roadmap item: `ROADMAP_PLAN.md` §13 (U7).
 
-The redesign covers six dialogs in depth (Add Projectors, Edit Projector, Groups, Scheduled
-Tasks, Brightness Control, Color Correction) and one
+The redesign covers seven dialogs in depth (Add Projectors, Edit Projector, Groups, Scheduled
+Tasks, Brightness Control, Color Correction, Geometry Correction) and one
 change that reaches **every** dialog: the shared title bar gets an icon tile, so all dialogs
 take the new look, not just the redesigned ones.
 
 General rules carried over from the review:
 - Projectors are identified by **IP address**, or model + IP (`RZ34K (192.168.0.15)`), never by
   model name alone: models repeat, so a list of names identifies nothing.
+- A dialog opened for one projector shows that projector **in the title bar** (§1.1), not in
+  a card in the body: the user already knows which projector they opened it for, and the
+  height goes to the controls (owner, 2026-10-14).
 - Mockup text is English and so is the UI text below. UI text separates with commas, colons
   and parentheses, never `·` or dashes (`ROADMAP_PLAN.md`); ranges read `0 to 255`.
 - Codes of NTCONTROL commands (`PON`, `OSH:1`, …) are not shown to the user anywhere in these
@@ -47,7 +51,7 @@ keep one icon per dialog family):
 | Manage Groups, New Group | `manage_groups_dialog.dart` | `layers` |
 | Scheduled Tasks | `scheduled_tasks_dialog.dart` | `schedule` |
 | Custom Command | `custom_command_dialog.dart` | `code` |
-| Geometry Correction | `geometry_correction_dialog.dart` | `crop_free` |
+| Geometry Correction | `geometry_correction_dialog.dart` | `crop_free` (mockup: trapezoid with corner dots) |
 | Color Correction | `color_correction_dialog.dart` | `palette` |
 | Brightness Control | `brightness_control_dialog.dart` | `brightness_6` |
 | Edge Blending | `edge_blending/edge_blending_dialog.dart` | `gradient` |
@@ -56,8 +60,17 @@ keep one icon per dialog family):
 | Keyboard Shortcuts | `keyboard_shortcuts_dialog.dart` | `keyboard` |
 | About | `about_dialog.dart` | `info` |
 
-Per-projector dialogs keep the IP in the title (`Geometry Correction - 192.168.0.11`), except
-Brightness Control and Color Correction, which move it into a projector card (§5, §6).
+**Projector in the title bar** (owner, 2026-10-14). Per-projector dialogs drop the IP from the
+title (`Geometry Correction - 192.168.0.11` today, in `brightness_control_dialog.dart`,
+`color_correction_dialog.dart`, `geometry_correction_dialog.dart`) and pass an optional
+`projector` (`ProjectorNode`) instead. The bar then shows:
+- under the title, model + IP in monospace 12 px, `onSurfaceVariant`: `RZ34K (192.168.0.41)`;
+- right of the title, before ✕: the **group pill** (dot + name, only when the projector is in
+  a group) and the **status badge** (Online / Offline / Wrong login, as in §2.5).
+
+Both are read-only information, so the "no other controls" rule above stands. The bar keeps
+its height (title + subtitle fit the 40 px close button). Brightness Control, Color
+Correction and Geometry Correction use it (§5, §6, §7).
 
 ### 1.2 Confirmation dialogs
 Six confirmation `AlertDialog`s exist today: Delete Command (`control_bar.dart`), Delete
@@ -82,8 +95,8 @@ approved *Groups: delete confirm* board:
 Under `presentation/widgets/common/`, reused across the dialogs below:
 - `SegmentedTabs` — the pill tab strip (Address / IP range / Discover; Color Matching /
   Color Temperature with a state pill per tab).
-- `ProjectorInfoCard` — model, IP, group chip, status badge (Edit Projector, Brightness
-  Control, Color Correction).
+- `ProjectorInfoCard` — model, IP, group chip, status badge. Edit Projector only, where it
+  shows the address being edited; other per-projector dialogs use the title bar (§1.1).
 - `GroupColorPalette` — §3.2.
 - `IpChips` + pure `collapseIpRanges(List<String>)` in `domain/` — consecutive addresses as
   one chip (`192.168.0.10 to .49`), used by the IP range skip list and the New Group "joins"
@@ -353,10 +366,10 @@ Boards: *Brightness Control: Normal mode / User 2 mode / reading values*. Approv
 2026-10-14. Today (`brightness_control_dialog.dart`) it is a 460 px `AlertDialog` titled
 `Brightness Control - <IP>` with an Operating Mode dropdown and two bare sliders.
 
-- Dialog **560×676**, title bar icon `brightness_6`, title **Brightness Control** without
+- Dialog **560×594**, title bar icon `brightness_6`, title **Brightness Control** without
   the IP.
-- **Projector card** on top, as in Edit Projector (§2.6) but **without the port**: projector
-  tile, model, IP in monospace; group chip and status badge on the right.
+- The projector (model + IP, group pill, status) is in the **title bar** (§1.1), no projector
+  card (the first mockups had one; dropped 2026-10-14, which took the dialog from 676 to 594).
 - **Operating mode** card: title + "User modes unlock Max light output"; the dropdown becomes
   **six tiles** in one row (icon over label, 60 px high): *Normal* (sun), *Eco* (leaf),
   *Quiet* (moon), a small gap, *User 1 / User 2 / User 3* (person). Selected tile:
@@ -396,8 +409,9 @@ temperature User 1 / temperature Custom / temperature fixed by matching*. Approv
 White Balance High and Low as two separate cards, and a centred grey line for Off / Default.
 
 ### 6.1 Frame
-- Dialog **560×660**, title bar icon `palette`, title **Color Correction** without the IP.
-- **Projector card** on top (`ProjectorInfoCard`, §1.3): model, IP, group chip, status.
+- Dialog **560×580**, title bar icon `palette`, title **Color Correction** without the IP.
+- The projector is in the **title bar** (§1.1), no projector card (dropped 2026-10-14, 660 →
+  580).
 - **Tabs** in the `SegmentedTabs` strip: *Color Matching*, *Color Temperature*. Each tab
   carries a **state pill**: `Off` / `3 colors` / `7 colors`, and `Default` / `User 1` /
   `User 2` / `6500 K` / `Fixed`. Both states are visible without switching tabs.
@@ -459,7 +473,108 @@ White Balance High and Low as two separate cards, and a centred grey line for Of
 
 ---
 
-## 7. Order
+## 7. `[ ]` Geometry Correction
+
+Boards (dark only): *Geometry Correction: off / Keystone / Curved Correction / Corner, one
+corner, Auto / Corner, two corners, Manual / reading values*, and the row *Geometry
+Correction in the minimum window (800 × 600)*: *off / Curved, controls scroll / Corner, top of
+the list / Corner, scrolled to the end*. Approved 2026-10-14. Today
+(`geometry_correction_dialog.dart`) it is up to 920 wide and 90 % of the screen high, a
+`SegmentedButton` with the four modes, `DialogSplitLayout` (canvas 5 : sliders 4), "Preview
+not available" in Keystone and Curved, and a centred spinner while a mode loads.
+
+### 7.1 Frame
+- Dialog **920×720**, title bar with the projector (§1.1), title **Geometry Correction**.
+- **Mode tiles** in one row (icon + label, 46 px): *Off*, *Keystone*, *Curved Correction*,
+  *Corner Correction*. Selected tile: `primaryContainer`, 2 px primary border. Switching
+  keeps today's sequence: the selection changes at once; `VXX:QPDI1=ON` first when leaving
+  Off on a Quad Pixel Drive model, then `GMMI0`, then the first load of the mode.
+- Body: **preview card** on the left (480 px) and a **controls card** on the right.
+- Footer: info line "Changes are sent to the projector right away", no button (as §5, §6).
+- Sliders are `LabeledSliderRow` with the stepper input, grouped under small headers with
+  the range on the right of the header (`V -40 to 40, H -15 to 15`). Symmetric ranges fill
+  from a centre zero mark.
+
+### 7.2 Off
+An empty-state card: "Geometry correction is off", one line, and three small cards, one per
+mode, each with a mini drawing and one line on what it fixes. Under them a **Quad Pixel Drive
+note**, by `quadPixelTierFor(model)`:
+- Tier A: "Quad Pixel Drive turns on by itself when you choose a mode. This model needs it
+  for geometry correction, and Corner Correction gets a wider inward range."
+- Tier B: only the first sentence (their inward limits are unconfirmed, they stay standard).
+- Other models: no note.
+
+### 7.3 Keystone
+- Preview card: header *Preview*, pill *Schematic*, text button **Reset**; the drawing (panel
+  frame + image shape); legend *Panel* / *Image* and the note "The drawing is approximate,
+  check the result on the screen."
+- Controls: **Keystone**, degrees (Vertical -40 to 40, Horizontal -15 to 15, step 0.2);
+  **Balance** (Vertical -60 to 60, Horizontal -30 to 30); **Lens**: *Throw ratio* stepper,
+  "0.7 to 16.5, match the lens in use".
+
+### 7.4 Curved Correction
+- Same preview card as Keystone.
+- Controls: **Arc** (Vertical, Horizontal, -40 to 40), **Keystone**, **Balance**, and **Lens
+  and image**: *Throw ratio* and the *Maintain aspect ratio* switch ("Keep the image
+  proportions while it bends").
+
+**Preview in Keystone and Curved:** approved to add. The drawing should follow how VSS
+renders these modes; the owner will work that out later. The unused `_TrapezoidPainter` in
+the dialog is the starting point. Until then the mockup's schematic is the target layout.
+
+### 7.5 Corner Correction
+- **Canvas card**: header *Corners*, a pill with the selection (`Upper right`, `2 selected`),
+  text button **Reset all**. Canvas (the logical 480×300 of today): dashed **outer limit**,
+  thin **default frame**, a tinted box per selected corner showing **its range** (`_bounds`),
+  the image shape with Pincushion bows and the Linearity cross. Handles: unselected = card
+  fill with a primary ring; selected = primary fill, white ring and a soft halo.
+- Card footer: legend *Outer limit*, *Default frame*, *Range of the selected corner*; a hint
+  line with key caps: "Drag a corner, or move it 1 step with ← ↑ → ↓. Ctrl click selects more
+  corners, double click resets one."
+- Interaction unchanged: drag, arrow keys with hold-repeat (`KeyHoldRepeater`), Ctrl / Shift /
+  Cmd click for several corners, double click resets a corner, a click on empty space clears.
+- **Corners** group in the controls card: header "Corners, panel pixels" and, on Tier A, a
+  pill *Extended inward range*. A 2×2 grid of tiles (Upper left, Upper right, Lower left,
+  Lower right): name, a dot when the corner is not at 0, and **H / V stepper inputs** (raw
+  protocol units). The selected corners' tiles are highlighted; a tile click selects its
+  corner (Ctrl click adds), the same selection as the canvas.
+- **Linearity and pincushion** group: *Auto / Manual* segmented in the header; sub-headers
+  *Linearity* (-127 to 127: Vertical, Horizontal) and *Pincushion* (-100 to 100: Upper,
+  Lower, Left, Right). In Auto the six rows are disabled and dimmed.
+
+### 7.6 Loading
+- Opening and a first switch to a mode show the **full layout** at once: the canvas or
+  preview area with a spinner and "Reading Corner Correction from the projector" ("Mode is
+  already switched. The controls appear once the 15 values are read."), skeleton blocks in
+  the controls card. Replaces the centred spinner.
+
+### 7.7 Minimum window
+The app's minimum window is 800×600 (`main.dart`); with the `Dialog` insets and the 90 %
+height cap the dialog gets about **720×510**. Below a dialog width of about **880** a compact
+layout is used:
+- Mode tiles 40 px with short labels (*Off*, *Keystone*, *Curved*, *Corner*); the full name
+  in a tooltip.
+- Preview / canvas card 360 px; the canvas scales down, handles drawn larger to stay easy to
+  grab. The keyboard hint moves into a keyboard icon (tooltip) in the canvas header; the
+  legend is one line (*Corner range*).
+- The controls card **scrolls**, with a scrollbar and a fade at the bottom.
+- Corners become a **list of four rows** (corner, changed dot, H, V) instead of the 2×2 grid.
+- Off: no large icon, a shorter line, the three mode cards and the Quad Pixel Drive note.
+
+### 7.8 Behaviour changes
+- **Numeric H / V per corner**: typing commits on Enter or focus loss, clamps to the corner's
+  limits for the model's tier (`cornerInwardH/V`, `cornerOutwardH/V`) and sends that corner's
+  `GMFI` pair, like a drag release.
+- **Reset** in Keystone writes 0 to `GMKS8`, `GMKS9`, `GMKI4`, `GMKI7`; in Curved to `GMCI2`,
+  `GMCI3`, `GMCI6`, `GMCI7`, `GMCS8`, `GMCS9`. Throw ratio and Maintain aspect ratio are kept.
+  **Reset all** in Corner stays as today (the eight `GMFI` corner values).
+- **Quad Pixel Drive note** by tier (§7.2).
+- **Preview** in Keystone and Curved (§7.4, after the VSS study).
+- **Loading** layout (§7.6) and the compact layout (§7.7).
+
+---
+
+## 8. Order
 
 1. **Foundation** (§1): `DialogTitleBar` icon + all dialogs migrated in one go (the change is
    mechanical: one `icon:` argument each), dialog radius in the theme, `ConfirmDialog` and the
@@ -467,11 +582,13 @@ White Balance High and Low as two separate cards, and a centred grey line for Of
 2. **Groups** (§3): smallest of the three; brings `GroupColorPalette` and `collapseIpRanges`.
 3. **Add Projectors + Edit Projector** (§2): reuses `collapseIpRanges`; last-used
    credentials setting; the login card is one widget shared by both dialogs.
-4. **Brightness Control** (§5): self-contained, one file; reuses the projector card from
-   Edit Projector.
-5. **Color Correction** (§6): one file; reuses the projector card, `SegmentedTabs` and the
-   debounce from Brightness Control.
-6. **Scheduled Tasks** (§4): largest; model change (`targetGroupIds`), missed runs and their
+4. **Brightness Control** (§5): self-contained, one file; brings the projector in the title
+   bar (§1.1).
+5. **Color Correction** (§6): one file; reuses `SegmentedTabs` and the debounce from
+   Brightness Control.
+6. **Geometry Correction** (§7): one file; mode tiles, grouped sliders, corner steppers,
+   compact layout. The Keystone / Curved preview can follow separately after the VSS study.
+7. **Scheduled Tasks** (§4): largest; model change (`targetGroupIds`), missed runs and their
    state file, one dialog instead of two, command picker.
 
 Each step: behaviour change only where this plan says so; `flutter analyze`, `dart format`,
@@ -479,7 +596,7 @@ tests below, then a GUI check in both themes (`flutter-windows-gui-check`).
 
 ---
 
-## 8. Tests
+## 9. Tests
 
 - **Unit** (`test/unit/`): `collapseIpRanges`; first unused group colour; target chip label
   ("Main stage" / "N groups"); command picker search; `isTaskDue` with the 2-minute grace;
@@ -496,11 +613,16 @@ tests below, then a GUI check in both themes (`flutter-windows-gui-check`).
   outside User modes, Light output capped at Max in a User mode, a burst of + presses sends
   one `LOPI2` write (`FakeProtocolService`); Color Correction: the tile row has 3 or 7 tiles
   by method, Reset sends the default triple, the temperature mode tiles are disabled while
-  matching is on, a preset chip sends one `OTE`.
+  matching is on, a preset chip sends one `OTE`; Geometry Correction: the Quad Pixel Drive
+  note per tier (A full, B short, none hidden), a corner H stepper sends that corner's `GMFI`
+  pair clamped to the tier limit, Reset in Keystone sends the four zeros and keeps `GMKS0`,
+  the Linearity / Pincushion rows are disabled in Auto, the compact layout below ~880 px;
+  `DialogTitleBar` with a `projector` shows model + IP, the group pill only for a grouped
+  projector, and the status badge.
 
 ---
 
-## 9. Open questions
+## 10. Open questions
 
 - ~~A scheduled task whose target groups were all deleted~~ — decided 2026-10-13: paused
   (§4.5).
@@ -508,5 +630,9 @@ tests below, then a GUI check in both themes (`flutter-windows-gui-check`).
 - Color Matching defaults (§6.5): the `_values3` / `_values7` initial values are assumed to
   be the factory defaults. Check on a projector before Reset and the Changed dot rely on
   them.
+- Geometry preview in Keystone / Curved (§7.4): how VSS draws these modes, to be studied by
+  the owner before the painter is finished.
+- ~~Edit Projector: card or title bar~~ — decided 2026-10-14: it keeps its projector card
+  (§2.6), since it shows the address being edited.
 - ~~Missed runs~~ — decided 2026-10-13: never run late, one-time and recurring alike; shown
   in their own Missed list (§4.8).
