@@ -33,7 +33,7 @@ accepted item so each can be picked up independently. Edge Blending has its own 
 | U4 | Side panel instead of modal dialogs | `[dropped]` | Doesn't fit the current layout; dialogs are open → adjust → close, rarely revisited |
 | U5 | Command palette (Ctrl+K) | **Accepted** → §11 | Owner asked for UX + code design |
 | U6 | Monitoring table keyboard/filter/export | `[later]` | Already tracked in `MONITORING_UI_PLAN.md` §5/§7/§9 |
-| U7 | Dialog redesign (Add / Edit Projector, Groups, Scheduled Tasks, Brightness Control, Color Correction, Geometry Correction, Edge Blending, Remote Preview, Custom Command, Keyboard Shortcuts, About; main toolbar; tooltip; control bar; icon title bar for all dialogs) | **Accepted** → §13 | Design approved 2026-10-13 from the mockups; full plan in `DIALOG_REDESIGN_PLAN.md` |
+| U7 | Dialog redesign (Add / Edit Projector, Groups, Scheduled Tasks, Brightness Control, Color Correction, Geometry Correction, Edge Blending, Remote Preview, Custom Command, Keyboard Shortcuts, About; main toolbar; tooltip; control bar; Monitoring view; icon title bar for all dialogs) | **Accepted** → §13 | Design approved 2026-10-13 from the mockups; full plan in `DIALOG_REDESIGN_PLAN.md` |
 
 Suggested order (value ÷ effort, and what unblocks what):
 **U1 → U2 → (Edge Blending) → F1 → F4 → U3 → F5 → F3 → U5 → F7/§5 → R6 in parallel throughout.**
@@ -1621,7 +1621,12 @@ because the work is large. In short:
   OSD rows with more room; the 12-button lens cross kept, Home position moved to the card
   header; Focus / Zoom with more spacing; Lens setup collapsible; test pattern favourites as
   thumbnails; System grouped into cards; custom commands with Run and a ⋮ menu.
+- **Monitoring view:** a filter bar (search, chips, group by), a grouped table with
+  two-line columns and signal pills, a Cards view with Compact / Extended density, and a
+  projector panel that opens over the content; all in the app's blue-tinted palette.
+- **Brightness / Color Correction:** the − / + step buttons tinted muted red and green.
 
 Order: foundation (with the tooltip) → Groups → Add / Edit Projector → Brightness Control →
 Color Correction → Geometry Correction → Edge Blending → Remote Preview → Custom Command →
-Keyboard Shortcuts and About → main toolbar → control bar → Scheduled Tasks (plan §8).
+Keyboard Shortcuts and About → main toolbar → control bar → Monitoring view → Scheduled
+Tasks (plan §8).

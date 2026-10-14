@@ -6,6 +6,11 @@ Status legend: `[ ]` pending · `[~]` in progress · `[x]` done · `[dropped]` n
 Scope: Sections are ordered roughly by value-for-effort; a suggested phasing is
 at the end.
 
+**Redesign (2026-10-14):** the new look and the new views (grouped table with two-line
+columns, Cards in Compact / Extended, the projector panel over the content, the filter bar)
+are planned in `DIALOG_REDESIGN_PLAN.md` §7i; filtering, search and export below (§7, §9)
+get their UI there.
+
 **Implementation status (2026-09-07):** Phase 1 landed in commit `c921579`
 ("feat: configurable monitoring table columns, sort, hover and selection") on
 `features/monitoring`. Done: column-descriptor refactor, the View ▸ Monitoring

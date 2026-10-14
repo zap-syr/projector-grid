@@ -4,14 +4,15 @@ Status: `[ ]` pending · `[~]` in progress · `[x]` done · `[dropped]` not doin
 
 Design approved by the owner on 2026-10-13. Mockups (light and dark for every board,
 Geometry Correction, Edge Blending, Remote Preview, Custom Command, Keyboard Shortcuts,
-About, the main toolbar, the tooltip and the control bar dark only):
+About, the main toolbar, the tooltip, the control bar and the Monitoring view dark only;
+the tooltip also in light):
 https://claude.ai/artifact/AL2c8Kh9aoXrrv2eUmVdcJ (canvas *Projector Grid dialogs redesign*).
 Roadmap item: `ROADMAP_PLAN.md` §13 (U7).
 
 The redesign covers twelve dialogs in depth (Add Projectors, Edit Projector, Groups,
 Scheduled Tasks, Brightness Control, Color Correction, Geometry Correction, Edge Blending,
 Remote Preview, Custom Command, Keyboard Shortcuts, About), the main toolbar, the
-tooltip and the control bar (§7f, §7g, §7h), and one
+tooltip, the control bar and the Monitoring view (§7f, §7g, §7h, §7i), and one
 change that reaches **every** dialog: the shared title bar gets an icon tile, so all dialogs
 take the new look, not just the redesigned ones.
 
@@ -380,7 +381,9 @@ Boards: *Brightness Control: Normal mode / User 2 mode / reading values*. Approv
   *Quiet* (moon), a small gap, *User 1 / User 2 / User 3* (person). Selected tile:
   `primaryContainer` fill, 2 px primary border. A tap sends the mode at once, as today.
 - **Light output** card: icon tile, title, subtitle, the value large on the right (`85%`,
-  26 px, tabular); below it the slider between **− / +** buttons (32 px, step 1 %); a scale
+  26 px, tabular); below it the slider between **− / +** buttons (32 px, step 1 %; − in a
+  muted red, + in a muted green, so they don't read as the card's icon tile, which shares
+  the primary colour; owner, 2026-10-14); a scale
   row `8%` … `100%` under the track.
   - Subtitle: "Sent when you release the slider"; in a User mode "Limited to 80% by Max
     light output".
@@ -461,7 +464,8 @@ White Balance High and Low as two separate cards, and a centred grey line for Of
 - Card: thermometer tile, "Color temperature", "Lower is warmer, higher is cooler", the value
   large on the right (`6500 K`).
 - The existing blackbody gradient (`_kKelvinGradient`) as a 10 px track with a white thumb,
-  between − / + buttons (step 100 K), scale `3200 K` … `13000 K`.
+  between − / + buttons (step 100 K; − muted red, + muted green, as in Brightness §5),
+  scale `3200 K` … `13000 K`.
 - **Presets** row: chips *3200 K*, *5400 K*, *6500 K*, *9300 K*; the chip matching the value is
   selected. A tap sends `OTE:<K>`.
 - − / + and preset taps are debounced like Brightness (§5) so a burst sends one `OTE`.
@@ -900,7 +904,9 @@ Board (dark only): *Tooltip: variants*. Approved 2026-10-14. Today `CustomToolti
 extra lines in italic.
 
 - A raised surface instead of the inverse colour: `#2E3238` in dark (surface container
-  highest), a 1 px border (`outlineVariant`), radius 9, a soft shadow, padding 11×7, at
+  highest), white in light (board *Tooltip: variants (light)*: border `#D6D5DA`, a
+  stronger shadow, key caps `#F0EFF3`, warning in dark amber `#8A5300`), a 1 px border
+  (`outlineVariant`), radius 9, a soft shadow, padding 11×7, at
   most **260 px** wide with wrapping, and a small **arrow** to its anchor.
 - Text: the first line is the title, 12.5 px semibold; an optional second line is the
   detail, 12 px regular in `onSurfaceVariant` (replaces the italic lines). Left-aligned
@@ -980,6 +986,78 @@ four favourite slots and a dropdown with *Set*.
 
 ---
 
+## 7i. `[ ]` Monitoring view
+
+Boards (dark only): *Monitoring: table, grouped / table with the projector panel / cards,
+extended / cards, compact, with the projector panel / table without groups*, each in the
+app window at 1600×960. Approved direction 2026-10-14. Today (`monitoring_table.dart`) it is
+one wide table of up to 17 single-line columns (Connection, Model, Serial, IP, Power,
+Shutter, Input, Signal, runtimes, temperatures, AC, Errors, …) with uppercase state words
+(`ON`, `OPEN`, `NO ERRORS`). `MONITORING_UI_PLAN.md` holds the table's existing features
+(column chooser, sort, resize, reorder) and the planned filter, search and export; this
+section is the look and the new views on top of it.
+
+**Palette** (owner, 2026-10-14): the app's blue-seeded M3 dark tones, as in the dialogs
+(`#191C20` background, `#1D2024` bars, `#212429` cards, `#30333A` lines), never a neutral
+near-black; secondary text no darker than `#80838D`. The same applies to the toolbar
+(§7f) and control bar (§7h) boards.
+
+### 7i.1 Bar above the data
+- One 56 px row: **search** ("Search IP, model, serial"), **filter chips** with counts (*All
+  20*, *Needs attention 3*, *Offline 1*, *Standby 3*), a group filter (*All groups ▾*) and
+  **Group by** (*group* / *none*); on the right the **view switch** *Table / Cards*, in Cards
+  also a **density switch** *Compact / Extended*, in Table the column chooser, and *Export
+  CSV*.
+- No summary tiles above the data (tried and dropped: they repeat the status bar and the
+  Alerts window, owner 2026-10-14).
+
+### 7i.2 Table
+- **Grouped by group** by default: a group row (colour square, name in near-white, a
+  readable summary "8 projectors, 7 online, 1 needs attention", collapse chevron) above its
+  projectors. *Group by: none* gives one flat table sorted by the chosen column, with a
+  **Group** column (dot + name) instead of the group rows.
+- Fewer, two-line columns (9 instead of up to 17): **Projector** (status dot, IP in
+  monospace; model under it), **Power** and **Shutter** (icon + word in sentence case:
+  *On* / *Standby*, *Open* / *Closed*), **Input, signal** (input; the signal as a **pill**:
+  green with the resolution, red *No signal*, grey *Unknown* when offline), **Temperature**
+  (In / Ex with small bars, the bar and value amber above the alert threshold),
+  **Runtime** (projector hours; light hours under it), **AC**, **Errors** (*None* muted,
+  or a badge *Exhaust hot* / *Error F305* / *Offline*), and row actions on hover (Remote
+  Preview, ⋮).
+- Problem rows carry a 3 px accent on the left: amber warning, red error, grey offline. An
+  offline row shows its last known values dimmed and "last seen 16:41" under the model.
+- The column chooser keeps working on the new columns; the old single fields stay
+  available as optional columns.
+
+### 7i.3 Cards
+- **Extended**: five per row at 1600, grouped like the table. Each card: status dot, IP,
+  group dot; model; **Power** and **Shutter** pills; then the **Input** block (input name
+  large, signal pill as in the table); a problem badge; intake / exhaust with bars,
+  runtime and light hours. Problem cards get an amber or red border, offline ones are
+  dimmed.
+- **Compact** (the former "wall"): 176×96 tiles, grouped: **full IP** (not the last
+  octet), power icon, input, signal pill. Warning tiles are tinted amber with the reason in
+  the corner (`52 °C`), errors red with the code (`F305`), offline tiles dashed. For big
+  installations: many projectors on one screen.
+
+### 7i.4 Projector panel
+- Clicking a table row, an extended card or a compact tile opens a 380 px panel from the
+  right, **over** the content with a shadow, so the table and cards keep their layout (no
+  reflow, owner 2026-10-14). ✕ closes it; the selected row / tile is highlighted.
+- Content: header (status dot, IP, model, serial, group), a **Needs attention / Error**
+  section with the reason and since when, **Status** (power, shutter, input, signal pill,
+  test pattern), **Temperature** gauges with the threshold mark, **Runtime and power**,
+  and actions in one row: *Preview*, *Web UI*, *Find on canvas* (labels never wrap).
+
+### 7i.5 New data and open points
+- "Last seen" for offline projectors and "since" for warnings and errors: not stored
+  today, needed for the offline rows and the panel.
+- Temperature thresholds on the bars come from the alert rules (`AlertRule`).
+- Open: *No signal* is red everywhere, also on projectors in Standby, where no signal is
+  expected; proposed to show it grey while the projector isn't on.
+
+---
+
 ## 8. Order
 
 1. **Foundation** (§1): `DialogTitleBar` icon + all dialogs migrated in one go (the change is
@@ -1006,7 +1084,10 @@ four favourite slots and a dropdown with *Set*.
 11. **Main toolbar** (§7f): `toolbar.dart`; the missed-run badge colour waits for §4.8.
 12. **Control bar** (§7h): `control_bar.dart`; split into one widget per card while at it
     (the file is ~1300 lines).
-13. **Scheduled Tasks** (§4): largest; model change (`targetGroupIds`), missed runs and their
+13. **Monitoring view** (§7i): table restyle and grouping first (it builds on
+    `monitoring_table.dart` and `MONITORING_UI_PLAN.md`), then Cards (compact / extended)
+    and the projector panel, then filter / search / export.
+14. **Scheduled Tasks** (§4): largest; model change (`targetGroupIds`), missed runs and their
    state file, one dialog instead of two, command picker.
 
 Each step: behaviour change only where this plan says so; `flutter analyze`, `dart format`,
@@ -1049,7 +1130,9 @@ tests below, then a GUI check in both themes (`flutter-windows-gui-check`).
   detail, shortcut and warning variants render, the arrow follows the placement; control
   bar: Home position sends `kLensHomeCommand`, Lens setup starts collapsed and opens, each
   of the 12 cross buttons sends its axis / direction / speed, a custom command's ⋮ menu
-  edits and deletes (with confirm), controls disabled without a selection;
+  edits and deletes (with confirm), controls disabled without a selection; Monitoring:
+  group rows and *Group by: none*, the signal pill per state, the panel opens over the
+  table without changing column widths, Compact / Extended switch, offline rows dimmed;
   `DialogTitleBar` with a `projector` shows model + IP, the group pill only for a grouped
   projector, and the status badge.
 
