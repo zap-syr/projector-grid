@@ -175,6 +175,77 @@ void main() {
     expect(_addButton('Add 46 projectors'), findsOneWidget);
   });
 
+  testWidgets('the field row and Port stay put across the tabs', (
+    tester,
+  ) async {
+    await _open(tester);
+    Rect port() =>
+        tester.getRect(find.byKey(const ValueKey('port')).hitTestable());
+    final addressPort = port();
+    final ipTop = tester.getTopLeft(find.byKey(const ValueKey('add-ip'))).dy;
+
+    await tester.tap(find.text('IP range'));
+    await tester.pumpAndSettle();
+    expect(port(), addressPort);
+    expect(
+      tester.getTopLeft(find.byKey(const ValueKey('range-from'))).dy,
+      ipTop,
+    );
+
+    await tester.tap(find.text('Discover'));
+    await tester.pumpAndSettle();
+    expect(port(), addressPort);
+  });
+
+  testWidgets('the range preview keeps its height while a range is typed', (
+    tester,
+  ) async {
+    await _open(tester, existingIps: ['192.168.0.12']);
+    await tester.tap(find.text('IP range'));
+    await tester.pumpAndSettle();
+    double loginTop() => tester
+        .getTopLeft(find.byKey(const ValueKey('projector-login')).hitTestable())
+        .dy;
+    final before = loginTop();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('range-from')),
+      '192.168.0.10',
+    );
+    await tester.enterText(find.byKey(const ValueKey('range-to')), '15');
+    await tester.pump();
+    expect(loginTop(), before, reason: 'labelled strip, one skipped');
+
+    await tester.enterText(find.byKey(const ValueKey('range-to')), '200');
+    await tester.pump();
+    expect(loginTop(), before, reason: 'dense strip with axis');
+
+    await tester.enterText(find.byKey(const ValueKey('range-to')), '5');
+    await tester.pump();
+    expect(find.textContaining('Not lower than'), findsOneWidget);
+    expect(loginTop(), before, reason: 'an error line takes no extra room');
+  });
+
+  testWidgets('the clear button empties the prefilled login', (tester) async {
+    await _open(
+      tester,
+      seed: (c) => c
+          .read(appSettingsProvider.notifier)
+          .setLastProjectorLogin('admin1', 'panasonic'),
+    );
+    await tester.tap(find.byKey(const ValueKey('clear-login')).hitTestable());
+    await tester.pump();
+    final login = tester.widget<TextField>(
+      find.byKey(const ValueKey('projector-login')).hitTestable(),
+    );
+    final password = tester.widget<TextField>(
+      find.byKey(const ValueKey('projector-password')).hitTestable(),
+    );
+    expect(login.controller!.text, isEmpty);
+    expect(password.controller!.text, isEmpty);
+    expect(find.text('Last used'), findsNothing);
+  });
+
   testWidgets('Discover shows a badge per scan status', (tester) async {
     final fake = FakeProtocolService()
       ..scanResults.addAll([
@@ -190,11 +261,15 @@ void main() {
     );
     await tester.tap(find.text('Discover'));
     await tester.pumpAndSettle();
+    expect(fake.scans, isEmpty, reason: 'scans only on Scan');
+    expect(find.text('Press Scan to look on 192.168.0.0/24'), findsOneWidget);
 
+    await tester.tap(find.widgetWithText(FilledButton, 'Scan'));
+    await tester.pumpAndSettle();
     expect(fake.scans.single.$1, '192.168.0');
+    expect(find.widgetWithText(FilledButton, 'Scan again'), findsOneWidget);
     expect(find.text('4 projectors found'), findsOneWidget);
-    expect(find.text('on 192.168.0.0/24'), findsOneWidget);
-    expect(find.text('Scan complete'), findsOneWidget);
+    expect(find.text('on 192.168.0.0/24, scan complete'), findsOneWidget);
     expect(find.text('In project'), findsOneWidget);
     expect(find.text('Online'), findsOneWidget);
     expect(find.text('No login'), findsOneWidget);

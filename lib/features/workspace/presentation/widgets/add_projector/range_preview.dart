@@ -9,6 +9,14 @@ import '../common/ip_chips.dart';
 /// is dense and unlabelled, with an axis under it.
 const _labelledCellLimit = 16;
 
+// The card keeps one height whatever the range (placeholder, labelled or
+// dense strip, with or without skipped addresses), so the login card under
+// it never moves: each part has a fixed slot.
+const _headerHeight = 46.0;
+const _stripSlotHeight = 50.0; // dense strip 28 + axis 22; labelled 34
+const _footerHeight = 44.0;
+const _cardHeight = _headerHeight + _stripSlotHeight + 14 + _footerHeight + 2;
+
 /// The IP range tab's preview: how many addresses, which are new and which
 /// are already in the project (and so skipped).
 class RangePreview extends StatelessWidget {
@@ -35,98 +43,139 @@ class RangePreview extends StatelessWidget {
     final labelled = count <= _labelledCellLimit;
     final muted = TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant);
     return DialogCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-            child: Row(
-              children: [
-                Text(
-                  count == 1 ? '1 address' : '$count addresses',
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    count == 1
-                        ? '.${range.firstOctet}'
-                        : '.${range.firstOctet} to .${range.lastOctet}',
-                    style: AppTheme.mono(muted),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                _Legend(color: cs.primary, label: '$newCount new'),
-                if (inProject.isNotEmpty) ...[
-                  const SizedBox(width: 14),
-                  _Legend(
-                    color: DialogSurfaces.of(context).soft,
-                    border: cs.outline.withValues(alpha: 0.5),
-                    label: '${inProject.length} in project',
-                  ),
-                ],
-              ],
-            ),
-          ),
-          Semantics(
-            label:
-                '$count addresses, $newCount new, '
-                '${inProject.length} already in project',
-            child: Padding(
+      child: SizedBox(
+        height: _cardHeight - 2,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              height: _headerHeight,
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: labelled
-                  ? _LabelledStrip(
-                      octets: [
-                        for (
-                          var o = range.firstOctet;
-                          o <= range.lastOctet;
-                          o++
-                        )
-                          o,
-                      ],
-                      taken: {
-                        for (final ip in taken) int.parse(ip.split('.').last),
-                      },
-                    )
-                  : _DenseStrip(
-                      inProject: [
-                        for (final ip in addresses) taken.contains(ip),
+              child: Row(
+                children: [
+                  Text(
+                    count == 1 ? '1 address' : '$count addresses',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      count == 1
+                          ? '.${range.firstOctet}'
+                          : '.${range.firstOctet} to .${range.lastOctet}',
+                      style: AppTheme.mono(muted),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  _Legend(color: cs.primary, label: '$newCount new'),
+                  if (inProject.isNotEmpty) ...[
+                    const SizedBox(width: 14),
+                    _Legend(
+                      color: DialogSurfaces.of(context).soft,
+                      border: cs.outline.withValues(alpha: 0.5),
+                      label: '${inProject.length} in project',
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            SizedBox(
+              height: _stripSlotHeight,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Semantics(
+                    label:
+                        '$count addresses, $newCount new, '
+                        '${inProject.length} already in project',
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: labelled
+                          ? _LabelledStrip(
+                              octets: [
+                                for (
+                                  var o = range.firstOctet;
+                                  o <= range.lastOctet;
+                                  o++
+                                )
+                                  o,
+                              ],
+                              taken: {
+                                for (final ip in taken)
+                                  int.parse(ip.split('.').last),
+                              },
+                            )
+                          : _DenseStrip(
+                              inProject: [
+                                for (final ip in addresses) taken.contains(ip),
+                              ],
+                            ),
+                    ),
+                  ),
+                  if (!labelled)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+                      child: _Axis(
+                        first: range.firstOctet,
+                        last: range.lastOctet,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const Spacer(),
+            _SkipFooter(
+              child: inProject.isEmpty
+                  ? Text('Nothing skipped, every address is new', style: muted)
+                  : Row(
+                      children: [
+                        Text('Skipped, already in project:', style: muted),
+                        const SizedBox(width: 10),
+                        // One line: past a few runs the rest go into
+                        // "+N more" (full list in its tooltip), and anything
+                        // still too wide is clipped rather than wrapped.
+                        Expanded(
+                          child: ClipRect(
+                            child: OverflowBox(
+                              alignment: Alignment.centerLeft,
+                              maxHeight: double.infinity,
+                              child: IpChips(
+                                ips: inProject,
+                                short: true,
+                                maxChips: 4,
+                              ),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
             ),
-          ),
-          if (!labelled)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
-              child: _Axis(first: range.firstOctet, last: range.lastOctet),
-            ),
-          const SizedBox(height: 14),
-          if (inProject.isNotEmpty)
-            Container(
-              decoration: BoxDecoration(
-                color: cs.surfaceContainerHigh.withValues(alpha: 0.5),
-                border: Border(
-                  top: BorderSide(
-                    color: cs.outlineVariant.withValues(alpha: 0.5),
-                  ),
-                ),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(top: 3, right: 10),
-                    child: Text('Skipped, already in project:', style: muted),
-                  ),
-                  Expanded(
-                    child: IpChips(ips: inProject, short: true, maxChips: 8),
-                  ),
-                ],
-              ),
-            ),
-        ],
+          ],
+        ),
       ),
+    );
+  }
+}
+
+class _SkipFooter extends StatelessWidget {
+  const _SkipFooter({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      height: _footerHeight,
+      alignment: Alignment.centerLeft,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHigh.withValues(alpha: 0.5),
+        border: Border(
+          top: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.5)),
+        ),
+      ),
+      child: child,
     );
   }
 }
@@ -140,11 +189,18 @@ class RangePreviewPlaceholder extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return DialogCard(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 28),
-      child: Text(
-        'Enter From and To to see which addresses are new',
-        textAlign: TextAlign.center,
-        style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+      child: SizedBox(
+        height: _cardHeight - 2,
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              'Enter From and To to see which addresses are new',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+            ),
+          ),
+        ),
       ),
     );
   }

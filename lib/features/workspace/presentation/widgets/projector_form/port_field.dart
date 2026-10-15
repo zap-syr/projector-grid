@@ -6,18 +6,9 @@ import '../common/dialog_parts.dart';
 
 /// The NTCONTROL port field of Add Projectors and Edit Projector.
 class PortField extends StatelessWidget {
-  const PortField({
-    super.key,
-    required this.controller,
-    this.showDefault = true,
-    this.onSubmitted,
-  });
+  const PortField({super.key, required this.controller, this.onSubmitted});
 
   final TextEditingController controller;
-
-  /// "Default 1024" under the field; an out-of-range port shows its error
-  /// either way.
-  final bool showDefault;
   final VoidCallback? onSubmitted;
 
   @override
@@ -25,11 +16,9 @@ class PortField extends StatelessWidget {
     final valid = parsePort(controller.text) != null;
     return LabeledField(
       label: 'Port',
-      help: !valid
-          ? const FieldHelp('1 to 65535', tone: FieldHelpTone.error)
-          : showDefault
-          ? const FieldHelp('Default $defaultNtcontrolPort')
-          : null,
+      help: valid
+          ? null
+          : const FieldHelp('1 to 65535', tone: FieldHelpTone.error),
       child: TextField(
         key: const ValueKey('port'),
         controller: controller,

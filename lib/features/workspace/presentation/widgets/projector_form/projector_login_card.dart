@@ -64,7 +64,9 @@ class ProjectorLoginCard extends StatelessWidget {
                   const SizedBox(width: 5),
                   Text('Last used', style: muted.copyWith(fontSize: 12)),
                 ],
-                const SizedBox(width: 12),
+                const SizedBox(width: 4),
+                ClearLoginButton(login: login, password: password),
+                const SizedBox(width: 8),
                 const _OptionalPill(),
               ],
             ),
@@ -205,8 +207,52 @@ class CompactProjectorLogin extends StatelessWidget {
               ),
             ),
           ),
+          const SizedBox(width: 4),
+          ClearLoginButton(login: login, password: password),
         ],
       ),
+    );
+  }
+}
+
+/// Empties both login fields in one click: they come prefilled with the
+/// last used login, and a projector without protection needs none. Takes
+/// its place even while disabled so the row doesn't shift.
+class ClearLoginButton extends StatelessWidget {
+  const ClearLoginButton({
+    super.key,
+    required this.login,
+    required this.password,
+  });
+
+  final TextEditingController login;
+  final TextEditingController password;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: Listenable.merge([login, password]),
+      builder: (context, _) {
+        final empty = login.text.isEmpty && password.text.isEmpty;
+        return SizedBox(
+          width: 32,
+          height: 32,
+          child: IconButton(
+            key: const ValueKey('clear-login'),
+            tooltip: 'Clear login and password',
+            padding: EdgeInsets.zero,
+            iconSize: 18,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            icon: const Icon(Icons.backspace_outlined),
+            onPressed: empty
+                ? null
+                : () {
+                    login.clear();
+                    password.clear();
+                  },
+          ),
+        );
+      },
     );
   }
 }

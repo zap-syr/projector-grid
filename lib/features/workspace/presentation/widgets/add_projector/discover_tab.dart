@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/ip_input.dart';
 import '../../providers/protocol_service_provider.dart';
+import '../common/app_dropdown.dart';
 import '../common/dialog_parts.dart';
 import '../projector_form/port_field.dart';
 import '../projector_form/projector_login_card.dart';
@@ -90,7 +91,6 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab> {
       _interfaces = interfaces;
       _address = interfaces.firstOrNull?.address;
     });
-    _startScan();
   }
 
   void _startScan() {
@@ -98,7 +98,7 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab> {
     final port = parsePort(_port.text);
     if (address == null || port == null) return;
     _scan?.cancel();
-    final subnet = address.substring(0, address.lastIndexOf('.'));
+    final subnet = _subnetOf(address)!;
     final login = (
       login: widget.login.login.text,
       password: widget.login.password.text,
@@ -170,7 +170,7 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab> {
       children: [
         Expanded(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+            padding: addTabPadding,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -196,6 +196,8 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab> {
                       _selected.clear();
                       if (on) _selected.addAll(_newFound.map((p) => p.ip));
                     }),
+                    targetSubnet: _subnetOf(_address),
+                    action: _scanButton(),
                   ),
                 ),
               ],
@@ -247,80 +249,68 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab> {
         ),
       );
     } else {
-      network = DropdownButtonFormField<String>(
+      network = AppDropdown<String>(
         key: const ValueKey('discover-network'),
-        initialValue: _address,
-        isExpanded: true,
-        isDense: true,
-        borderRadius: BorderRadius.circular(10),
-        decoration: dialogFieldDecoration(context),
+        value: _address,
         items: [
           for (final i in interfaces)
-            DropdownMenuItem(
+            AppDropdownItem(
               value: i.address,
-              child: Row(
-                children: [
-                  Flexible(
-                    child: Text(
-                      i.name,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    i.address,
-                    style: monoFieldStyle.copyWith(
-                      fontSize: 12.5,
-                      color: cs.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
+              label: '${i.name} (${i.address})',
+              menuTitle: i.name,
+              detail: i.address,
             ),
         ],
         onChanged: (a) => setState(() => _address = a),
       );
     }
-    final canScan = _address != null && parsePort(_port.text) != null;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
-          child: LabeledField(label: 'Network', child: network),
-        ),
-        const SizedBox(width: 12),
-        SizedBox(
-          width: 92,
-          child: PortField(
-            controller: _port,
-            showDefault: false,
-            onSubmitted: canScan ? _startScan : null,
+          // The empty help line keeps this row as tall as on the other
+          // tabs, and a Port error from shifting the results card.
+          child: LabeledField(
+            label: 'Network',
+            help: const FieldHelp(''),
+            child: network,
           ),
         ),
-        const SizedBox(width: 12),
-        Padding(
-          // Level with the fields, under their labels.
-          padding: const EdgeInsets.only(top: 23),
-          child: SizedBox(
-            height: 40,
-            child: _scanning
-                ? FilledButton.tonalIcon(
-                    onPressed: _stopScan,
-                    icon: const Icon(Icons.stop, size: 18),
-                    label: const Text('Stop'),
-                  )
-                : FilledButton.tonalIcon(
-                    onPressed: canScan ? _startScan : null,
-                    icon: const Icon(Icons.refresh, size: 18),
-                    label: Text(_scannedSubnet == null ? 'Scan' : 'Scan again'),
-                  ),
+        const SizedBox(width: addTabFieldGap),
+        SizedBox(
+          width: addTabPortWidth,
+          child: PortField(
+            controller: _port,
+            onSubmitted: _canScan ? _startScan : null,
           ),
         ),
       ],
     );
+  }
+
+  bool get _canScan => _address != null && parsePort(_port.text) != null;
+
+  /// `192.168.0` of an interface address: the /24 a scan sweeps.
+  static String? _subnetOf(String? address) =>
+      address?.substring(0, address.lastIndexOf('.'));
+
+  Widget _scanButton() {
+    const style = ButtonStyle(
+      visualDensity: VisualDensity.compact,
+      padding: WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 14)),
+    );
+    return _scanning
+        ? FilledButton.tonalIcon(
+            style: style,
+            onPressed: _stopScan,
+            icon: const Icon(Icons.stop, size: 18),
+            label: const Text('Stop'),
+          )
+        : FilledButton.tonalIcon(
+            style: style,
+            onPressed: _canScan ? _startScan : null,
+            icon: const Icon(Icons.radar, size: 18),
+            label: Text(_scannedSubnet == null ? 'Scan' : 'Scan again'),
+          );
   }
 }

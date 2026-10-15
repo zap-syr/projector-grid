@@ -61,10 +61,20 @@ class DiscoverResults extends StatelessWidget {
     required this.selected,
     required this.onToggle,
     required this.onToggleAll,
+    required this.targetSubnet,
+    required this.action,
   });
 
   /// `192.168.0` of the running or last scan, null before the first.
   final String? subnet;
+
+  /// The /24 the next scan would sweep (the chosen interface's), named in
+  /// the prompt before the first scan.
+  final String? targetSubnet;
+
+  /// Scan / Scan again / Stop, at the right of the header so the field row
+  /// above lines up with the other tabs.
+  final Widget action;
   final bool scanning;
   final List<DiscoveredProjector> found;
   final Set<String> existingIps;
@@ -94,7 +104,7 @@ class DiscoverResults extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.fromLTRB(16, 8, 10, 8),
             child: Row(
               children: [
                 if (scanning)
@@ -118,18 +128,21 @@ class DiscoverResults extends StatelessWidget {
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: subnet == null
-                      ? const SizedBox.shrink()
-                      : Text(
-                          'on $subnet.0/24',
-                          style: muted,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                  child: Text(
+                    switch (subnet) {
+                      final s? when scanning => 'on $s.0/24, scanning',
+                      final s? => 'on $s.0/24, scan complete',
+                      null when targetSubnet != null =>
+                        'Press Scan to look on $targetSubnet.0/24',
+                      null => '',
+                    },
+                    style: muted,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-                if (subnet != null && !scanning)
-                  Text('Scan complete', style: muted)
-                else if (scanning && count > 0)
-                  Text('Scanning', style: muted),
+                const SizedBox(width: 12),
+                SizedBox(height: 32, child: action),
               ],
             ),
           ),

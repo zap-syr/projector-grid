@@ -78,7 +78,7 @@ class _IpRangeTabState extends State<IpRangeTab> {
       children: [
         Expanded(
           child: DialogScrollBody(
-            padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+            padding: addTabPadding,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -88,12 +88,14 @@ class _IpRangeTabState extends State<IpRangeTab> {
                     Expanded(
                       child: LabeledField(
                         label: 'From',
+                        // An empty line when fine: the error then takes its
+                        // place instead of pushing the preview down.
                         help: fromError
                             ? const FieldHelp(
                                 'Not a valid IP address',
                                 tone: FieldHelpTone.error,
                               )
-                            : null,
+                            : const FieldHelp(''),
                         child: TextField(
                           key: const ValueKey('range-from'),
                           controller: _from,
@@ -130,7 +132,7 @@ class _IpRangeTabState extends State<IpRangeTab> {
                                 'Not lower than .${range.firstOctet}',
                                 tone: FieldHelpTone.error,
                               )
-                            : null,
+                            : const FieldHelp(''),
                         child: TextField(
                           key: const ValueKey('range-to'),
                           controller: _to,
@@ -158,14 +160,10 @@ class _IpRangeTabState extends State<IpRangeTab> {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: addTabFieldGap),
                     SizedBox(
-                      width: 100,
-                      child: PortField(
-                        controller: _port,
-                        showDefault: false,
-                        onSubmitted: _submit,
-                      ),
+                      width: addTabPortWidth,
+                      child: PortField(controller: _port, onSubmitted: _submit),
                     ),
                   ],
                 ),

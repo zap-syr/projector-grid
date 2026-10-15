@@ -35,6 +35,13 @@ typedef AddProjectorsCallback = void Function(
   List<Map<String, dynamic>> projectors,
 );
 
+// The field row at the top of each tab (Address, IP range, Discover) uses
+// the same padding, gap and Port width, so the fields don't move when the
+// tab changes.
+const addTabPadding = EdgeInsets.fromLTRB(24, 20, 24, 24);
+const addTabFieldGap = 12.0;
+const addTabPortWidth = 110.0;
+
 /// The add button's label carries the count.
 String addProjectorsLabel(int count) => switch (count) {
   1 => 'Add projector',

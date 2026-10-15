@@ -78,6 +78,7 @@ class _AddressTabState extends State<AddressTab> {
       children: [
         Expanded(
           child: DialogScrollBody(
+            padding: addTabPadding,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -109,9 +110,9 @@ class _AddressTabState extends State<AddressTab> {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: addTabFieldGap),
                     SizedBox(
-                      width: 120,
+                      width: addTabPortWidth,
                       child: PortField(controller: _port, onSubmitted: _submit),
                     ),
                   ],
