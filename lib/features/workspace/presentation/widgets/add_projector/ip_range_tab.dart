@@ -167,7 +167,14 @@ class _IpRangeTabState extends State<IpRangeTab> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: addTabSectionGap),
+                ProjectorLoginCard(
+                  login: widget.login.login,
+                  password: widget.login.password,
+                  lastUsed: widget.login.lastUsed,
+                  onSubmitted: _submit,
+                ),
+                const SizedBox(height: addTabSectionGap),
                 switch (range) {
                   IpRangeValid r => RangePreview(
                     range: r,
@@ -175,13 +182,6 @@ class _IpRangeTabState extends State<IpRangeTab> {
                   ),
                   _ => const RangePreviewPlaceholder(),
                 },
-                const SizedBox(height: 18),
-                ProjectorLoginCard(
-                  login: widget.login.login,
-                  password: widget.login.password,
-                  lastUsed: widget.login.lastUsed,
-                  onSubmitted: _submit,
-                ),
               ],
             ),
           ),

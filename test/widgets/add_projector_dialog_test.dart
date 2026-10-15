@@ -4,7 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:projector_grid/core/theme/app_theme.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/app_settings_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/protocol_service_provider.dart';
+import 'package:projector_grid/features/workspace/presentation/widgets/add_projector/range_preview.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/add_projector_dialog.dart';
+import 'package:projector_grid/features/workspace/presentation/widgets/common/dialog_parts.dart';
 
 import '../helpers/fake_protocol_service.dart';
 import '../helpers/test_config_dir.dart';
@@ -195,6 +197,34 @@ void main() {
     await tester.tap(find.text('Discover'));
     await tester.pumpAndSettle();
     expect(port(), addressPort);
+    expect(
+      tester.getSize(find.byType(DropdownMenu<String>)).height,
+      addressPort.height,
+      reason: 'the interface dropdown is as tall as Port',
+    );
+  });
+
+  testWidgets('the Projector login card keeps its place across the tabs', (
+    tester,
+  ) async {
+    await _open(tester);
+    double cardTop() => tester
+        .getTopLeft(
+          find
+              .ancestor(
+                of: find.byKey(const ValueKey('projector-login')).hitTestable(),
+                matching: find.byType(DialogCard),
+              )
+              .first,
+        )
+        .dy;
+    final address = cardTop();
+    await tester.tap(find.text('IP range'));
+    await tester.pumpAndSettle();
+    expect(cardTop(), address);
+    await tester.tap(find.text('Discover'));
+    await tester.pumpAndSettle();
+    expect(cardTop(), address);
   });
 
   testWidgets('the range preview keeps its height while a range is typed', (
@@ -203,10 +233,15 @@ void main() {
     await _open(tester, existingIps: ['192.168.0.12']);
     await tester.tap(find.text('IP range'));
     await tester.pumpAndSettle();
-    double loginTop() => tester
-        .getTopLeft(find.byKey(const ValueKey('projector-login')).hitTestable())
+    // The preview is the last card: its bottom edge moving is a jump.
+    double previewBottom() => tester
+        .getBottomLeft(
+          find.byWidgetPredicate(
+            (w) => w is RangePreview || w is RangePreviewPlaceholder,
+          ),
+        )
         .dy;
-    final before = loginTop();
+    final before = previewBottom();
 
     await tester.enterText(
       find.byKey(const ValueKey('range-from')),
@@ -214,16 +249,20 @@ void main() {
     );
     await tester.enterText(find.byKey(const ValueKey('range-to')), '15');
     await tester.pump();
-    expect(loginTop(), before, reason: 'labelled strip, one skipped');
+    expect(previewBottom(), before, reason: 'labelled strip, one skipped');
 
     await tester.enterText(find.byKey(const ValueKey('range-to')), '200');
     await tester.pump();
-    expect(loginTop(), before, reason: 'dense strip with axis');
+    expect(previewBottom(), before, reason: 'dense strip with axis');
 
     await tester.enterText(find.byKey(const ValueKey('range-to')), '5');
     await tester.pump();
     expect(find.textContaining('Not lower than'), findsOneWidget);
-    expect(loginTop(), before, reason: 'an error line takes no extra room');
+    expect(
+      previewBottom(),
+      before,
+      reason: 'an error line takes no extra room',
+    );
   });
 
   testWidgets('the clear button empties the prefilled login', (tester) async {

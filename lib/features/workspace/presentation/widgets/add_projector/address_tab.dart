@@ -117,7 +117,7 @@ class _AddressTabState extends State<AddressTab> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: addTabSectionGap),
                 ProjectorLoginCard(
                   login: widget.login.login,
                   password: widget.login.password,

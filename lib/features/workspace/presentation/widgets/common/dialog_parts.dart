@@ -38,8 +38,13 @@ final monoFieldStyle = AppTheme.mono(const TextStyle(fontSize: 13.5));
 /// Plain text fields: 14 px, so a field is 40 px tall like the mono ones.
 const plainFieldStyle = TextStyle(fontSize: 14);
 
-/// The outlined field of these dialogs: 40 px, radius 10, label above it
-/// (see [LabeledField]) rather than inside, so the help line can sit under.
+/// Height of every field in these dialogs, text fields and [AppDropdown]
+/// alike, so a row of them lines up.
+const double dialogFieldHeight = 40;
+
+/// The outlined field of these dialogs: [dialogFieldHeight] tall, radius 10,
+/// label above it (see [LabeledField]) rather than inside, so the help line
+/// can sit under.
 InputDecoration dialogFieldDecoration(
   BuildContext context, {
   String? hintText,
@@ -57,6 +62,9 @@ InputDecoration dialogFieldDecoration(
   final idle = error ? cs.error : cs.outline.withValues(alpha: 0.6);
   return InputDecoration(
     isDense: true,
+    // A dense field's own height follows its font (about 32 px); pin it so
+    // text fields match the dropdowns beside them.
+    constraints: const BoxConstraints.tightFor(height: dialogFieldHeight),
     filled: true,
     fillColor: surfaces.field,
     hintText: hintText,

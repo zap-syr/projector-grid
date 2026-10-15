@@ -33,7 +33,7 @@ class AppDropdown<T> extends StatelessWidget {
     required this.items,
     required this.value,
     required this.onChanged,
-    this.height = 40,
+    this.height = dialogFieldHeight,
     this.radius = 10,
     this.menuHeight = 260,
   });

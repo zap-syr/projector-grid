@@ -175,7 +175,7 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _networkRow(context),
-                const SizedBox(height: 16),
+                const SizedBox(height: addTabSectionGap),
                 CompactProjectorLogin(
                   login: widget.login.login,
                   password: widget.login.password,

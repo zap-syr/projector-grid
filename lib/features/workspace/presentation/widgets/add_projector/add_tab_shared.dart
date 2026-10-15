@@ -42,6 +42,10 @@ const addTabPadding = EdgeInsets.fromLTRB(24, 20, 24, 24);
 const addTabFieldGap = 12.0;
 const addTabPortWidth = 110.0;
 
+/// Between the field row and the Projector login card, which sits right
+/// under the fields on every tab so it doesn't move either.
+const addTabSectionGap = 20.0;
+
 /// The add button's label carries the count.
 String addProjectorsLabel(int count) => switch (count) {
   1 => 'Add projector',
