@@ -11,13 +11,14 @@ class CustomCommand {
 
   /// OSC-safe slug derived from name.
   /// "House Lights!" → "house-lights"
-  String get oscSlug => name
+  String get oscSlug => slugOf(name);
+
+  /// The slug rule on its own, for a name still being typed.
+  static String slugOf(String name) => name
       .toLowerCase()
       .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
       .replaceAll(RegExp(r'-+'), '-')
       .replaceAll(RegExp(r'^-|-$'), '');
-
-  String get oscAddress => '/pgrid/custom/$oscSlug';
 
   Map<String, dynamic> toJson() => {'id': id, 'name': name, 'command': command};
 

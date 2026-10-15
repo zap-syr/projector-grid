@@ -241,13 +241,6 @@ void main() {
       expect(cmd('Scene 2 / Warm').oscSlug, 'scene-2-warm');
     });
 
-    test('address uses the custom prefix', () {
-      expect(
-        cmd('Dynamic Contrast').oscAddress,
-        '/pgrid/custom/dynamic-contrast',
-      );
-    });
-
     test('json round-trip', () {
       final c = CustomCommand.fromJson(
         const CustomCommand(id: 'a', name: 'N', command: 'OSH:1').toJson(),

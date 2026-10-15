@@ -1,10 +1,9 @@
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../../../../core/services/external_links.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../domain/alignment.dart';
 import '../../domain/card_layout.dart';
@@ -291,16 +290,9 @@ class _ProjectorCardState extends ConsumerState<ProjectorCard> {
                     child: const Text('Remote Preview'),
                   ),
                   MenuItemButton(
-                    onPressed: () => _closeAndRun(() {
-                      final url = 'http://${node.ipAddress}';
-                      if (Platform.isWindows) {
-                        Process.run('cmd', ['/c', 'start', url]);
-                      } else if (Platform.isMacOS) {
-                        Process.run('open', [url]);
-                      } else if (Platform.isLinux) {
-                        Process.run('xdg-open', [url]);
-                      }
-                    }),
+                    onPressed: () => _closeAndRun(
+                      () => openInBrowser('http://${node.ipAddress}'),
+                    ),
                     leadingIcon: const Icon(Icons.open_in_browser),
                     child: const Text('Open in Browser'),
                   ),

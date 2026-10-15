@@ -95,6 +95,8 @@ flutter:
     - assets/alert_icons/
     # The app icon as a file on disk, for Windows notifications.
     - assets/launcher_icon/app_icon.png
+    # The same artwork at 160 px, for the About dialog's 80 px header.
+    - assets/launcher_icon/app_icon_160.png
     # Built Web UI (web_ui/). Asset folders aren't recursive, hence both.
     - assets/web/
     - assets/web/assets/

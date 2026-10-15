@@ -2,309 +2,326 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 
+import '../../domain/keyboard_shortcuts.dart';
+import 'common/dashed_border.dart';
+import 'common/key_caps.dart';
+import 'common/scroll_fade.dart';
 import 'dialog_title_bar.dart';
 
-class KeyboardShortcutsDialog extends StatelessWidget {
+class KeyboardShortcutsDialog extends StatefulWidget {
   const KeyboardShortcutsDialog({super.key});
 
   @override
+  State<KeyboardShortcutsDialog> createState() =>
+      _KeyboardShortcutsDialogState();
+}
+
+class _KeyboardShortcutsDialogState extends State<KeyboardShortcutsDialog> {
+  static const _leftColumn = {
+    ShortcutSectionId.project,
+    ShortcutSectionId.canvasNavigation,
+    ShortcutSectionId.edit,
+    ShortcutSectionId.view,
+  };
+
+  /// Below this width the two columns of cards stack into one.
+  static const _twoColumnMinWidth = 600.0;
+
+  final _sections = shortcutSections(macOS: Platform.isMacOS);
+  late final int _total = shortcutCount(_sections);
+  final _search = TextEditingController();
+  final _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _search.dispose();
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final searching = _search.text.trim().isNotEmpty;
+    final hits = filterShortcuts(_sections, _search.text);
+    final shown = hits.fold(0, (n, s) => n + s.hits.length);
+
+    final left = [
+      for (final s in hits)
+        if (_leftColumn.contains(s.section.id))
+          _SectionCard(hits: s, searching: searching),
+    ];
+    final right = [
+      for (final s in hits)
+        if (!_leftColumn.contains(s.section.id))
+          _SectionCard(hits: s, searching: searching),
+    ];
+
+    final muted = theme.textTheme.bodySmall?.copyWith(
+      fontSize: 12.5,
+      color: cs.onSurfaceVariant.withValues(alpha: 0.75),
+    );
+
     return Dialog(
       clipBehavior: Clip.antiAlias,
-      child: SizedBox(
-        width: 560,
-        height: 620,
-        child: Column(
-          children: [
-            const DialogTitleBar(
-              icon: Icons.keyboard_outlined,
-              title: 'Keyboard Shortcuts',
-            ),
-            // Content
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const _Section(
-                      title: 'Project',
-                      shortcuts: [
-                        _Shortcut(
-                          keys: ['Ctrl', 'N'],
-                          description: 'New project',
-                        ),
-                        _Shortcut(
-                          keys: ['Ctrl', 'O'],
-                          description: 'Open project',
-                        ),
-                        _Shortcut(
-                          keys: ['Ctrl', 'S'],
-                          description: 'Save project',
-                        ),
-                        _Shortcut(
-                          keys: ['Ctrl', 'Shift', 'S'],
-                          description: 'Save project as…',
-                        ),
-                        _Shortcut(
-                          keys: ['Ctrl', 'Q'],
-                          description: 'Exit application',
-                        ),
-                        _Shortcut(
-                          keys: ['F5'],
-                          description: 'Refresh all projectors',
-                        ),
-                      ],
-                    ),
-                    const _Section(
-                      title: 'Canvas Navigation',
-                      shortcuts: [
-                        _Shortcut(
-                          keys: ['Middle drag'],
-                          description: 'Pan the canvas',
-                        ),
-                        _Shortcut(
-                          keys: ['Ctrl', 'Scroll'],
-                          description: 'Zoom in / out (50 – 200%)',
-                        ),
-                        _Shortcut(
-                          keys: ['Click', 'empty space'],
-                          description: 'Deselect all',
-                        ),
-                        _Shortcut(
-                          keys: ['F'],
-                          description: 'Focus selected projectors (or all, if none selected)',
-                        ),
-                        _Shortcut(
-                          keys: ['Shift', 'F'],
-                          description: 'Focus all projectors',
-                        ),
-                      ],
-                    ),
-                    const _Section(
-                      title: 'Selection',
-                      shortcuts: [
-                        _Shortcut(
-                          keys: ['Click'],
-                          description: 'Select projector (deselects others)',
-                        ),
-                        _Shortcut(
-                          keys: ['Ctrl', 'Click'],
-                          description: 'Toggle projector in selection',
-                        ),
-                        _Shortcut(
-                          keys: ['Ctrl', 'Drag'],
-                          description: 'Marquee (box) select',
-                        ),
-                        _Shortcut(
-                          keys: ['Ctrl', 'A'],
-                          description: 'Select all projectors',
-                        ),
-                        _Shortcut(
-                          keys: ['Ctrl', 'D'],
-                          description: 'Deselect all projectors',
-                        ),
-                        _Shortcut(
-                          keys: ['Ctrl', 'G'],
-                          description: "Select all projectors in the selected projector's group",
-                        ),
-                      ],
-                    ),
-                    const _Section(
-                      title: 'Projector Control',
-                      shortcuts: [
-                        _Shortcut(
-                          keys: ['I'],
-                          description: 'Open shutter on selected projectors',
-                        ),
-                        _Shortcut(
-                          keys: ['O'],
-                          description: 'Close shutter on selected projectors',
-                        ),
-                        _Shortcut(
-                          keys: ['Delete'],
-                          description: 'Delete selected projectors',
-                        ),
-                      ],
-                    ),
-                    _Section(
-                      title: 'Edit',
-                      shortcuts: [
-                        const _Shortcut(
-                          keys: ['Ctrl', 'Z'],
-                          description: 'Undo',
-                        ),
-                        // macOS binds Redo to the platform-conventional
-                        // Cmd+Shift+Z (native Edit menu); Windows/Linux use
-                        // Ctrl+Y. Previously the in-canvas Shortcuts widget
-                        // also bound Cmd+Y as a second, non-standard Redo
-                        // combo — removed so there's exactly one macOS
-                        // binding, matching what's documented here.
-                        _Shortcut(
-                          keys: Platform.isMacOS
-                              ? const ['Ctrl', 'Shift', 'Z']
-                              : const ['Ctrl', 'Y'],
-                          description: 'Redo',
-                        ),
-                      ],
-                    ),
-                    const _Section(
-                      title: 'View',
-                      shortcuts: [
-                        _Shortcut(
-                          keys: ['Ctrl', '1'],
-                          description: 'Switch to Controls view',
-                        ),
-                        _Shortcut(
-                          keys: ['Ctrl', '2'],
-                          description: 'Switch to Monitoring view',
-                        ),
-                      ],
-                    ),
-                    const _Section(
-                      title: 'Alignment',
-                      shortcuts: [
-                        _Shortcut(
-                          keys: ['Ctrl', 'L'],
-                          description: 'Enter / exit Alignment mode',
-                        ),
-                        _Shortcut(
-                          keys: ['<', '>'],
-                          description: 'Previous / next projector',
-                        ),
-                        _Shortcut(
-                          keys: ['N'],
-                          description: 'Neighbours on / off',
-                        ),
-                        _Shortcut(
-                          keys: ['A'],
-                          description: 'Show All on / off',
-                        ),
-                        _Shortcut(
-                          keys: ['Ctrl', 'Click'],
-                          description: 'Add / remove a neighbour',
-                        ),
-                        _Shortcut(
-                          keys: ['Esc'],
-                          description: 'Exit Alignment mode',
-                        ),
-                      ],
-                    ),
-                    const _Section(
-                      title: 'Lens Shift',
-                      shortcuts: [
-                        _Shortcut(
-                          keys: ['↑ ↓ ← →'],
-                          description: 'Lens shift — normal speed',
-                        ),
-                        _Shortcut(
-                          keys: ['Shift', '↑ ↓ ← →'],
-                          description: 'Lens shift — fast speed',
-                        ),
-                        _Shortcut(
-                          keys: ['Ctrl', '↑ ↓ ← →'],
-                          description: 'Lens shift — slow speed',
-                        ),
-                      ],
-                    ),
-                  ],
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 860, maxHeight: 680),
+        // Full size whatever the search leaves, so the dialog doesn't
+        // shrink and jump while typing.
+        child: SizedBox.expand(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const DialogTitleBar(
+                icon: Icons.keyboard_outlined,
+                title: 'Keyboard Shortcuts',
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 20, 24, 14),
+                child: _SearchField(
+                  controller: _search,
+                  count: searching ? '$shown of $_total' : '$_total shortcuts',
+                  onChanged: () => setState(() {}),
                 ),
               ),
-            ),
-          ],
+              Expanded(
+                child: Scrollbar(
+                  controller: _scroll,
+                  child: ScrollFade(
+                    child: SingleChildScrollView(
+                      controller: _scroll,
+                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final twoColumns =
+                              constraints.maxWidth >= _twoColumnMinWidth;
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              if (twoColumns)
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(child: _CardColumn(left)),
+                                    const SizedBox(width: 14),
+                                    Expanded(child: _CardColumn(right)),
+                                  ],
+                                )
+                              else
+                                _CardColumn([...left, ...right]),
+                              if (searching) ...[
+                                if (hits.isEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 4),
+                                    child: Text(
+                                      'No shortcuts match "${_search.text.trim()}".',
+                                      style: theme.textTheme.bodyMedium,
+                                    ),
+                                  )
+                                else
+                                  const SizedBox(height: 10),
+                                Text(
+                                  'Matches descriptions and keys: try "ctrl g" or "esc".',
+                                  style: muted,
+                                ),
+                              ],
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-// ── Section ───────────────────────────────────────────────────────────────────
+class _CardColumn extends StatelessWidget {
+  const _CardColumn(this.cards);
 
-class _Section extends StatelessWidget {
-  final String title;
-  final List<_Shortcut> shortcuts;
-
-  const _Section({required this.title, required this.shortcuts});
+  final List<Widget> cards;
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Text(
-              title.toUpperCase(),
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.8,
-                color: colorScheme.primary,
-              ),
-            ),
-          ),
-          ...shortcuts.map((s) => s.build(context)),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final (i, card) in cards.indexed) ...[
+          if (i > 0) const SizedBox(height: 10),
+          card,
         ],
+      ],
+    );
+  }
+}
+
+class _SearchField extends StatelessWidget {
+  const _SearchField({
+    required this.controller,
+    required this.count,
+    required this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final String count;
+  final VoidCallback onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    OutlineInputBorder border(Color color, double width) => OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: BorderSide(color: color, width: width),
+    );
+    return TextField(
+      controller: controller,
+      autofocus: true,
+      onChanged: (_) => onChanged(),
+      decoration: InputDecoration(
+        isDense: true,
+        filled: true,
+        fillColor: cs.surfaceContainerLowest,
+        hintText: 'Search shortcuts, e.g. shutter, zoom, undo',
+        hintStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.6)),
+        contentPadding: const EdgeInsets.symmetric(vertical: 12),
+        prefixIcon: Icon(Icons.search, size: 18, color: cs.onSurfaceVariant),
+        suffixIcon: Padding(
+          padding: const EdgeInsets.only(left: 8, right: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                count,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: cs.onSurfaceVariant.withValues(alpha: 0.75),
+                ),
+              ),
+              if (controller.text.isNotEmpty) ...[
+                const SizedBox(width: 2),
+                IconButton(
+                  tooltip: 'Clear search',
+                  iconSize: 16,
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.close),
+                  onPressed: () {
+                    controller.clear();
+                    onChanged();
+                  },
+                ),
+              ] else
+                const SizedBox(width: 6),
+            ],
+          ),
+        ),
+        enabledBorder: border(cs.outline, 1),
+        focusedBorder: border(cs.primary, 2),
       ),
     );
   }
 }
 
-// ── Shortcut row ──────────────────────────────────────────────────────────────
+class _SectionCard extends StatelessWidget {
+  const _SectionCard({required this.hits, required this.searching});
 
-class _Shortcut {
-  final List<String> keys;
-  final String description;
+  final ShortcutSectionHits hits;
+  final bool searching;
 
-  const _Shortcut({required this.keys, required this.description});
+  static IconData _icon(ShortcutSectionId id) => switch (id) {
+    ShortcutSectionId.project => Icons.folder_outlined,
+    ShortcutSectionId.canvasNavigation => Icons.pan_tool_outlined,
+    ShortcutSectionId.edit => Icons.edit_outlined,
+    ShortcutSectionId.view => Icons.visibility_outlined,
+    ShortcutSectionId.selection => Icons.select_all,
+    ShortcutSectionId.projectorControl => Icons.videocam_outlined,
+    ShortcutSectionId.alignment => Icons.center_focus_strong,
+    ShortcutSectionId.lensShift => Icons.control_camera,
+  };
 
+  @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final section = hits.section;
+    final note = searching
+        ? '${hits.hits.length} of ${section.entries.length}'
+        : section.note;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainer,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: cs.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           SizedBox(
-            width: 220,
-            child: Wrap(
-              spacing: 4,
-              runSpacing: 4,
-              children: keys.map((k) => _KeyBadge(label: k)).toList(),
+            height: 28,
+            child: Row(
+              children: [
+                Container(
+                  width: 26,
+                  height: 26,
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    _icon(section.id),
+                    size: 15,
+                    color: cs.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(width: 9),
+                Text(
+                  section.title,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (note != null) ...[
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      note,
+                      textAlign: TextAlign.end,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant.withValues(alpha: 0.75),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              description,
-              style: TextStyle(
-                fontSize: 13,
-                color: colorScheme.onSurface.withValues(alpha: 0.85),
-              ),
-            ),
-          ),
+          const SizedBox(height: 2),
+          for (final (i, hit) in hits.hits.indexed)
+            _ShortcutRow(hit: hit, divider: i > 0),
         ],
       ),
     );
   }
 }
 
-// ── Key badge ─────────────────────────────────────────────────────────────────
+class _ShortcutRow extends StatelessWidget {
+  const _ShortcutRow({required this.hit, required this.divider});
 
-class _KeyBadge extends StatelessWidget {
-  final String label;
+  final ShortcutHit hit;
+  final bool divider;
 
-  const _KeyBadge({required this.label});
-
-  // Shortcut data is written generically (e.g. 'Ctrl'); this maps it to the
-  // symbol/label a user actually expects on their platform. macOS has no
-  // physical "Ctrl" key in the Windows sense, and every one of these
-  // shortcuts is registered with both control and meta modifiers
-  // (see projector_workspace.dart), so Cmd is what's really bound there.
+  // Shortcut data is written generically ('Ctrl'); macOS shows the symbols.
+  // Every shortcut is registered with both control and meta modifiers
+  // (projector_workspace.dart), so Cmd is what's really bound there.
   static String _platformLabel(String label) {
     if (!Platform.isMacOS) return label;
     return switch (label) {
@@ -316,41 +333,112 @@ class _KeyBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final displayLabel = _platformLabel(label);
-    final isSingleSymbol =
-        displayLabel.length == 1 ||
-        displayLabel == '↑' ||
-        displayLabel == '↓' ||
-        displayLabel == '←' ||
-        displayLabel == '→' ||
-        displayLabel == '↑ ↓ ← →';
-
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final base = theme.textTheme.bodyMedium?.copyWith(
+      fontSize: 13,
+      height: 1.35,
+      color: cs.onSurface.withValues(alpha: 0.88),
+    );
     return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: isSingleSymbol ? 8 : 10,
-        vertical: 2,
-      ),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(5),
-        border: Border.all(color: colorScheme.outlineVariant, width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: colorScheme.shadow.withValues(alpha: 0.15),
-            offset: const Offset(0, 1),
-            blurRadius: 0,
+      constraints: const BoxConstraints(minHeight: 30),
+      decoration: divider
+          ? BoxDecoration(
+              border: Border(
+                top: BorderSide(
+                  color: cs.outlineVariant.withValues(alpha: 0.6),
+                ),
+              ),
+            )
+          : null,
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 150,
+            child: Wrap(
+              spacing: 4,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                for (final input in hit.entry.inputs)
+                  input.mouse
+                      ? _MousePill(input.label)
+                      : KeyCap(_platformLabel(input.label)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text.rich(
+              _highlighted(hit.entry.description, hit.highlights, cs),
+              style: base,
+            ),
           ),
         ],
       ),
-      child: Text(
-        displayLabel,
-        style: TextStyle(
-          fontFamily: 'monospace',
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: colorScheme.onSurface,
-          height: 1.5,
+    );
+  }
+
+  static TextSpan _highlighted(
+    String text,
+    List<(int, int)> ranges,
+    ColorScheme cs,
+  ) {
+    final spans = <TextSpan>[];
+    var at = 0;
+    for (final (start, end) in ranges) {
+      if (start > at) spans.add(TextSpan(text: text.substring(at, start)));
+      spans.add(
+        TextSpan(
+          text: text.substring(start, end),
+          style: TextStyle(
+            color: cs.onSurface,
+            backgroundColor: cs.primary.withValues(alpha: 0.22),
+          ),
+        ),
+      );
+      at = end;
+    }
+    if (at < text.length) spans.add(TextSpan(text: text.substring(at)));
+    return TextSpan(children: spans);
+  }
+}
+
+/// A mouse action: dashed, with a mouse icon, so it never reads as a key.
+class _MousePill extends StatelessWidget {
+  const _MousePill(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return DashedBorder(
+      radius: 11,
+      color: cs.outline,
+      child: Container(
+        height: 22,
+        padding: const EdgeInsets.only(left: 6, right: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.mouse_outlined, size: 13, color: cs.onSurfaceVariant),
+            const SizedBox(width: 5),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11.5,
+                  height: 1,
+                  fontWeight: FontWeight.w600,
+                  color: cs.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
