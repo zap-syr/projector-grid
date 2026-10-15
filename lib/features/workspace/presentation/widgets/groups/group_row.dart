@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../../core/theme/app_theme.dart';
 import '../../../domain/projector_group.dart';
-import 'group_card.dart';
+import '../common/dialog_parts.dart';
 import 'group_inline_editor.dart';
 
 /// One group in Manage Groups: swatch, name, member count, its OSC address
@@ -33,11 +33,12 @@ class GroupRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final surfaces = DialogSurfaces.of(context);
     final rowColor = highlighted
         ? cs.primaryContainer.withValues(alpha: 0.55)
         : expanded
-        ? GroupSurfaces.editor(cs)
-        : GroupSurfaces.card(cs);
+        ? surfaces.editor
+        : surfaces.card;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,

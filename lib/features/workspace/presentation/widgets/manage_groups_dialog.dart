@@ -5,9 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/projector_group.dart';
 import '../providers/workspace_provider.dart';
+import 'common/dialog_parts.dart';
 import 'common/scroll_fade.dart';
 import 'dialog_title_bar.dart';
-import 'groups/group_card.dart';
 import 'groups/group_row.dart';
 import 'groups/new_group_card.dart';
 
@@ -171,7 +171,7 @@ class _ManageGroupsDialogState extends ConsumerState<ManageGroupsDialog>
                           child: SingleChildScrollView(
                             controller: _scroll,
                             padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-                            child: GroupCard(
+                            child: DialogCard(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [

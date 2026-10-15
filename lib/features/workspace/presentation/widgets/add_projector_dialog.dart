@@ -6,9 +6,9 @@ import 'add_projector/add_tab_shared.dart';
 import 'add_projector/address_tab.dart';
 import 'add_projector/discover_tab.dart';
 import 'add_projector/ip_range_tab.dart';
+import 'common/dialog_parts.dart';
 import 'common/segmented_tabs.dart';
 import 'dialog_title_bar.dart';
-import 'projector_form/form_parts.dart';
 
 enum _AddTab { address, range, discover }
 
@@ -121,7 +121,7 @@ class _AddProjectorDialogState extends ConsumerState<AddProjectorDialog> {
     final lastUsed = _isLastUsed();
     return Dialog(
       clipBehavior: Clip.antiAlias,
-      backgroundColor: FormSurfaces.of(context).body,
+      backgroundColor: DialogSurfaces.of(context).body,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 720, maxHeight: 640),
         child: Column(

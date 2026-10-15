@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../core/theme/app_theme.dart';
-import 'form_parts.dart';
+import '../common/dialog_parts.dart';
 
 const _loginHint = 'Sent only if the projector is in protected mode';
 
@@ -35,7 +35,7 @@ class ProjectorLoginCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final sc = AppStatusColors.of(context);
     final muted = TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant);
-    return FormCard(
+    return DialogCard(
       borderColor: wrongLogin ? sc.warning.withValues(alpha: 0.7) : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -44,7 +44,7 @@ class ProjectorLoginCard extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
             child: Row(
               children: [
-                const FormIconTile(Icons.lock_outline),
+                const DialogIconTile(Icons.lock_outline),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(
@@ -83,7 +83,7 @@ class ProjectorLoginCard extends StatelessWidget {
                       controller: login,
                       autofocus: autofocusLogin,
                       style: plainFieldStyle,
-                      decoration: formFieldDecoration(context),
+                      decoration: dialogFieldDecoration(context),
                       onSubmitted: (_) => onSubmitted?.call(),
                     ),
                   ),
@@ -159,11 +159,11 @@ class CompactProjectorLogin extends StatelessWidget {
         ),
       ),
     );
-    return FormCard(
+    return DialogCard(
       padding: const EdgeInsets.fromLTRB(16, 8, 12, 8),
       child: Row(
         children: [
-          const FormIconTile(Icons.lock_outline, size: 32),
+          const DialogIconTile(Icons.lock_outline, size: 32),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -188,7 +188,7 @@ class CompactProjectorLogin extends StatelessWidget {
                 key: const ValueKey('projector-login'),
                 controller: login,
                 style: plainFieldStyle,
-                decoration: formFieldDecoration(
+                decoration: dialogFieldDecoration(
                   context,
                   prefix: inner('Login'),
                 ),
@@ -240,7 +240,7 @@ class _PasswordFieldState extends State<PasswordField> {
       obscureText: !_visible,
       style: plainFieldStyle,
       onSubmitted: (_) => widget.onSubmitted?.call(),
-      decoration: formFieldDecoration(
+      decoration: dialogFieldDecoration(
         context,
         prefix: widget.prefix,
         suffixIcon: IconButton(
@@ -271,7 +271,7 @@ class _OptionalPill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 9),
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: FormSurfaces.of(context).soft,
+        color: DialogSurfaces.of(context).soft,
         borderRadius: BorderRadius.circular(11),
       ),
       child: Text(

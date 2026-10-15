@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../../../core/theme/app_theme.dart';
 import '../../../domain/ip_input.dart';
+import '../common/dialog_parts.dart';
 import '../common/ip_chips.dart';
-import '../projector_form/form_parts.dart';
 
 /// Up to this many addresses each get a labelled cell; past it the strip
 /// is dense and unlabelled, with an axis under it.
@@ -34,7 +34,7 @@ class RangePreview extends StatelessWidget {
     final count = addresses.length;
     final labelled = count <= _labelledCellLimit;
     final muted = TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant);
-    return FormCard(
+    return DialogCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -60,7 +60,7 @@ class RangePreview extends StatelessWidget {
                 if (inProject.isNotEmpty) ...[
                   const SizedBox(width: 14),
                   _Legend(
-                    color: FormSurfaces.of(context).soft,
+                    color: DialogSurfaces.of(context).soft,
                     border: cs.outline.withValues(alpha: 0.5),
                     label: '${inProject.length} in project',
                   ),
@@ -139,7 +139,7 @@ class RangePreviewPlaceholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return FormCard(
+    return DialogCard(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 28),
       child: Text(
         'Enter From and To to see which addresses are new',
@@ -188,7 +188,7 @@ class _LabelledStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final soft = FormSurfaces.of(context).soft;
+    final soft = DialogSurfaces.of(context).soft;
     return SizedBox(
       height: 34,
       child: Row(
@@ -250,7 +250,7 @@ class _DenseStrip extends StatelessWidget {
         painter: _DenseStripPainter(
           inProject: inProject,
           newColor: cs.primary,
-          takenColor: FormSurfaces.of(context).soft,
+          takenColor: DialogSurfaces.of(context).soft,
           takenBorder: cs.outline.withValues(alpha: 0.5),
         ),
       ),

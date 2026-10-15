@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../domain/ip_input.dart';
-import 'form_parts.dart';
+import '../common/dialog_parts.dart';
 
 /// The NTCONTROL port field of Add Projectors and Edit Projector.
 class PortField extends StatelessWidget {
@@ -38,7 +38,7 @@ class PortField extends StatelessWidget {
           FilteringTextInputFormatter.digitsOnly,
           LengthLimitingTextInputFormatter(5),
         ],
-        decoration: formFieldDecoration(context, error: !valid),
+        decoration: dialogFieldDecoration(context, error: !valid),
         onSubmitted: (_) => onSubmitted?.call(),
       ),
     );

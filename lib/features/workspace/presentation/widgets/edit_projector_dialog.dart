@@ -5,8 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/ip_input.dart';
 import '../../domain/projector_node.dart';
 import '../providers/workspace_provider.dart';
+import 'common/dialog_parts.dart';
 import 'dialog_title_bar.dart';
-import 'projector_form/form_parts.dart';
 import 'projector_form/port_field.dart';
 import 'projector_form/projector_info_card.dart';
 import 'projector_form/projector_login_card.dart';
@@ -87,7 +87,7 @@ class _EditProjectorDialogState extends ConsumerState<EditProjectorDialog> {
     );
     return Dialog(
       clipBehavior: Clip.antiAlias,
-      backgroundColor: FormSurfaces.of(context).body,
+      backgroundColor: DialogSurfaces.of(context).body,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 560, maxHeight: 560),
         child: Column(
@@ -99,7 +99,7 @@ class _EditProjectorDialogState extends ConsumerState<EditProjectorDialog> {
               title: 'Edit Projector',
             ),
             Flexible(
-              child: FormScrollBody(
+              child: DialogScrollBody(
                 padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -119,7 +119,10 @@ class _EditProjectorDialogState extends ConsumerState<EditProjectorDialog> {
                 ),
               ),
             ),
-            FormFooter(actionLabel: 'Save', onAction: _canSave ? _save : null),
+            DialogFooter(
+              actionLabel: 'Save',
+              onAction: _canSave ? _save : null,
+            ),
           ],
         ),
       ),
@@ -164,7 +167,7 @@ class _EditProjectorDialogState extends ConsumerState<EditProjectorDialog> {
               inputFormatters: [
                 FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
               ],
-              decoration: formFieldDecoration(context, error: ipError),
+              decoration: dialogFieldDecoration(context, error: ipError),
               onSubmitted: (_) => _save(),
             ),
           ),

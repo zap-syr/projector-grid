@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../domain/ip_input.dart';
-import '../projector_form/form_parts.dart';
+import '../common/dialog_parts.dart';
 import '../projector_form/port_field.dart';
 import '../projector_form/projector_login_card.dart';
 import 'add_tab_shared.dart';
@@ -77,7 +77,7 @@ class _IpRangeTabState extends State<IpRangeTab> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(
-          child: FormScrollBody(
+          child: DialogScrollBody(
             padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -104,7 +104,7 @@ class _IpRangeTabState extends State<IpRangeTab> {
                               RegExp(r'[0-9.]'),
                             ),
                           ],
-                          decoration: formFieldDecoration(
+                          decoration: dialogFieldDecoration(
                             context,
                             hintText: '192.168.0.10',
                             error: fromError,
@@ -139,7 +139,7 @@ class _IpRangeTabState extends State<IpRangeTab> {
                             FilteringTextInputFormatter.digitsOnly,
                             LengthLimitingTextInputFormatter(3),
                           ],
-                          decoration: formFieldDecoration(
+                          decoration: dialogFieldDecoration(
                             context,
                             hintText: prefix == null ? 'Last number' : null,
                             error: range is IpRangeReversed,
@@ -188,7 +188,7 @@ class _IpRangeTabState extends State<IpRangeTab> {
             ),
           ),
         ),
-        FormFooter(
+        DialogFooter(
           actionLabel: addProjectorsLabel(newCount),
           actionIcon: Icons.add,
           onAction: newCount > 0 && portOk ? _submit : null,

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../domain/ip_input.dart';
-import '../projector_form/form_parts.dart';
+import '../common/dialog_parts.dart';
 import '../projector_form/port_field.dart';
 import '../projector_form/projector_login_card.dart';
 import 'add_tab_shared.dart';
@@ -77,7 +77,7 @@ class _AddressTabState extends State<AddressTab> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(
-          child: FormScrollBody(
+          child: DialogScrollBody(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -98,7 +98,7 @@ class _AddressTabState extends State<AddressTab> {
                               RegExp(r'[0-9.]'),
                             ),
                           ],
-                          decoration: formFieldDecoration(
+                          decoration: dialogFieldDecoration(
                             context,
                             hintText: '192.168.0.10',
                             error:
@@ -127,7 +127,7 @@ class _AddressTabState extends State<AddressTab> {
             ),
           ),
         ),
-        FormFooter(
+        DialogFooter(
           actionLabel: addProjectorsLabel(1),
           actionIcon: Icons.add,
           onAction: _canAdd ? _submit : null,

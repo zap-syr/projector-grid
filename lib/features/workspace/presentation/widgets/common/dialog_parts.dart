@@ -1,19 +1,20 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../core/theme/app_theme.dart';
-import '../common/scroll_fade.dart';
+import 'scroll_fade.dart';
 
-/// Surfaces of the Add Projectors / Edit Projector look: the dialog body sits
-/// below its cards, so a card reads as raised in both themes.
-class FormSurfaces {
-  FormSurfaces._(this.body, this.card, this.field, this.soft);
+/// Surfaces of the redesigned dialogs: the body sits below its cards, so a
+/// card reads as raised in both themes.
+class DialogSurfaces {
+  DialogSurfaces._(this.body, this.card, this.editor, this.field, this.soft);
 
-  factory FormSurfaces.of(BuildContext context) {
+  factory DialogSurfaces.of(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final light = Theme.of(context).brightness == Brightness.light;
-    return FormSurfaces._(
+    final light = cs.brightness == Brightness.light;
+    return DialogSurfaces._(
       cs.surfaceContainerLow,
       light ? cs.surfaceContainerLowest : cs.surfaceContainer,
+      light ? cs.surfaceContainerLow : cs.surfaceContainerHigh,
       cs.surfaceContainerLowest,
       cs.surfaceContainerHighest,
     );
@@ -21,6 +22,10 @@ class FormSurfaces {
 
   final Color body;
   final Color card;
+
+  /// An open editor inside a card (Groups' inline editor): one step off the
+  /// card.
+  final Color editor;
   final Color field;
 
   /// Icon tiles and neutral pills.
@@ -35,7 +40,7 @@ const plainFieldStyle = TextStyle(fontSize: 14);
 
 /// The outlined field of these dialogs: 40 px, radius 10, label above it
 /// (see [LabeledField]) rather than inside, so the help line can sit under.
-InputDecoration formFieldDecoration(
+InputDecoration dialogFieldDecoration(
   BuildContext context, {
   String? hintText,
   Widget? prefix,
@@ -43,7 +48,7 @@ InputDecoration formFieldDecoration(
   bool error = false,
 }) {
   final cs = Theme.of(context).colorScheme;
-  final surfaces = FormSurfaces.of(context);
+  final surfaces = DialogSurfaces.of(context);
   OutlineInputBorder border(Color color, [double width = 1]) =>
       OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
@@ -73,11 +78,15 @@ class LabeledField extends StatelessWidget {
     required this.label,
     required this.child,
     this.help,
+    this.error = false,
   });
 
   final String label;
   final Widget child;
   final Widget? help;
+
+  /// Label in the error colour.
+  final bool error;
 
   @override
   Widget build(BuildContext context) {
@@ -91,7 +100,7 @@ class LabeledField extends StatelessWidget {
           style: TextStyle(
             fontSize: 12.5,
             fontWeight: FontWeight.w600,
-            color: cs.onSurfaceVariant,
+            color: error ? cs.error : cs.onSurfaceVariant,
           ),
         ),
         const SizedBox(height: 6),
@@ -142,41 +151,66 @@ class FieldHelp extends StatelessWidget {
   }
 }
 
-/// A raised card of these dialogs, with an optional warning border.
-class FormCard extends StatelessWidget {
-  const FormCard({
+/// A raised card of these dialogs (radius 14). [borderColor] for a warning
+/// border; [highlighted] for the card tied to a selection or an open form
+/// (primary border and ring); [muted] for a locked card that should read as
+/// unavailable at a glance.
+class DialogCard extends StatelessWidget {
+  const DialogCard({
     super.key,
     required this.child,
     this.borderColor,
+    this.highlighted = false,
+    this.muted = false,
     this.padding = EdgeInsets.zero,
   });
 
   final Widget child;
   final Color? borderColor;
+  final bool highlighted;
+  final bool muted;
   final EdgeInsetsGeometry padding;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final surfaces = DialogSurfaces.of(context);
     return Container(
       padding: padding,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: FormSurfaces.of(context).card,
+        color: muted ? surfaces.editor : surfaces.card,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: borderColor ?? cs.outlineVariant),
+        border: Border.all(
+          color: highlighted ? cs.primary : borderColor ?? cs.outlineVariant,
+        ),
+        boxShadow: highlighted
+            ? [
+                BoxShadow(
+                  color: cs.primary.withValues(alpha: 0.16),
+                  spreadRadius: 3,
+                ),
+              ]
+            : null,
       ),
       child: child,
     );
   }
 }
 
-/// The square icon tile at the start of a card row.
-class FormIconTile extends StatelessWidget {
-  const FormIconTile(this.icon, {super.key, this.size = 34});
+/// The square icon tile at the start of a card row: neutral by default,
+/// [primary] for a card whose subject is the primary accent (Brightness).
+class DialogIconTile extends StatelessWidget {
+  const DialogIconTile(
+    this.icon, {
+    super.key,
+    this.size = 34,
+    this.primary = false,
+  });
 
   final IconData icon;
   final double size;
+  final bool primary;
 
   @override
   Widget build(BuildContext context) {
@@ -185,41 +219,71 @@ class FormIconTile extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: FormSurfaces.of(context).soft,
+        color: primary ? cs.primaryContainer : DialogSurfaces.of(context).soft,
         borderRadius: BorderRadius.circular(size * 0.3),
       ),
-      child: Icon(icon, size: size * 0.53, color: cs.onSurfaceVariant),
+      child: Icon(
+        icon,
+        size: size * 0.53,
+        color: primary ? cs.onPrimaryContainer : cs.onSurfaceVariant,
+      ),
     );
   }
 }
 
-/// Footer of these dialogs: a message on the left, Cancel and the primary
-/// action on the right.
-class FormFooter extends StatelessWidget {
-  const FormFooter({
+/// Footer of these dialogs: a message on the left, then the actions. Pass
+/// [actionLabel] for the usual Cancel + primary button; leave it null for an
+/// info-only footer (dialogs that send changes right away close with ✕).
+class DialogFooter extends StatelessWidget {
+  const DialogFooter({
     super.key,
-    required this.actionLabel,
-    required this.onAction,
+    this.actionLabel,
+    this.onAction,
     this.actionIcon,
     this.message,
+    this.actions,
   });
 
-  final String actionLabel;
+  final String? actionLabel;
   final IconData? actionIcon;
 
   /// Null disables the action.
   final VoidCallback? onAction;
   final Widget? message;
 
+  /// Replaces Cancel + the primary button (e.g. Delete / Duplicate /
+  /// Schedule again).
+  final List<Widget>? actions;
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final label = actionLabel;
+    final buttons =
+        actions ??
+        [
+          if (label != null) ...[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            if (actionIcon != null)
+              FilledButton.icon(
+                onPressed: onAction,
+                icon: Icon(actionIcon, size: 18),
+                label: Text(label),
+              )
+            else
+              FilledButton(onPressed: onAction, child: Text(label)),
+          ],
+        ];
     return Container(
+      constraints: const BoxConstraints(minHeight: 56),
       decoration: BoxDecoration(
-        color: FormSurfaces.of(context).card,
+        color: DialogSurfaces.of(context).card,
         border: Border(top: BorderSide(color: cs.outlineVariant)),
       ),
-      padding: const EdgeInsets.fromLTRB(24, 12, 20, 12),
+      padding: const EdgeInsets.fromLTRB(24, 10, 20, 10),
       child: Row(
         children: [
           Expanded(
@@ -228,39 +292,65 @@ class FormFooter extends StatelessWidget {
               child: message ?? const SizedBox.shrink(),
             ),
           ),
-          const SizedBox(width: 8),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          const SizedBox(width: 8),
-          if (actionIcon != null)
-            FilledButton.icon(
-              onPressed: onAction,
-              icon: Icon(actionIcon, size: 18),
-              label: Text(actionLabel),
-            )
-          else
-            FilledButton(onPressed: onAction, child: Text(actionLabel)),
+          for (final b in buttons) ...[const SizedBox(width: 8), b],
         ],
       ),
     );
   }
 }
 
+/// The footer line of dialogs that send every change at once: an info icon
+/// and "Changes are sent to the projector right away", or, while [loading],
+/// a small spinner and "Reading current values from the projector…".
+class SentRightAwayNote extends StatelessWidget {
+  const SentRightAwayNote({super.key, this.loading = false});
+
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        if (loading)
+          const SizedBox(
+            width: 14,
+            height: 14,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          )
+        else
+          Icon(
+            Icons.info_outline,
+            size: 16,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            loading
+                ? 'Reading current values from the projector…'
+                : 'Changes are sent to the projector right away',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// The scrolling body of these dialogs: scrollbar and edge fade when it
 /// doesn't fit (small windows), title bar and footer stay put.
-class FormScrollBody extends StatefulWidget {
-  const FormScrollBody({super.key, required this.child, this.padding});
+class DialogScrollBody extends StatefulWidget {
+  const DialogScrollBody({super.key, required this.child, this.padding});
 
   final Widget child;
   final EdgeInsetsGeometry? padding;
 
   @override
-  State<FormScrollBody> createState() => _FormScrollBodyState();
+  State<DialogScrollBody> createState() => _DialogScrollBodyState();
 }
 
-class _FormScrollBodyState extends State<FormScrollBody> {
+class _DialogScrollBodyState extends State<DialogScrollBody> {
   final _controller = ScrollController();
 
   @override

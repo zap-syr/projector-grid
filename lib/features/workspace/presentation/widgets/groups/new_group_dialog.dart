@@ -7,10 +7,10 @@ import '../../../domain/group_palette.dart';
 import '../../../domain/ip_sort.dart';
 import '../../../domain/projector_group.dart';
 import '../../providers/workspace_provider.dart';
+import '../common/dialog_parts.dart';
 import '../common/ip_chips.dart';
 import '../dialog_title_bar.dart';
 import 'group_actions.dart';
-import 'group_card.dart';
 import 'group_color_palette.dart';
 import 'group_name_field.dart';
 
@@ -63,8 +63,7 @@ class _NewGroupDialogState extends ConsumerState<NewGroupDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final background = Theme.of(context).dialogTheme.backgroundColor!;
+    final background = DialogSurfaces.of(context).body;
     final used = {
       for (final g in ref.watch(workspaceProvider.notifier).groups) g.color,
     };
@@ -112,27 +111,10 @@ class _NewGroupDialogState extends ConsumerState<NewGroupDialog> {
                 ),
               ),
             ),
-            Container(
-              decoration: BoxDecoration(
-                color: GroupSurfaces.card(cs),
-                border: Border(top: BorderSide(color: cs.outlineVariant)),
-              ),
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel'),
-                  ),
-                  const SizedBox(width: 8),
-                  FilledButton.icon(
-                    onPressed: _create,
-                    icon: const Icon(Icons.add, size: 18),
-                    label: const Text('Create group'),
-                  ),
-                ],
-              ),
+            DialogFooter(
+              actionLabel: 'Create group',
+              actionIcon: Icons.add,
+              onAction: _create,
             ),
           ],
         ),
@@ -160,28 +142,11 @@ class _JoinsBox extends StatelessWidget {
     final sorted = [...ips]
       ..sort((a, b) => ipSortKey(a).compareTo(ipSortKey(b)));
     final body = theme.textTheme.bodyMedium?.copyWith(color: cs.onSurface);
-    return Container(
+    return DialogCard(
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-      decoration: BoxDecoration(
-        color: GroupSurfaces.card(cs),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: cs.outlineVariant),
-      ),
       child: Row(
         children: [
-          Container(
-            width: 30,
-            height: 30,
-            decoration: BoxDecoration(
-              color: cs.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(9),
-            ),
-            child: Icon(
-              Icons.videocam_outlined,
-              size: 17,
-              color: cs.onSurfaceVariant,
-            ),
-          ),
+          const DialogIconTile(Icons.videocam_outlined, size: 30),
           const SizedBox(width: 12),
           Expanded(
             child: Column(

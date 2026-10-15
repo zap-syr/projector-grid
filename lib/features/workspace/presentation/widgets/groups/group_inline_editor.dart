@@ -4,8 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../domain/group_naming.dart';
 import '../../../domain/projector_group.dart';
 import '../../providers/workspace_provider.dart';
+import '../common/dialog_parts.dart';
 import 'group_actions.dart';
-import 'group_card.dart';
 import 'group_color_palette.dart';
 import 'group_name_field.dart';
 
@@ -65,7 +65,7 @@ class _GroupInlineEditorState extends ConsumerState<GroupInlineEditor> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final background = GroupSurfaces.editor(cs);
+    final background = DialogSurfaces.of(context).editor;
     final used = {
       for (final g in ref.watch(workspaceProvider.notifier).groups)
         if (g.id != widget.group.id) g.color,

@@ -5,8 +5,8 @@ import '../../../domain/group_naming.dart';
 import '../../../domain/group_palette.dart';
 import '../../../domain/projector_group.dart';
 import '../../providers/workspace_provider.dart';
+import '../common/dialog_parts.dart';
 import 'group_actions.dart';
-import 'group_card.dart';
 import 'group_color_palette.dart';
 import 'group_name_field.dart';
 
@@ -55,11 +55,11 @@ class _NewGroupCardState extends ConsumerState<NewGroupCard> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final background = GroupSurfaces.editor(cs);
+    final background = DialogSurfaces.of(context).editor;
     final used = {
       for (final g in ref.watch(workspaceProvider.notifier).groups) g.color,
     };
-    return GroupCard(
+    return DialogCard(
       highlighted: true,
       child: Container(
         color: background,

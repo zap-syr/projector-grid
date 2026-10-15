@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/ip_input.dart';
 import '../../providers/protocol_service_provider.dart';
-import '../projector_form/form_parts.dart';
+import '../common/dialog_parts.dart';
 import '../projector_form/port_field.dart';
 import '../projector_form/projector_login_card.dart';
 import 'add_tab_shared.dart';
@@ -202,7 +202,7 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab> {
             ),
           ),
         ),
-        FormFooter(
+        DialogFooter(
           message: newCount == 0
               ? null
               : Text.rich(
@@ -253,7 +253,7 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab> {
         isExpanded: true,
         isDense: true,
         borderRadius: BorderRadius.circular(10),
-        decoration: formFieldDecoration(context),
+        decoration: dialogFieldDecoration(context),
         items: [
           for (final i in interfaces)
             DropdownMenuItem(

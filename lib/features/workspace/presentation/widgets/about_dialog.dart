@@ -3,6 +3,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../../../core/services/external_links.dart';
 import '../../../../core/theme/app_theme.dart';
+import 'common/dialog_parts.dart';
 import 'common/scroll_fade.dart';
 import 'dialog_title_bar.dart';
 
@@ -153,7 +154,7 @@ class _AppAboutDialogState extends State<AppAboutDialog> {
             ),
             DecoratedBox(
               decoration: BoxDecoration(
-                color: cs.surfaceContainer,
+                color: DialogSurfaces.of(context).card,
                 border: Border(top: BorderSide(color: cs.outlineVariant)),
               ),
               child: Padding(
@@ -240,13 +241,8 @@ class _LinksCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Container(
+    return DialogCard(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainer,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: cs.outlineVariant),
-      ),
       child: Column(
         children: [
           for (final (i, child) in children.indexed) ...[

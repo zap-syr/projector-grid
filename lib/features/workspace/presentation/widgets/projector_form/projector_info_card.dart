@@ -4,8 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../../core/theme/app_theme.dart';
 import '../../../domain/projector_node.dart';
 import '../../providers/workspace_provider.dart';
+import '../common/dialog_parts.dart';
 import '../common/status_pill.dart';
-import 'form_parts.dart';
 
 /// The projector Edit Projector is editing: model, its current `IP : port`,
 /// group and connection badge. Unlike the other per-projector dialogs it
@@ -38,11 +38,11 @@ class ProjectorInfoCard extends ConsumerWidget {
     );
     final status = live?.status ?? node.connectionStatus;
     final modelKnown = node.name.isNotEmpty && node.name != node.ipAddress;
-    return FormCard(
+    return DialogCard(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
-          const FormIconTile(Icons.videocam_outlined, size: 40),
+          const DialogIconTile(Icons.videocam_outlined, size: 40),
           const SizedBox(width: 14),
           Expanded(
             child: Column(

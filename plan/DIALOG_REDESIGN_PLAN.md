@@ -48,6 +48,11 @@ Done 2026-10-15. What landed, for the later steps to build on:
   hatched limit), `step_buttons.dart` (`StepButton.minus/plus`), `debouncer.dart`,
   `key_caps.dart` (`KeyCap`, `KeyCaps`), `ip_chips.dart`; `domain/ip_ranges.dart`
   (`collapseIpRanges`, `IpRun.label(short:)`).
+- Added after wave A: `common/dialog_parts.dart` — `DialogSurfaces` (body, card, editor,
+  field, soft), `DialogCard` (highlighted, muted, borderColor), `DialogIconTile` (primary),
+  `LabeledField` + `FieldHelp` + `dialogFieldDecoration`, `DialogFooter` (message, Cancel +
+  action, or custom `actions`), `SentRightAwayNote(loading:)`, `DialogScrollBody`. Every
+  redesigned dialog builds its cards, fields and footer from these.
 - `CustomTooltip(message:, detail:, shortcut:, warning:, placement:)` with the arrow
   (§7g done); `TooltipBubble` is public for other overlays.
 - Not in the foundation (they belong to one step only): `GroupColorPalette` (§3),

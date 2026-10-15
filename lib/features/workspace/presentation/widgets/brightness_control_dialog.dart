@@ -5,6 +5,7 @@ import '../../domain/projector_node.dart';
 import '../providers/protocol_service_provider.dart';
 import 'command_failure_notice.dart';
 import 'common/debouncer.dart';
+import 'common/dialog_parts.dart';
 import 'common/mode_tile.dart';
 import 'common/projector_settings_client.dart';
 import 'common/scroll_fade.dart';
@@ -246,7 +247,7 @@ class _BrightnessControlDialogState
                 ),
               ),
             ),
-            _Footer(loading: _loading),
+            DialogFooter(message: SentRightAwayNote(loading: _loading)),
           ],
         ),
       ),
@@ -260,23 +261,14 @@ class _Card extends StatelessWidget {
   const _Card({required this.child, this.muted = false});
 
   final Widget child;
-
-  /// Locked: a muted surface so it reads as unavailable at a glance.
   final bool muted;
 
   @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-      decoration: BoxDecoration(
-        color: muted ? cs.surfaceContainerHigh : cs.surfaceContainer,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: cs.outlineVariant),
-      ),
-      child: child,
-    );
-  }
+  Widget build(BuildContext context) => DialogCard(
+    muted: muted,
+    padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+    child: child,
+  );
 }
 
 class _CardHeading extends StatelessWidget {
@@ -460,19 +452,7 @@ class _PercentSliderState extends State<_PercentSlider> {
         ? null
         : (cap - _minPercent) / (_maxPercent - _minPercent);
 
-    final iconTile = Container(
-      width: 34,
-      height: 34,
-      decoration: BoxDecoration(
-        color: locked ? cs.surfaceContainerHighest : cs.primaryContainer,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Icon(
-        widget.icon,
-        size: 18,
-        color: locked ? cs.onSurfaceVariant : cs.onPrimaryContainer,
-      ),
-    );
+    final iconTile = DialogIconTile(widget.icon, primary: !locked);
 
     final Widget trailing = loading
         ? const SkeletonPulse(child: Skeleton(width: 56, height: 26, radius: 8))
@@ -687,51 +667,6 @@ class _LockPill extends StatelessWidget {
               fontSize: 12,
               fontWeight: FontWeight.w600,
               color: cs.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Footer extends StatelessWidget {
-  const _Footer({required this.loading});
-
-  final bool loading;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(24, 12, 20, 12),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainer,
-        border: Border(top: BorderSide(color: cs.outlineVariant)),
-      ),
-      child: Row(
-        spacing: 8,
-        children: [
-          if (loading)
-            const SizedBox(
-              width: 14,
-              height: 14,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          else
-            Icon(Icons.info_outline, size: 16, color: cs.onSurfaceVariant),
-          Expanded(
-            child: Text(
-              loading
-                  ? 'Reading current values from the projector…'
-                  : 'Changes are sent to the projector right away',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                fontSize: 13,
-                color: cs.onSurfaceVariant,
-              ),
             ),
           ),
         ],

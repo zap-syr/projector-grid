@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../../../../core/theme/app_theme.dart';
 import '../../../domain/projector_node.dart';
+import '../common/dialog_parts.dart';
 import '../common/scroll_fade.dart';
 import '../common/status_pill.dart';
-import '../projector_form/form_parts.dart';
 
 /// One answer of `PanasonicProtocolService.scanNetwork`.
 class DiscoveredProjector {
@@ -89,7 +89,7 @@ class DiscoverResults extends StatelessWidget {
       (_, 1) => '1 projector found',
       _ => '$count projectors found',
     };
-    return FormCard(
+    return DialogCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

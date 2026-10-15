@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../domain/custom_command.dart';
 import '../providers/custom_commands_provider.dart';
+import 'common/dialog_parts.dart';
 import 'common/scroll_fade.dart';
 import 'dialog_title_bar.dart';
 
@@ -66,8 +67,6 @@ class _CustomCommandDialogState extends ConsumerState<CustomCommandDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
     final isEdit = widget.existing != null;
     final takenBy = _takenBy;
 
@@ -90,19 +89,27 @@ class _CustomCommandDialogState extends ConsumerState<CustomCommandDialog> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _Field(
+                      // The error replaces the help line rather than adding
+                      // one, so the dialog never changes height.
+                      LabeledField(
                         label: 'Name',
-                        help:
-                            'Shown on the button and used for the OSC address',
-                        error: takenBy == null
-                            ? null
-                            : 'Another command already has this OSC address',
+                        error: takenBy != null,
+                        help: takenBy == null
+                            ? const FieldHelp(
+                                'Shown on the button and used for the OSC '
+                                'address',
+                              )
+                            : const FieldHelp(
+                                'Another command already has this OSC address',
+                                tone: FieldHelpTone.error,
+                              ),
                         child: TextField(
                           controller: _nameCtrl,
                           autofocus: true,
-                          decoration: _decoration(
+                          style: plainFieldStyle,
+                          decoration: dialogFieldDecoration(
                             context,
-                            hint: 'e.g. Dynamic contrast',
+                            hintText: 'e.g. Dynamic contrast',
                             error: takenBy != null,
                           ),
                           onChanged: (_) => setState(() {}),
@@ -110,20 +117,18 @@ class _CustomCommandDialogState extends ConsumerState<CustomCommandDialog> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      _Field(
+                      LabeledField(
                         label: 'Command',
-                        help: 'Sent as is to the selected projectors, in NTCONTROL form',
+                        help: const FieldHelp(
+                          'Sent as is to the selected projectors, in '
+                          'NTCONTROL form',
+                        ),
                         child: TextField(
                           controller: _cmdCtrl,
-                          style: AppTheme.mono(
-                            theme.textTheme.bodyMedium?.copyWith(
-                              fontSize: 13.5,
-                            ),
-                          ),
-                          decoration: _decoration(
+                          style: monoFieldStyle,
+                          decoration: dialogFieldDecoration(
                             context,
-                            hint: 'OSH:1',
-                            error: false,
+                            hintText: 'OSH:1',
                           ),
                           onChanged: (_) => setState(() {}),
                           onSubmitted: (_) => _isValid ? _submit() : null,
@@ -136,133 +141,19 @@ class _CustomCommandDialogState extends ConsumerState<CustomCommandDialog> {
                 ),
               ),
             ),
-            DecoratedBox(
-              decoration: BoxDecoration(
-                color: cs.surfaceContainer,
-                border: Border(top: BorderSide(color: cs.outlineVariant)),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 12, 20, 12),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: isEdit
-                          // A show controller still pointing at the old
-                          // address stops working after a rename.
-                          ? Text(
-                              'Renaming changes the OSC address',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                fontSize: 12.5,
-                                color: cs.onSurfaceVariant,
-                              ),
-                            )
-                          : const SizedBox.shrink(),
-                    ),
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('Cancel'),
-                    ),
-                    const SizedBox(width: 8),
-                    if (isEdit)
-                      FilledButton(
-                        onPressed: _isValid ? _submit : null,
-                        child: const Text('Save'),
-                      )
-                    else
-                      FilledButton.icon(
-                        onPressed: _isValid ? _submit : null,
-                        icon: const Icon(Icons.add, size: 18),
-                        label: const Text('Add command'),
-                      ),
-                  ],
-                ),
-              ),
+            DialogFooter(
+              // A show controller still pointing at the old address stops
+              // working after a rename.
+              message: isEdit
+                  ? const Text('Renaming changes the OSC address')
+                  : null,
+              actionLabel: isEdit ? 'Save' : 'Add command',
+              actionIcon: isEdit ? null : Icons.add,
+              onAction: _isValid ? _submit : null,
             ),
           ],
         ),
       ),
-    );
-  }
-
-  InputDecoration _decoration(
-    BuildContext context, {
-    required String hint,
-    required bool error,
-  }) {
-    final cs = Theme.of(context).colorScheme;
-    OutlineInputBorder border(Color color, double width) => OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: color, width: width),
-    );
-    return InputDecoration(
-      isDense: true,
-      filled: true,
-      fillColor: cs.surfaceContainerLowest,
-      hintText: hint,
-      hintStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.6)),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      enabledBorder: error ? border(cs.error, 2) : border(cs.outline, 1),
-      focusedBorder: error ? border(cs.error, 2) : border(cs.primary, 2),
-    );
-  }
-}
-
-/// A label above a field and one help line under it. The error replaces the
-/// help line rather than adding one, so the dialog never changes height.
-class _Field extends StatelessWidget {
-  const _Field({
-    required this.label,
-    required this.help,
-    required this.child,
-    this.error,
-  });
-
-  final String label;
-  final String help;
-  final String? error;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final hasError = error != null;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          label,
-          style: theme.textTheme.labelLarge?.copyWith(
-            fontSize: 12.5,
-            fontWeight: FontWeight.w600,
-            color: hasError ? cs.error : cs.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(height: 6),
-        child,
-        const SizedBox(height: 6),
-        SizedBox(
-          height: 18,
-          child: Row(
-            children: [
-              if (hasError) ...[
-                Icon(Icons.error_outline, size: 14, color: cs.error),
-                const SizedBox(width: 6),
-              ],
-              Expanded(
-                child: Text(
-                  error ?? help,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: hasError ? cs.error : cs.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }
@@ -317,13 +208,8 @@ class _OscAddressesCard extends StatelessWidget {
       ],
     );
 
-    return Container(
+    return DialogCard(
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainer,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: cs.outlineVariant),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
