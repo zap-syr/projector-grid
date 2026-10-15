@@ -37,6 +37,14 @@ class _AddProjectorDialogState extends ConsumerState<AddProjectorDialog> {
   // (and a running scan) instead of starting over.
   final _visited = {_AddTab.address};
 
+  // IndexedStack puts hidden tabs under ExcludeFocus, and a field's
+  // autofocus fires only on its first build: a scope per tab remembers its
+  // focused field so returning to a tab focuses it again.
+  final _scopes = {
+    for (final t in _AddTab.values)
+      t: FocusScopeNode(debugLabel: 'AddProjectors ${t.name}'),
+  };
+
   // One login shared by the three tabs, so switching tabs keeps it.
   late final TextEditingController _login;
   late final TextEditingController _password;
@@ -59,6 +67,9 @@ class _AddProjectorDialogState extends ConsumerState<AddProjectorDialog> {
   void dispose() {
     _login.dispose();
     _password.dispose();
+    for (final s in _scopes.values) {
+      s.dispose();
+    }
     super.dispose();
   }
 
@@ -124,10 +135,18 @@ class _AddProjectorDialogState extends ConsumerState<AddProjectorDialog> {
               padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
               child: SegmentedTabs<_AddTab>(
                 selected: _tab,
-                onChanged: (t) => setState(() {
-                  _tab = t;
-                  _visited.add(t);
-                }),
+                onChanged: (t) {
+                  final revisit = _visited.contains(t);
+                  setState(() {
+                    _tab = t;
+                    _visited.add(t);
+                  });
+                  if (revisit) {
+                    WidgetsBinding.instance.addPostFrameCallback(
+                      (_) => _scopes[t]!.requestFocus(),
+                    );
+                  }
+                },
                 tabs: const [
                   SegmentedTab(
                     value: _AddTab.address,
@@ -152,7 +171,8 @@ class _AddProjectorDialogState extends ConsumerState<AddProjectorDialog> {
                 index: _tab.index,
                 sizing: StackFit.expand,
                 children: [
-                  for (final t in _AddTab.values) _tabBody(t, lastUsed),
+                  for (final t in _AddTab.values)
+                    FocusScope(node: _scopes[t], child: _tabBody(t, lastUsed)),
                 ],
               ),
             ),

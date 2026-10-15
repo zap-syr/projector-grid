@@ -44,6 +44,36 @@ void main() {
     expect(tasks[2].enabled, isTrue);
   });
 
+  test('a task left without a group cannot be switched back on', () {
+    final c = makeContainer(FakeProtocolService());
+    final ws = c.read(workspaceProvider.notifier);
+    ws.addGroup(const ProjectorGroup(id: 'g', name: 'Left', color: 0));
+    final tasks = c.read(scheduledTasksProvider.notifier);
+    tasks.loadTasks([_task('1', groupId: 'g')]);
+    ws.deleteGroup('g');
+
+    tasks.toggleEnabled('1');
+
+    expect(c.read(scheduledTasksProvider).single.enabled, isFalse);
+  });
+
+  test('redo of a group delete detaches a task re-aimed after the undo', () {
+    final c = makeContainer(FakeProtocolService());
+    final ws = c.read(workspaceProvider.notifier);
+    ws.addGroup(const ProjectorGroup(id: 'g', name: 'Left', color: 0));
+    final tasks = c.read(scheduledTasksProvider.notifier);
+    tasks.loadTasks([_task('1', groupId: 'g')]);
+    ws.deleteGroup('g');
+    ws.undo();
+    tasks.update(_task('1', groupId: 'g'));
+
+    ws.redo();
+
+    final task = c.read(scheduledTasksProvider).single;
+    expect(task.targetGroupId, isNull);
+    expect(task.enabled, isFalse);
+  });
+
   test('a delete that touches no task leaves the task list as it was', () {
     final c = makeContainer(FakeProtocolService());
     final ws = c.read(workspaceProvider.notifier);

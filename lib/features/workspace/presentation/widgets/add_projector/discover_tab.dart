@@ -61,6 +61,9 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab> {
   /// The /24 of the last scan (`192.168.0`), null before the first.
   String? _scannedSubnet;
   int _scannedPort = defaultNtcontrolPort;
+
+  /// The login the scan probed with: its statuses only hold for that login.
+  ({String login, String password})? _scannedLogin;
   final List<DiscoveredProjector> _found = [];
   final Set<String> _selected = {};
 
@@ -96,20 +99,20 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab> {
     if (address == null || port == null) return;
     _scan?.cancel();
     final subnet = address.substring(0, address.lastIndexOf('.'));
+    final login = (
+      login: widget.login.login.text,
+      password: widget.login.password.text,
+    );
     setState(() {
       _scannedSubnet = subnet;
       _scannedPort = port;
+      _scannedLogin = login;
       _found.clear();
       _selected.clear();
     });
     _scan = ref
         .read(protocolServiceProvider)
-        .scanNetwork(
-          subnet,
-          port,
-          login: widget.login.login.text,
-          password: widget.login.password.text,
-        )
+        .scanNetwork(subnet, port, login: login.login, password: login.password)
         .listen(
           (result) {
             if (!mounted) return;
@@ -141,13 +144,19 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab> {
         if (_selected.contains(p.ip)) p,
     ];
     if (picked.isEmpty) return;
+    // A login edited after the scan makes its statuses stale ("Wrong login"
+    // fixed, or a good one mistyped): add as not yet probed so the
+    // workspace checks each projector again with the login it now has.
+    final loginUnchanged =
+        _scannedLogin ==
+        (login: widget.login.login.text, password: widget.login.password.text);
     widget.onAdd([
       for (final p in picked)
         widget.login.config(
           p.ip,
           _scannedPort,
           name: p.name,
-          status: p.status.scanStatus,
+          status: loginUnchanged ? p.status.scanStatus : 'offline',
         ),
     ]);
   }

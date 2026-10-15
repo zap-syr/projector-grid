@@ -137,6 +137,11 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
   void _restoreSnapshot(_WorkspaceSnapshot snapshot) {
     state = _mergeWithTelemetry(snapshot.nodes);
     _groups = List.of(snapshot.groups);
+    // Tasks aren't in the snapshot: a redo of a group delete must detach
+    // the tasks aimed at that group again.
+    ref.read(scheduledTasksProvider.notifier).detachMissingGroups({
+      for (final g in _groups) g.id,
+    });
     ref.read(selectionProvider.notifier).clear();
     _notifyStateChanged();
   }
@@ -198,7 +203,8 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
         .map((n) => n.groupId == groupId ? n.copyWith(groupId: null) : n)
         .toList();
     // Tasks aren't part of the undo snapshot, so undoing the delete brings
-    // the group back but leaves its tasks paused for the user to re-enable.
+    // the group back but its tasks stay without a target until the user
+    // picks one again.
     ref.read(scheduledTasksProvider.notifier).detachGroup(groupId);
   }
 

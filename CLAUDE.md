@@ -124,7 +124,7 @@ undoing a layout change never rolls back power/temperature readings.
   (`isolate_protocol_service.dart`) that runs every call on a worker isolate so polling
   doesn't stall the UI — a new public method on the service must be routed there too.
 - **`osc_service.dart`** — UDP. Inbound: maps OSC addresses to projector actions; custom commands get slugs
-  like `/pgrid/custom/dynamic-contrast`. Outbound: broadcasts `/pgrid/status/{online,offline,critical,warning}` to a
+  like `/pgrid/all/custom/dynamic-contrast` (or `/pgrid/group/<group-name>/custom/<slug>`). Outbound: broadcasts `/pgrid/status/{online,offline,critical,warning}` to a
   configured send IP/port on every status change (`critical`/`warning` count unacknowledged alerts), and
   `/pgrid/alert/<rule>` / `/pgrid/alert/acknowledged` from `alertsProvider.events`.
 - **`remote_preview_service.dart`** — "Remote Preview" (RemoView) live view: a WebSocket client to

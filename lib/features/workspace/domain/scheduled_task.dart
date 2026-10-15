@@ -23,3 +23,9 @@ abstract class ScheduledTask with _$ScheduledTask {
     DateTime? lastRunAt,
   }) = _ScheduledTask;
 }
+
+/// False for a group task whose group was deleted: it would fire on
+/// schedule and reach no projector, so it can't be switched on until it
+/// gets a new target.
+bool taskHasTarget(ScheduledTask task) =>
+    task.target == ScheduleTarget.all || task.targetGroupId != null;

@@ -207,7 +207,9 @@ class _TaskRow extends ConsumerWidget {
       contentPadding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
       leading: Switch(
         value: task.enabled,
-        onChanged: (_) => notifier.toggleEnabled(task.id),
+        onChanged: task.enabled || taskHasTarget(task)
+            ? (_) => notifier.toggleEnabled(task.id)
+            : null,
       ),
       title: Text(
         task.name,

@@ -98,19 +98,29 @@ class ScheduledTasksNotifier extends _$ScheduledTasksNotifier {
   /// Called when group [groupId] is deleted. A task aimed at it would keep
   /// firing on schedule and reach no projector, so it loses the target and
   /// is switched off until the user picks a new one.
-  void detachGroup(String groupId) {
-    if (!state.any((t) => t.targetGroupId == groupId)) return;
+  void detachGroup(String groupId) => detachMissingGroups({
+    for (final t in state)
+      if (t.targetGroupId != null && t.targetGroupId != groupId)
+        t.targetGroupId!,
+  });
+
+  /// Detaches every task whose group isn't in [groupIds] — after an undo or
+  /// redo puts the group list back to a state where a task's group is gone.
+  void detachMissingGroups(Set<String> groupIds) {
+    bool missing(ScheduledTask t) =>
+        t.targetGroupId != null && !groupIds.contains(t.targetGroupId);
+    if (!state.any(missing)) return;
     state = [
       for (final t in state)
-        t.targetGroupId == groupId
-            ? t.copyWith(targetGroupId: null, enabled: false)
-            : t,
+        missing(t) ? t.copyWith(targetGroupId: null, enabled: false) : t,
     ];
   }
 
   void toggleEnabled(String id) {
-    state = state
-        .map((t) => t.id == id ? t.copyWith(enabled: !t.enabled) : t)
-        .toList();
+    state = state.map((t) {
+      if (t.id != id) return t;
+      if (!t.enabled && !taskHasTarget(t)) return t;
+      return t.copyWith(enabled: !t.enabled);
+    }).toList();
   }
 }

@@ -142,6 +142,18 @@ void main() {
     expect(writes(), ['VXX:LOPI2=+00550']);
   });
 
+  testWidgets('lowering Max drops a pending Light output press above it', (
+    tester,
+  ) async {
+    await pumpDialog(tester, mode: '+00101', lopi2: 700, lopi3: 800);
+    await tester.tap(stepButton(1)); // Light 71%, waiting in the debounce
+    await tester.pump();
+    await tester.drag(find.byType(Slider).at(1), const Offset(-600, 0));
+    await tester.pump();
+    await tester.pump(pastDebounce);
+    expect(writes(), ['VXX:LOPI3=+00080']);
+  });
+
   testWidgets('a pending press is still sent when the dialog closes', (
     tester,
   ) async {

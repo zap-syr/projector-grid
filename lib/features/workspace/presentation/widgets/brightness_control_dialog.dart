@@ -145,6 +145,7 @@ class _BrightnessControlDialogState
       // When switching to user mode clamp light output to max.
       if (m.isUserMode && _lightOutput > _maxLightOutput) {
         _lightOutput = _maxLightOutput;
+        _lightDebounce.cancel();
       }
     });
     _sendMode(m);
@@ -154,8 +155,13 @@ class _BrightnessControlDialogState
 
   void _setMaxLightOutput(double v) => setState(() {
     _maxLightOutput = v;
-    // Keep light output within new ceiling.
-    if (_lightOutput > v) _lightOutput = v;
+    // Keep light output within new ceiling. A Light output press still
+    // waiting in the debounce holds the old, higher value: drop it rather
+    // than send it after the lower ceiling.
+    if (_lightOutput > v) {
+      _lightOutput = v;
+      _lightDebounce.cancel();
+    }
   });
 
   @override
