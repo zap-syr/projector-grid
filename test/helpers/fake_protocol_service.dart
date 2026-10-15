@@ -108,6 +108,23 @@ class FakeProtocolService extends PanasonicProtocolService {
     pollCount++;
     return pollResults[ip] ?? (ProbeResult.offline, null);
   }
+
+  /// What `scanNetwork` yields, in order (`{ip, name, status}`).
+  final List<Map<String, dynamic>> scanResults = [];
+
+  /// `(subnet, port, login)` of every `scanNetwork` call.
+  final List<(String, int, String)> scans = [];
+
+  @override
+  Stream<Map<String, dynamic>> scanNetwork(
+    String subnet,
+    int port, {
+    String login = '',
+    String password = '',
+  }) async* {
+    scans.add((subnet, port, login));
+    yield* Stream.fromIterable(scanResults);
+  }
 }
 
 /// A full, healthy telemetry map as `pollProjectorTelemetry` returns it.
