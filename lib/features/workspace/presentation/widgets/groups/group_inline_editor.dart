@@ -5,7 +5,6 @@ import '../../../domain/group_naming.dart';
 import '../../../domain/projector_group.dart';
 import '../../providers/workspace_provider.dart';
 import '../common/dialog_parts.dart';
-import 'group_actions.dart';
 import 'group_color_palette.dart';
 import 'group_name_field.dart';
 
@@ -58,13 +57,8 @@ class _GroupInlineEditorState extends ConsumerState<GroupInlineEditor> {
     widget.onClose();
   }
 
-  Future<void> _delete() async {
-    await confirmDeleteGroup(context, ref, widget.group);
-  }
-
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final background = DialogSurfaces.of(context).editor;
     final used = {
       for (final g in ref.watch(workspaceProvider.notifier).groups)
@@ -96,14 +90,8 @@ class _GroupInlineEditorState extends ConsumerState<GroupInlineEditor> {
           ),
           const SizedBox(height: 16),
           Row(
+            mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              TextButton.icon(
-                style: TextButton.styleFrom(foregroundColor: cs.error),
-                onPressed: _delete,
-                icon: const Icon(Icons.delete_outline, size: 18),
-                label: const Text('Delete group'),
-              ),
-              const Spacer(),
               TextButton(
                 onPressed: widget.onClose,
                 child: const Text('Cancel'),

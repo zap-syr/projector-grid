@@ -166,7 +166,7 @@ class FieldHelp extends StatelessWidget {
 
 /// A raised card of these dialogs (radius 14). [borderColor] for a warning
 /// border; [highlighted] for the card tied to a selection or an open form
-/// (primary border and ring); [muted] for a locked card that should read as
+/// (2 px primary border); [muted] for a locked card that should read as
 /// unavailable at a glance.
 class DialogCard extends StatelessWidget {
   const DialogCard({
@@ -188,23 +188,28 @@ class DialogCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final surfaces = DialogSurfaces.of(context);
+    final radius = BorderRadius.circular(14);
     return Container(
-      padding: padding,
+      // The 1 px the border used to inset the content by, kept so card
+      // sizes don't change.
+      padding: padding.add(const EdgeInsets.all(1)),
       clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: muted ? surfaces.editor : surfaces.card,
-        borderRadius: BorderRadius.circular(14),
+      // The border is drawn over the content, not under it: a child with
+      // its own square-cornered fill (a group row, the New group form)
+      // painted over the border where it curves, and the corners looked
+      // cut off.
+      // Highlighted: a 2 px primary border and nothing outside it. A soft
+      // ring around it read as a background larger than the card.
+      foregroundDecoration: BoxDecoration(
+        borderRadius: radius,
         border: Border.all(
           color: highlighted ? cs.primary : borderColor ?? cs.outlineVariant,
+          width: highlighted ? 2 : 1,
         ),
-        boxShadow: highlighted
-            ? [
-                BoxShadow(
-                  color: cs.primary.withValues(alpha: 0.16),
-                  spreadRadius: 3,
-                ),
-              ]
-            : null,
+      ),
+      decoration: BoxDecoration(
+        color: muted ? surfaces.editor : surfaces.card,
+        borderRadius: radius,
       ),
       child: child,
     );

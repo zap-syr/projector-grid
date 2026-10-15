@@ -106,7 +106,8 @@ void main() {
       await tester.tap(find.byTooltip('Edit Left wall'));
       await tester.pumpAndSettle();
       expect(find.text('Save'), findsOneWidget);
-      expect(find.text('Delete group'), findsOneWidget);
+      // Delete lives in the row, not in the editor.
+      expect(find.text('Delete group'), findsNothing);
       // The OSC address isn't part of the editor.
       expect(find.text('/group/left-wall'), findsNothing);
 
@@ -122,6 +123,33 @@ void main() {
       expect(saved.oscAddress, '/group/balcony');
       expect(find.text('Save'), findsNothing);
       expect(find.text('/group/balcony'), findsOneWidget);
+    });
+
+    testWidgets('opening the editor keeps the row buttons in place', (
+      tester,
+    ) async {
+      _useWindow(tester, const Size(1280, 900));
+      await _pump(tester);
+      final edit = tester.getRect(find.byTooltip('Edit Left wall'));
+      final delete = tester.getRect(find.byTooltip('Delete Left wall'));
+      await tester.tap(find.byTooltip('Edit Left wall'));
+      await tester.pumpAndSettle();
+      // The focused name field may scroll the list a little; measure the
+      // row itself, not the screen.
+      final scrolled = tester
+          .state<ScrollableState>(
+            find
+                .descendant(
+                  of: find.byType(ManageGroupsDialog),
+                  matching: find.byType(Scrollable),
+                )
+                .first,
+          )
+          .position
+          .pixels;
+      Rect unscrolled(Finder f) => tester.getRect(f).shift(Offset(0, scrolled));
+      expect(unscrolled(find.byTooltip('Collapse')), edit);
+      expect(unscrolled(find.byTooltip('Delete Left wall')), delete);
     });
 
     testWidgets('inline edit rejects a taken name', (tester) async {
@@ -185,9 +213,7 @@ void main() {
           timeOfDay: '22:30',
         ),
       ]);
-      await tester.tap(find.byTooltip('Edit Left wall'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Delete group'));
+      await tester.tap(find.byTooltip('Delete Left wall'));
       await tester.pumpAndSettle();
 
       expect(find.text('Delete “Left wall”?'), findsOneWidget);

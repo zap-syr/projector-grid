@@ -151,8 +151,7 @@ class _ManageGroupsDialogState extends ConsumerState<ManageGroupsDialog>
                     child: IgnorePointer(
                       ignoring: _newClosing,
                       child: Padding(
-                        // Room for the form's focus ring on every side.
-                        padding: const EdgeInsets.fromLTRB(24, 3, 24, 12),
+                        padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
                         child: NewGroupCard(
                           key: ValueKey(_newFormGeneration),
                           onCancel: _closeNewForm,

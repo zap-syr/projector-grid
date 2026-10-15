@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../../core/theme/app_theme.dart';
 import '../../../domain/projector_group.dart';
 import '../common/dialog_parts.dart';
+import 'group_actions.dart';
 import 'group_inline_editor.dart';
 
 /// One group in Manage Groups: swatch, name, member count, its OSC address
-/// as a read-only chip and an edit button that opens the editor in place.
-class GroupRow extends StatelessWidget {
+/// as a read-only chip, an edit button that opens the editor in place and
+/// a red delete button.
+class GroupRow extends ConsumerWidget {
   const GroupRow({
     super.key,
     required this.group,
@@ -30,7 +33,7 @@ class GroupRow extends StatelessWidget {
   final bool highlighted;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final surfaces = DialogSurfaces.of(context);
@@ -77,8 +80,12 @@ class GroupRow extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
+                    // One line: wrapping beside the OSC chip and unwrapping
+                    // when the editor hides it moved the row's buttons.
                     Text(
                       '$memberCount projector${memberCount == 1 ? '' : 's'}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: cs.onSurfaceVariant,
                       ),
@@ -120,6 +127,16 @@ class GroupRow extends StatelessWidget {
                   expanded ? Icons.expand_less : Icons.edit_outlined,
                   color: cs.onSurfaceVariant,
                 ),
+              ),
+              // In the row, not the editor, and shown either way, so the
+              // edit button never moves when the row opens.
+              IconButton(
+                key: ValueKey('delete-group-${group.id}'),
+                onPressed: () => confirmDeleteGroup(context, ref, group),
+                iconSize: 17,
+                visualDensity: VisualDensity.compact,
+                tooltip: 'Delete ${group.name}',
+                icon: Icon(Icons.delete_outline, color: cs.error),
               ),
             ],
           ),
