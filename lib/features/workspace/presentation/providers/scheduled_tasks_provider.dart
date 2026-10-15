@@ -95,6 +95,19 @@ class ScheduledTasksNotifier extends _$ScheduledTasksNotifier {
     state = state.where((t) => t.id != id).toList();
   }
 
+  /// Called when group [groupId] is deleted. A task aimed at it would keep
+  /// firing on schedule and reach no projector, so it loses the target and
+  /// is switched off until the user picks a new one.
+  void detachGroup(String groupId) {
+    if (!state.any((t) => t.targetGroupId == groupId)) return;
+    state = [
+      for (final t in state)
+        t.targetGroupId == groupId
+            ? t.copyWith(targetGroupId: null, enabled: false)
+            : t,
+    ];
+  }
+
   void toggleEnabled(String id) {
     state = state
         .map((t) => t.id == id ? t.copyWith(enabled: !t.enabled) : t)

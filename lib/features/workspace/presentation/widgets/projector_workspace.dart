@@ -378,7 +378,10 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
       if (groups.isNotEmpty) const Divider(height: 1),
       MenuItemButton(
         onPressed: () async {
-          final newGroup = await showGroupEditorDialog(context, ref);
+          final newGroup = await showNewGroupDialog(
+            context,
+            projectorIds: targetIds,
+          );
           if (newGroup != null) {
             notifier.assignNodesToGroup(targetIds, newGroup.id);
           }
