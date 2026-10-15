@@ -5,6 +5,52 @@ import '../common/dialog_parts.dart';
 
 const _loginHint = 'Sent only if the projector is in protected mode';
 
+// The heading row (lock tile, title, subtitle) is the same height in the
+// full card and in Discover's one-row card, field-high with the same
+// padding, so switching tabs moves neither the card's text nor what is
+// under it.
+// 12 + 40 + 12 + borders = 66: 8 px over the one-row card's old 58, which
+// the 8 px smaller gap above it gives back, so Discover's list keeps its
+// height.
+const _headingPadding = EdgeInsets.fromLTRB(16, 12, 16, 12);
+
+class _LoginHeading extends StatelessWidget {
+  const _LoginHeading({required this.subtitle});
+
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        const DialogIconTile(Icons.lock_outline),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Projector login',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// Projector login of Add Projectors and Edit Projector. There is no
 /// "protected" switch: the projector says whether it wants a login when the
 /// app connects, so the fields are always there and optional.
@@ -41,34 +87,22 @@ class ProjectorLoginCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-            child: Row(
-              children: [
-                const DialogIconTile(Icons.lock_outline),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Projector login',
-                        style: TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      Text(_loginHint, style: muted),
-                    ],
-                  ),
-                ),
-                if (lastUsed) ...[
-                  const SizedBox(width: 8),
-                  Icon(Icons.history, size: 14, color: cs.onSurfaceVariant),
-                  const SizedBox(width: 5),
-                  Text('Last used', style: muted.copyWith(fontSize: 12)),
+            padding: _headingPadding,
+            child: SizedBox(
+              height: dialogFieldHeight,
+              child: Row(
+                children: [
+                  const Expanded(child: _LoginHeading(subtitle: _loginHint)),
+                  if (lastUsed) ...[
+                    const SizedBox(width: 8),
+                    Icon(Icons.history, size: 14, color: cs.onSurfaceVariant),
+                    const SizedBox(width: 5),
+                    Text('Last used', style: muted.copyWith(fontSize: 12)),
+                  ],
+                  const SizedBox(width: 12),
+                  const _OptionalPill(),
                 ],
-                const SizedBox(width: 4),
-                ClearLoginButton(login: login, password: password),
-                const SizedBox(width: 8),
-                const _OptionalPill(),
-              ],
+              ),
             ),
           ),
           Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.5)),
@@ -80,13 +114,10 @@ class ProjectorLoginCard extends StatelessWidget {
                 Expanded(
                   child: LabeledField(
                     label: 'Login',
-                    child: TextField(
-                      key: const ValueKey('projector-login'),
+                    child: LoginField(
                       controller: login,
                       autofocus: autofocusLogin,
-                      style: plainFieldStyle,
-                      decoration: dialogFieldDecoration(context),
-                      onSubmitted: (_) => onSubmitted?.call(),
+                      onSubmitted: onSubmitted,
                     ),
                   ),
                 ),
@@ -150,131 +181,112 @@ class CompactProjectorLogin extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    Widget inner(String label) => Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 12.5,
-          color: cs.onSurfaceVariant.withValues(alpha: 0.75),
+    return DialogCard(
+      child: Padding(
+        padding: _headingPadding,
+        child: SizedBox(
+          height: dialogFieldHeight,
+          child: Row(
+            children: [
+              Expanded(
+                child: _LoginHeading(
+                  subtitle: lastUsed ? 'Last used, optional' : 'Optional',
+                ),
+              ),
+              const SizedBox(width: 12),
+              // No labels in these narrow fields: a hint names each one
+              // until it takes focus. Fixed widths, the heading takes the
+              // rest: Flexible fields left their unused share empty at the
+              // right, so Password stopped short of the card's padding.
+              SizedBox(
+                width: 180,
+                child: LoginField(controller: login, hintText: 'Login'),
+              ),
+              const SizedBox(width: 10),
+              SizedBox(
+                width: 200,
+                child: PasswordField(
+                  controller: password,
+                  hintText: 'Password',
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
-    return DialogCard(
-      padding: const EdgeInsets.fromLTRB(16, 8, 12, 8),
-      child: Row(
-        children: [
-          const DialogIconTile(Icons.lock_outline, size: 32),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Projector login',
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
-                Text(
-                  lastUsed ? 'Last used, optional' : 'Optional',
-                  style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Flexible(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 170),
-              child: TextField(
-                key: const ValueKey('projector-login'),
-                controller: login,
-                style: plainFieldStyle,
-                decoration: dialogFieldDecoration(
-                  context,
-                  prefix: inner('Login'),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Flexible(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 190),
-              child: PasswordField(
-                controller: password,
-                prefix: inner('Password'),
-              ),
-            ),
-          ),
-          const SizedBox(width: 4),
-          ClearLoginButton(login: login, password: password),
-        ],
-      ),
-    );
   }
 }
 
-/// Empties both login fields in one click: they come prefilled with the
-/// last used login, and a projector without protection needs none. Takes
-/// its place even while disabled so the row doesn't shift.
-class ClearLoginButton extends StatelessWidget {
-  const ClearLoginButton({
-    super.key,
-    required this.login,
-    required this.password,
-  });
-
-  final TextEditingController login;
-  final TextEditingController password;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: Listenable.merge([login, password]),
-      builder: (context, _) {
-        final empty = login.text.isEmpty && password.text.isEmpty;
-        return SizedBox(
-          width: 32,
-          height: 32,
-          child: IconButton(
-            key: const ValueKey('clear-login'),
-            tooltip: 'Clear login and password',
-            padding: EdgeInsets.zero,
-            iconSize: 18,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-            icon: const Icon(Icons.backspace_outlined),
-            onPressed: empty
-                ? null
-                : () {
-                    login.clear();
-                    password.clear();
-                  },
-          ),
-        );
-      },
-    );
-  }
-}
-
-/// A password field, hidden until the eye button shows it.
-class PasswordField extends StatefulWidget {
-  const PasswordField({
+/// The login field: a ✕ inside clears it, since it comes prefilled with
+/// the last used login and a projector without protection needs none.
+class LoginField extends StatefulWidget {
+  const LoginField({
     super.key,
     required this.controller,
-    this.prefix,
+    this.hintText,
+    this.autofocus = false,
     this.onSubmitted,
   });
 
   final TextEditingController controller;
-  final Widget? prefix;
+
+  /// Names the field while it is empty and not focused (Discover, where
+  /// the fields have no label above them).
+  final String? hintText;
+  final bool autofocus;
+  final VoidCallback? onSubmitted;
+
+  @override
+  State<LoginField> createState() => _LoginFieldState();
+}
+
+class _LoginFieldState extends State<LoginField> with _FocusHint {
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      key: const ValueKey('projector-login'),
+      controller: widget.controller,
+      focusNode: focusNode,
+      autofocus: widget.autofocus,
+      style: plainFieldStyle,
+      onSubmitted: (_) => widget.onSubmitted?.call(),
+      decoration: dialogFieldDecoration(
+        context,
+        hintText: hintFor(widget.hintText),
+        suffixIcon: _FieldActions(
+          children: [
+            _ClearButton(
+              key: const ValueKey('clear-login'),
+              controller: widget.controller,
+              tooltip: 'Clear login',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A password field, hidden until the eye button shows it, with the same
+/// ✕ as [LoginField].
+class PasswordField extends StatefulWidget {
+  const PasswordField({
+    super.key,
+    required this.controller,
+    this.hintText,
+    this.onSubmitted,
+  });
+
+  final TextEditingController controller;
+  final String? hintText;
   final VoidCallback? onSubmitted;
 
   @override
   State<PasswordField> createState() => _PasswordFieldState();
 }
 
-class _PasswordFieldState extends State<PasswordField> {
+class _PasswordFieldState extends State<PasswordField> with _FocusHint {
   bool _visible = false;
 
   @override
@@ -283,25 +295,130 @@ class _PasswordFieldState extends State<PasswordField> {
     return TextField(
       key: const ValueKey('projector-password'),
       controller: widget.controller,
+      focusNode: focusNode,
       obscureText: !_visible,
       style: plainFieldStyle,
       onSubmitted: (_) => widget.onSubmitted?.call(),
       decoration: dialogFieldDecoration(
         context,
-        prefix: widget.prefix,
-        suffixIcon: IconButton(
-          tooltip: _visible ? 'Hide password' : 'Show password',
-          iconSize: 18,
-          color: cs.onSurfaceVariant,
-          visualDensity: VisualDensity.compact,
-          icon: Icon(
-            _visible
-                ? Icons.visibility_off_outlined
-                : Icons.visibility_outlined,
-          ),
-          onPressed: () => setState(() => _visible = !_visible),
+        hintText: hintFor(widget.hintText),
+        suffixIcon: _FieldActions(
+          children: [
+            _ClearButton(
+              key: const ValueKey('clear-password'),
+              controller: widget.controller,
+              tooltip: 'Clear password',
+            ),
+            _SmallIconButton(
+              tooltip: _visible ? 'Hide password' : 'Show password',
+              icon: _visible
+                  ? Icons.visibility_off_outlined
+                  : Icons.visibility_outlined,
+              color: cs.onSurfaceVariant,
+              onPressed: () => setState(() => _visible = !_visible),
+            ),
+          ],
         ),
       ),
+    );
+  }
+}
+
+/// The field's own focus node, and its hint shown only while unfocused: a
+/// hint here names the field, so it goes as soon as the user is in it.
+mixin _FocusHint<T extends StatefulWidget> on State<T> {
+  final focusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    focusNode.addListener(_onFocus);
+  }
+
+  void _onFocus() => setState(() {});
+
+  @override
+  void dispose() {
+    focusNode.dispose();
+    super.dispose();
+  }
+
+  String? hintFor(String? hint) => focusNode.hasFocus ? null : hint;
+}
+
+/// The buttons at the end of a field, in a fixed-width row so the ✕
+/// appearing or going never changes the field's text area.
+class _FieldActions extends StatelessWidget {
+  const _FieldActions({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 4),
+      child: Row(mainAxisSize: MainAxisSize.min, children: children),
+    );
+  }
+}
+
+/// ✕ that empties [controller]; keeps its place while the field is empty.
+class _ClearButton extends StatelessWidget {
+  const _ClearButton({
+    super.key,
+    required this.controller,
+    required this.tooltip,
+  });
+
+  final TextEditingController controller;
+  final String tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) => Visibility(
+        visible: controller.text.isNotEmpty,
+        maintainSize: true,
+        maintainAnimation: true,
+        maintainState: true,
+        child: _SmallIconButton(
+          tooltip: tooltip,
+          icon: Icons.close,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+          onPressed: controller.clear,
+        ),
+      ),
+    );
+  }
+}
+
+/// 28 px, so it stays inside the field's 40 px: the default tap target
+/// would make the field taller than the others.
+class _SmallIconButton extends StatelessWidget {
+  const _SmallIconButton({
+    required this.tooltip,
+    required this.icon,
+    required this.color,
+    required this.onPressed,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: tooltip,
+      iconSize: 17,
+      color: color,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints.tightFor(width: 28, height: 28),
+      style: const ButtonStyle(tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+      icon: Icon(icon),
+      onPressed: onPressed,
     );
   }
 }

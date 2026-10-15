@@ -175,13 +175,13 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _networkRow(context),
-                const SizedBox(height: addTabSectionGap),
+                const SizedBox(height: addTabLoginGap),
                 CompactProjectorLogin(
                   login: widget.login.login,
                   password: widget.login.password,
                   lastUsed: widget.login.lastUsed,
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: addTabSectionGap),
                 Expanded(
                   child: DiscoverResults(
                     subnet: _scannedSubnet,
@@ -218,7 +218,8 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab> {
                     ],
                   ),
                 ),
-          actionLabel: addProjectorsLabel(selectedCount),
+          actionLabel: addManyLabel,
+          widestActionLabel: addManyLabel,
           actionIcon: Icons.add,
           onAction: selectedCount > 0 && !_scanning ? _submit : null,
         ),

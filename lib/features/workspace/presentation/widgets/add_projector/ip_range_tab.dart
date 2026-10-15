@@ -79,6 +79,17 @@ class _IpRangeTabState extends State<IpRangeTab> {
         Expanded(
           child: DialogScrollBody(
             padding: addTabPadding,
+            // Stretched to the bottom like Discover's results, so it ends
+            // the same distance from the footer and its height never
+            // depends on the range typed.
+            fillGap: addTabSectionGap,
+            fill: switch (range) {
+              IpRangeValid r => RangePreview(
+                range: r,
+                existingIps: widget.existingIps,
+              ),
+              _ => const RangePreviewPlaceholder(),
+            },
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -167,27 +178,20 @@ class _IpRangeTabState extends State<IpRangeTab> {
                     ),
                   ],
                 ),
-                const SizedBox(height: addTabSectionGap),
+                const SizedBox(height: addTabLoginGap),
                 ProjectorLoginCard(
                   login: widget.login.login,
                   password: widget.login.password,
                   lastUsed: widget.login.lastUsed,
                   onSubmitted: _submit,
                 ),
-                const SizedBox(height: addTabSectionGap),
-                switch (range) {
-                  IpRangeValid r => RangePreview(
-                    range: r,
-                    existingIps: widget.existingIps,
-                  ),
-                  _ => const RangePreviewPlaceholder(),
-                },
               ],
             ),
           ),
         ),
         DialogFooter(
-          actionLabel: addProjectorsLabel(newCount),
+          actionLabel: addManyLabel,
+          widestActionLabel: addManyLabel,
           actionIcon: Icons.add,
           onAction: newCount > 0 && portOk ? _submit : null,
         ),

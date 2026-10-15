@@ -121,15 +121,17 @@ class AppTheme {
   /// Radius every dialog shares; set once in [DialogThemeData].
   static const double dialogRadius = 20;
 
-  /// The one monospace style for IPs, ports, commands and OSC addresses.
-  /// A bare `fontFamily: 'monospace'` falls back to Courier New on Windows.
+  /// The one monospace style for IPs, ports, commands and OSC addresses:
+  /// IBM Plex Mono, bundled (pubspec `fonts:`), so it looks the same on
+  /// every machine. A bare `fontFamily: 'monospace'` falls back to Courier
+  /// New on Windows.
   static TextStyle mono([TextStyle? base]) =>
       (base ?? const TextStyle()).merge(monoStyle);
 
   /// [mono] as a const, for `static const` styles.
   static const TextStyle monoStyle = TextStyle(
-    fontFamily: 'Cascadia Mono',
-    fontFamilyFallback: ['Consolas', 'SF Mono', 'Menlo', 'monospace'],
+    fontFamily: 'IBM Plex Mono',
+    fontFamilyFallback: ['Consolas', 'Menlo', 'monospace'],
     fontFeatures: [FontFeature.tabularFigures()],
   );
 

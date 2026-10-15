@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:projector_grid/core/theme/app_theme.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/app_settings_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/protocol_service_provider.dart';
+import 'package:projector_grid/features/workspace/presentation/widgets/add_projector/add_tab_shared.dart';
+import 'package:projector_grid/features/workspace/presentation/widgets/add_projector/discover_results.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/add_projector/range_preview.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/add_projector_dialog.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/common/dialog_parts.dart';
@@ -61,8 +63,10 @@ Future<(List<List<Map<String, dynamic>>>, ProviderContainer)> _open(
   return (added, container);
 }
 
+// `.first`: the button holds its label twice (the real one and the widest,
+// invisible, that fixes its width), so the finder matches it twice.
 Finder _addButton(String label) =>
-    find.widgetWithText(FilledButton, label).hitTestable();
+    find.widgetWithText(FilledButton, label).hitTestable().first;
 
 void main() {
   useTempConfigDir();
@@ -142,7 +146,7 @@ void main() {
     expect(find.text('Skipped, already in project:'), findsOneWidget);
     expect(find.text('.13'), findsNWidgets(2)); // cell and skip chip
 
-    await tester.tap(_addButton('Add 10 projectors'));
+    await tester.tap(_addButton('Add projectors'));
     await tester.pumpAndSettle();
     final ips = added.single.map((p) => p['ip']).toList();
     expect(ips, hasLength(10));
@@ -174,7 +178,7 @@ void main() {
     expect(find.text('50 addresses'), findsOneWidget);
     expect(find.text('.31 to .33'), findsOneWidget);
     expect(find.text('.59'), findsOneWidget); // axis end
-    expect(_addButton('Add 46 projectors'), findsOneWidget);
+    expect(find.text('46 new'), findsOneWidget);
   });
 
   testWidgets('the field row and Port stay put across the tabs', (
@@ -227,6 +231,54 @@ void main() {
     expect(cardTop(), address);
   });
 
+  // The test font (Ahem) is much wider than Segoe and wraps the login card's
+  // subtitle, so whether IP range fits the full-size dialog can't be judged
+  // here; DialogScrollBody's fill behaviour is tested on its own instead.
+  group('DialogScrollBody fill', () {
+    Future<double> pumpBody(WidgetTester tester, double height) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.darkTheme,
+          home: Scaffold(
+            body: Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: 400,
+                height: height,
+                child: const DialogScrollBody(
+                  padding: EdgeInsets.fromLTRB(24, 20, 24, 20),
+                  fillGap: 16,
+                  fill: SizedBox(key: ValueKey('fill'), height: 100),
+                  child: SizedBox(height: 200),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      return tester.getBottomLeft(find.byKey(const ValueKey('fill'))).dy;
+    }
+
+    testWidgets('stretches to the bottom padding when there is room', (
+      tester,
+    ) async {
+      expect(await pumpBody(tester, 500), 500 - 20);
+      expect(
+        tester.getSize(find.byKey(const ValueKey('fill'))).height,
+        500 - 20 - 200 - 16 - 20,
+      );
+    });
+
+    testWidgets('keeps its own height and scrolls when there is not', (
+      tester,
+    ) async {
+      await pumpBody(tester, 300);
+      expect(tester.getSize(find.byKey(const ValueKey('fill'))).height, 100);
+      final scroll = tester.state<ScrollableState>(find.byType(Scrollable));
+      expect(scroll.position.maxScrollExtent, 20 + 200 + 16 + 100 + 20 - 300);
+    });
+  });
+
   testWidgets('the range preview keeps its height while a range is typed', (
     tester,
   ) async {
@@ -265,24 +317,142 @@ void main() {
     );
   });
 
-  testWidgets('the clear button empties the prefilled login', (tester) async {
+  testWidgets('the ✕ in each field empties it without moving the field', (
+    tester,
+  ) async {
     await _open(
       tester,
       seed: (c) => c
           .read(appSettingsProvider.notifier)
           .setLastProjectorLogin('admin1', 'panasonic'),
     );
-    await tester.tap(find.byKey(const ValueKey('clear-login')).hitTestable());
+    Finder field(String key) => find.byKey(ValueKey(key)).hitTestable();
+    final loginRect = tester.getRect(field('projector-login'));
+    final passwordRect = tester.getRect(field('projector-password'));
+
+    await tester.tap(field('clear-login'));
     await tester.pump();
-    final login = tester.widget<TextField>(
+    expect(
+      tester.widget<TextField>(field('projector-login')).controller!.text,
+      isEmpty,
+    );
+    expect(
+      tester.widget<TextField>(field('projector-password')).controller!.text,
+      'panasonic',
+      reason: 'each ✕ clears only its own field',
+    );
+    expect(find.text('Last used'), findsNothing);
+
+    await tester.tap(field('clear-password'));
+    await tester.pump();
+    expect(
+      tester.widget<TextField>(field('projector-password')).controller!.text,
+      isEmpty,
+    );
+    expect(tester.getRect(field('projector-login')), loginRect);
+    expect(tester.getRect(field('projector-password')), passwordRect);
+  });
+
+  testWidgets('Discover hints name the fields until they take focus', (
+    tester,
+  ) async {
+    await _open(tester);
+    await tester.tap(find.text('Discover'));
+    await tester.pumpAndSettle();
+    InputDecoration deco(String key) => tester
+        .widget<TextField>(find.byKey(ValueKey(key)).hitTestable())
+        .decoration!;
+    expect(deco('projector-login').hintText, 'Login');
+    expect(deco('projector-password').hintText, 'Password');
+
+    await tester.tap(
       find.byKey(const ValueKey('projector-login')).hitTestable(),
     );
-    final password = tester.widget<TextField>(
-      find.byKey(const ValueKey('projector-password')).hitTestable(),
+    await tester.pump();
+    expect(deco('projector-login').hintText, isNull);
+    expect(deco('projector-password').hintText, 'Password');
+  });
+
+  testWidgets('Add button and Cancel keep their place across the tabs', (
+    tester,
+  ) async {
+    await _open(tester);
+    Rect action() => tester.getRect(
+      find.byKey(const ValueKey('dialog-footer-action')).hitTestable(),
     );
-    expect(login.controller!.text, isEmpty);
-    expect(password.controller!.text, isEmpty);
-    expect(find.text('Last used'), findsNothing);
+    Rect cancel() =>
+        tester.getRect(find.widgetWithText(TextButton, 'Cancel').hitTestable());
+    expect(find.text('Add projector').hitTestable(), findsOneWidget);
+    final a = action();
+    final c = cancel();
+    for (final tab in ['IP range', 'Discover', 'Address']) {
+      await tester.tap(find.text(tab));
+      await tester.pumpAndSettle();
+      expect(action(), a, reason: tab);
+      expect(cancel(), c, reason: tab);
+    }
+  });
+
+  testWidgets('the login card heading matches on Discover; the list keeps '
+      'its height', (tester) async {
+    await _open(tester);
+    // Top-left only: the one-row card gives the title less width.
+    Offset heading() =>
+        tester.getTopLeft(find.text('Projector login').hitTestable());
+    Rect tile() =>
+        tester.getRect(find.byIcon(Icons.lock_outline).hitTestable());
+    final addressHeading = heading();
+    final addressTile = tile();
+    double passwordRight() => tester
+        .getTopRight(
+          find.byKey(const ValueKey('projector-password')).hitTestable(),
+        )
+        .dx;
+    final addressPasswordRight = passwordRight();
+    final addressCardFinder = find
+        .ancestor(
+          of: find.text('Projector login').hitTestable(),
+          matching: find.byType(DialogCard),
+        )
+        .first;
+    final addressCard = tester.getRect(addressCardFinder);
+    // Where the full card's heading band ends: its divider.
+    final addressHeadingBottom = tester
+        .getBottomLeft(
+          find.descendant(
+            of: addressCardFinder,
+            matching: find.byType(Divider),
+          ),
+        )
+        .dy;
+
+    await tester.tap(find.text('Discover'));
+    await tester.pumpAndSettle();
+    expect(heading(), addressHeading);
+    expect(tile(), addressTile);
+    expect(
+      passwordRight(),
+      addressPasswordRight,
+      reason: 'Password ends at the card padding, as on the other tabs',
+    );
+    final discoverCard = tester.getRect(
+      find
+          .ancestor(
+            of: find.text('Projector login').hitTestable(),
+            matching: find.byType(DialogCard),
+          )
+          .first,
+    );
+    // The one-row card is exactly the full card's heading band, down to
+    // the divider (which stands where the one-row card's border is).
+    expect(discoverCard.top, addressCard.top);
+    expect(discoverCard.bottom, addressHeadingBottom);
+    expect(discoverCard.height, 66, reason: 'was 58, the gap above lost 8');
+    // Login card to list: the usual gap.
+    expect(
+      tester.getTopLeft(find.byType(DiscoverResults)).dy - discoverCard.bottom,
+      addTabSectionGap,
+    );
   });
 
   testWidgets('Discover shows a badge per scan status', (tester) async {
@@ -318,7 +488,7 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(_addButton('Add 3 projectors'));
+    await tester.tap(_addButton('Add projectors'));
     await tester.pumpAndSettle();
     expect(added.single.map((p) => (p['ip'], p['status'])), [
       ('192.168.0.11', 'online'),

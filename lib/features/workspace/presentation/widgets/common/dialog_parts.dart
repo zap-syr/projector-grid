@@ -62,17 +62,22 @@ InputDecoration dialogFieldDecoration(
   final idle = error ? cs.error : cs.outline.withValues(alpha: 0.6);
   return InputDecoration(
     isDense: true,
-    // A dense field's own height follows its font (about 32 px); pin it so
-    // text fields match the dropdowns beside them.
-    constraints: const BoxConstraints.tightFor(height: dialogFieldHeight),
     filled: true,
     fillColor: surfaces.field,
     hintText: hintText,
     hintStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.6)),
     prefix: prefix,
-    suffixIcon: suffixIcon,
-    suffixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    // The suffix slot sets the height: a dense field's border follows its
+    // text (about 32 px), and `constraints` only sizes the box around it,
+    // so a field would still draw shorter than the dropdowns beside it.
+    // A field without a suffix gets an empty one, which also gives the
+    // right-hand padding.
+    suffixIcon: suffixIcon ?? const SizedBox(width: 12),
+    suffixIconConstraints: BoxConstraints(
+      minWidth: suffixIcon == null ? 12 : 36,
+      minHeight: dialogFieldHeight,
+    ),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
     enabledBorder: border(idle),
     focusedBorder: border(error ? cs.error : cs.primary, 2),
     border: border(idle),
@@ -246,6 +251,7 @@ class DialogFooter extends StatelessWidget {
   const DialogFooter({
     super.key,
     this.actionLabel,
+    this.widestActionLabel,
     this.onAction,
     this.actionIcon,
     this.message,
@@ -253,6 +259,11 @@ class DialogFooter extends StatelessWidget {
   });
 
   final String? actionLabel;
+
+  /// The longest label this button ever shows (`Add projectors` for `Add
+  /// projector`): the button keeps that width, so a label change never
+  /// moves Cancel.
+  final String? widestActionLabel;
   final IconData? actionIcon;
 
   /// Null disables the action.
@@ -267,6 +278,25 @@ class DialogFooter extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final label = actionLabel;
+    final widest = widestActionLabel;
+    // The widest label laid out invisibly under the real one sets the width.
+    final Widget labelText = label == null
+        ? const SizedBox.shrink()
+        : widest == null
+        ? Text(label)
+        : Stack(
+            alignment: Alignment.center,
+            children: [
+              Visibility(
+                visible: false,
+                maintainSize: true,
+                maintainAnimation: true,
+                maintainState: true,
+                child: Text(widest),
+              ),
+              Text(label),
+            ],
+          );
     final buttons =
         actions ??
         [
@@ -277,12 +307,17 @@ class DialogFooter extends StatelessWidget {
             ),
             if (actionIcon != null)
               FilledButton.icon(
+                key: const ValueKey('dialog-footer-action'),
                 onPressed: onAction,
                 icon: Icon(actionIcon, size: 18),
-                label: Text(label),
+                label: labelText,
               )
             else
-              FilledButton(onPressed: onAction, child: Text(label)),
+              FilledButton(
+                key: const ValueKey('dialog-footer-action'),
+                onPressed: onAction,
+                child: labelText,
+              ),
           ],
         ];
     return Container(
@@ -349,10 +384,23 @@ class SentRightAwayNote extends StatelessWidget {
 /// The scrolling body of these dialogs: scrollbar and edge fade when it
 /// doesn't fit (small windows), title bar and footer stay put.
 class DialogScrollBody extends StatefulWidget {
-  const DialogScrollBody({super.key, required this.child, this.padding});
+  const DialogScrollBody({
+    super.key,
+    required this.child,
+    this.padding,
+    this.fill,
+    this.fillGap = 0,
+  });
 
   final Widget child;
-  final EdgeInsetsGeometry? padding;
+  final EdgeInsets? padding;
+
+  /// Placed under [child], [fillGap] below it, and stretched to the bottom
+  /// of the body (a list or preview card that should end at the same
+  /// distance from the footer on every tab). It never gets less than its
+  /// own height: then the body scrolls.
+  final Widget? fill;
+  final double fillGap;
 
   @override
   State<DialogScrollBody> createState() => _DialogScrollBodyState();
@@ -369,14 +417,35 @@ class _DialogScrollBodyState extends State<DialogScrollBody> {
 
   @override
   Widget build(BuildContext context) {
+    final padding = widget.padding ?? const EdgeInsets.all(24);
+    final fill = widget.fill;
     return Scrollbar(
       controller: _controller,
       child: ScrollFade(
-        child: SingleChildScrollView(
-          controller: _controller,
-          padding: widget.padding ?? const EdgeInsets.all(24),
-          child: widget.child,
-        ),
+        child: fill == null
+            ? SingleChildScrollView(
+                controller: _controller,
+                padding: padding,
+                child: widget.child,
+              )
+            : CustomScrollView(
+                controller: _controller,
+                slivers: [
+                  SliverPadding(
+                    padding: padding.copyWith(bottom: widget.fillGap),
+                    sliver: SliverToBoxAdapter(child: widget.child),
+                  ),
+                  // The padding goes inside: SliverFillRemaining under a
+                  // SliverPadding still fills to the very bottom.
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Padding(
+                      padding: padding.copyWith(top: 0),
+                      child: fill,
+                    ),
+                  ),
+                ],
+              ),
       ),
     );
   }

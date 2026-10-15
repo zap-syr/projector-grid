@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:screen_retriever/screen_retriever.dart';
 import 'package:window_manager/window_manager.dart';
@@ -42,6 +44,14 @@ Future<bool> _isPositionOnScreen(WindowPrefs prefs) async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // The bundled font's OFL licence, alongside the packages' own on the
+  // Third-party licenses page.
+  LicenseRegistry.addLicense(() async* {
+    yield LicenseEntryWithLineBreaks(const [
+      'IBM Plex Mono',
+    ], await rootBundle.loadString('assets/fonts/ibm_plex_mono/OFL.txt'));
+  });
 
   if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
     await windowManager.ensureInitialized();

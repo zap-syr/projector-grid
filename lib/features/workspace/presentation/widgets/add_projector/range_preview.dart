@@ -9,13 +9,14 @@ import '../common/ip_chips.dart';
 /// is dense and unlabelled, with an axis under it.
 const _labelledCellLimit = 16;
 
-// The card keeps one height whatever the range (placeholder, labelled or
-// dense strip, with or without skipped addresses), so the login card under
-// it never moves: each part has a fixed slot.
-const _headerHeight = 46.0;
+// The tab gives the card the rest of the body (as Discover gives its
+// results), so its height comes from the layout, never from the range:
+// placeholder, labelled or dense strip, with or without skipped addresses.
+// Each part has a fixed slot; this is the least it needs.
+const _headerHeight = 40.0;
 const _stripSlotHeight = 50.0; // dense strip 28 + axis 22; labelled 34
-const _footerHeight = 44.0;
-const _cardHeight = _headerHeight + _stripSlotHeight + 14 + _footerHeight + 2;
+const _footerHeight = 40.0;
+const _minCardHeight = _headerHeight + _stripSlotHeight + _footerHeight + 2;
 
 /// The IP range tab's preview: how many addresses, which are new and which
 /// are already in the project (and so skipped).
@@ -43,8 +44,8 @@ class RangePreview extends StatelessWidget {
     final labelled = count <= _labelledCellLimit;
     final muted = TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant);
     return DialogCard(
-      child: SizedBox(
-        height: _cardHeight - 2,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: _minCardHeight - 2),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -180,8 +181,8 @@ class _SkipFooter extends StatelessWidget {
   }
 }
 
-/// Stands in for the preview until From and To make a range, so the login
-/// card below doesn't jump when it appears.
+/// Stands in for the preview until From and To make a range, the same size
+/// so nothing moves when the preview replaces it.
 class RangePreviewPlaceholder extends StatelessWidget {
   const RangePreviewPlaceholder({super.key});
 
@@ -189,8 +190,8 @@ class RangePreviewPlaceholder extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return DialogCard(
-      child: SizedBox(
-        height: _cardHeight - 2,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: _minCardHeight - 2),
         child: Center(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),

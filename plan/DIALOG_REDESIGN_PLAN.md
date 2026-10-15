@@ -172,8 +172,10 @@ Every dialog adapts to the app window, down to the smallest window the app allow
   and its extension, not literals in widgets.
 - One monospace text style for IPs, ports, commands and OSC addresses. Today widgets use
   `fontFamily: 'monospace'`, which on Windows falls back to Courier New: use
-  `fontFamilyFallback: ['Cascadia Mono', 'Consolas', 'SF Mono', 'Menlo']` with
-  `FontFeature.tabularFigures()`.
+  `AppTheme.mono` with `FontFeature.tabularFigures()`. The font is **IBM Plex Mono**,
+  bundled under `assets/fonts/` (Regular, Medium, SemiBold; OFL, registered with
+  `LicenseRegistry`), chosen by the owner on 2026-10-15 from the *Monospace font for
+  fields* boards; placeholders in mono fields use it too.
 - No new packages anywhere in this plan: everything is stock Flutter plus `flutter_svg`,
   `crypto` and `package_info_plus`, which the app already has.
 

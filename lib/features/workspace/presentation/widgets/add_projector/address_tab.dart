@@ -117,7 +117,7 @@ class _AddressTabState extends State<AddressTab> {
                     ),
                   ],
                 ),
-                const SizedBox(height: addTabSectionGap),
+                const SizedBox(height: addTabLoginGap),
                 ProjectorLoginCard(
                   login: widget.login.login,
                   password: widget.login.password,
@@ -129,7 +129,8 @@ class _AddressTabState extends State<AddressTab> {
           ),
         ),
         DialogFooter(
-          actionLabel: addProjectorsLabel(1),
+          actionLabel: addOneLabel,
+          widestActionLabel: addManyLabel,
           actionIcon: Icons.add,
           onAction: _canAdd ? _submit : null,
         ),
