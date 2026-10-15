@@ -4,15 +4,16 @@ Status: `[ ]` pending · `[~]` in progress · `[x]` done · `[dropped]` not doin
 
 Design approved by the owner on 2026-10-13. Mockups (light and dark for every board,
 Geometry Correction, Edge Blending, Remote Preview, Custom Command, Keyboard Shortcuts,
-About, the main toolbar, the tooltip, the control bar and the Monitoring view dark only;
-the tooltip also in light):
+About, the main toolbar, the tooltip, the control bar, the Monitoring view and the
+projector card dark only; the tooltip also in light):
 https://claude.ai/artifact/AL2c8Kh9aoXrrv2eUmVdcJ (canvas *Projector Grid dialogs redesign*).
 Roadmap item: `ROADMAP_PLAN.md` §13 (U7).
 
 The redesign covers twelve dialogs in depth (Add Projectors, Edit Projector, Groups,
 Scheduled Tasks, Brightness Control, Color Correction, Geometry Correction, Edge Blending,
 Remote Preview, Custom Command, Keyboard Shortcuts, About), the main toolbar, the
-tooltip, the control bar and the Monitoring view (§7f, §7g, §7h, §7i), and one
+tooltip, the control bar, the Monitoring view and the projector card on the Controls
+canvas (§7f, §7g, §7h, §7i, §7j), and one
 change that reaches **every** dialog: the shared title bar gets an icon tile, so all dialogs
 take the new look, not just the redesigned ones.
 
@@ -1058,6 +1059,88 @@ near-black; secondary text no darker than `#80838D`. The same applies to the too
 
 ---
 
+## 7j. `[ ]` Projector card (Controls canvas)
+
+Boards (dark only): *Projector card: states, group bands C and D / canvas, group C band
+inside / canvas, group D band under / quick status popover / Alignment mode*. Approved
+2026-10-15 with group variant **C**. Today (`projector_card.dart`): a grey status bar with a
+green / red power icon, a red eye for a closed shutter, the alert badge and a connection
+dot; the name and IP below; a grouped card tinted 15% with the group colour and a 9 px pill
+under the card.
+
+The card stays a **control target**: it shows what you need before sending a command.
+Temperatures, signal details and errors stay in Monitoring (§7i).
+
+### 7j.1 Frame
+- Same **120×100** (`kCardWidth` / `kCardHeight`), so saved layouts, snapping and the
+  Alignment neighbour rules don't change. Radius 10, 1 px border `#42464E`, a light
+  top-to-bottom gradient on the body (`#272B32` to `#212429`).
+- **Header band** 26 px, tinted by the power state so it reads from a distance: green when
+  on, red in standby, amber while warming up or cooling and when the login fails, strong
+  red when offline.
+- **Text**: the name in 14 bold. It is the model as read from the projector (`PT-RQ35K`),
+  so cards often repeat it. The IP sits under it in the monospace font and tells them apart.
+  The test pattern thumbnail (20×12) stays bottom right.
+
+### 7j.2 State colours
+| State | Header | Icons |
+|---|---|---|
+| On, shutter open | green tint | power green, eye green |
+| On, shutter closed | green tint | power green, eye-off **red** |
+| Warming up / cooling | amber tint | power amber, eye-off red |
+| Standby | red tint | power **red** (like the projector LED), eye-off grey |
+| Offline | strong red, *Offline* with an unplugged-plug icon | none; red 1.5 px outline, reddish body |
+| Login failed | amber tint, *Login failed* with a lock | none |
+
+- The **connection dot is gone**: offline is shown by the whole card, a failed login in
+  words. The red outline belongs to offline only, so standby (header tint only) never reads
+  as a fault.
+- **Right side of the header**: the alert badge (warning amber, error red, with the count
+  from 2) and the grey open lock for a projector without a password. Power and shutter
+  stay on the left, so a new alert never moves them.
+
+### 7j.3 Group: band inside the card (variant C)
+- An **18 px band** at the bottom of the card, filled with the group colour, the group name
+  in 10.5 semibold, black or white by `estimateBrightnessForColor` as today's chip. The
+  body gets shorter by the band; the card keeps its 100 px.
+- The border takes the group colour at 55%. The 15% body tint and the pill under the card
+  go away, so nothing hangs below the card any more.
+- A long name ellipsizes. The full name is in the quick status popover (§7j.6) and the
+  context menu; no `Tooltip` inside the card, which sits under `MenuAnchor` (the AXTree
+  crash the chip's comment describes).
+- Offline grouped cards dim the band to 55%.
+- Variant D (a 20 px band joined under the card) was drawn for comparison and not taken.
+
+### 7j.4 Selection and hover
+- **Selected**: a 2.5 px `#AAC7FF` ring 3 px outside the card with a soft blue glow, and a
+  blue tint over the body. No check mark (owner). The ring never mixes with the red,
+  green or group colours.
+- **Hover**: the border turns `#AAC7FF` at 70%.
+- In Alignment mode the rings stay as today (orange focused with a glow, pale neighbours,
+  60% scrim on closed cards); the band is inside the card, so the ring is unaffected.
+
+### 7j.5 Context menu
+- Header: **model and IP** on one line (`PT-RZ120  10.0.1.52`), nothing else.
+- Sections split by dividers: *Edit*; *Brightness Control, Color Correction, Geometry
+  Correction, Edge Blending*; *Remote Preview, Open in Browser*; *Assign to Group ›,
+  Select in Group*; *Delete* in red. Surface `#272A30`, radius 12, 32 px rows, as the
+  tooltip (§7g).
+
+### 7j.6 Quick status popover (new)
+- **Opens** after the pointer rests on a card for about half a second, or with Space on
+  the focused card. It sits next to the card with an arrow. Moving onto it keeps it open;
+  leaving, Esc or a drag closes it. Not shown while dragging or in Alignment mode.
+- **Content**: model, IP, group dot + name, "Updated 2 s ago"; **Power** (word + how long),
+  **Shutter**, **Input** with the signal pill as in Monitoring, **Temperature** (intake,
+  exhaust, amber above the alert threshold) and the active alerts. Light source hours are
+  left out, and so is a selection summary in the status bar (both repeat Monitoring, owner
+  2026-10-15).
+- **Actions**: *Show in Monitoring* (switches the view and opens this projector's panel,
+  §7i.4) and *Remote Preview*.
+- New data: "on for 2 h 14 min" needs the time of the last power change; not stored today.
+
+---
+
 ## 8. Order
 
 1. **Foundation** (§1): `DialogTitleBar` icon + all dialogs migrated in one go (the change is
@@ -1084,10 +1167,13 @@ near-black; secondary text no darker than `#80838D`. The same applies to the too
 11. **Main toolbar** (§7f): `toolbar.dart`; the missed-run badge colour waits for §4.8.
 12. **Control bar** (§7h): `control_bar.dart`; split into one widget per card while at it
     (the file is ~1300 lines).
-13. **Monitoring view** (§7i): table restyle and grouping first (it builds on
+13. **Projector card** (§7j): `projector_card.dart` and `alert_badge.dart`; state colours,
+    the group band and the selection ring first, then the context menu, then the quick
+    status popover (it links to the Monitoring panel, so it lands with or after step 14).
+14. **Monitoring view** (§7i): table restyle and grouping first (it builds on
     `monitoring_table.dart` and `MONITORING_UI_PLAN.md`), then Cards (compact / extended)
     and the projector panel, then filter / search / export.
-14. **Scheduled Tasks** (§4): largest; model change (`targetGroupIds`), missed runs and their
+15. **Scheduled Tasks** (§4): largest; model change (`targetGroupIds`), missed runs and their
    state file, one dialog instead of two, command picker.
 
 Each step: behaviour change only where this plan says so; `flutter analyze`, `dart format`,
@@ -1133,6 +1219,12 @@ tests below, then a GUI check in both themes (`flutter-windows-gui-check`).
   edits and deletes (with confirm), controls disabled without a selection; Monitoring:
   group rows and *Group by: none*, the signal pill per state, the panel opens over the
   table without changing column widths, Compact / Extended switch, offline rows dimmed;
+  projector card: header tint and icon colours per power / shutter state, the red
+  outline only when offline, *Login failed* for an `unauthorized` node, the group band
+  with the group name and none for an ungrouped card, the selection ring, an alert
+  appearing doesn't move the power icon (same `Offset`), the context menu header shows
+  model + IP, the quick status popover opens on hover delay and Space and not while
+  dragging;
   `DialogTitleBar` with a `projector` shows model + IP, the group pill only for a grouped
   projector, and the status badge.
 
@@ -1152,3 +1244,7 @@ tests below, then a GUI check in both themes (`flutter-windows-gui-check`).
   (§2.6), since it shows the address being edited.
 - ~~Missed runs~~ — decided 2026-10-13: never run late, one-time and recurring alike; shown
   in their own Missed list (§4.8).
+- ~~Projector card group marker~~ — decided 2026-10-15: band inside the card (§7j.3,
+  variant C).
+- Quick status popover (§7j.6): the hover delay (about 500 ms) and Space as the key, to
+  confirm in the GUI check.
