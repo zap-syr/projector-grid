@@ -452,7 +452,11 @@ class _PercentSliderState extends State<_PercentSlider> {
         ? null
         : (cap - _minPercent) / (_maxPercent - _minPercent);
 
-    final iconTile = DialogIconTile(widget.icon, primary: !locked);
+    final iconTile = DialogIconTile(
+      widget.icon,
+      primary: !locked,
+      muted: locked,
+    );
 
     final Widget trailing = loading
         ? const SkeletonPulse(child: Skeleton(width: 56, height: 26, radius: 8))

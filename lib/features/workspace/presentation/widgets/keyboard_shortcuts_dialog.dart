@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 import '../../domain/keyboard_shortcuts.dart';
 import 'common/dashed_border.dart';
@@ -17,13 +18,6 @@ class KeyboardShortcutsDialog extends StatefulWidget {
 }
 
 class _KeyboardShortcutsDialogState extends State<KeyboardShortcutsDialog> {
-  static const _leftColumn = {
-    ShortcutSectionId.project,
-    ShortcutSectionId.canvasNavigation,
-    ShortcutSectionId.edit,
-    ShortcutSectionId.view,
-  };
-
   /// Below this width the two columns of cards stack into one.
   static const _twoColumnMinWidth = 600.0;
 
@@ -47,15 +41,13 @@ class _KeyboardShortcutsDialogState extends State<KeyboardShortcutsDialog> {
     final hits = filterShortcuts(_sections, _search.text);
     final shown = hits.fold(0, (n, s) => n + s.hits.length);
 
-    final left = [
+    final cards = [
       for (final s in hits)
-        if (_leftColumn.contains(s.section.id))
-          _SectionCard(hits: s, searching: searching),
-    ];
-    final right = [
-      for (final s in hits)
-        if (!_leftColumn.contains(s.section.id))
-          _SectionCard(hits: s, searching: searching),
+        _SectionCard(
+          key: ValueKey(s.section.id),
+          hits: s,
+          searching: searching,
+        ),
     ];
 
     final muted = theme.textTheme.bodySmall?.copyWith(
@@ -100,16 +92,9 @@ class _KeyboardShortcutsDialogState extends State<KeyboardShortcutsDialog> {
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               if (twoColumns)
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Expanded(child: _CardColumn(left)),
-                                    const SizedBox(width: 14),
-                                    Expanded(child: _CardColumn(right)),
-                                  ],
-                                )
+                                _BalancedColumns(children: cards)
                               else
-                                _CardColumn([...left, ...right]),
+                                _CardColumn(cards),
                               if (searching) ...[
                                 if (hits.isEmpty)
                                   Padding(
@@ -142,6 +127,66 @@ class _KeyboardShortcutsDialogState extends State<KeyboardShortcutsDialog> {
   }
 }
 
+const _cardGap = 10.0;
+const _columnGap = 14.0;
+
+/// Two columns of cards whose bottoms end as close as the cards allow: in
+/// list order, each card goes under the column that is shorter so far. The
+/// cards are measured at the column width, so wrapped rows count, and a
+/// search that hides sections rebalances what is left.
+class _BalancedColumns extends MultiChildRenderObjectWidget {
+  const _BalancedColumns({required super.children});
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderBalancedColumns();
+}
+
+class _ColumnParentData extends ContainerBoxParentData<RenderBox> {}
+
+class _RenderBalancedColumns extends RenderBox
+    with
+        ContainerRenderObjectMixin<RenderBox, _ColumnParentData>,
+        RenderBoxContainerDefaultsMixin<RenderBox, _ColumnParentData> {
+  @override
+  void setupParentData(RenderBox child) {
+    if (child.parentData is! _ColumnParentData) {
+      child.parentData = _ColumnParentData();
+    }
+  }
+
+  @override
+  void performLayout() {
+    final width = constraints.maxWidth;
+    final columnWidth = (width - _columnGap) / 2;
+    final heights = [0.0, 0.0];
+    var child = firstChild;
+    while (child != null) {
+      child.layout(
+        BoxConstraints.tightFor(width: columnWidth),
+        parentUsesSize: true,
+      );
+      final column = heights[1] < heights[0] ? 1 : 0;
+      final top = heights[column] == 0 ? 0.0 : heights[column] + _cardGap;
+      final data = child.parentData! as _ColumnParentData;
+      data.offset = Offset(column * (columnWidth + _columnGap), top);
+      heights[column] = top + child.size.height;
+      child = data.nextSibling;
+    }
+    size = constraints.constrain(
+      Size(width, heights[0] > heights[1] ? heights[0] : heights[1]),
+    );
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) =>
+      defaultPaint(context, offset);
+
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) =>
+      defaultHitTestChildren(result, position: position);
+}
+
 class _CardColumn extends StatelessWidget {
   const _CardColumn(this.cards);
 
@@ -153,7 +198,7 @@ class _CardColumn extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (final (i, card) in cards.indexed) ...[
-          if (i > 0) const SizedBox(height: 10),
+          if (i > 0) const SizedBox(height: _cardGap),
           card,
         ],
       ],
@@ -228,7 +273,7 @@ class _SearchField extends StatelessWidget {
 }
 
 class _SectionCard extends StatelessWidget {
-  const _SectionCard({required this.hits, required this.searching});
+  const _SectionCard({super.key, required this.hits, required this.searching});
 
   final ShortcutSectionHits hits;
   final bool searching;
@@ -273,11 +318,9 @@ class _SectionCard extends StatelessWidget {
                     color: cs.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Icon(
-                    _icon(section.id),
-                    size: 15,
-                    color: cs.onSurfaceVariant,
-                  ),
+                  // Neutral tile, primary icon: the section-tile rule of
+                  // DialogIconTile.
+                  child: Icon(_icon(section.id), size: 15, color: cs.primary),
                 ),
                 const SizedBox(width: 9),
                 Text(
@@ -354,8 +397,10 @@ class _ShortcutRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
+          // Wide enough for Shift or Ctrl and the four arrows on one line:
+          // at 150 the lens shift combinations broke onto two.
           SizedBox(
-            width: 150,
+            width: 176,
             child: Wrap(
               spacing: 4,
               runSpacing: 4,

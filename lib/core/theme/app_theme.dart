@@ -16,6 +16,7 @@ class AppStatusColors extends ThemeExtension<AppStatusColors> {
     required this.tooltipBackground,
     required this.tooltipBorder,
     required this.keyCap,
+    required this.keyCapBorder,
   });
 
   final Color success;
@@ -30,8 +31,10 @@ class AppStatusColors extends ThemeExtension<AppStatusColors> {
   final Color tooltipBackground;
   final Color tooltipBorder;
 
-  /// Fill of a key cap (Keyboard Shortcuts, tooltip shortcuts).
+  /// Fill and border of a key cap (Keyboard Shortcuts, tooltip shortcuts),
+  /// the mockup's values.
   final Color keyCap;
+  final Color keyCapBorder;
 
   static const light = AppStatusColors(
     success: Color(0xFF1E7B3A),
@@ -44,6 +47,7 @@ class AppStatusColors extends ThemeExtension<AppStatusColors> {
     tooltipBackground: Color(0xFFFFFFFF),
     tooltipBorder: Color(0xFFD6D5DA),
     keyCap: Color(0xFFF0EFF3),
+    keyCapBorder: Color(0xFFC9C8CE),
   );
 
   static const dark = AppStatusColors(
@@ -56,7 +60,8 @@ class AppStatusColors extends ThemeExtension<AppStatusColors> {
     mutedPlus: Color(0xFF8CCB9C),
     tooltipBackground: Color(0xFF2E3238),
     tooltipBorder: Color(0xFF42464E),
-    keyCap: Color(0xFF3A3F47),
+    keyCap: Color(0xFF2C2F35),
+    keyCapBorder: Color(0xFF53565F),
   );
 
   static AppStatusColors of(BuildContext context) =>
@@ -74,6 +79,7 @@ class AppStatusColors extends ThemeExtension<AppStatusColors> {
     Color? tooltipBackground,
     Color? tooltipBorder,
     Color? keyCap,
+    Color? keyCapBorder,
   }) => AppStatusColors(
     success: success ?? this.success,
     successContainer: successContainer ?? this.successContainer,
@@ -85,6 +91,7 @@ class AppStatusColors extends ThemeExtension<AppStatusColors> {
     tooltipBackground: tooltipBackground ?? this.tooltipBackground,
     tooltipBorder: tooltipBorder ?? this.tooltipBorder,
     keyCap: keyCap ?? this.keyCap,
+    keyCapBorder: keyCapBorder ?? this.keyCapBorder,
   );
 
   @override
@@ -113,6 +120,7 @@ class AppStatusColors extends ThemeExtension<AppStatusColors> {
       )!,
       tooltipBorder: Color.lerp(tooltipBorder, other.tooltipBorder, t)!,
       keyCap: Color.lerp(keyCap, other.keyCap, t)!,
+      keyCapBorder: Color.lerp(keyCapBorder, other.keyCapBorder, t)!,
     );
   }
 }

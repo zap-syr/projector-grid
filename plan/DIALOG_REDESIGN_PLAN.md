@@ -53,6 +53,11 @@ Done 2026-10-15. What landed, for the later steps to build on:
   `LabeledField` + `FieldHelp` + `dialogFieldDecoration`, `DialogFooter` (message, Cancel +
   action, or custom `actions`), `SentRightAwayNote(loading:)`, `DialogScrollBody`. Every
   redesigned dialog builds its cards, fields and footer from these.
+- Icon tiles (owner, 2026-10-16, board *Icon tiles of sections and cards*, option 2): the
+  title bar tile is filled (`primaryContainer`); a section or card tile inside a dialog is a
+  neutral tile with a **primary icon** (`DialogIconTile` default); filled only where the card's
+  subject is the primary accent (Brightness, `primary: true`); all grey only when locked
+  (`muted: true`).
 - `CustomTooltip(message:, detail:, shortcut:, warning:, placement:)` with the arrow
   (§7g done); `TooltipBubble` is public for other overlays.
 - Not in the foundation (they belong to one step only): `GroupColorPalette` (§3),

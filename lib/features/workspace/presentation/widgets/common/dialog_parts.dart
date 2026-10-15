@@ -216,19 +216,25 @@ class DialogCard extends StatelessWidget {
   }
 }
 
-/// The square icon tile at the start of a card row: neutral by default,
-/// [primary] for a card whose subject is the primary accent (Brightness).
+/// The square icon tile at the start of a card or section (owner, 2026-10-16):
+/// - default: a neutral tile with a primary icon, so sections stand out
+///   while the filled tile of the title bar stays the dialog's own mark;
+/// - [primary]: filled like the title bar, for a card whose subject is the
+///   primary accent (Brightness);
+/// - [muted]: all grey, for a locked or unavailable card.
 class DialogIconTile extends StatelessWidget {
   const DialogIconTile(
     this.icon, {
     super.key,
     this.size = 34,
     this.primary = false,
+    this.muted = false,
   });
 
   final IconData icon;
   final double size;
   final bool primary;
+  final bool muted;
 
   @override
   Widget build(BuildContext context) {
@@ -243,7 +249,11 @@ class DialogIconTile extends StatelessWidget {
       child: Icon(
         icon,
         size: size * 0.53,
-        color: primary ? cs.onPrimaryContainer : cs.onSurfaceVariant,
+        color: primary
+            ? cs.onPrimaryContainer
+            : muted
+            ? cs.onSurfaceVariant
+            : cs.primary,
       ),
     );
   }
