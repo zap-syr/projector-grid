@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/theme/app_theme.dart';
 import '../../domain/log_event.dart';
 import 'custom_tooltip.dart';
 import '../providers/app_settings_provider.dart';
@@ -385,11 +386,7 @@ class _LogRow extends StatelessWidget {
             width: 60,
             child: Text(
               _formatTime(event.timestamp),
-              style: TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 11,
-                color: dim,
-              ),
+              style: AppTheme.mono(TextStyle(fontSize: 11, color: dim)),
             ),
           ),
           const SizedBox(width: 8),
@@ -405,10 +402,8 @@ class _LogRow extends StatelessWidget {
             width: 106,
             child: Text(
               event.projectorIp ?? '–',
-              style: TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 11,
-                color: cs.onSurface,
+              style: AppTheme.mono(
+                TextStyle(fontSize: 11, color: cs.onSurface),
               ),
               overflow: TextOverflow.ellipsis,
             ),

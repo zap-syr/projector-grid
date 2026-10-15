@@ -12,6 +12,7 @@ import 'manage_groups_dialog.dart';
 import 'scheduled_tasks_dialog.dart';
 import 'keyboard_shortcuts_dialog.dart';
 import 'about_dialog.dart';
+import 'common/confirm_dialog.dart';
 import 'common/menu_check_gutter.dart';
 import 'add_projector_dialog.dart';
 import 'alignment_banner.dart';
@@ -73,23 +74,17 @@ class TopMenuBar extends ConsumerWidget {
     final result = await showDialog<String>(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Unsaved Changes'),
-        content: const Text(
-          'You have unsaved changes. Would you like to save before continuing?',
-        ),
+      builder: (ctx) => const ConfirmDialog<String>(
+        icon: Icons.save_outlined,
+        title: 'Unsaved changes',
+        subtitle: 'Save this project before you continue?',
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, 'cancel'),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, 'discard'),
-            child: const Text('Discard'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, 'save'),
-            child: const Text('Save'),
+          ConfirmAction(label: 'Cancel', value: 'cancel'),
+          ConfirmAction(label: 'Discard', value: 'discard'),
+          ConfirmAction(
+            label: 'Save',
+            value: 'save',
+            kind: ConfirmActionKind.filled,
           ),
         ],
       ),

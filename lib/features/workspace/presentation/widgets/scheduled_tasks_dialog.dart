@@ -7,6 +7,7 @@ import '../../domain/scheduled_task.dart';
 import '../providers/custom_commands_provider.dart';
 import '../providers/scheduled_tasks_provider.dart';
 import '../providers/workspace_provider.dart';
+import 'common/confirm_dialog.dart';
 import 'dialog_title_bar.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -96,14 +97,16 @@ class ScheduledTasksDialog extends ConsumerWidget {
     final tasks = ref.watch(scheduledTasksProvider);
     return Dialog(
       clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: SizedBox(
         width: 540,
         height: 560,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const DialogTitleBar(title: 'Scheduled Tasks'),
+            const DialogTitleBar(
+              icon: Icons.schedule,
+              title: 'Scheduled Tasks',
+            ),
             Expanded(
               child: tasks.isEmpty
                   ? Center(
@@ -234,27 +237,14 @@ class _TaskRow extends ConsumerWidget {
     );
   }
 
-  void _confirmDelete(BuildContext context, WidgetRef ref) {
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Task'),
-        content: Text('Delete "${task.name}"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              ref.read(scheduledTasksProvider.notifier).remove(task.id);
-              Navigator.pop(ctx);
-            },
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+  Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
+    final confirmed = await confirmDestructive(
+      context,
+      title: 'Delete “${task.name}”?',
+      subtitle: 'The task is removed from this project and won’t run again.',
+      confirmLabel: 'Delete task',
     );
+    if (confirmed) ref.read(scheduledTasksProvider.notifier).remove(task.id);
   }
 }
 
@@ -753,7 +743,6 @@ class _ScheduledTaskEditorDialogState
 
     return Dialog(
       clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: 520, maxHeight: maxDialogHeight),
         child: Column(
@@ -761,6 +750,7 @@ class _ScheduledTaskEditorDialogState
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             DialogTitleBar(
+              icon: Icons.schedule,
               title: isEditing ? 'Edit Task' : 'New Scheduled Task',
             ),
 

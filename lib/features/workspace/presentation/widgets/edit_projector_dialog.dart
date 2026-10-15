@@ -73,7 +73,6 @@ class _EditProjectorDialogState extends State<EditProjectorDialog> {
     );
     return Dialog(
       clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: SizedBox(
         width: 400,
         child: Form(
@@ -82,7 +81,10 @@ class _EditProjectorDialogState extends State<EditProjectorDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const DialogTitleBar(title: 'Edit Projector'),
+              const DialogTitleBar(
+                icon: Icons.edit_outlined,
+                title: 'Edit Projector',
+              ),
               // ── Content ─────────────────────────────────────────────────
               Padding(
                 padding: const EdgeInsets.all(24.0),

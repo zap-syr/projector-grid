@@ -32,15 +32,12 @@ class _AppAboutDialogState extends State<AppAboutDialog> {
 
     return Dialog(
       clipBehavior: Clip.antiAlias,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.all(Radius.circular(12)),
-      ),
       child: SizedBox(
         width: 360,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const DialogTitleBar(title: 'About'),
+            const DialogTitleBar(icon: Icons.info_outline, title: 'About'),
 
             // Body
             Padding(

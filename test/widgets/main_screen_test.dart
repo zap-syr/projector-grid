@@ -43,7 +43,7 @@ void main() {
     testWidgets('clean project closes without asking', (tester) async {
       final calls = await pumpApp(tester, FakeProtocolService());
       await sendWindowEvent(tester, 'close');
-      expect(find.text('Unsaved Changes'), findsNothing);
+      expect(find.text('Unsaved changes'), findsNothing);
       expect(calls, contains('destroy'));
     });
 
@@ -58,7 +58,7 @@ void main() {
       expect(c.read(projectStateProvider).isDirty, isTrue);
 
       await sendWindowEvent(tester, 'close');
-      expect(find.text('Unsaved Changes'), findsOneWidget);
+      expect(find.text('Unsaved changes'), findsOneWidget);
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
       expect(calls, isNot(contains('destroy')));

@@ -112,7 +112,11 @@ class _RemotePreviewDialogState extends ConsumerState<RemotePreviewDialog> {
       clipBehavior: Clip.antiAlias,
       titlePadding: EdgeInsets.zero,
       contentPadding: const EdgeInsets.all(16),
-      title: DialogTitleBar(title: _title(nodes), onClose: _close),
+      title: DialogTitleBar(
+        icon: Icons.monitor,
+        title: _title(nodes),
+        onClose: _close,
+      ),
       content: ScrollConfiguration(
         // One deliberate Scrollbar, inside _grid's own gutter — not the
         // ambient auto-scrollbar this and the nested GridView would each

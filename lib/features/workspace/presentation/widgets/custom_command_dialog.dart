@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/theme/app_theme.dart';
 import '../../domain/custom_command.dart';
 import '../providers/custom_commands_provider.dart';
 import 'dialog_title_bar.dart';
@@ -71,14 +72,13 @@ class _CustomCommandDialogState extends ConsumerState<CustomCommandDialog> {
 
     return Dialog(
       clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: SizedBox(
         width: 400,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            DialogTitleBar(title: title),
+            DialogTitleBar(icon: Icons.code, title: title),
             // ── Content ───────────────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.all(24),
@@ -149,12 +149,13 @@ class _CustomCommandDialogState extends ConsumerState<CustomCommandDialog> {
                             slug.isNotEmpty
                                 ? '/pgrid/all/custom/$slug'
                                 : 'OSC address will appear here',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: slug.isNotEmpty
-                                  ? theme.colorScheme.onSurfaceVariant
-                                  : theme.colorScheme.onSurfaceVariant
-                                        .withValues(alpha: 0.4),
-                              fontFamily: 'monospace',
+                            style: AppTheme.mono(
+                              theme.textTheme.bodySmall?.copyWith(
+                                color: slug.isNotEmpty
+                                    ? theme.colorScheme.onSurfaceVariant
+                                    : theme.colorScheme.onSurfaceVariant
+                                          .withValues(alpha: 0.4),
+                              ),
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),

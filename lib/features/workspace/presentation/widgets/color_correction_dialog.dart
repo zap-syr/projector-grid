@@ -695,7 +695,9 @@ class _ColorCorrectionDialogState extends ConsumerState<ColorCorrectionDialog> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               DialogTitleBar(
-                title: 'Color Correction - ${widget.node.ipAddress}',
+                icon: Icons.palette_outlined,
+                title: 'Color Correction',
+                projectorId: widget.node.id,
               ),
               TabBar(
                 tabs: const [

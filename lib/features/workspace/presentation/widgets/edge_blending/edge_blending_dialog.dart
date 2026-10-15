@@ -261,7 +261,10 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                DialogTitleBar(title: 'Edge Blending - $title'),
+                DialogTitleBar(
+                  icon: Icons.gradient,
+                  title: 'Edge Blending - $title',
+                ),
                 if (_reachable.isEmpty)
                   Expanded(
                     child: _sides.any((s) => s.loading)

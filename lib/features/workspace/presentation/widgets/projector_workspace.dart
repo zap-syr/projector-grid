@@ -21,6 +21,23 @@ import 'edge_blending/edge_blending_dialog.dart';
 import 'geometry_correction_dialog.dart';
 import 'manage_groups_dialog.dart';
 import 'remote_preview_dialog.dart';
+import 'common/confirm_dialog.dart';
+import 'dialog_title_bar.dart' show projectorLabel;
+
+/// Shared by the Delete key and the card's context menu. [single] names the
+/// projector when exactly one goes.
+Future<bool> _confirmDeleteProjectors(
+  BuildContext context,
+  int count, {
+  ProjectorNode? single,
+}) => confirmDestructive(
+  context,
+  title: single != null
+      ? 'Delete ${projectorLabel(single.name, single.ipAddress)}?'
+      : 'Delete $count projector${count == 1 ? '' : 's'}?',
+  subtitle: 'Removed from this project. Undo brings it back.',
+  confirmLabel: 'Delete',
+);
 
 class SelectAllIntent extends Intent {
   const SelectAllIntent();
@@ -639,30 +656,11 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
                             .read(selectionProvider)
                             .length;
                         if (selectedCount == 0) return;
-                        final confirm = await showDialog<bool>(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: const Text('Delete Projectors'),
-                            content: Text(
-                              'Are you sure you want to delete $selectedCount selected projector(s)?',
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () =>
-                                    Navigator.of(context).pop(false),
-                                child: const Text('Cancel'),
-                              ),
-                              FilledButton(
-                                onPressed: () =>
-                                    Navigator.of(context).pop(true),
-                                child: const Text('Delete'),
-                              ),
-                            ],
-                          ),
+                        final confirm = await _confirmDeleteProjectors(
+                          context,
+                          selectedCount,
                         );
-                        if (confirm == true) {
-                          notifier.deleteSelected();
-                        }
+                        if (confirm) notifier.deleteSelected();
                         return null;
                       },
                     ),
@@ -980,38 +978,17 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
                                                     node.id,
                                                   ) &&
                                                   selectedCount > 1;
-                                              final confirm = await showDialog<bool>(
-                                                context: context,
-                                                builder: (context) => AlertDialog(
-                                                  title: const Text(
-                                                    'Delete Projector',
-                                                  ),
-                                                  content: Text(
+                                              final confirm =
+                                                  await _confirmDeleteProjectors(
+                                                    context,
                                                     isMultiDelete
-                                                        ? 'Are you sure you want to delete $selectedCount selected projectors?'
-                                                        : 'Are you sure you want to delete ${node.name}?',
-                                                  ),
-                                                  actions: [
-                                                    TextButton(
-                                                      onPressed: () =>
-                                                          Navigator.of(context)
-                                                              .pop(false),
-                                                      child: const Text(
-                                                        'Cancel',
-                                                      ),
-                                                    ),
-                                                    FilledButton(
-                                                      onPressed: () =>
-                                                          Navigator.of(context)
-                                                              .pop(true),
-                                                      child: const Text(
-                                                        'Delete',
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              );
-                                              if (confirm == true) {
+                                                        ? selectedCount
+                                                        : 1,
+                                                    single: isMultiDelete
+                                                        ? null
+                                                        : node,
+                                                  );
+                                              if (confirm) {
                                                 if (isMultiDelete) {
                                                   notifier.deleteSelected();
                                                 } else {

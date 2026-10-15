@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../core/services/app_config_dir.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../domain/control_options.dart';
 import '../../domain/custom_command.dart';
 import '../../domain/lens_commands.dart';
@@ -14,6 +15,7 @@ import '../../domain/test_patterns.dart';
 import '../providers/custom_commands_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../providers/selection_provider.dart';
+import 'common/confirm_dialog.dart';
 import 'custom_command_dialog.dart';
 import 'custom_tooltip.dart';
 
@@ -907,28 +909,23 @@ class _CustomCommandsTab extends ConsumerWidget {
                     context: context,
                     builder: (_) => CustomCommandDialog(existing: cmd),
                   ),
-                  onDelete: () => showDialog(
-                    context: context,
-                    builder: (_) => AlertDialog(
-                      title: const Text('Delete Command'),
-                      content: Text(
-                        'Are you sure you want to delete "${cmd.name}"?',
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          child: const Text('Cancel'),
-                        ),
-                        FilledButton(
-                          onPressed: () {
-                            notifier.remove(cmd.id);
-                            Navigator.of(context).pop();
-                          },
-                          child: const Text('Delete'),
+                  onDelete: () async {
+                    final confirmed = await confirmDestructive(
+                      context,
+                      title: 'Delete “${cmd.name}”?',
+                      subtitle: 'The command is removed from this app.',
+                      confirmLabel: 'Delete',
+                      changes: [
+                        ConfirmChange(
+                          icon: Icons.sensors,
+                          lead: '/pgrid/all/custom/${cmd.oscSlug}',
+                          rest: 'no longer answers',
+                          monoLead: true,
                         ),
                       ],
-                    ),
-                  ),
+                    );
+                    if (confirmed) notifier.remove(cmd.id);
+                  },
                 );
               },
             ),
@@ -1003,9 +1000,10 @@ class _CustomCommandTile extends StatelessWidget {
                 ),
                 Text(
                   command.command,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontFamily: 'monospace',
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  style: AppTheme.mono(
+                    Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -1228,7 +1226,8 @@ class _PatternSlot extends StatelessWidget {
     }
     // Filled slot — normal click sends, Ctrl+click clears.
     return CustomTooltip(
-      message: '${label ?? code!}\nCtrl+click to remove',
+      message: label ?? code!,
+      detail: 'Ctrl click to remove',
       child: OutlinedButton(
         style: _slotStyle,
         onPressed: () {

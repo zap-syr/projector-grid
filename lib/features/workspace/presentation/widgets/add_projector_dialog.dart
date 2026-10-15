@@ -41,13 +41,15 @@ class _AddProjectorDialogState extends State<AddProjectorDialog>
   Widget build(BuildContext context) {
     return Dialog(
       clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: SizedBox(
         width: 500,
         height: 620,
         child: Column(
           children: [
-            const DialogTitleBar(title: 'Add Projectors'),
+            const DialogTitleBar(
+              icon: Icons.videocam_outlined,
+              title: 'Add Projectors',
+            ),
             TabBar(
               controller: _tabController,
               tabs: const [

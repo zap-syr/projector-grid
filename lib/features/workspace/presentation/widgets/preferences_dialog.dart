@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/services/web_auth.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../domain/alert_rule.dart';
 import '../../domain/web_clients.dart';
 import '../../domain/web_pins.dart';
@@ -809,13 +810,17 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
 
     return Dialog(
       clipBehavior: Clip.antiAlias,
-      child: SizedBox(
-        width: 760,
-        height: 560,
+      // Maximum size, not a fixed one: the smallest window (800×600) leaves
+      // about 720×550 inside the Dialog insets.
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 760, maxHeight: 560),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const DialogTitleBar(title: 'Preferences'),
+            const DialogTitleBar(
+              icon: Icons.settings_outlined,
+              title: 'Preferences',
+            ),
             Expanded(
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -964,9 +969,8 @@ class _LinkField extends StatelessWidget {
             child: SelectableText(
               url,
               maxLines: 1,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontFamily: 'monospace',
-                fontSize: 12.5,
+              style: AppTheme.mono(
+                theme.textTheme.bodyMedium?.copyWith(fontSize: 12.5),
               ),
             ),
           ),

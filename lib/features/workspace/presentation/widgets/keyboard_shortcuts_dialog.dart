@@ -11,15 +11,15 @@ class KeyboardShortcutsDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     return Dialog(
       clipBehavior: Clip.antiAlias,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.all(Radius.circular(12)),
-      ),
       child: SizedBox(
         width: 560,
         height: 620,
         child: Column(
           children: [
-            const DialogTitleBar(title: 'Keyboard Shortcuts'),
+            const DialogTitleBar(
+              icon: Icons.keyboard_outlined,
+              title: 'Keyboard Shortcuts',
+            ),
             // Content
             Expanded(
               child: SingleChildScrollView(

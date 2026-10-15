@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/theme/app_theme.dart';
 import '../../domain/alert_rule.dart';
 import '../../domain/alerts.dart';
 import '../../domain/projector_errors.dart';
@@ -153,10 +154,8 @@ class _CodeTag extends StatelessWidget {
 
   /// Horizontal padding and text style, also used to measure a tag.
   static const double padding = 5;
-  static const style = TextStyle(
-    fontFamily: 'monospace',
-    fontSize: 11.5,
-    fontWeight: FontWeight.w600,
+  static final style = AppTheme.mono(
+    const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
   );
 
   final String code;
@@ -252,10 +251,11 @@ class _ErrorsPanel extends StatelessWidget {
                       ),
                       child: Text(
                         e.id,
-                        style: TextStyle(
-                          fontFamily: 'monospace',
-                          fontSize: 11,
-                          color: colors.onSurfaceVariant,
+                        style: AppTheme.mono(
+                          TextStyle(
+                            fontSize: 11,
+                            color: colors.onSurfaceVariant,
+                          ),
                         ),
                       ),
                     ),

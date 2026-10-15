@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/projector_group.dart';
 import '../providers/scheduled_tasks_provider.dart';
 import '../providers/workspace_provider.dart';
+import 'common/confirm_dialog.dart';
 import 'dialog_title_bar.dart';
 
 /// 8 hues x 3 tones, flattened tone-major (row 0 = lightest tone of every
@@ -99,7 +100,6 @@ class _GroupEditorDialogState extends State<_GroupEditorDialog> {
     final cs = theme.colorScheme;
     return Dialog(
       clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: SizedBox(
         width: 380,
         child: Column(
@@ -107,6 +107,7 @@ class _GroupEditorDialogState extends State<_GroupEditorDialog> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             DialogTitleBar(
+              icon: Icons.layers,
               title: existing != null ? 'Edit Group' : 'New Group',
             ),
             // Content
@@ -267,7 +268,7 @@ class ManageGroupsDialog extends ConsumerStatefulWidget {
 }
 
 class _ManageGroupsDialogState extends ConsumerState<ManageGroupsDialog> {
-  void _confirmDeleteGroup(ProjectorGroup group) {
+  Future<void> _confirmDeleteGroup(ProjectorGroup group) async {
     final nodes = ref.read(workspaceProvider);
     final memberCount = nodes.where((n) => n.groupId == group.id).length;
     // Deleting a group doesn't touch scheduled tasks that target it — such
@@ -279,37 +280,36 @@ class _ManageGroupsDialogState extends ConsumerState<ManageGroupsDialog> {
         .where((t) => t.targetGroupId == group.id)
         .length;
 
-    final warnings = <String>[
-      if (memberCount > 0) '$memberCount projector(s) will be unassigned.',
-      if (taskCount > 0)
-        '$taskCount scheduled task(s) target this group and will stop doing anything once it\'s deleted.',
-    ];
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Group'),
-        content: Text(
-          warnings.isEmpty
-              ? 'Are you sure you want to delete "${group.name}"?'
-              : 'Are you sure you want to delete "${group.name}"?\n${warnings.join('\n')}',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+    final confirmed = await confirmDestructive(
+      context,
+      title: 'Delete “${group.name}”?',
+      subtitle: 'The group is removed from this project.',
+      confirmLabel: 'Delete group',
+      changes: [
+        if (memberCount > 0)
+          ConfirmChange(
+            icon: Icons.videocam_outlined,
+            lead: '$memberCount projector${memberCount == 1 ? '' : 's'}',
+            rest: 'stay in the project, ungrouped',
           ),
-          FilledButton(
-            onPressed: () {
-              ref.read(workspaceProvider.notifier).deleteGroup(group.id);
-              Navigator.pop(ctx);
-              setState(() {});
-            },
-            child: const Text('Delete'),
+        if (taskCount > 0)
+          ConfirmChange(
+            icon: Icons.schedule,
+            lead: '$taskCount scheduled task${taskCount == 1 ? '' : 's'}',
+            rest: 'target this group and stop doing anything',
           ),
-        ],
-      ),
+        if (group.oscAddress.isNotEmpty)
+          ConfirmChange(
+            icon: Icons.sensors,
+            lead: group.oscAddress,
+            rest: 'no longer answers',
+            monoLead: true,
+          ),
+      ],
     );
+    if (!confirmed || !mounted) return;
+    ref.read(workspaceProvider.notifier).deleteGroup(group.id);
+    setState(() {});
   }
 
   @override
@@ -320,7 +320,6 @@ class _ManageGroupsDialogState extends ConsumerState<ManageGroupsDialog> {
 
     return Dialog(
       clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: SizedBox(
         width: 460,
         height: 480,
@@ -328,7 +327,7 @@ class _ManageGroupsDialogState extends ConsumerState<ManageGroupsDialog> {
           mainAxisSize: MainAxisSize.max,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const DialogTitleBar(title: 'Manage Groups'),
+            const DialogTitleBar(icon: Icons.layers, title: 'Manage Groups'),
             // Content
             Expanded(
               child: groups.isEmpty

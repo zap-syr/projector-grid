@@ -31,13 +31,35 @@ General rules carried over from the review:
 
 ---
 
-## 1. `[ ]` Shared foundation (all dialogs)
+## 1. `[x]` Shared foundation (all dialogs)
+
+Done 2026-10-15. What landed, for the later steps to build on:
+- `DialogTitleBar(icon:, title:, projectorId:, subtitle:, badges:)`; `projectorLabel(model, ip)`
+  in the same file. Brightness, Color and Geometry already pass `projectorId`; Edge Blending
+  and Remote Preview keep their old titles until §7a / §7b.
+- Theme (`app_theme.dart`): `AppStatusColors.of(context)` (success, warning, onWarning,
+  mutedMinus, mutedPlus, tooltip surface, keyCap, containers), `AppTheme.mono(style)` /
+  `AppTheme.monoStyle`, dialog radius 20 in `DialogThemeData`, `TooltipThemeData` in the
+  `CustomTooltip` look.
+- `common/`: `confirm_dialog.dart` (`ConfirmDialog`, `confirmDestructive`), `status_pill.dart`
+  (`StatusPill`, `GroupPill`, `ConnectionStatusBadge`), `segmented_tabs.dart`, `mode_tile.dart`
+  (`ModeTileRow`, `ModeTile`), `dashed_border.dart`, `scroll_fade.dart`, `skeleton.dart`
+  (`Skeleton`, `SkeletonPulse`), `slider_tracks.dart` (`AppSliderTrackShape`: centre zero,
+  hatched limit), `step_buttons.dart` (`StepButton.minus/plus`), `debouncer.dart`,
+  `key_caps.dart` (`KeyCap`, `KeyCaps`), `ip_chips.dart`; `domain/ip_ranges.dart`
+  (`collapseIpRanges`, `IpRun.label(short:)`).
+- `CustomTooltip(message:, detail:, shortcut:, warning:, placement:)` with the arrow
+  (§7g done); `TooltipBubble` is public for other overlays.
+- Not in the foundation (they belong to one step only): `GroupColorPalette` (§3),
+  `ProjectorInfoCard` (§2.6), `TargetChip` (§4).
 
 ### 1.1 Title bar with an icon
 `DialogTitleBar` (`presentation/widgets/dialog_title_bar.dart`) is used by every dialog, so
 changing it changes them all.
 
-- New required parameter `icon` (`IconData`). Layout, left to right: **icon tile** 30×30,
+- New required parameter `icon` (`IconData`): stock `Icons.*` only. Where the mockup drew
+  its own glyph (projector, trapezoid, two overlapping frames) the closest Material icon in
+  the table below is used instead (owner, 2026-10-15). Layout, left to right: **icon tile** 30×30,
   radius 8, `primaryContainer` fill, icon 18 px in `onPrimaryContainer`; gap 12; title
   (`titleMedium`, weight 500); close button 40×40, circular, `onSurfaceVariant`.
 - Background stays `surfaceContainerHigh`, divider below stays. Padding `10, 8, 10, 20`
@@ -52,12 +74,12 @@ keep one icon per dialog family):
 
 | Dialog | File | Icon |
 |---|---|---|
-| Add Projectors | `add_projector_dialog.dart` | `videocam` / projector glyph (as in the mockup) |
+| Add Projectors | `add_projector_dialog.dart` | `videocam` |
 | Edit Projector | `edit_projector_dialog.dart` | `edit` |
 | Manage Groups, New Group | `manage_groups_dialog.dart` | `layers` |
 | Scheduled Tasks | `scheduled_tasks_dialog.dart` | `schedule` |
 | Custom Command | `custom_command_dialog.dart` | `code` |
-| Geometry Correction | `geometry_correction_dialog.dart` | `crop_free` (mockup: trapezoid with corner dots) |
+| Geometry Correction | `geometry_correction_dialog.dart` | `crop_free` |
 | Color Correction | `color_correction_dialog.dart` | `palette` |
 | Brightness Control | `brightness_control_dialog.dart` | `brightness_6` |
 | Edge Blending | `edge_blending/edge_blending_dialog.dart` | `gradient` |
@@ -69,7 +91,11 @@ keep one icon per dialog family):
 **Projector in the title bar** (owner, 2026-10-14). Per-projector dialogs drop the IP from the
 title (`Geometry Correction - 192.168.0.11` today, in `brightness_control_dialog.dart`,
 `color_correction_dialog.dart`, `geometry_correction_dialog.dart`) and pass an optional
-`projector` (`ProjectorNode`) instead. The bar then shows:
+projector id instead. The status must stay **live** while the dialog is open (a projector can
+go offline meanwhile), so the bar does not take a `ProjectorNode` snapshot: a small
+`Consumer` inside it watches `workspaceProvider.select(...)` for that node's model, IP,
+group and connection status only, so a polling tick doesn't rebuild the bar. The bar then
+shows:
 - under the title, model + IP in monospace 12 px, `onSurfaceVariant`: `RZ34K (192.168.0.41)`;
 - right of the title, before ✕: the **group pill** (dot + name, only when the projector is in
   a group) and the **status badge** (Online / Offline / Wrong login, as in §2.5).
@@ -98,7 +124,7 @@ approved *Groups: delete confirm* board:
   (neutral variant, primary icon).
 - No title bar and no ✕ on confirmations: they are short and answered with the buttons / Esc.
 
-### 1.3 Shared pieces built for the three dialogs
+### 1.3 Shared pieces
 Under `presentation/widgets/common/`, reused across the dialogs below:
 - `SegmentedTabs` — the pill tab strip (Address / IP range / Discover; Color Matching /
   Color Temperature and Edge Blending / Black Level with a state pill per tab).
@@ -109,6 +135,42 @@ Under `presentation/widgets/common/`, reused across the dialogs below:
   one chip (`192.168.0.10 to .49`), used by the IP range skip list and the New Group "joins"
   box.
 - `StatusPill`, `TargetChip` (group dot + name, or stacked dots + "N groups").
+- `ModeTile` / `ModeTileRow` — icon + label (+ optional muted line) tiles, one height per
+  dialog: Brightness (60), Color Temperature (44), Geometry (46), Edge Blending (54).
+- Drawing helpers with no package: `DashedBorder` (a `CustomPainter` over `PathMetric`;
+  dashed New task card, empty favourite slot, mouse-action pills, offline compact tiles, the
+  Edge Blending "No reply" placeholder), `ScrollFade` (`ShaderMask` driven by the scroll
+  position), `Skeleton` blocks, and slider track shapes for the centre zero fill and the
+  hatched part above a limit.
+
+### 1.4 Adaptive layout (all dialogs)
+Every dialog adapts to the app window, down to the smallest window the app allows (800×600,
+`main.dart`); there is no separate "compact mode" (owner, 2026-10-15). Sizes in this plan
+(560×594, 960×800, …) are the **maximum**, not a fixed size:
+- `ConstrainedBox(maxWidth, maxHeight)` instead of a fixed `SizedBox`; with the `Dialog`
+  insets the smallest window leaves about 720×550 for a dialog.
+- The body scrolls when it doesn't fit (scrollbar, fade at the bottom); the title bar and
+  the footer stay in place.
+- Where a row can't shrink, a `LayoutBuilder` adapts it: mode tiles take shorter labels
+  (full name in the tooltip), two-column grids drop to one column, a canvas card shrinks.
+- Canvases (Geometry Correction §7.5, Edge Blending §7a) scale to the space they get. Drag,
+  hit testing and arrow keys work in canvas coordinates through that scale, and handles keep
+  their size on screen so they stay easy to grab. Test dragging at a scale below 1.
+- GUI check of every dialog at 800×600 as well as at a large window.
+
+### 1.5 Colours and type in the theme
+- M3 `ColorScheme` has no success / warning roles, yet this plan uses green, amber and the
+  muted red / green of the − / + buttons everywhere. They go into one
+  `ThemeExtension` (`AppStatusColors`: success, warning, onWarning, mutedMinus,
+  mutedPlus, …) with light and dark values in `app_theme.dart`. The hex values quoted in
+  this plan (tooltip §7g, Monitoring palette §7i, card §7j) are the targets for the theme
+  and its extension, not literals in widgets.
+- One monospace text style for IPs, ports, commands and OSC addresses. Today widgets use
+  `fontFamily: 'monospace'`, which on Windows falls back to Courier New: use
+  `fontFamilyFallback: ['Cascadia Mono', 'Consolas', 'SF Mono', 'Menlo']` with
+  `FontFeature.tabularFigures()`.
+- No new packages anywhere in this plan: everything is stock Flutter plus `flutter_svg`,
+  `crypto` and `package_info_plus`, which the app already has.
 
 ---
 
@@ -160,6 +222,10 @@ has to turn anything on. The fields are always visible and optional:
   (green), **No login** (non-protected projector, blue, open lock), **Wrong login** (amber,
   closed lock), **In project** (grey, row disabled and unchecked).
 - Footer message "5 of 5 new selected".
+- The scan already reports `online` / `unprotected` / `auth_error` per address
+  (`PanasonicProtocolService.scanNetwork`), so the badges need no protocol change. The tab
+  creates its own `PanasonicProtocolService()` today; it moves to `protocolServiceProvider`
+  so widget tests can use `FakeProtocolService`.
 
 ### 2.6 Edit Projector
 Boards: *Edit Projector*, *Edit Projector: wrong login*. Approved 2026-10-13. Same look as
@@ -248,6 +314,12 @@ new group from context menu, 60 projectors*.
 
 Rows that don't apply are left out.
 
+Today `deleteGroup` leaves the tasks that target the group alone (they keep running and
+match no projector; the current confirm only warns). Groups (step 2) lands before the
+`targetGroupIds` change (§4.5, step 15), so step 2 already pauses those tasks with today's
+single field: `targetGroupId` cleared, switch off, target chip "No target". Step 15 then
+generalises it to "remove the id, pause only when no group is left".
+
 ---
 
 ## 4. `[ ]` Scheduled Tasks
@@ -260,6 +332,9 @@ Today the list and the editor are two dialogs (`ScheduledTasksDialog` opens
 `_ScheduledTaskEditorDialog`). They become **one**: list on the left (330 px), editor on the
 right. Selecting a card loads it into the editor; *New task* adds a dashed **New** card at
 the top of the list and an empty editor.
+- Unsaved edits when another card is selected, *New task* is pressed or the dialog is
+  closed: a `ConfirmDialog` "Discard changes to "<task>"?" with *Keep editing* /
+  *Discard* (owner, 2026-10-15).
 
 ### 4.2 Task list
 - Header: "14 tasks, 12 active" and a tonal *New task* (disabled while a new task is open).
@@ -269,13 +344,14 @@ the top of the list and an empty editor.
 - **Target chip**: All projectors; one group → dot + name; **two or more groups → up to five
   stacked dots + "N groups"**, the names in a tooltip. Same width whether 2 or 30 groups.
 - The list **scrolls**: scrollbar, fade at the bottom (and top when scrolled).
-- Two sections under the active tasks, each a collapsible header row with its count and
+- Sections under the active tasks, each a collapsible header row with its count and
   *Clear* when expanded (owner, 2026-10-13):
-  - **Missed N** — one row per missed run (§4.8): muted card, no switch, amber line
-    "⚠ Missed Tue 13 Oct, 08:00". For a recurring task the task itself stays in the active
-    list; the Missed row is only the record of that run. Selecting the row opens the task.
   - **Completed N** — one-time tasks that ran: muted card, no switch, green line
     "✓ Ran Sat 10 Oct, 18:00".
+  - `[later]` **Missed N**, with §4.8 — one row per missed run: muted card, no switch, amber
+    line "⚠ Missed Tue 13 Oct, 08:00". For a recurring task the task itself stays in the
+    active list; the Missed row is only the record of that run. Selecting the row opens the
+    task.
 - Footnote at the bottom: "Runs only while the app is open".
 
 ### 4.3 Editor
@@ -289,7 +365,9 @@ the top of the list and an empty editor.
 ### 4.4 Command picker
 The dropdown is replaced:
 - **Closed field**: category icon tile + command name, chevron. No code.
-- Click opens a **panel** under the field, full editor width:
+- Click opens a **panel** under the field, full editor width. It expands inside the editor
+  (`AnimatedSize`, the editor body scrolls), not as an overlay, so focus and placement
+  inside the dialog need no extra handling:
   - search field on top ("Search commands, e.g. hdmi, shutter"), focused on open;
   - **category rail** on the left with counts: All, Power, Shutter, Input, Custom (and *Cue*
     once F3 lands);
@@ -309,9 +387,17 @@ The dropdown is replaced:
   18 projectors").
 - Under them the project's groups as **toggle chips** (dot + name), any number selected.
 - **Model change:** `ScheduledTask.targetGroupId` (`String?`) → `targetGroupIds`
-  (`List<String>`). Project files: read the old single field as a one-item list; write the
-  new field only. Tasks are saved in the project file (`project_provider.dart`), so bump its
-  format version.
+  (`List<String>`): one field in the Freezed model, then `build_runner`. Tasks are saved in
+  the project file by hand-written JSON (`_scheduledTaskFromJson` / `_scheduledTaskToJson`
+  in `project_provider.dart`):
+  - read `targetGroupIds`; a file that has only the old `targetGroupId` gives a one-item
+    list;
+  - write `targetGroupIds` **and** the old `targetGroupId` (the first id), so a file saved
+    by this version and opened in an older app still keeps one target group.
+  - No format version bump: the file's `'version': 2` is written but never read, so
+    raising it would change nothing (2026-10-15).
+- The other uses of the field (the scheduler's target resolution, group delete, the task
+  diff in `project_provider.dart`, the dialog) move to the list.
 - Deleting a group removes its id from every task. A task left with no groups is **paused**
   (switch off; card target chip "No target") — decided 2026-10-13. The delete confirm (§3.5)
   says so: "**Shutter close, 22:30** is paused".
@@ -329,7 +415,12 @@ The dropdown is replaced:
   *Delete* / *Duplicate* / *Schedule again* (enabled once the date is in the future).
 - *Clear* removes all completed tasks (confirm with `ConfirmDialog`).
 
-### 4.8 Missed runs (behaviour change, decided 2026-10-13)
+### 4.8 `[later]` Missed runs (behaviour change, decided 2026-10-13)
+**Deferred** (owner, 2026-10-15): the Scheduled Tasks redesign ships without it, and the
+scheduler keeps today's behaviour until this step is taken up. What waits with it: the
+Missed section (§4.2), the amber "Missed" pill in the editor (below), the amber Scheduled
+tasks badge in the toolbar (§7f.3) and the missed-run tests (§9).
+
 The scheduler only runs while the app is open (one tick per minute,
 `scheduled_tasks_provider.dart`). A run is **missed** when its time passes while the app is
 closed, the computer is off or asleep, or the tick is late. **Missed runs are never executed
@@ -473,7 +564,8 @@ White Balance High and Low as two separate cards, and a centred grey line for Of
 
 ### 6.5 Behaviour changes
 - **Reset** per colour: writes the default values of that colour (the current
-  `_values3` / `_values7` initial values) with one `VMR` / `VMG` / `VMB` or `C7CS<n>` write.
+  `_values3` / `_values7` initial values, confirmed as the factory defaults by the owner,
+  2026-10-15) with one `VMR` / `VMG` / `VMB` or `C7CS<n>` write.
 - **Changed** dot and subtitle: computed against the same defaults; only the active method's
   values are read, so only its tiles show dots.
 - **Temperature presets** (§6.4).
@@ -528,9 +620,10 @@ note**, by `quadPixelTierFor(model)`:
   and image**: *Throw ratio* and the *Maintain aspect ratio* switch ("Keep the image
   proportions while it bends").
 
-**Preview in Keystone and Curved:** approved to add. The drawing should follow how VSS
-renders these modes; the owner will work that out later. The unused `_TrapezoidPainter` in
-the dialog is the starting point. Until then the mockup's schematic is the target layout.
+**Preview in Keystone and Curved:** approved to add. The drawing follows how VSS renders
+these modes; the owner provides VSS screenshots of both modes as the reference (2026-10-15).
+The unused `_TrapezoidPainter` in the dialog is the starting point. The mockup's schematic
+is the target layout of the card.
 
 ### 7.5 Corner Correction
 - **Canvas card**: header *Corners*, a pill with the selection (`Upper right`, `2 selected`),
@@ -558,18 +651,16 @@ the dialog is the starting point. Until then the mockup's schematic is the targe
   already switched. The controls appear once the 15 values are read."), skeleton blocks in
   the controls card. Replaces the centred spinner.
 
-### 7.7 Minimum window
-The app's minimum window is 800×600 (`main.dart`); with the `Dialog` insets and the 90 %
-height cap the dialog gets about **720×510**. Below a dialog width of about **880** a compact
-layout is used:
-- Mode tiles 40 px with short labels (*Off*, *Keystone*, *Curved*, *Corner*); the full name
-  in a tooltip.
-- Preview / canvas card 360 px; the canvas scales down, handles drawn larger to stay easy to
-  grab. The keyboard hint moves into a keyboard icon (tooltip) in the canvas header; the
-  legend is one line (*Corner range*).
-- The controls card **scrolls**, with a scrollbar and a fade at the bottom.
-- Corners become a **list of four rows** (corner, changed dot, H, V) instead of the 2×2 grid.
-- Off: no large icon, a shorter line, the three mode cards and the Quad Pixel Drive note.
+### 7.7 Small windows
+No separate compact layout: the dialog adapts like every other (§1.4) (owner, 2026-10-15).
+The minimum-window boards show where it ends up at 800×600, about 720×510 for the dialog:
+- mode tiles with short labels (*Off*, *Keystone*, *Curved*, *Corner*), the full name in a
+  tooltip;
+- the preview / canvas card shrinks and the canvas scales with it; handles keep their screen
+  size; the keyboard hint moves into a keyboard icon (tooltip) in the canvas header and the
+  legend fits one line;
+- the controls card scrolls, with a scrollbar and a fade at the bottom;
+- the corner tiles go from the 2×2 grid to one column when the card is too narrow for two.
 
 ### 7.8 Behaviour changes
 - **Numeric H / V per corner**: typing commits on Enter or focus loss, clamps to the corner's
@@ -579,8 +670,8 @@ layout is used:
   `GMCI3`, `GMCI6`, `GMCI7`, `GMCS8`, `GMCS9`. Throw ratio and Maintain aspect ratio are kept.
   **Reset all** in Corner stays as today (the eight `GMFI` corner values).
 - **Quad Pixel Drive note** by tier (§7.2).
-- **Preview** in Keystone and Curved (§7.4, after the VSS study).
-- **Loading** layout (§7.6) and the compact layout (§7.7).
+- **Preview** in Keystone and Curved (§7.4, from the owner's VSS screenshots).
+- **Loading** layout (§7.6) and the adaptive layout (§7.7, §1.4).
 
 ---
 
@@ -596,7 +687,7 @@ names), with a `SegmentedButton` Off / On / User, an underlined `TabBar`,
 above the edge cards, and in a pair the panel header "Switch on the canvas".
 
 ### 7a.1 Frame
-- Dialog **960×800**, title bar icon `gradient` (mockup: two overlapping frames), title
+- Dialog **960×800**, title bar icon `gradient`, title
   **Edge Blending**, projector in the title bar (§1.1). A pair shows both:
   `Pair: RQ25K (192.168.0.41), RQ25K (192.168.0.42)`; the group pill when both are in the
   same group; the status badge reads *Online* while both reply, amber *B not replying*
@@ -610,9 +701,11 @@ above the edge cards, and in a pair the panel header "Switch on the canvas".
   info line "Changes are sent to the projector right away", no button.
 - **Canvas card header**: left side empty for one projector; in a pair the arrangement
   segmented *Side by side / Stacked* and the swap button. Right side, **in the same place in
-  both**: icon toggles **Markers** (a custom icon: image frame with two dashed vertical
-  lines, the Start and zone end lines the markers draw; `CustomPaint`, no Material icon fits)
-  and **Auto test pattern** (frame with a grid), then *Reset all* as an icon button. The
+  both**: icon toggles **Markers** (`Icons.width_normal`: a frame with two vertical lines,
+  like the Start and zone end lines the markers draw) and **Auto test pattern**
+  (`Icons.grid_on`), both stock icons in an `IconButton` with `isSelected` (owner,
+  2026-10-15; today they are two labelled switches in the panel), then *Reset all* as an
+  icon button (`Icons.restart_alt`, as today). The
   toggles' names are in their tooltips; in a pair the tooltip adds "on both projectors". The
   `EATI1` ER401 warning moves from the label onto the Auto test pattern toggle's tooltip.
 
@@ -718,7 +811,9 @@ captions `name · group` and the IP, and a bare *Pre-show mode* row with a switc
   `TEST PATTERN` or `ASPECT DIFFERS` (Pre-show wins the slot); bottom right the signal, with
   the separators of the UI text rule: `HDMI1: 3840x2160/60p (134.99 kHz, 59.99 Hz)`
   (today `HDMI1 · 3840x2160/60p (134.99kHz/59.99Hz)`). `previewSignalTag` is shared with the
-  Web API preview stream, so the web page's tag changes with it.
+  Web API preview stream, so the web page's tag changes with it: in the same commit run
+  `flutter test --update-goldens test/unit/web_api_dto_test.dart` and update any tag in
+  `web_ui/mocks/`.
 - Notices centred as today (*No signal*, *HDCP-protected content*, *Starting up*, *Image
   rotating*); connecting: a small spinner.
 - **Not available**: monitor-off icon, "Preview not available", one line "The projector's
@@ -768,7 +863,8 @@ fields (label inside), a one-line OSC preview (`/pgrid/all/custom/<slug>`) and *
   NTCONTROL form". Placeholder `OSH:1` (a known-good command; the mockup's `VXX:DYNI0=+00001`
   was only an illustration).
 - **OSC addresses** card, always shown at its full height so nothing moves while typing:
-  header with the OSC icon and "Follow the name" on the right, two rows, label above a
+  header with the OSC icon (`Icons.sensors`, as the OSC page in Preferences) and "Follow the
+  name" on the right, two rows, label above a
   monospace address:
   - *All projectors*: `/pgrid/all/custom/<slug>`;
   - *One group*: `/pgrid/group/{group-name}/custom/<slug>`, `{group-name}` in primary (the
@@ -832,7 +928,9 @@ and a licenses button). Today (`about_dialog.dart`) it is 360 wide: name, `Versi
 one-line description, "Author", `© 2025-2026` and *View Licenses*.
 
 - Dialog **480×615**, title bar icon `info`, everything centred.
-- **Header**: the app icon (the launcher icon artwork, 80 px, radius 18, soft shadow),
+- **Header**: the app icon (the launcher icon artwork, 80 px, radius 18, soft shadow; the
+  artwork is not in the app bundle today, only `flutter_launcher_icons` reads it, so add a
+  160 px copy under `assets:` in `pubspec.yaml`),
   **Projector Grid** (22 px, bold), a pill `Version 1.4.2 (build 11)` (`PackageInfo`
   version and build number), and under it **Made by Aleksei Vlasov** (15.5 px, name bold).
   No description text (owner, 2026-10-14).
@@ -891,14 +989,15 @@ cut off, and the scroll doesn't show that more is there.
   appearing or disappearing, never moves anything (owner's concern, 2026-10-14).
 - Fixed size: at least 17 px, tabular figures, `9+` above 9, a 2 px ring in the toolbar's
   colour to cut it out of the icon. Zero shows no badge.
-- State is shown by **colour, not text**: missed runs (§4.8) turn the Scheduled tasks
-  badge amber with the same number; the tooltip says "12 active, 1 missed run".
+- State is shown by **colour, not text**: `[later]` with §4.8, missed runs turn the
+  Scheduled tasks badge amber with the same number; the tooltip says "12 active, 1 missed
+  run".
 - The counts come from `select`-ed providers (group count, active / missed task counts),
   so the toolbar doesn't rebuild on every polling tick.
 
 ---
 
-## 7g. `[ ]` Tooltip
+## 7g. `[x]` Tooltip
 
 Board (dark only): *Tooltip: variants*. Approved 2026-10-14. Today `CustomTooltip`
 (`custom_tooltip.dart`) is an `inverseSurface` box, radius 4, padding 8×5, 12 px text,
@@ -919,7 +1018,15 @@ extra lines in italic.
 - Placement stays as today (above by default, below with `TooltipPlacement.bottom`,
   clamped to the window); the arrow follows the side. Still ignores the pointer.
 - API: `CustomTooltip(message:, detail:, shortcut:, warning:)`; the `\n`-split italic
-  lines go. One change in one widget restyles every tooltip in the app.
+  lines go. One change in one widget restyles every `CustomTooltip` (12 uses).
+- Six Material `Tooltip`s are left in the app (one is the group chip on the card, which
+  §7j.3 removes). Move the rest to `CustomTooltip`, or where that doesn't fit give
+  `TooltipThemeData` the same surface, border and text (no arrow), so no old-style tooltip
+  is left.
+- The arrow: when the bubble is clamped to the window edge the arrow is no longer at its
+  centre, so the layout places bubble and arrow as two children of one
+  `CustomMultiChildLayout` (the current `CustomSingleChildLayout` can't hand the clamped
+  offset to its child).
 
 ---
 
@@ -953,7 +1060,8 @@ four favourite slots and a dropdown with *Set*.
     labelled pill, so the header stays short (owner, 2026-10-14).
   - The cross keeps today's 12 buttons and speeds (owner: no speed selector): per
     direction three round 34 px buttons, slow / normal / fast from the centre outwards,
-    drawn with one, two and three chevrons; the centre is empty. 5 px between rows, 6 px
+    drawn with one, two and three chevrons (the existing `assets/icons/lens_shift/*_slow`,
+    `_normal`, `_fast` SVGs, no new artwork); the centre is empty. 5 px between rows, 6 px
     above the cross and 16 px below it.
   - **Focus** and **Zoom** rows, 54 px each: label, three buttons towards near / out, a
     gap, three towards far / in, the same chevron icons.
@@ -1052,18 +1160,21 @@ near-black; secondary text no darker than `#80838D`. The same applies to the too
 
 ### 7i.5 New data and open points
 - "Last seen" for offline projectors and "since" for warnings and errors: not stored
-  today, needed for the offline rows and the panel.
+  today, needed for the offline rows and the panel. They are telemetry, so they join the
+  fields `_stripTransient` / `_mergeWithTelemetry` handle (an undo must not roll them back).
 - Temperature thresholds on the bars come from the alert rules (`AlertRule`).
-- Open: *No signal* is red everywhere, also on projectors in Standby, where no signal is
-  expected; proposed to show it grey while the projector isn't on.
+- *No signal* is red only while the projector is on; in Standby, warming up, cooling or
+  offline it is grey, since no signal is expected then (owner, 2026-10-15). Same rule for
+  the signal pill in the table, the cards, the panel and the quick status popover (§7j.6).
 
 ---
 
 ## 7j. `[ ]` Projector card (Controls canvas)
 
 Boards (dark only): *Projector card: states, group bands C and D / canvas, group C band
-inside / canvas, group D band under / quick status popover / Alignment mode*. Approved
-2026-10-15 with group variant **C**. Today (`projector_card.dart`): a grey status bar with a
+inside / canvas, group D band under / quick status popover / Alignment mode / group
+colors x states (C, E, F) / group C muted band, before and after*. Approved 2026-10-15
+with group variant **C**, muted. Today (`projector_card.dart`): a grey status bar with a
 green / red power icon, a red eye for a closed shutter, the alert badge and a connection
 dot; the name and IP below; a grouped card tinted 15% with the group colour and a 9 px pill
 under the card.
@@ -1099,17 +1210,28 @@ Temperatures, signal details and errors stay in Monitoring (§7i).
   from 2) and the grey open lock for a projector without a password. Power and shutter
   stay on the left, so a new alert never moves them.
 
-### 7j.3 Group: band inside the card (variant C)
-- An **18 px band** at the bottom of the card, filled with the group colour, the group name
-  in 10.5 semibold, black or white by `estimateBrightnessForColor` as today's chip. The
-  body gets shorter by the band; the card keeps its 100 px.
-- The border takes the group colour at 55%. The 15% body tint and the pill under the card
-  go away, so nothing hangs below the card any more.
+### 7j.3 Group: muted band inside the card (variant C)
+- An **18 px band** at the bottom of the card, the group name in 10.5 semibold. The body
+  gets shorter by the band; the card keeps its 100 px.
+- **Muted** (owner, 2026-10-15): the band is the group colour mixed 55% into the card
+  colour (`Color.lerp(cardColor, groupColor, 0.55)`), not the full colour. At full colour a
+  red group on a standby card made the whole card read red, an amber group merged with
+  warming up and a green one with the "on" header.
+- **Text colour** comes from the brightness of the *mixed* colour, not the group colour.
+  With today's palette that is light text (`#F4F5F8`, a faint shadow) on every band; black
+  text on the muted yellow, green and blue bands was unreadable.
+- **No group border**: the card keeps its neutral outline, so a red outline still means
+  offline only. The 15% body tint and the pill under the card go away, so nothing hangs
+  below the card any more.
+- The group palette stays as it is (a reorder that puts red last was drawn and declined).
 - A long name ellipsizes. The full name is in the quick status popover (§7j.6) and the
   context menu; no `Tooltip` inside the card, which sits under `MenuAnchor` (the AXTree
   crash the chip's comment describes).
-- Offline grouped cards dim the band to 55%.
-- Variant D (a 20 px band joined under the card) was drawn for comparison and not taken.
+- Offline grouped cards dim the band to 70%.
+- Drawn for comparison and not taken: D (a band joined under the card), E (today's pill
+  with the 15% body tint: the tint merges with the state header), F (pill only), and a
+  grey band with a colour chip. Board *Projector card: group C muted band, before and
+  after* shows the change.
 
 ### 7j.4 Selection and hover
 - **Selected**: a 2.5 px `#AAC7FF` ring 3 px outside the card with a soft blue glow, and a
@@ -1121,23 +1243,39 @@ Temperatures, signal details and errors stay in Monitoring (§7i).
 
 ### 7j.5 Context menu
 - Header: **model and IP** on one line (`PT-RZ120  10.0.1.52`), nothing else.
-- Sections split by dividers: *Edit*; *Brightness Control, Color Correction, Geometry
+- Sections split by dividers: *Edit*, *Quick status* (`Space`, §7j.6); *Brightness Control, Color Correction, Geometry
   Correction, Edge Blending*; *Remote Preview, Open in Browser*; *Assign to Group ›,
   Select in Group*; *Delete* in red. Surface `#272A30`, radius 12, 32 px rows, as the
   tooltip (§7g).
 
 ### 7j.6 Quick status popover (new)
-- **Opens** after the pointer rests on a card for about half a second, or with Space on
-  the focused card. It sits next to the card with an arrow. Moving onto it keeps it open;
-  leaving, Esc or a drag closes it. Not shown while dragging or in Alignment mode.
-- **Content**: model, IP, group dot + name, "Updated 2 s ago"; **Power** (word + how long),
-  **Shutter**, **Input** with the signal pill as in Monitoring, **Temperature** (intake,
-  exhaust, amber above the alert threshold) and the active alerts. Light source hours are
-  left out, and so is a selection summary in the status bar (both repeat Monitoring, owner
-  2026-10-15).
-- **Actions**: *Show in Monitoring* (switches the view and opens this projector's panel,
-  §7i.4) and *Remote Preview*.
-- New data: "on for 2 h 14 min" needs the time of the last power change; not stored today.
+- **Opens with Space** when exactly one card is selected, **no hover trigger** (owner,
+  2026-10-15). Space again or Esc closes it. With no card or several cards selected Space
+  does nothing. Not in Alignment mode.
+- The binding lives in the canvas `Shortcuts` (`projector_workspace.dart`, Space is free
+  there), so it works only while the canvas has focus and never takes a space from a text
+  field. Focus stays on the canvas while it is open, so the arrows, I / O and the other
+  canvas keys keep working.
+- Esc is already bound to `AlignmentExitIntent` in the same map. Alignment and the popover
+  never overlap, so Esc maps to one intent whose action closes whichever of the two is
+  active.
+- **Closes by itself** when the selection changes, the card is dragged or deleted, the
+  canvas zooms or scrolls, the view switches to Monitoring, or Alignment mode starts.
+- **One popover for the whole canvas**: a single `OverlayPortal` in the workspace, outside
+  the cards, placed next to the selected card with an arrow (zoom taken into account,
+  flipped at the window edge). Its content watches only that node through `select`, so a
+  polling tick doesn't rebuild the canvas. No Material `Tooltip` inside it (`CustomTooltip`
+  only).
+- **Discoverable**: a *Quick status* item with the `Space` key in the card context menu
+  (§7j.5) and a row in Keyboard Shortcuts (§7d).
+- **Content**: model, IP, group dot + name; **Power**, **Shutter**, **Input** with the
+  signal pill as in Monitoring, **Temperature** (intake, exhaust, amber above the alert
+  threshold) and the active alerts. All of it is already in `ProjectorNode` and
+  `alertsProvider`, no new fields. "Updated 2 s ago" and "on for 2 h" from the mockup are
+  left out (owner, 2026-10-15), and so are light source hours and a selection summary in
+  the status bar (both repeat Monitoring, owner 2026-10-15).
+- **Actions**: *Remote Preview*, and *Show in Monitoring* (switches the view and opens this
+  projector's panel) once the Monitoring panel (§7i.4) exists.
 
 ---
 
@@ -1145,8 +1283,10 @@ Temperatures, signal details and errors stay in Monitoring (§7i).
 
 1. **Foundation** (§1): `DialogTitleBar` icon + all dialogs migrated in one go (the change is
    mechanical: one `icon:` argument each), dialog radius in the theme, `ConfirmDialog` and the
-   six confirmations. Visible app-wide, low risk — ship it first. The new tooltip (§7g) goes
-   in the same step: one widget, used everywhere.
+   six confirmations, the theme extension and monospace style (§1.5), the shared pieces
+   (§1.3) and the adaptive-layout rule (§1.4) applied to the dialogs that aren't redesigned
+   later (Preferences). Visible app-wide, low risk — ship it first. The new tooltip (§7g)
+   goes in the same step: one widget, used everywhere.
 2. **Groups** (§3): smallest of the three; brings `GroupColorPalette` and `collapseIpRanges`.
 3. **Add Projectors + Edit Projector** (§2): reuses `collapseIpRanges`; last-used
    credentials setting; the login card is one widget shared by both dialogs.
@@ -1155,7 +1295,8 @@ Temperatures, signal details and errors stay in Monitoring (§7i).
 5. **Color Correction** (§6): one file; reuses `SegmentedTabs` and the debounce from
    Brightness Control.
 6. **Geometry Correction** (§7): one file; mode tiles, grouped sliders, corner steppers,
-   compact layout. The Keystone / Curved preview can follow separately after the VSS study.
+   adaptive layout (§1.4). The Keystone / Curved preview can follow separately once the
+   owner's VSS screenshots are in.
 7. **Edge Blending** (§7a): the `edge_blending/` widgets; reuses the Geometry frame (mode
    tiles, canvas card + controls card). The canvas painter keeps its logic and gets the new
    colours, legend and placeholders.
@@ -1164,17 +1305,20 @@ Temperatures, signal details and errors stay in Monitoring (§7i).
 9. **Custom Command** (§7c): one file, small; can ride along with the foundation step.
 10. **Keyboard Shortcuts and About** (§7d, §7e): two small files; the shortcut search
     filter goes to `domain/`.
-11. **Main toolbar** (§7f): `toolbar.dart`; the missed-run badge colour waits for §4.8.
+11. **Main toolbar** (§7f): `toolbar.dart`; the missed-run badge colour waits for §4.8
+    (deferred).
 12. **Control bar** (§7h): `control_bar.dart`; split into one widget per card while at it
     (the file is ~1300 lines).
 13. **Projector card** (§7j): `projector_card.dart` and `alert_badge.dart`; state colours,
     the group band and the selection ring first, then the context menu, then the quick
-    status popover (it links to the Monitoring panel, so it lands with or after step 14).
+    status popover; its *Show in Monitoring* action is added with the Monitoring panel in
+    step 14.
 14. **Monitoring view** (§7i): table restyle and grouping first (it builds on
     `monitoring_table.dart` and `MONITORING_UI_PLAN.md`), then Cards (compact / extended)
     and the projector panel, then filter / search / export.
-15. **Scheduled Tasks** (§4): largest; model change (`targetGroupIds`), missed runs and their
-   state file, one dialog instead of two, command picker.
+15. **Scheduled Tasks** (§4): largest; model change (`targetGroupIds`), one dialog instead
+   of two, command picker. Missed runs and their state file (§4.8) are deferred to a later
+   step of their own.
 
 Each step: behaviour change only where this plan says so; `flutter analyze`, `dart format`,
 tests below, then a GUI check in both themes (`flutter-windows-gui-check`).
@@ -1184,11 +1328,13 @@ tests below, then a GUI check in both themes (`flutter-windows-gui-check`).
 ## 9. Tests
 
 - **Unit** (`test/unit/`): `collapseIpRanges`; first unused group colour; target chip label
-  ("Main stage" / "N groups"); command picker search; `isTaskDue` with the 2-minute grace;
-  `missedOccurrences` (daily / weekly / once, gaps over midnight and weekday boundaries, no
-  state file); project-file migration `targetGroupId` → `targetGroupIds`.
-- **Provider** (`fake_async`): app "closed" over a run → missed record, no command sent;
-  a late one-time task is not executed.
+  ("Main stage" / "N groups"); command picker search; project-file migration
+  `targetGroupId` → `targetGroupIds` (old file read as a one-item list, both fields
+  written).
+- `[later]` with §4.8: unit `isTaskDue` with the 2-minute grace and `missedOccurrences`
+  (daily / weekly / once, gaps over midnight and weekday boundaries, no state file);
+  provider (`fake_async`) app "closed" over a run → missed record, no command sent, a late
+  one-time task is not executed.
 - **Provider**: deleting a group strips it from tasks; last-used credentials saved after an
   add.
 - **Widget**: `DialogTitleBar` renders icon + title + close; `ConfirmDialog` returns
@@ -1201,7 +1347,9 @@ tests below, then a GUI check in both themes (`flutter-windows-gui-check`).
   matching is on, a preset chip sends one `OTE`; Geometry Correction: the Quad Pixel Drive
   note per tier (A full, B short, none hidden), a corner H stepper sends that corner's `GMFI`
   pair clamped to the tier limit, Reset in Keystone sends the four zeros and keeps `GMKS0`,
-  the Linearity / Pincushion rows are disabled in Auto, the compact layout below ~880 px;
+  the Linearity / Pincushion rows are disabled in Auto, a corner drag lands on the right
+  value with the canvas scaled below 1 (§1.4); every redesigned dialog lays out without
+  overflow in an 800×600 window;
   Edge Blending: a disabled edge's card collapses and its border width field is disabled,
   the A / B segmented switches the active projector, the Markers toggle writes both in a
   pair and only the replying one when the other is silent, the Off note is shown;
@@ -1221,12 +1369,14 @@ tests below, then a GUI check in both themes (`flutter-windows-gui-check`).
   table without changing column widths, Compact / Extended switch, offline rows dimmed;
   projector card: header tint and icon colours per power / shutter state, the red
   outline only when offline, *Login failed* for an `unauthorized` node, the group band
-  with the group name and none for an ungrouped card, the selection ring, an alert
+  with the group name and none for an ungrouped card, the band colour is the 55% mix and
+  its text colour follows the mixed colour, no group border, the selection ring, an alert
   appearing doesn't move the power icon (same `Offset`), the context menu header shows
-  model + IP, the quick status popover opens on hover delay and Space and not while
-  dragging;
-  `DialogTitleBar` with a `projector` shows model + IP, the group pill only for a grouped
-  projector, and the status badge.
+  model + IP, the quick status popover opens with Space for one selected card only, closes
+  on Space / Esc / a selection change / a drag, and doesn't open in Alignment mode;
+  `DialogTitleBar` with a projector id shows model + IP, the group pill only for a grouped
+  projector, and the status badge, and the badge follows the node going offline while the
+  dialog is open.
 
 ---
 
@@ -1235,16 +1385,22 @@ tests below, then a GUI check in both themes (`flutter-windows-gui-check`).
 - ~~A scheduled task whose target groups were all deleted~~ — decided 2026-10-13: paused
   (§4.5).
 - Icons in §1.1 are proposals; confirm during the GUI check.
-- Color Matching defaults (§6.5): the `_values3` / `_values7` initial values are assumed to
-  be the factory defaults. Check on a projector before Reset and the Changed dot rely on
-  them.
-- Geometry preview in Keystone / Curved (§7.4): how VSS draws these modes, to be studied by
-  the owner before the painter is finished.
+- ~~Scheduled Tasks master-detail, unsaved edits (§4.1)~~ — decided 2026-10-15: a
+  `ConfirmDialog` "Discard changes?".
+- ~~Monitoring, No signal colour (§7i.5)~~ — decided 2026-10-15: grey while the projector
+  isn't on.
+- ~~Color Matching defaults (§6.5)~~ — decided 2026-10-15: the `_values3` / `_values7`
+  initial values are the factory defaults.
+- ~~Geometry preview in Keystone / Curved (§7.4)~~ — decided 2026-10-15: drawn from VSS
+  screenshots the owner provides.
+- ~~Compact Geometry layout (§7.7)~~ — decided 2026-10-15: no separate mode, every dialog
+  adapts to the window down to 800×600 (§1.4).
+- ~~Missed runs, when~~ — decided 2026-10-15: deferred (§4.8).
 - ~~Edit Projector: card or title bar~~ — decided 2026-10-14: it keeps its projector card
   (§2.6), since it shows the address being edited.
 - ~~Missed runs~~ — decided 2026-10-13: never run late, one-time and recurring alike; shown
   in their own Missed list (§4.8).
-- ~~Projector card group marker~~ — decided 2026-10-15: band inside the card (§7j.3,
+- ~~Projector card group marker~~ — decided 2026-10-15: muted band inside the card (§7j.3,
   variant C).
-- Quick status popover (§7j.6): the hover delay (about 500 ms) and Space as the key, to
-  confirm in the GUI check.
+- ~~Quick status popover trigger (§7j.6)~~ — decided 2026-10-15: Space for one selected
+  card, no hover, no new model fields.

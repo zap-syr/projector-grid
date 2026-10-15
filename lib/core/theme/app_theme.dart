@@ -1,6 +1,138 @@
 import 'package:flutter/material.dart';
 
+/// Status colours M3's [ColorScheme] has no roles for: success green, warning
+/// amber, the muted red / green of the − / + step buttons, and the raised
+/// tooltip surface. Read with `AppStatusColors.of(context)`.
+@immutable
+class AppStatusColors extends ThemeExtension<AppStatusColors> {
+  const AppStatusColors({
+    required this.success,
+    required this.successContainer,
+    required this.warning,
+    required this.warningContainer,
+    required this.onWarning,
+    required this.mutedMinus,
+    required this.mutedPlus,
+    required this.tooltipBackground,
+    required this.tooltipBorder,
+    required this.keyCap,
+  });
+
+  final Color success;
+  final Color successContainer;
+  final Color warning;
+  final Color warningContainer;
+
+  /// Text and icons on a solid [warning] fill.
+  final Color onWarning;
+  final Color mutedMinus;
+  final Color mutedPlus;
+  final Color tooltipBackground;
+  final Color tooltipBorder;
+
+  /// Fill of a key cap (Keyboard Shortcuts, tooltip shortcuts).
+  final Color keyCap;
+
+  static const light = AppStatusColors(
+    success: Color(0xFF1E7B3A),
+    successContainer: Color(0xFFD5EEDB),
+    warning: Color(0xFF8A5300),
+    warningContainer: Color(0xFFFBE7C6),
+    onWarning: Color(0xFFFFFFFF),
+    mutedMinus: Color(0xFFB0504A),
+    mutedPlus: Color(0xFF3C8A52),
+    tooltipBackground: Color(0xFFFFFFFF),
+    tooltipBorder: Color(0xFFD6D5DA),
+    keyCap: Color(0xFFF0EFF3),
+  );
+
+  static const dark = AppStatusColors(
+    success: Color(0xFF6DD58C),
+    successContainer: Color(0xFF1E3A27),
+    warning: Color(0xFFF5B544),
+    warningContainer: Color(0xFF3D2E12),
+    onWarning: Color(0xFF2A1A00),
+    mutedMinus: Color(0xFFE09A94),
+    mutedPlus: Color(0xFF8CCB9C),
+    tooltipBackground: Color(0xFF2E3238),
+    tooltipBorder: Color(0xFF42464E),
+    keyCap: Color(0xFF3A3F47),
+  );
+
+  static AppStatusColors of(BuildContext context) =>
+      Theme.of(context).extension<AppStatusColors>()!;
+
+  @override
+  AppStatusColors copyWith({
+    Color? success,
+    Color? successContainer,
+    Color? warning,
+    Color? warningContainer,
+    Color? onWarning,
+    Color? mutedMinus,
+    Color? mutedPlus,
+    Color? tooltipBackground,
+    Color? tooltipBorder,
+    Color? keyCap,
+  }) => AppStatusColors(
+    success: success ?? this.success,
+    successContainer: successContainer ?? this.successContainer,
+    warning: warning ?? this.warning,
+    warningContainer: warningContainer ?? this.warningContainer,
+    onWarning: onWarning ?? this.onWarning,
+    mutedMinus: mutedMinus ?? this.mutedMinus,
+    mutedPlus: mutedPlus ?? this.mutedPlus,
+    tooltipBackground: tooltipBackground ?? this.tooltipBackground,
+    tooltipBorder: tooltipBorder ?? this.tooltipBorder,
+    keyCap: keyCap ?? this.keyCap,
+  );
+
+  @override
+  AppStatusColors lerp(AppStatusColors? other, double t) {
+    if (other == null) return this;
+    return AppStatusColors(
+      success: Color.lerp(success, other.success, t)!,
+      successContainer: Color.lerp(
+        successContainer,
+        other.successContainer,
+        t,
+      )!,
+      warning: Color.lerp(warning, other.warning, t)!,
+      warningContainer: Color.lerp(
+        warningContainer,
+        other.warningContainer,
+        t,
+      )!,
+      onWarning: Color.lerp(onWarning, other.onWarning, t)!,
+      mutedMinus: Color.lerp(mutedMinus, other.mutedMinus, t)!,
+      mutedPlus: Color.lerp(mutedPlus, other.mutedPlus, t)!,
+      tooltipBackground: Color.lerp(
+        tooltipBackground,
+        other.tooltipBackground,
+        t,
+      )!,
+      tooltipBorder: Color.lerp(tooltipBorder, other.tooltipBorder, t)!,
+      keyCap: Color.lerp(keyCap, other.keyCap, t)!,
+    );
+  }
+}
+
 class AppTheme {
+  /// Radius every dialog shares; set once in [DialogThemeData].
+  static const double dialogRadius = 20;
+
+  /// The one monospace style for IPs, ports, commands and OSC addresses.
+  /// A bare `fontFamily: 'monospace'` falls back to Courier New on Windows.
+  static TextStyle mono([TextStyle? base]) =>
+      (base ?? const TextStyle()).merge(monoStyle);
+
+  /// [mono] as a const, for `static const` styles.
+  static const TextStyle monoStyle = TextStyle(
+    fontFamily: 'Cascadia Mono',
+    fontFamilyFallback: ['Consolas', 'SF Mono', 'Menlo', 'monospace'],
+    fontFeatures: [FontFeature.tabularFigures()],
+  );
+
   /// Alignment mode's accent: orange, opposite the blue selection accent, so
   /// its card rings and banner never blend with selection.
   static Color alignmentAccent(Brightness brightness) =>
@@ -25,6 +157,7 @@ class AppTheme {
 
   static ThemeData _base(Brightness brightness) {
     final isLight = brightness == Brightness.light;
+    final statusColors = isLight ? AppStatusColors.light : AppStatusColors.dark;
 
     var colorScheme = ColorScheme.fromSeed(
       seedColor: const Color(0xFF1A73E8),
@@ -107,6 +240,32 @@ class AppTheme {
       // instead of floating above it.
       dialogTheme: DialogThemeData(
         backgroundColor: colorScheme.surfaceContainerLow,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(dialogRadius),
+        ),
+      ),
+      extensions: [statusColors],
+      // Material tooltips (IconButton.tooltip and the like) take the same
+      // raised surface as CustomTooltip, minus the arrow.
+      tooltipTheme: TooltipThemeData(
+        decoration: BoxDecoration(
+          color: statusColors.tooltipBackground,
+          borderRadius: BorderRadius.circular(9),
+          border: Border.all(color: statusColors.tooltipBorder),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: isLight ? 0.14 : 0.35),
+              blurRadius: isLight ? 14 : 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        textStyle: TextStyle(
+          color: colorScheme.onSurface,
+          fontSize: 12.5,
+          fontWeight: FontWeight.w600,
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
       ),
       // Right-click context menus and DropdownMenu popups both resolve their
       // container style through MenuThemeData.

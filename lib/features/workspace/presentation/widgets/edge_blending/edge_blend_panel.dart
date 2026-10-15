@@ -131,6 +131,7 @@ class _LabeledSwitch extends StatelessWidget {
           const SizedBox(width: 4),
           CustomTooltip(
             message: warning,
+            warning: true,
             child: Icon(
               Icons.info_outline,
               size: 16,

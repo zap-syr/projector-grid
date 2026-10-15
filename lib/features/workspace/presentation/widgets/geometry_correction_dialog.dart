@@ -274,7 +274,9 @@ class _GeometryCorrectionDialogState
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             DialogTitleBar(
-              title: 'Geometry Correction - ${widget.node.ipAddress}',
+              icon: Icons.crop_free,
+              title: 'Geometry Correction',
+              projectorId: widget.node.id,
             ),
 
             if (_loading)

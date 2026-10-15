@@ -118,7 +118,9 @@ class _BrightnessControlDialogState
       clipBehavior: Clip.antiAlias,
       titlePadding: EdgeInsets.zero,
       title: DialogTitleBar(
-        title: 'Brightness Control - ${widget.node.ipAddress}',
+        icon: Icons.brightness_6_outlined,
+        title: 'Brightness Control',
+        projectorId: widget.node.id,
       ),
       content: SizedBox(
         width: 460,
