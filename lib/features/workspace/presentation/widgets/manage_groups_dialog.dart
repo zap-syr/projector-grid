@@ -1,265 +1,20 @@
-import 'dart:math';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/projector_group.dart';
-import '../providers/scheduled_tasks_provider.dart';
 import '../providers/workspace_provider.dart';
-import 'common/confirm_dialog.dart';
+import 'common/scroll_fade.dart';
 import 'dialog_title_bar.dart';
+import 'groups/group_card.dart';
+import 'groups/group_row.dart';
+import 'groups/new_group_card.dart';
 
-/// 8 hues x 3 tones, flattened tone-major (row 0 = lightest tone of every
-/// hue, row 1 = mid, row 2 = deepest) so a `crossAxisCount: 8` grid renders
-/// one hue per column, light-to-dark top to bottom.
-const List<Color> _curatedPalette = [
-  Color(0xFFF87171),
-  Color(0xFFFB923C),
-  Color(0xFFFBBF24),
-  Color(0xFF4ADE80),
-  Color(0xFF2DD4BF),
-  Color(0xFF60A5FA),
-  Color(0xFFA78BFA),
-  Color(0xFFF472B6),
-  Color(0xFFEF4444),
-  Color(0xFFF97316),
-  Color(0xFFF59E0B),
-  Color(0xFF22C55E),
-  Color(0xFF14B8A6),
-  Color(0xFF3B82F6),
-  Color(0xFF8B5CF6),
-  Color(0xFFEC4899),
-  Color(0xFFB91C1C),
-  Color(0xFFC2410C),
-  Color(0xFFB45309),
-  Color(0xFF15803D),
-  Color(0xFF0F766E),
-  Color(0xFF1D4ED8),
-  Color(0xFF6D28D9),
-  Color(0xFFBE185D),
-];
+export 'groups/new_group_dialog.dart' show showNewGroupDialog;
 
-/// The readable text/icon color to paint on top of [background] — mirrors
-/// how the group's card chip picks its own text color (see ProjectorCard).
-Color contrastOn(Color background) {
-  return ThemeData.estimateBrightnessForColor(background) == Brightness.light
-      ? const Color(0xFF15171B)
-      : Colors.white;
-}
-
-/// Shows the New / Edit Group dialog. Returns the created/updated group, or null.
-/// Can be called standalone (from context menu "New Group...") or from ManageGroupsDialog.
-Future<ProjectorGroup?> showGroupEditorDialog(
-  BuildContext context,
-  WidgetRef ref, {
-  ProjectorGroup? existing,
-}) {
-  return showDialog<ProjectorGroup>(
-    context: context,
-    builder: (_) => _GroupEditorDialog(ref: ref, existing: existing),
-  );
-}
-
-// A real State (rather than the StatefulBuilder this used to be built with)
-// so its TextEditingController has a dispose() to actually get called —
-// StatefulBuilder has no lifecycle hook to free one, leaking a controller
-// and its listeners on every New/Edit Group open.
-class _GroupEditorDialog extends StatefulWidget {
-  const _GroupEditorDialog({required this.ref, this.existing});
-
-  final WidgetRef ref;
-  final ProjectorGroup? existing;
-
-  @override
-  State<_GroupEditorDialog> createState() => _GroupEditorDialogState();
-}
-
-/// Soft cap on group names — long names get ellipsized on the ~120px-wide
-/// card chip anyway, and this keeps the generated OSC address reasonable.
-const int _maxGroupNameLength = 24;
-
-class _GroupEditorDialogState extends State<_GroupEditorDialog> {
-  late final _nameController = TextEditingController(
-    text: widget.existing?.name ?? '',
-  );
-  late Color _selectedColor = widget.existing != null
-      ? Color(widget.existing!.color)
-      : _curatedPalette[0];
-  String? _nameError;
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final existing = widget.existing;
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    return Dialog(
-      clipBehavior: Clip.antiAlias,
-      child: SizedBox(
-        width: 380,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            DialogTitleBar(
-              icon: Icons.layers,
-              title: existing != null ? 'Edit Group' : 'New Group',
-            ),
-            // Content
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextField(
-                    controller: _nameController,
-                    maxLength: _maxGroupNameLength,
-                    decoration: InputDecoration(
-                      labelText: 'Group Name',
-                      border: const OutlineInputBorder(),
-                      errorText: _nameError,
-                      labelStyle: TextStyle(
-                        color: cs.onSurfaceVariant.withValues(alpha: 0.5),
-                      ),
-                      floatingLabelStyle: WidgetStateTextStyle.resolveWith((
-                        states,
-                      ) {
-                        if (states.contains(WidgetState.error)) {
-                          return TextStyle(color: cs.error);
-                        }
-                        return TextStyle(color: cs.primary);
-                      }),
-                    ),
-                    autofocus: true,
-                    onChanged: (_) {
-                      if (_nameError != null) {
-                        setState(() => _nameError = null);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  Text('Color', style: theme.textTheme.bodySmall),
-                  const SizedBox(height: 8),
-                  GridView.count(
-                    crossAxisCount: 8,
-                    mainAxisSpacing: 6,
-                    crossAxisSpacing: 6,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    children: _curatedPalette.map((color) {
-                      final isSelected =
-                          color.toARGB32() == _selectedColor.toARGB32();
-                      return GestureDetector(
-                        onTap: () => setState(() => _selectedColor = color),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 120),
-                          decoration: BoxDecoration(
-                            color: color,
-                            borderRadius: BorderRadius.circular(9),
-                            boxShadow: isSelected
-                                ? [
-                                    BoxShadow(
-                                      color: cs.onSurface,
-                                      spreadRadius: 2,
-                                    ),
-                                    BoxShadow(
-                                      color: theme.dialogTheme.backgroundColor!,
-                                      spreadRadius: 1,
-                                    ),
-                                  ]
-                                : null,
-                          ),
-                          child: isSelected
-                              ? Icon(
-                                  Icons.check,
-                                  size: 15,
-                                  color: contrastOn(color),
-                                )
-                              : null,
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('Cancel'),
-                      ),
-                      const SizedBox(width: 12),
-                      FilledButton(
-                        onPressed: () {
-                          final name = _nameController.text.trim();
-                          if (name.isEmpty) {
-                            setState(
-                              () => _nameError = 'Group name is required',
-                            );
-                            return;
-                          }
-
-                          // Check for duplicate name or OSC address collision
-                          final notifier = widget.ref.read(
-                            workspaceProvider.notifier,
-                          );
-                          final existingGroups = notifier.groups;
-                          final oscAddress =
-                              '/group/${name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-')}';
-                          final isDuplicate = existingGroups.any(
-                            (g) =>
-                                g.id != existing?.id &&
-                                (g.name.toLowerCase() == name.toLowerCase() ||
-                                    g.oscAddress == oscAddress),
-                          );
-                          if (isDuplicate) {
-                            setState(
-                              () => _nameError =
-                                  'A group with this name already exists',
-                            );
-                            return;
-                          }
-                          ProjectorGroup result;
-                          if (existing != null) {
-                            result = existing.copyWith(
-                              name: name,
-                              color: _selectedColor.toARGB32(),
-                              oscAddress: oscAddress,
-                            );
-                            notifier.updateGroup(result);
-                          } else {
-                            final id =
-                                '${DateTime.now().microsecondsSinceEpoch}_${Random().nextInt(99999)}';
-                            result = ProjectorGroup(
-                              id: id,
-                              name: name,
-                              color: _selectedColor.toARGB32(),
-                              oscAddress: oscAddress,
-                            );
-                            notifier.addGroup(result);
-                          }
-                          Navigator.pop(context, result);
-                        },
-                        child: Text(existing != null ? 'Save' : 'Create'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
+/// Manage Groups: a summary line with *New group*, the New group form when
+/// open, and one card with a row per group that edits in place.
 class ManageGroupsDialog extends ConsumerStatefulWidget {
   const ManageGroupsDialog({super.key});
 
@@ -267,152 +22,209 @@ class ManageGroupsDialog extends ConsumerStatefulWidget {
   ConsumerState<ManageGroupsDialog> createState() => _ManageGroupsDialogState();
 }
 
-class _ManageGroupsDialogState extends ConsumerState<ManageGroupsDialog> {
-  Future<void> _confirmDeleteGroup(ProjectorGroup group) async {
-    final nodes = ref.read(workspaceProvider);
-    final memberCount = nodes.where((n) => n.groupId == group.id).length;
-    // Deleting a group doesn't touch scheduled tasks that target it — such
-    // a task would keep "running" on schedule but silently match zero
-    // projectors afterward, so warn about that here rather than let it
-    // happen invisibly.
-    final taskCount = ref
-        .read(scheduledTasksProvider)
-        .where((t) => t.targetGroupId == group.id)
-        .length;
+class _ManageGroupsDialogState extends ConsumerState<ManageGroupsDialog>
+    with SingleTickerProviderStateMixin {
+  late final _newForm = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 220),
+  );
+  late final _newFormCurve = CurvedAnimation(
+    parent: _newForm,
+    curve: Curves.easeOut,
+  );
+  final _scroll = ScrollController();
 
-    final confirmed = await confirmDestructive(
-      context,
-      title: 'Delete “${group.name}”?',
-      subtitle: 'The group is removed from this project.',
-      confirmLabel: 'Delete group',
-      changes: [
-        if (memberCount > 0)
-          ConfirmChange(
-            icon: Icons.videocam_outlined,
-            lead: '$memberCount projector${memberCount == 1 ? '' : 's'}',
-            rest: 'stay in the project, ungrouped',
-          ),
-        if (taskCount > 0)
-          ConfirmChange(
-            icon: Icons.schedule,
-            lead: '$taskCount scheduled task${taskCount == 1 ? '' : 's'}',
-            rest: 'target this group and stop doing anything',
-          ),
-        if (group.oscAddress.isNotEmpty)
-          ConfirmChange(
-            icon: Icons.sensors,
-            lead: group.oscAddress,
-            rest: 'no longer answers',
-            monoLead: true,
-          ),
-      ],
-    );
-    if (!confirmed || !mounted) return;
-    ref.read(workspaceProvider.notifier).deleteGroup(group.id);
-    setState(() {});
+  /// The form stays built while it collapses; [_newClosing] keeps it from
+  /// taking a second click meanwhile.
+  bool _newOpen = false;
+  bool _newClosing = false;
+
+  /// A fresh form (empty name, next unused colour) each time it opens.
+  int _newFormGeneration = 0;
+  String? _editingId;
+  String? _highlightId;
+  Timer? _highlightTimer;
+
+  @override
+  void dispose() {
+    _highlightTimer?.cancel();
+    _newFormCurve.dispose();
+    _newForm.dispose();
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _openNewForm() {
+    setState(() {
+      _newOpen = true;
+      _newClosing = false;
+      _newFormGeneration++;
+    });
+    _newForm.forward(from: 0);
+  }
+
+  Future<void> _closeNewForm() async {
+    setState(() => _newClosing = true);
+    await _newForm.reverse();
+    if (!mounted) return;
+    setState(() {
+      _newOpen = false;
+      _newClosing = false;
+    });
+  }
+
+  void _onCreated(ProjectorGroup group) {
+    _highlightTimer?.cancel();
+    setState(() => _highlightId = group.id);
+    _highlightTimer = Timer(const Duration(milliseconds: 900), () {
+      if (mounted) setState(() => _highlightId = null);
+    });
+    _closeNewForm();
+    // New groups go to the end of the list, which may be scrolled away.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scroll.hasClients) return;
+      _scroll.animateTo(
+        _scroll.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+      );
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     final groups = ref.watch(workspaceProvider.notifier).groups;
     final nodes = ref.watch(workspaceProvider);
+    final counts = <String, int>{};
+    for (final n in nodes) {
+      final id = n.groupId;
+      if (id != null) counts[id] = (counts[id] ?? 0) + 1;
+    }
+    final groupIds = {for (final g in groups) g.id};
+    final assigned = nodes.where((n) => groupIds.contains(n.groupId)).length;
+    final summary =
+        '${groups.length} group${groups.length == 1 ? '' : 's'}, '
+        '$assigned of ${nodes.length} '
+        'projector${nodes.length == 1 ? '' : 's'} assigned';
 
     return Dialog(
       clipBehavior: Clip.antiAlias,
-      child: SizedBox(
-        width: 460,
-        height: 480,
-        child: Column(
-          mainAxisSize: MainAxisSize.max,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const DialogTitleBar(icon: Icons.layers, title: 'Manage Groups'),
-            // Content
-            Expanded(
-              child: groups.isEmpty
-                  ? Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560, maxHeight: 640),
+        child: SizedBox.expand(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const DialogTitleBar(icon: Icons.layers, title: 'Manage Groups'),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
+                child: Row(
+                  children: [
+                    Expanded(
                       child: Text(
-                        'No groups created yet',
+                        summary,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurface.withValues(
-                            alpha: 0.5,
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    FilledButton.tonalIcon(
+                      onPressed: _newOpen ? null : _openNewForm,
+                      icon: const Icon(Icons.add, size: 18),
+                      label: const Text('New group'),
+                    ),
+                  ],
+                ),
+              ),
+              // Above the scrolling list so the form can't scroll away.
+              if (_newOpen)
+                FadeTransition(
+                  opacity: _newFormCurve,
+                  child: SizeTransition(
+                    sizeFactor: _newFormCurve,
+                    alignment: Alignment.topCenter,
+                    child: IgnorePointer(
+                      ignoring: _newClosing,
+                      child: Padding(
+                        // Room for the form's focus ring on every side.
+                        padding: const EdgeInsets.fromLTRB(24, 3, 24, 12),
+                        child: NewGroupCard(
+                          key: ValueKey(_newFormGeneration),
+                          onCancel: _closeNewForm,
+                          onCreated: _onCreated,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              Expanded(
+                child: groups.isEmpty
+                    ? (_newOpen ? const SizedBox.shrink() : const _EmptyState())
+                    : ScrollFade(
+                        child: Scrollbar(
+                          controller: _scroll,
+                          child: SingleChildScrollView(
+                            controller: _scroll,
+                            padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                            child: GroupCard(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  for (final (i, g) in groups.indexed)
+                                    GroupRow(
+                                      key: ValueKey(g.id),
+                                      group: g,
+                                      first: i == 0,
+                                      memberCount: counts[g.id] ?? 0,
+                                      expanded: _editingId == g.id,
+                                      highlighted: _highlightId == g.id,
+                                      onToggle: () => setState(
+                                        () => _editingId = _editingId == g.id
+                                            ? null
+                                            : g.id,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
                       ),
-                    )
-                  : ListView.separated(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      itemCount: groups.length,
-                      separatorBuilder: (_, _) =>
-                          const Divider(height: 1, indent: 16, endIndent: 16),
-                      itemBuilder: (context, index) {
-                        final group = groups[index];
-                        final memberCount = nodes
-                            .where((n) => n.groupId == group.id)
-                            .length;
-                        return ListTile(
-                          leading: Container(
-                            width: 16,
-                            height: 16,
-                            decoration: BoxDecoration(
-                              color: Color(group.color),
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          title: Text(group.name),
-                          subtitle: Text(
-                            [
-                              '$memberCount projector${memberCount != 1 ? 's' : ''}',
-                              if (group.oscAddress.isNotEmpty) group.oscAddress,
-                            ].join('  ·  '),
-                            style: theme.textTheme.bodySmall,
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.edit_outlined, size: 18),
-                                onPressed: () async {
-                                  await showGroupEditorDialog(
-                                    context,
-                                    ref,
-                                    existing: group,
-                                  );
-                                  setState(() {});
-                                },
-                                tooltip: 'Edit',
-                              ),
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.delete_outline,
-                                  size: 18,
-                                ),
-                                onPressed: () => _confirmDeleteGroup(group),
-                                tooltip: 'Delete',
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-            ),
-            const Divider(height: 1),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  FilledButton.icon(
-                    onPressed: () async {
-                      await showGroupEditorDialog(context, ref);
-                      setState(() {});
-                    },
-                    icon: const Icon(Icons.add, size: 18),
-                    label: const Text('New Group'),
-                  ),
-                ],
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.layers_outlined, size: 40, color: muted),
+            const SizedBox(height: 12),
+            Text('No groups yet', style: theme.textTheme.bodyMedium),
+            const SizedBox(height: 4),
+            Text(
+              'Create one, then assign projectors via the grid',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall?.copyWith(color: muted),
             ),
           ],
         ),

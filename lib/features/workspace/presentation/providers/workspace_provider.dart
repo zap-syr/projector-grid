@@ -18,6 +18,7 @@ import 'event_log_provider.dart';
 import 'selection_provider.dart';
 import 'poll_status_provider.dart';
 import 'protocol_service_provider.dart';
+import 'scheduled_tasks_provider.dart';
 
 part 'workspace_provider.g.dart';
 
@@ -196,6 +197,9 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     state = state
         .map((n) => n.groupId == groupId ? n.copyWith(groupId: null) : n)
         .toList();
+    // Tasks aren't part of the undo snapshot, so undoing the delete brings
+    // the group back but leaves its tasks paused for the user to re-enable.
+    ref.read(scheduledTasksProvider.notifier).detachGroup(groupId);
   }
 
   void assignNodesToGroup(List<String> nodeIds, String? groupId) {
