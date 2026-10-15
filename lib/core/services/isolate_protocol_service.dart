@@ -19,7 +19,8 @@ enum _Op {
 /// UI isolate only sees one message per call.
 ///
 /// Overrides every public method except [scanNetwork], which the Add
-/// Projector dialog runs on its own in-process instance. A public method
+/// Projectors Discover tab runs in-process: a one-off sweep while a modal
+/// dialog is open, nothing else on the UI to stall. A public method
 /// added to the base class must be routed here too, or it runs on the UI
 /// isolate again.
 class IsolateProtocolService extends PanasonicProtocolService {

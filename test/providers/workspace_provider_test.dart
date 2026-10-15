@@ -423,7 +423,7 @@ void main() {
       await ws.refreshAll();
       expect(c.read(workspaceProvider).single.polled, isTrue);
 
-      ws.updateNode('1', '10.0.0.9', 'admin1', 'panasonic');
+      ws.updateNode('1', '10.0.0.9', 1024, 'admin1', 'panasonic');
       expect(c.read(workspaceProvider).single.polled, isFalse);
     });
 
@@ -500,7 +500,7 @@ void main() {
       ws.setNodes([node('1', status: ConnectionStatus.offline)]);
       fake.reachable['10.0.0.9'] = true;
       fake.pollResults['10.0.0.9'] = (ProbeResult.online, telemetry());
-      ws.updateNode('1', '10.0.0.9', 'admin1', 'panasonic');
+      ws.updateNode('1', '10.0.0.9', 1024, 'admin1', 'panasonic');
       await pumpEventQueue();
       expect(logMessages(c).where((m) => m == 'Came online'), hasLength(1));
     });

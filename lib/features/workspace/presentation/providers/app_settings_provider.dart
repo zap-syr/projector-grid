@@ -91,6 +91,11 @@ class AppSettings {
 
   final AlertSettings alerts;
 
+  /// The projector login of the last Add Projectors, prefilled the next
+  /// time: a rig usually shares one. Plain JSON like the rest of the file.
+  final String lastProjectorLogin;
+  final String lastProjectorPassword;
+
   const AppSettings({
     this.pollingIntervalSeconds = defaultPollingIntervalSeconds,
     this.themeMode = ThemeMode.dark,
@@ -121,6 +126,8 @@ class AppSettings {
     this.alignmentDiagonals = false,
     this.pendingFadeRestores = const {},
     this.alerts = const AlertSettings(),
+    this.lastProjectorLogin = '',
+    this.lastProjectorPassword = '',
   });
 
   AppSettings copyWith({
@@ -154,6 +161,8 @@ class AppSettings {
     bool? alignmentDiagonals,
     Map<String, ShutterFade>? pendingFadeRestores,
     AlertSettings? alerts,
+    String? lastProjectorLogin,
+    String? lastProjectorPassword,
   }) {
     return AppSettings(
       pollingIntervalSeconds:
@@ -193,6 +202,9 @@ class AppSettings {
       alignmentDiagonals: alignmentDiagonals ?? this.alignmentDiagonals,
       pendingFadeRestores: pendingFadeRestores ?? this.pendingFadeRestores,
       alerts: alerts ?? this.alerts,
+      lastProjectorLogin: lastProjectorLogin ?? this.lastProjectorLogin,
+      lastProjectorPassword:
+          lastProjectorPassword ?? this.lastProjectorPassword,
     );
   }
 
@@ -229,6 +241,8 @@ class AppSettings {
         e.key: {'in': e.value.fadeIn, 'out': e.value.fadeOut},
     },
     'alerts': alerts.toJson(),
+    'lastProjectorLogin': lastProjectorLogin,
+    'lastProjectorPassword': lastProjectorPassword,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) => AppSettings(
@@ -293,6 +307,8 @@ class AppSettings {
             (json['alerts'] as Map).cast<String, dynamic>(),
           )
         : const AlertSettings(),
+    lastProjectorLogin: (json['lastProjectorLogin'] as String?) ?? '',
+    lastProjectorPassword: (json['lastProjectorPassword'] as String?) ?? '',
   );
 }
 
@@ -462,6 +478,14 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
 
   void setAlertSettings(AlertSettings alerts) {
     state = state.copyWith(alerts: alerts);
+    _save(state);
+  }
+
+  void setLastProjectorLogin(String login, String password) {
+    state = state.copyWith(
+      lastProjectorLogin: login,
+      lastProjectorPassword: password,
+    );
     _save(state);
   }
 

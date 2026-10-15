@@ -957,12 +957,14 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
                                                       onSave:
                                                           (
                                                             ip,
+                                                            port,
                                                             login,
                                                             password,
                                                           ) {
                                                             notifier.updateNode(
                                                               node.id,
                                                               ip,
+                                                              port,
                                                               login,
                                                               password,
                                                             );
