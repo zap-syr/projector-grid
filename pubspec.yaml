@@ -102,11 +102,31 @@ flutter:
     - assets/web/assets/
     # IBM Plex Mono's licence, shown on the Third-party licenses page.
     - assets/fonts/ibm_plex_mono/OFL.txt
+    - assets/fonts/plus_jakarta_sans/OFL.txt
+    - assets/fonts/inter/OFL.txt
 
-  # Bundled rather than taken from the system, so IPs, ports and commands
-  # look the same on Windows and macOS (Cascadia Mono / Consolas / Menlo
-  # vary by machine).
+  # Bundled rather than taken from the system, so the UI and the IPs, ports
+  # and commands look the same on Windows and macOS (Segoe UI / SF and
+  # Cascadia Mono / Consolas / Menlo vary by machine).
   fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/inter/Inter-Regular.ttf
+        - asset: assets/fonts/inter/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/inter/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/inter/Inter-Bold.ttf
+          weight: 700
+    - family: Plus Jakarta Sans
+      fonts:
+        - asset: assets/fonts/plus_jakarta_sans/PlusJakartaSans-Regular.ttf
+        - asset: assets/fonts/plus_jakarta_sans/PlusJakartaSans-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/plus_jakarta_sans/PlusJakartaSans-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/plus_jakarta_sans/PlusJakartaSans-Bold.ttf
+          weight: 700
     - family: IBM Plex Mono
       fonts:
         - asset: assets/fonts/ibm_plex_mono/IBMPlexMono-Regular.ttf

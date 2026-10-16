@@ -125,9 +125,101 @@ class AppStatusColors extends ThemeExtension<AppStatusColors> {
   }
 }
 
+/// The type scale of the redesigned dialogs (owner, 2026-10-16), already in
+/// the text colours of the theme: `final t = AppText.of(context)`, then
+/// `Text('…', style: t.description)`. Widgets take a role from here instead
+/// of a `fontSize` of their own; a one-off tweak is a `copyWith` of a role.
+///
+/// Text colours: [primary] (onSurface), [secondary] (onSurfaceVariant: field
+/// labels, descriptions, help lines), [tertiary] (outline: captions, scale
+/// labels, placeholders), [disabled] (onSurface at 38 %, disabled controls
+/// only).
+@immutable
+class AppText {
+  AppText._(ColorScheme cs)
+    : primary = cs.onSurface,
+      secondary = cs.onSurfaceVariant,
+      tertiary = cs.outline,
+      disabled = cs.onSurface.withValues(alpha: 0.38),
+      hero = _role(22, FontWeight.w700, cs.onSurface),
+      dialogTitle = _role(16, FontWeight.w600, cs.onSurface),
+      cardTitle = _role(15, FontWeight.w600, cs.onSurface),
+      label = _role(12.5, FontWeight.w600, cs.onSurfaceVariant),
+      body = _role(14, FontWeight.w400, cs.onSurface),
+      description = _role(12.5, FontWeight.w400, cs.onSurfaceVariant),
+      caption = _role(11.5, FontWeight.w500, cs.outline),
+      value = _role(
+        26,
+        FontWeight.w600,
+        cs.onSurface,
+      ).copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+      mono = AppTheme.mono(TextStyle(fontSize: 13.5, color: cs.onSurface)),
+      monoSmall = AppTheme.mono(
+        TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+      );
+
+  factory AppText.of(BuildContext context) =>
+      AppText._(Theme.of(context).colorScheme);
+
+  final Color primary;
+  final Color secondary;
+  final Color tertiary;
+  final Color disabled;
+
+  /// 22, w700: the app name in About, the one hero line in the app.
+  final TextStyle hero;
+
+  /// 16, w600: the dialog title in the title bar, a confirm dialog's title.
+  final TextStyle dialogTitle;
+
+  /// 15, w600: the title of a card or section.
+  final TextStyle cardTitle;
+
+  /// 12.5, w600, secondary: the label above a field, a small header.
+  final TextStyle label;
+
+  /// 14, w400: body text, list rows, field values, buttons.
+  final TextStyle body;
+
+  /// 12.5, w400, secondary: a card subtitle, a help line, a footer message.
+  final TextStyle description;
+
+  /// 11.5, w500, tertiary: scale labels, counters, legends, small pills.
+  final TextStyle caption;
+
+  /// 26, w600, tabular: the large value of a card (`85%`).
+  final TextStyle value;
+
+  /// 13.5 IBM Plex Mono: IPs, ports, commands and OSC addresses in fields
+  /// and rows.
+  final TextStyle mono;
+
+  /// 12 IBM Plex Mono, secondary: model + IP under a title, small chips.
+  final TextStyle monoSmall;
+
+  static TextStyle _role(double size, FontWeight weight, Color color) =>
+      TextStyle(
+        fontSize: size,
+        fontWeight: weight,
+        color: color,
+        letterSpacing: AppTheme.tracking(size),
+      );
+}
+
 class AppTheme {
   /// Radius every dialog shares; set once in [DialogThemeData].
   static const double dialogRadius = 20;
+
+  /// The UI font, bundled (pubspec `fonts:`, OFL in `LicenseRegistry`) so the
+  /// app looks the same on Windows and macOS; chosen by the owner on
+  /// 2026-10-16. Plus Jakarta Sans is bundled too, and switching to it is
+  /// this name alone; another font is this name plus the pubspec entry and
+  /// the licence. Widgets never name a font.
+  static const String fontFamily = 'Inter';
+
+  /// Letter spacing for [fontFamily] at [size]: +1 % for text up to 14 px,
+  /// where the font is tight, none for titles and large values.
+  static double tracking(double size) => size <= 14 ? size * 0.01 : 0;
 
   /// The one monospace style for IPs, ports, commands and OSC addresses:
   /// IBM Plex Mono, bundled (pubspec `fonts:`), so it looks the same on
@@ -136,11 +228,40 @@ class AppTheme {
   static TextStyle mono([TextStyle? base]) =>
       (base ?? const TextStyle()).merge(monoStyle);
 
-  /// [mono] as a const, for `static const` styles.
+  /// [mono] as a const, for `static const` styles. No letter spacing: the
+  /// UI font's tracking would otherwise carry over from the text theme.
   static const TextStyle monoStyle = TextStyle(
     fontFamily: 'IBM Plex Mono',
     fontFamilyFallback: ['Consolas', 'Menlo', 'monospace'],
     fontFeatures: [FontFeature.tabularFigures()],
+    letterSpacing: 0,
+  );
+
+  static TextStyle? _tracked(TextStyle? style) {
+    final size = style?.fontSize;
+    return size == null
+        ? style
+        : style!.copyWith(letterSpacing: tracking(size));
+  }
+
+  /// The M3 text theme with [tracking] instead of M3's own letter spacing,
+  /// which was set for Roboto.
+  static TextTheme _trackedTextTheme(TextTheme t) => TextTheme(
+    displayLarge: _tracked(t.displayLarge),
+    displayMedium: _tracked(t.displayMedium),
+    displaySmall: _tracked(t.displaySmall),
+    headlineLarge: _tracked(t.headlineLarge),
+    headlineMedium: _tracked(t.headlineMedium),
+    headlineSmall: _tracked(t.headlineSmall),
+    titleLarge: _tracked(t.titleLarge),
+    titleMedium: _tracked(t.titleMedium),
+    titleSmall: _tracked(t.titleSmall),
+    bodyLarge: _tracked(t.bodyLarge),
+    bodyMedium: _tracked(t.bodyMedium),
+    bodySmall: _tracked(t.bodySmall),
+    labelLarge: _tracked(t.labelLarge),
+    labelMedium: _tracked(t.labelMedium),
+    labelSmall: _tracked(t.labelSmall),
   );
 
   /// Alignment mode's accent: orange, opposite the blue selection accent, so
@@ -236,8 +357,9 @@ class AppTheme {
       shape: WidgetStatePropertyAll(menuShape),
     );
 
-    return ThemeData(
+    final theme = ThemeData(
       useMaterial3: true,
+      fontFamily: fontFamily,
       colorScheme: colorScheme,
       // Canvas behind every screen — a touch darker than the surface ramp so
       // panels and cards lift off it.
@@ -274,6 +396,7 @@ class AppTheme {
           color: colorScheme.onSurface,
           fontSize: 12.5,
           fontWeight: FontWeight.w600,
+          letterSpacing: tracking(12.5),
         ),
         padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
       ),
@@ -290,6 +413,10 @@ class AppTheme {
         elevation: 8,
         shape: menuShape,
       ),
+    );
+    return theme.copyWith(
+      textTheme: _trackedTextTheme(theme.textTheme),
+      primaryTextTheme: _trackedTextTheme(theme.primaryTextTheme),
     );
   }
 }

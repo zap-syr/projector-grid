@@ -45,9 +45,15 @@ Future<bool> _isPositionOnScreen(WindowPrefs prefs) async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // The bundled font's OFL licence, alongside the packages' own on the
+  // The bundled fonts' OFL licences, alongside the packages' own on the
   // Third-party licenses page.
   LicenseRegistry.addLicense(() async* {
+    yield LicenseEntryWithLineBreaks(const [
+      'Inter',
+    ], await rootBundle.loadString('assets/fonts/inter/OFL.txt'));
+    yield LicenseEntryWithLineBreaks(const [
+      'Plus Jakarta Sans',
+    ], await rootBundle.loadString('assets/fonts/plus_jakarta_sans/OFL.txt'));
     yield LicenseEntryWithLineBreaks(const [
       'IBM Plex Mono',
     ], await rootBundle.loadString('assets/fonts/ibm_plex_mono/OFL.txt'));
