@@ -3,7 +3,8 @@ name: projector-grid-visual-rules
 description: >
   The visual rules of Projector Grid's UI (owner-approved 2026-10-16): the type scale
   (AppText roles), the UI font, text colours, field placeholders and hint text, icon
-  colours and sizes, icon tiles, buttons, card surfaces and corner radii. Use this skill
+  colours and sizes, icon tiles, buttons, card surfaces and corner radii, and layout
+  stability (fixed size and order of elements across tabs, modes and dialogs). Use this skill
   whenever you add or change any widget, dialog, card, field, button, icon or text in
   lib/ of this project, redesign a dialog from plan/DIALOG_REDESIGN_PLAN.md, or draw a
   mockup of the app. It overrides the generic flutter-desktop-ui guidance where they
@@ -121,8 +122,9 @@ and is not affected by these rules.
 
 Inline icons beside text (a header icon, a help icon, a field's suffix) are `secondary`.
 **Blue fills and blue text only mean state**: a selected tab or mode tile, a switch that is
-on, a link, a filled button. A pill or tile is never blue just to stand out (the About
-version pill is neutral). Status colours only for status.
+on, a link, a filled button. A pill or tile is never blue just to stand out. One exception (owner,
+2026-10-16): the About version pill is `primaryContainer` with `onPrimaryContainer`
+text, part of the app's identity in that header. Status colours only for status.
 
 ### Sizes
 - **14**: inline with text (pill icons, `Last used`, the mouse pill).
@@ -163,7 +165,68 @@ version pill is neutral). Status colours only for status.
   warning a `warning` border.
 - Dividers inside a card: `outlineVariant` at 60 %.
 
-## 8. Text
+## 8. Layout stability and consistency
+
+The owner checks this on every redesign. Nothing may jump when the user switches a tab, a
+mode or a state.
+
+### Across tabs and modes in one dialog
+- **The dialog doesn't change size between tabs.** Give it one size for all tabs, by
+  `SizedBox.expand` inside the `ConstrainedBox` cap, or by the height of the tallest tab.
+  Never size it to the current tab's content.
+- **An element that repeats on several tabs keeps its size, position and order on every
+  tab.** Examples are the login card in Add Projectors, the footer and its button, the
+  field row and the list or preview card. It is the same widget with the same
+  parameters. When one tab needs a variant, such as Discover's one-row login, the variant
+  keeps the same height and the same place: its text and its top edge don't move on
+  switching.
+- **The same slot is at the same height on every tab.** A list or preview card that
+  fills the rest of the body ends the same distance above the footer on every tab
+  (`DialogScrollBody.fill`).
+- **The order is the same on every tab.** Tabs or mode tiles first, then inputs, then the
+  shared cards (such as the login card), then the result, list or preview. A tab doesn't
+  reorder shared pieces.
+- **Content that is missing keeps its place.** Use a placeholder of the same size
+  (`RangePreviewPlaceholder`, a skeleton while loading), `Visibility(maintainSize: true)`
+  for a button that comes and goes (the ✕ in a field), or an invisible widest label for
+  text that changes (`DialogFooter.widestActionLabel`, the `100.0%` behind a value). A
+  locked card stays in place, dimmed, instead of disappearing (Brightness' Max light
+  output).
+- **States don't move things.** Loading, empty, error and filled states of a card have
+  the same height. A help line under a field is always there (an empty `FieldHelp('')`
+  holds the line), and an error replaces it instead of being added under it.
+
+### Across dialogs
+- **One frame, one order:** title bar (`DialogTitleBar`), then tabs or mode tiles, then
+  the body cards, then the footer (`DialogFooter`). Per-projector dialogs put the
+  projector in the title bar, never in a body card.
+- **The same element looks the same everywhere.** Use the shared component, not a copy:
+  `DialogCard`, `DialogIconTile`, `LabeledField` + `dialogFieldDecoration`,
+  `SegmentedTabs`, `ModeTileRow`, `StatusPill` / `ConnectionStatusBadge`, `GroupPill`,
+  `IpChips`, `StepButton`, `DialogFooter`, `SentRightAwayNote`. When a shared piece is
+  missing something, extend it (a parameter) instead of hand-rolling a near copy in the
+  dialog.
+- **Same sizes for the same job:** every field and dropdown is 40 px high. Mode tiles of
+  one dialog share one height. Footer buttons have the same height, and the primary one
+  is on the right.
+- **Spacing depends on the task**, it is not a fixed rule: a dense list of small cards
+  wants tighter gaps than a form. Within one dialog keep it consistent. For reference,
+  the redesigned dialogs use: card padding 16 and 16 between cards (Brightness, Add
+  Projectors), 10 between the small section cards of Keyboard Shortcuts, 6 between a
+  label and its field, 24 around the body.
+- **Same wording for the same thing:** the same button label (`Cancel`, `Save`,
+  `Add …`), the same status names (`Online`, `Offline`, `Wrong login`, `No login`) and the
+  same footer note (`Changes are sent to the projector right away`).
+
+### How to check
+- Switch every tab and mode, both ways, and check that the title bar, the tabs, the shared
+  cards and the footer button don't move by a pixel. Check loading, empty and error
+  states the same way.
+- Where it matters, add a widget test that reads `tester.getTopLeft(...)` / `getSize(...)`
+  of the shared element on each tab and expects them equal.
+- Check at the maximum size and at the 800×600 window (§1.4 of the redesign plan).
+
+## 9. Text
 
 - UI text is English and separates with commas, colons and parentheses, never `·` or
   dashes; ranges read `0 to 255`.
@@ -171,12 +234,13 @@ version pill is neutral). Status colours only for status.
   alone.
 - NTCONTROL command codes are not shown to the user.
 
-## 9. Checklist before you finish
+## 10. Checklist before you finish
 
 - `grep` your files for `fontSize:`, `fontFamily:`, `withValues(alpha:` on text colours,
   `FilledButton.tonal` and `hintText:`, and check each against the rules above.
 - Two filled buttons enabled at once? A blue tile or pill that isn't state?
-- The layout stays put: no size change between states, tabs or labels.
+- The layout stays put (§8): no size or position change between tabs, modes, states or
+  labels; repeated elements are the shared component, in the same order everywhere.
 - A dialog's size from the plan is a cap (`ConstrainedBox(maxHeight:)` around a
   `mainAxisSize.min` column), so a role that grows the text doesn't cut the content off.
   A scrolling body is `DialogScrollBody`; a bare `Scrollbar` without a `ScrollController`
