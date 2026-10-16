@@ -10,9 +10,14 @@ class AppDropdownItem<T> {
     required this.label,
     this.menuTitle,
     this.detail,
+    this.leading,
   });
 
   final T value;
+
+  /// A small picture before the text, in the list row and, for the picked
+  /// item, in the field (a test pattern's thumbnail).
+  final Widget? leading;
 
   /// Shown in the field once picked, and in the list unless [menuTitle]
   /// is set.
@@ -58,6 +63,12 @@ class AppDropdown<T> extends StatelessWidget {
           borderSide: BorderSide(color: color, width: width),
         );
     final idle = cs.outline.withValues(alpha: 0.6);
+    // Only a list that has pictures gets the leading slot, so every other
+    // dropdown keeps its exact layout.
+    final hasLeading = items.any((i) => i.leading != null);
+    final pickedLeading = hasLeading
+        ? items.where((i) => i.value == value).firstOrNull?.leading
+        : null;
     return Theme(
       data: Theme.of(context).copyWith(
         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -81,6 +92,14 @@ class AppDropdown<T> extends StatelessWidget {
         menuHeight: menuHeight,
         initialSelection: value,
         textStyle: plainFieldStyle,
+        leadingIcon: hasLeading
+            ? UnconstrainedBox(
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 12, right: 8),
+                  child: pickedLeading ?? const SizedBox.shrink(),
+                ),
+              )
+            : null,
         trailingIcon: const UnconstrainedBox(
           child: Icon(Icons.expand_more, size: 20),
         ),
@@ -92,7 +111,12 @@ class AppDropdown<T> extends StatelessWidget {
           isDense: true,
           filled: true,
           fillColor: DialogSurfaces.of(context).field,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+          contentPadding: hasLeading
+              ? const EdgeInsets.only(right: 12)
+              : const EdgeInsets.symmetric(horizontal: 12),
+          prefixIconConstraints: hasLeading
+              ? BoxConstraints(minHeight: height)
+              : null,
           suffixIconConstraints: BoxConstraints(
             minHeight: height,
             minWidth: 36,
@@ -118,6 +142,7 @@ class AppDropdown<T> extends StatelessWidget {
             DropdownMenuEntry<T>(
               value: item.value,
               label: item.label,
+              leadingIcon: item.leading,
               labelWidget: Text(
                 item.menuTitle ?? item.label,
                 overflow: TextOverflow.ellipsis,
