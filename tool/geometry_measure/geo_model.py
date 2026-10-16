@@ -85,32 +85,33 @@ class Geo:
 
     def image(self, keep_aspect=True):
         """Largest rectangle: (cx, cy, a, b) in screen units."""
+        # Start from the screen point that lands on the panel centre: with a
+        # large Balance the screen centre itself falls outside the panel.
+        c0 = minimize(lambda c: np.square(self.panel(np.array([c[0]]), np.array([c[1]]))[0] - 0.5).sum(),
+                      [0.0, 0.0], method="Nelder-Mead", options={"xatol": 1e-6, "fatol": 1e-12}).x
         if keep_aspect:
-            # Start from the screen point that lands on the panel centre: with a
-            # large Balance the screen centre itself falls outside the panel.
-            c0 = minimize(lambda c: np.square(self.panel(np.array([c[0]]), np.array([c[1]]))[0] - 0.5).sum(),
-                          [0.0, 0.0], method="Nelder-Mead", options={"xatol": 1e-6, "fatol": 1e-12}).x
             simplex = [c0, c0 + [0.05, 0], c0 + [0, 0.05]]
             best = minimize(lambda c: -self._max_scale(c[0], c[1], HW, HH), c0, method="Nelder-Mead",
                             options={"xatol": 1e-4, "fatol": 1e-6, "initial_simplex": simplex})
             cx, cy = best.x
             s = self._max_scale(cx, cy, HW, HH)
             return cx, cy, s * HW, s * HH
-        # Without the aspect: centred, width and height widened in turn from the
-        # largest uniform scale (starting at full height collapses the width of
-        # a concave arc).
-        s = self._max_scale(0, 0, HW, HH)
+        # Without the aspect: width and height widened in turn from the largest
+        # uniform scale (starting at full height collapses the width of a
+        # concave arc).
+        cx, cy = c0
+        s = self._max_scale(cx, cy, HW, HH)
         a, b = s * HW, s * HH
         for _ in range(4):
-            a = self._fit_axis(a, b, "a")
-            b = self._fit_axis(a, b, "b")
-        return 0.0, 0.0, a, b
+            a = self._fit_axis(cx, cy, a, b, "a")
+            b = self._fit_axis(cx, cy, a, b, "b")
+        return cx, cy, a, b
 
-    def _fit_axis(self, a, b, which):
+    def _fit_axis(self, cx, cy, a, b, which):
         lo, hi = 0.0, 3 * (HW if which == "a" else HH)
         for _ in range(22):
             m = (lo + hi) / 2
-            ok = self.fits(0, 0, m, b) if which == "a" else self.fits(0, 0, a, m)
+            ok = self.fits(cx, cy, m, b) if which == "a" else self.fits(cx, cy, a, m)
             lo, hi = (m, hi) if ok else (lo, m)
         return lo
 

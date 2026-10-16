@@ -110,54 +110,26 @@ except two frames:
 
 ## 2. Implementation
 
-### 2.1 `[ ]` Pure model in `domain/geometry_preview.dart`
-Plain Dart, no packages (no `vector_math`; three doubles per vector are enough).
+### 2.1 `[x]` Pure model in `domain/geometry_preview.dart`
+Done 2026-10-16. Plain Dart, no packages. `keystonePreview(...)` and `curvedPreview(...)`
+take the register values and return a `GeometryPreview`: the image `outline` (clockwise
+from the top-left corner, `samples` points per edge) and the `centerRow` / `centerColumn`
+of the cross, all in panel coordinates 0..1. `appliedVerticalKeystone(...)` is the cap of
+§1.3.
 
-```dart
-/// Outline of the corrected image on the panel, points in 0..1, clockwise from
-/// the top-left corner. [samples] points per edge.
-List<Offset> keystonePreview({
-  required double throwRatio, // GMKS0
-  required double vertical, // GMKS8, degrees
-  required double horizontal, // GMKS9, degrees
-  required int verticalBalance, // GMKI4
-  required int horizontalBalance, // GMKI7
-  int samples = 2,
-});
-
-List<Offset> curvedPreview({
-  required double throwRatio, // GMCS0
-  required int verticalArc, // GMCI3
-  required int horizontalArc, // GMCI7
-  required double vertical, // GMCS8
-  required double horizontal, // GMCS9
-  required int verticalBalance, // GMCI2
-  required int horizontalBalance, // GMCI6
-  required bool keepAspect, // GMCIA
-  int samples = 24,
-});
-
-/// The image's middle row and middle column, mapped like the outline: the
-/// cross of the mockup. Straight in Keystone, bent with the screen in Curved.
-({List<Offset> row, List<Offset> column}) previewCenterLines(...);
-
-/// The vertical angle the projector applies (§1.3).
-double appliedVerticalKeystone(double throwRatio, double vertical, double horizontal);
-```
-
-Steps, matching §1.1:
-- `_project(X, Y)` → panel point (bend, rotate, divide by depth, axis shift).
-- `_fits(cx, cy, a, b)`: 13 points per edge of the rectangle inside `[0, 1]²`.
+Steps, matching §1.1 and `tool/geometry_measure/geo_model.py` line for line:
+- `panel(X, Y)`: bend, rotate, divide by depth, axis shift.
+- `fits(...)`: 13 points per edge of the rectangle inside the panel.
 - Largest scale for a centre: bisection, 22 steps.
-- Centre: start from the screen point that lands on the panel centre (found by a few Newton
-  steps; a large Balance puts the screen centre outside the panel), then a compass search
-  (step 0.05 halving to 1e-4) maximising the scale. Deterministic, no randomness.
-- Aspect off: centred; largest uniform scale first, then width and height widened in turn
-  (4 rounds). Starting from full height collapses the width on a concave arc.
-- Constants from §1.2 as named `const`s with a comment naming the model and date measured.
+- Centre: Newton's method finds the screen point that lands on the panel centre (with a
+  large Balance the screen centre is off the panel), then Nelder-Mead maximises the scale
+  with the same coefficients and stopping rule as scipy, so the port lands where the
+  reference does. A compass search was the first idea but stalls on the diagonal ridges of
+  this function.
+- Aspect off: from that same centre, largest uniform scale first, then width and height
+  widened in turn (4 rounds).
 
-Budget: under 2 ms per call (it runs on every slider tick). Measure once in a unit test with
-a `Stopwatch` over 200 random settings and keep the test as a guard.
+1.5 ms per call in the debug test runner; the test keeps an 8 ms guard.
 
 ### 2.2 `[ ]` Painter `presentation/widgets/geometry_preview_painter.dart`
 - Draws, inside the panel aspect box: the panel frame (legend *Panel*), the image fill and
@@ -170,7 +142,8 @@ a `Stopwatch` over 200 random settings and keep the test as a guard.
   header (*Preview*, pill, **Reset**) and legend are §7.3 of the redesign plan.
 - Delete `_TrapezoidPainter` and `_buildPreviewUnavailable`.
 
-### 2.3 `[ ]` Tests
+### 2.3 `[x]` Tests
+Done 2026-10-16, `test/unit/geometry_preview_test.dart` (52 tests).
 - `test/unit/geometry_preview_test.dart`:
   - zero settings → the full panel (corners within 0.001);
   - every outline point within `[0, 1]`;
