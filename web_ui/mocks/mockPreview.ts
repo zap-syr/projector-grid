@@ -86,7 +86,7 @@ export function mockPreview(projectors: Projector[]) {
   function statusOf(p: Projector, feed: Feed): PreviewStatus {
     const ps = preShow.get(p.id) ?? { on: false, applying: false };
     const base = { notice: null, overlay: null, preShow: ps.on, preShowApplying: ps.applying };
-    const signal = p.signal === 'NO SIGNAL' ? 'No signal' : `${p.input} · ${p.signal}`;
+    const signal = p.signal === 'NO SIGNAL' ? 'No signal' : `${p.input}: ${p.signal}`;
     if (Date.now() < feed.connectingUntil) return { ...base, state: 'connecting', signal: null };
     if (p.connection === 'offline') return { ...base, state: 'unavailable', signal: null };
     if (p.power !== 'on' && !ps.on) return { ...base, state: 'notice', notice: 'noSignal', signal };

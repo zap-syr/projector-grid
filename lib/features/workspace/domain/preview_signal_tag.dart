@@ -11,7 +11,7 @@ import 'projector_node.dart';
 /// fields are only a fallback until the very first fetch lands, not on every
 /// failure — that would mean displaying NTCONTROL's own stale/ER401 reading
 /// with no time bound, the exact staleness this tag exists to avoid.
-///  - web says a real signal  -> "HDMI1 · 3840x2160/60p (134.99kHz/59.99Hz)"
+///  - web says a real signal  -> "HDMI1: 3840x2160/60p (134.99 kHz, 59.99 Hz)"
 ///  - web says no signal      -> "No signal" (authoritative — built-in test
 ///    pattern / no external input, in any power state)
 ///  - no fetch has ever landed, polled value real -> that, same format
@@ -24,13 +24,24 @@ String? previewSignalTag(ProjectorNode node, WebSignalStatus? webSignal) {
     final input = webSignal.input.isNotEmpty ? webSignal.input : node.input;
     final freq = webSignal.signalFrequency;
     final detail = freq.isNotEmpty
-        ? '${webSignal.signalName} ($freq)'
+        ? '${webSignal.signalName} (${formatSignalFrequency(freq)})'
         : webSignal.signalName;
-    return real(input) ? '$input · $detail' : detail;
+    return real(input) ? '$input: $detail' : detail;
   }
   if (real(node.signal)) {
-    return real(node.input) ? '${node.input} · ${node.signal}' : node.signal;
+    return real(node.input) ? '${node.input}: ${node.signal}' : node.signal;
   }
   if (node.signal.toUpperCase() == 'NO SIGNAL') return 'No signal';
   return null;
 }
+
+/// The web page's `134.99kHz/59.99Hz` as `134.99 kHz, 59.99 Hz`: UI text
+/// separates with commas, and a unit stands apart from its number. A part
+/// that isn't a number and a unit is kept as it came.
+String formatSignalFrequency(String raw) => raw
+    .split('/')
+    .map((part) {
+      final m = RegExp(r'^([\d.]+)\s*([A-Za-z]+)$').firstMatch(part.trim());
+      return m == null ? part.trim() : '${m.group(1)} ${m.group(2)}';
+    })
+    .join(', ');

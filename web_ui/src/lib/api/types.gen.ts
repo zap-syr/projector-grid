@@ -1330,7 +1330,7 @@ export interface components {
             notice: ("noSignal" | "hdcp" | "startingUp" | "rotating" | "blank") | null;
             /** @description A tag over a live image. */
             overlay: ("testPattern" | "aspectMismatch") | null;
-            /** @description The input and signal tag, e.g. "HDMI1 · 1080/60p"; null while unknown. */
+            /** @description The input and signal tag, e.g. "HDMI1: 1080/60p"; null while unknown. */
             signal: string | null;
             /** @description Whether pre-show is on; null until read (only read in Standby). */
             preShow: boolean | null;

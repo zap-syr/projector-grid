@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/services/projector_web_status_service.dart';
 import '../../../../core/services/remote_preview_service.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../domain/projector_group.dart';
 import '../../domain/projector_node.dart';
 import '../../domain/preview_signal_tag.dart';
@@ -24,22 +25,32 @@ class PreviewViewport extends ConsumerStatefulWidget {
 
   final ProjectorNode node;
   final ProjectorGroup? group;
+
+  /// A grid cell: smaller corners and tag insets, a compact "not available"
+  /// notice, and the caption (group dot, model, IP) under the plane.
   final bool showCaption;
 
   /// Draw a `PRE-SHOW` tag over the frame — the dialog owns the actual state
   /// (read via NTCONTROL `QVX:PSMI1`).
   final bool preShowActive;
 
+  // The projector's own web preview draws this exact green when the shutter is
+  // open; red when closed. Public for the dialog's frame colour legend.
+  static const frameOpen = Color(0xFF6CFF6C);
+  static const frameClosed = Color(0xFFFF5F56);
+
+  /// The frame when the projector isn't on.
+  static Color frameNotOn(ColorScheme scheme) => scheme.outline;
+
+  /// The gap above the caption plus the caption itself: the grid adds it to
+  /// a tile's 16:9 plane.
+  static const double captionHeight = 25;
+
   @override
   ConsumerState<PreviewViewport> createState() => _PreviewViewportState();
 }
 
 class _PreviewViewportState extends ConsumerState<PreviewViewport> {
-  // The projector's own web preview draws this exact green when the shutter is
-  // open; red when closed.
-  static const _frameOpen = Color(0xFF6CFF6C);
-  static const _frameClosed = Color(0xFFFF5F56);
-
   // A known-offline projector: skip opening a socket that would just time out
   // (matters when a multiview holds several). Retry forces an attempt anyway.
   bool _forced = false;
@@ -63,9 +74,15 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
       node.connectionStatus == ConnectionStatus.offline && !_forced;
 
   Color _frameColor(ProjectorNode node, ColorScheme scheme) {
-    if (node.powerStatus != PowerStatus.on) return scheme.outline;
-    return node.shutterStatus == ShutterStatus.open ? _frameOpen : _frameClosed;
+    if (node.powerStatus != PowerStatus.on) {
+      return PreviewViewport.frameNotOn(scheme);
+    }
+    return node.shutterStatus == ShutterStatus.open
+        ? PreviewViewport.frameOpen
+        : PreviewViewport.frameClosed;
   }
+
+  bool get _inGrid => widget.showCaption;
 
   void _retry() {
     if (_isOffline(_node)) {
@@ -136,24 +153,26 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
     }
 
     final plane = Container(
-      clipBehavior: Clip.hardEdge,
+      key: const ValueKey('preview-plane'),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: Colors.black,
+        borderRadius: BorderRadius.circular(_inGrid ? 8 : 10),
         border: Border.all(
           color: _frameColor(node, theme.colorScheme),
           width: 2,
         ),
       ),
-      child: _content(state, node, webSignal, theme),
+      child: _content(state, node, webSignal),
     );
 
     // Grid cell: the cell's aspect ratio fixes the height, so the plane fills
     // what's left after the caption. Single: drive the 16:9 shape ourselves.
-    if (widget.showCaption) {
+    if (_inGrid) {
       return Column(
         children: [
           Expanded(child: plane),
-          _caption(node, theme),
+          _caption(node),
         ],
       );
     }
@@ -164,8 +183,8 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
     RemotePreviewState state,
     ProjectorNode node,
     WebSignalStatus? webSignal,
-    ThemeData theme,
   ) {
+    final inset = _inGrid ? 6.0 : 8.0;
     switch (state) {
       case RemotePreviewConnecting():
         return const Center(
@@ -185,9 +204,20 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
           fit: StackFit.expand,
           children: [
             Image.memory(jpeg, gaplessPlayback: true, fit: BoxFit.contain),
-            if (tag != null) Positioned(left: 6, top: 6, child: _tag(tag)),
+            if (tag != null)
+              Positioned(left: inset, top: inset, child: _PlaneTag(tag)),
             if (signal != null)
-              Positioned(right: 6, bottom: 6, child: _tag(signal)),
+              Positioned(
+                right: inset,
+                bottom: inset,
+                // A long tag on a small grid tile ends in an ellipsis
+                // instead of running past the plane.
+                left: inset,
+                child: Align(
+                  alignment: Alignment.bottomRight,
+                  child: _PlaneTag(signal),
+                ),
+              ),
           ],
         );
       case RemotePreviewNotice(:final kind):
@@ -202,86 +232,153 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
         return Stack(
           fit: StackFit.expand,
           children: [
-            if (showText) _planeText(kind.label, theme),
+            if (showText)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Text(
+                    kind.label,
+                    textAlign: TextAlign.center,
+                    style: _planeText(context),
+                  ),
+                ),
+              ),
             if (widget.preShowActive)
-              Positioned(left: 6, top: 6, child: _tag('PRE-SHOW')),
+              Positioned(
+                left: inset,
+                top: inset,
+                child: const _PlaneTag('PRE-SHOW'),
+              ),
           ],
         );
       case RemotePreviewUnavailable():
-        return Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _planeLabel('Preview not available', theme),
-              const SizedBox(height: 8),
-              OutlinedButton(
-                onPressed: _retry,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  side: const BorderSide(color: Colors.white24),
-                  visualDensity: VisualDensity.compact,
-                ),
-                child: const Text('Retry'),
-              ),
-            ],
-          ),
-        );
+        return _unavailable();
     }
   }
 
-  Widget _planeText(String text, ThemeData theme) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(12),
-      child: _planeLabel(text, theme, center: true),
-    ),
-  );
+  /// Text on the black plane: light in both themes, the plane is black.
+  TextStyle _planeText(BuildContext context) =>
+      AppText.of(context).description.copyWith(color: Colors.white70);
 
-  Widget _planeLabel(String text, ThemeData theme, {bool center = false}) =>
-      Text(
-        text,
-        textAlign: center ? TextAlign.center : null,
-        style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
-      );
-
-  Widget _tag(String text) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-    decoration: BoxDecoration(
-      color: Colors.black.withValues(alpha: 0.6),
-      borderRadius: BorderRadius.circular(3),
-      border: Border.all(color: Colors.white24),
-    ),
-    child: Text(
-      text,
-      style: const TextStyle(
-        color: Colors.white,
-        fontSize: 10,
-        fontWeight: FontWeight.w600,
-        letterSpacing: 0.8,
+  Widget _unavailable() {
+    final t = AppText.of(context);
+    final retry = OutlinedButton.icon(
+      onPressed: _retry,
+      // White on the black plane, where the theme's buttons don't read.
+      style: OutlinedButton.styleFrom(
+        foregroundColor: Colors.white,
+        side: BorderSide(color: Colors.white.withValues(alpha: 0.28)),
+        shape: const StadiumBorder(),
+        visualDensity: VisualDensity.compact,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
       ),
-    ),
-  );
-
-  Widget _caption(ProjectorNode node, ThemeData theme) {
-    final group = widget.group;
-    final left = group != null ? '${node.name} · ${group.name}' : node.name;
-    return Padding(
-      padding: const EdgeInsets.only(top: 4),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              left,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.labelSmall,
+      icon: const Icon(Icons.refresh, size: 18),
+      label: const Text('Retry'),
+    );
+    // A grid tile has room for the title and Retry only.
+    final children = _inGrid
+        ? [Text('Preview not available', style: _planeText(context)), retry]
+        : [
+            const Icon(
+              Icons.desktop_access_disabled_outlined,
+              size: 30,
+              color: Colors.white54,
             ),
+            Text(
+              'Preview not available',
+              style: t.body.copyWith(
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
+            ),
+            Text(
+              "The projector's web page did not answer.",
+              textAlign: TextAlign.center,
+              style: _planeText(context),
+            ),
+            retry,
+          ];
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        // Scales down rather than overflowing on a very small plane.
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            spacing: _inGrid ? 8 : 10,
+            children: children,
           ),
-          const SizedBox(width: 8),
-          Text(
-            node.ipAddress,
-            style: theme.textTheme.labelSmall?.copyWith(color: theme.hintColor),
-          ),
-        ],
+        ),
       ),
     );
   }
+
+  Widget _caption(ProjectorNode node) {
+    final t = AppText.of(context);
+    final group = widget.group;
+    // The model alone repeats across a rig, so the IP is always there; a
+    // projector whose model isn't known yet shows the IP once.
+    final model = node.name == node.ipAddress ? '' : node.name;
+    return Padding(
+      padding: const EdgeInsets.only(top: 5),
+      child: SizedBox(
+        height: PreviewViewport.captionHeight - 5,
+        child: Row(
+          children: [
+            if (group != null) ...[
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: Color(group.color),
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 7),
+            ],
+            Expanded(
+              child: Text(
+                model,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: t.description.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: t.primary,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(node.ipAddress, style: t.monoSmall),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A tag over the plane (`PRE-SHOW`, the signal): a dark translucent pill
+/// with white text, readable over any frame.
+class _PlaneTag extends StatelessWidget {
+  const _PlaneTag(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+    decoration: ShapeDecoration(
+      color: Colors.black.withValues(alpha: 0.62),
+      shape: StadiumBorder(
+        side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+      ),
+    ),
+    child: Text(
+      text,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: AppText.of(context).caption
+          .copyWith(fontWeight: FontWeight.w600, color: Colors.white),
+    ),
+  );
 }

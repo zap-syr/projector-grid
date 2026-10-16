@@ -740,7 +740,7 @@ components:
               enum: [testPattern, aspectMismatch]
             - type: 'null'
         signal:
-          description: The input and signal tag, e.g. "HDMI1 · 1080/60p"; null while unknown.
+          description: 'The input and signal tag, e.g. "HDMI1: 1080/60p"; null while unknown.'
           type: [string, 'null']
         preShow:
           description: Whether pre-show is on; null until read (only read in Standby).

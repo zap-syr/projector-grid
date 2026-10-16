@@ -31,7 +31,7 @@ void main() {
     test('the web status wins, input first', () {
       expect(
         previewSignalTag(n.copyWith(input: 'HDMI1'), web),
-        'SDI1 · 1080/50p (56.25kHz/50.00Hz)',
+        'SDI1: 1080/50p (56.25 kHz, 50.00 Hz)',
       );
       expect(
         previewSignalTag(
@@ -46,10 +46,22 @@ void main() {
       );
     });
 
+    test('frequency: units apart, parts by commas, the unknown kept', () {
+      expect(
+        formatSignalFrequency('134.99kHz/59.99Hz'),
+        '134.99 kHz, 59.99 Hz',
+      );
+      expect(
+        formatSignalFrequency('67.50 kHz / 60.00 Hz'),
+        '67.50 kHz, 60.00 Hz',
+      );
+      expect(formatSignalFrequency('---kHz'), '---kHz');
+    });
+
     test('polled values until the web status has been read', () {
       expect(
         previewSignalTag(n.copyWith(input: 'HDMI1', signal: '1080/60p'), null),
-        'HDMI1 · 1080/60p',
+        'HDMI1: 1080/60p',
       );
       expect(
         previewSignalTag(n.copyWith(signal: 'NO SIGNAL'), null),
