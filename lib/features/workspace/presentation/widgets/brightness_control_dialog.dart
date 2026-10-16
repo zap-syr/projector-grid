@@ -7,6 +7,7 @@ import '../providers/protocol_service_provider.dart';
 import 'command_failure_notice.dart';
 import 'common/debouncer.dart';
 import 'common/dialog_parts.dart';
+import 'common/lock_pill.dart';
 import 'common/mode_tile.dart';
 import 'common/projector_settings_client.dart';
 import 'common/skeleton.dart';
@@ -518,7 +519,7 @@ class _PercentSliderState extends State<_PercentSlider> {
     final Widget trailing = loading
         ? const SkeletonPulse(child: Skeleton(width: 56, height: 26, radius: 8))
         : locked
-        ? const _LockPill()
+        ? const LockPill('User modes')
         // Sized by an invisible widest value, so the heading beside it
         // doesn't reflow as the value goes from 9.9% to 10.0% or 100.0%.
         : Stack(
@@ -692,37 +693,6 @@ class _Scale extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _LockPill extends StatelessWidget {
-  const _LockPill();
-
-  @override
-  Widget build(BuildContext context) {
-    final t = AppText.of(context);
-    return Container(
-      height: 24,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(
-        color: DialogSurfaces.of(context).soft,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        spacing: 6,
-        children: [
-          Icon(Icons.lock_outline, size: 14, color: t.secondary),
-          Text(
-            'User modes',
-            style: t.caption.copyWith(
-              fontWeight: FontWeight.w600,
-              color: t.secondary,
-            ),
-          ),
-        ],
       ),
     );
   }

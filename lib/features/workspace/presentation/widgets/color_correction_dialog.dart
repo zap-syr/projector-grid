@@ -1,73 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../domain/color_correction.dart';
 import '../../domain/projector_node.dart';
 import '../providers/protocol_service_provider.dart';
+import 'color_correction/card_heading.dart';
+import 'color_correction/color_matching_card.dart';
+import 'color_correction/kelvin_card.dart';
+import 'color_correction/matching_off_card.dart';
+import 'color_correction/method_card.dart';
+import 'color_correction/temperature_mode_card.dart';
+import 'color_correction/white_balance_card.dart';
 import 'command_failure_notice.dart';
-import 'common/labeled_slider_row.dart';
+import 'common/debouncer.dart';
+import 'common/dialog_parts.dart';
 import 'common/projector_settings_client.dart';
-import 'common/section_card.dart';
+import 'common/segmented_tabs.dart';
+import 'common/skeleton.dart';
 import 'dialog_title_bar.dart';
-import 'sleek_stepper_input.dart';
 
-enum _TempMode { defaultTemp, user1, user2, custom }
-
-// Blackbody approximation stops for 3200 K → 13 000 K.
-// Stop values = (K - 3200) / 9800.
-const _kKelvinGradient = LinearGradient(
-  colors: [
-    Color(0xFFFF9329), // 3200 K — warm amber
-    Color(0xFFFFBE70), // 4500 K — orange-white
-    Color(0xFFFFE4B4), // 5500 K — warm white
-    Color(0xFFFFFEFA), // 6500 K — neutral white
-    Color(0xFFCADBFF), // 8000 K — cool blue-white
-    Color(0xFFBECFFF), // 10000 K — blue-white
-    Color(0xFFB6C8FF), // 13000 K — cool blue
-  ],
-  stops: [0.000, 0.133, 0.235, 0.337, 0.490, 0.694, 1.000],
-);
-
-class _KelvinThumbShape extends SliderComponentShape {
-  const _KelvinThumbShape();
-
-  static const double _radius = 8;
-
-  @override
-  Size getPreferredSize(bool isEnabled, bool isInteractive) =>
-      const Size.fromRadius(_radius);
-
-  @override
-  void paint(
-    PaintingContext context,
-    Offset center, {
-    required Animation<double> activationAnimation,
-    required Animation<double> enableAnimation,
-    required bool isDiscrete,
-    required TextPainter labelPainter,
-    required RenderBox parentBox,
-    required SliderThemeData sliderTheme,
-    required TextDirection textDirection,
-    required double value,
-    required double textScaleFactor,
-    required Size sizeWithOverflow,
-  }) {
-    context.canvas
-      ..drawCircle(center, _radius, Paint()..color = Colors.white)
-      ..drawCircle(
-        center,
-        _radius,
-        Paint()
-          ..color = Colors.black.withValues(alpha: 0.25)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.5,
-      );
-  }
-}
+enum _Tab { matching, temperature }
 
 class ColorCorrectionDialog extends ConsumerStatefulWidget {
   final ProjectorNode node;
 
   const ColorCorrectionDialog({super.key, required this.node});
+
+  /// For layout tests: the tab strip and the first card of each tab.
+  static const tabsKey = ValueKey('color-correction-tabs');
+  static const firstCardKey = ValueKey('color-correction-first-card');
 
   @override
   ConsumerState<ColorCorrectionDialog> createState() =>
@@ -83,32 +44,37 @@ class _ColorCorrectionDialogState extends ConsumerState<ColorCorrectionDialog> {
     },
   );
 
+  // One per register, so a burst of − / + presses, preset taps or value
+  // field steps becomes one write each.
+  final _debouncers = <String, Debouncer>{};
+
+  // Every write and the reads that follow a switch go through one queue.
+  // Each command is its own TCP connection, so without it a read could
+  // reach the projector before the switch it depends on has applied.
+  Future<void> _queue = Future.value();
+
+  // Bumped on every method or mode switch, so a read for a state the user
+  // has already left doesn't overwrite the current one.
+  int _readSeq = 0;
+
   bool _loading = true;
+  _Tab _tab = _Tab.matching;
 
-  // ── Color Matching ────────────────────────────────────────────────────────
-  int _method = 0; // 0=off, 1=3colors, 2=7colors
+  // ── Color Matching ────────────────────────────────────────────────────
+  MatchMethod _method = MatchMethod.off;
 
-  final _values3 = <String, List<int>>{
-    'Red': [2048, 0, 0],
-    'Green': [0, 2048, 0],
-    'Blue': [0, 0, 2048],
+  // 3 and 7 colors are separate registers on the projector.
+  Map<MatchMethod, Map<MatchColor, List<int>>> _values = {
+    for (final m in [MatchMethod.three, MatchMethod.seven])
+      m: {for (final c in m.colors) c: c.defaultRgb},
   };
+  MatchColor _selected = MatchColor.red;
 
-  final _values7 = <String, List<int>>{
-    'Red': [2048, 0, 0],
-    'Green': [0, 2048, 0],
-    'Blue': [0, 0, 2048],
-    'Cyan': [0, 2048, 2048],
-    'Magenta': [2048, 0, 2048],
-    'Yellow': [2048, 2048, 0],
-    'White': [2048, 2048, 2048],
-  };
-
-  // ── Color Temperature ─────────────────────────────────────────────────────
-  _TempMode _tempMode = _TempMode.defaultTemp;
-  int _customK = 6500; // 3200–13000 step 100
-  List<int> _whHigh = [128, 128, 128]; // R,G,B  0–255
-  List<int> _whLow = [0, 0, 0]; // R,G,B  -127..+127 (display)
+  // ── Color Temperature ─────────────────────────────────────────────────
+  TempMode _tempMode = TempMode.defaultTemp;
+  int _kelvin = 6500;
+  List<int> _whHigh = const [128, 128, 128];
+  List<int> _whLow = const [0, 0, 0];
 
   @override
   void initState() {
@@ -116,581 +82,348 @@ class _ColorCorrectionDialogState extends ConsumerState<ColorCorrectionDialog> {
     _loadValues();
   }
 
-  // Only queries which mode/method is active on each axis (Color Matching,
-  // Color Temperature) — the actual slider values are fetched afterward, and
-  // only for whichever mode/method turns out to be selected (below). Off/
-  // Default need no slider query at all, and Custom's Kelvin comes straight
-  // from QTE's own value — querying every mode's sliders unconditionally
-  // used to open up to 18 simultaneous TCP connections to the projector on
-  // every open, most of them for sliders the dialog wasn't even showing.
+  @override
+  void dispose() {
+    // Flush, not cancel: the last press before ✕ still reaches the projector.
+    for (final d in _debouncers.values) {
+      d.flush();
+    }
+    super.dispose();
+  }
+
+  // Only asks which method and mode are active, then reads the values of
+  // those alone: Off and Default need none, and Custom's kelvin comes with
+  // QTE. Reading every register on open used to open up to 18 TCP
+  // connections, most of them for values the dialog wasn't showing.
   Future<void> _loadValues() async {
-    final modeResults = await Future.wait([
+    final (cmai, qte) = await (
       _client.query('QVX:CMAI0'),
       _client.query('QTE'),
-    ]);
-
+    ).wait;
     if (!mounted) return;
-
-    // ── Color Matching method ───────────────────────────────────────────────
-    final methodRaw = modeResults[0];
-    if (methodRaw != null && methodRaw.contains('+')) {
-      _method = int.tryParse(methodRaw.split('+').last) ?? 0;
+    if (cmai != null && cmai.contains('+')) {
+      _method = MatchMethod.fromProtocol(
+        int.tryParse(cmai.split('+').last) ?? 0,
+      );
     }
-
-    // ── Color Temperature mode ──────────────────────────────────────────────
-    final qteVal = int.tryParse(modeResults[1]?.trim() ?? '');
-    if (qteVal != null) {
-      if (qteVal == 4) {
-        _tempMode = _TempMode.user1;
-      } else if (qteVal == 9) {
-        _tempMode = _TempMode.user2;
-      } else if (qteVal == 10) {
-        _tempMode = _TempMode.defaultTemp;
-      } else if (qteVal >= 3200 && qteVal <= 13000) {
-        _tempMode = _TempMode.custom;
-        _customK = (qteVal ~/ 100) * 100;
-      }
-    }
-
+    _applyTemperature(qte);
+    final seq = _readSeq;
     await Future.wait([
-      if (_method == 1) _refreshColorMatching3(),
-      if (_method == 2) _refreshColorMatching7(),
-      // White Balance is also the register Color Matching (3/7 colors) edits
-      // directly — QTE reads ER401 there (confirmed live) so _tempMode can't
-      // tell us to fetch it, _method has to.
-      if (_method != 0 ||
-          _tempMode == _TempMode.user1 ||
-          _tempMode == _TempMode.user2)
-        _refreshWhiteBalance(),
+      if (_method != MatchMethod.off) _readMatching(_method, seq),
+      // White balance is also what Color Matching edits; QTE reads ER401
+      // then, so the method decides, not the mode.
+      if (_method != MatchMethod.off || _tempMode.isUser)
+        _readWhiteBalance(seq),
     ]);
-
-    if (!mounted) return;
-    setState(() => _loading = false);
+    if (mounted) setState(() => _loading = false);
   }
 
-  // White Balance High: 0–255, direct from the register.
-  static List<int> _parseWhHigh(List<String?> raw, List<int> fallback) {
-    final hr = int.tryParse(raw[0]?.trim() ?? '');
-    final hg = int.tryParse(raw[1]?.trim() ?? '');
-    final hb = int.tryParse(raw[2]?.trim() ?? '');
-    return [
-      (hr ?? fallback[0]).clamp(0, 255),
-      (hg ?? fallback[1]).clamp(0, 255),
-      (hb ?? fallback[2]).clamp(0, 255),
-    ];
+  void _applyTemperature(String? qte) {
+    final parsed = parseColorTemperature(qte);
+    if (parsed == null) return;
+    _tempMode = parsed.$1;
+    final kelvin = parsed.$2;
+    if (kelvin != null) _kelvin = kelvin;
   }
 
-  // White Balance Low: protocol 001–255, display = protocol - 128.
-  static List<int> _parseWhLow(List<String?> raw, List<int> fallback) {
-    final lr = int.tryParse(raw[0]?.trim() ?? '');
-    final lg = int.tryParse(raw[1]?.trim() ?? '');
-    final lb = int.tryParse(raw[2]?.trim() ?? '');
-    return [
-      lr == null ? fallback[0] : (lr - 128).clamp(-127, 127),
-      lg == null ? fallback[1] : (lg - 128).clamp(-127, 127),
-      lb == null ? fallback[2] : (lb - 128).clamp(-127, 127),
-    ];
-  }
-
-  // Re-derives _tempMode/_customK from a fresh QTE read. QTE reads ER401 the
-  // entire time Color Matching is active, so _tempMode can't be trusted the
-  // instant it returns to Off — needed both here and once at initial load
-  // (_loadValues has its own inline copy of this parse, batched together
-  // with the CMAI0 query there instead of calling this).
-  Future<void> _refreshTempMode() async {
+  // QTE reads ER401 the whole time Color Matching is on, so the mode is
+  // only known again once it is back to Off.
+  Future<void> _readTemperature(int seq) async {
     final raw = await _client.query('QTE');
-    if (!mounted) return;
-    final qteVal = int.tryParse(raw?.trim() ?? '');
-    if (qteVal == null) return;
+    if (!mounted || seq != _readSeq) return;
+    setState(() => _applyTemperature(raw));
+  }
+
+  // QHR..QOB report whichever User slot (OTE:04 / OTE:09) is active: there
+  // is no per-slot query (confirmed live), so they are read again on every
+  // switch.
+  Future<void> _readWhiteBalance(int seq) async {
+    final r = await Future.wait([
+      for (final cmd in ['QHR', 'QHG', 'QHB', 'QOR', 'QOG', 'QOB'])
+        _client.query(cmd),
+    ]);
+    if (!mounted || seq != _readSeq) return;
     setState(() {
-      if (qteVal == 4) {
-        _tempMode = _TempMode.user1;
-      } else if (qteVal == 9) {
-        _tempMode = _TempMode.user2;
-      } else if (qteVal == 10) {
-        _tempMode = _TempMode.defaultTemp;
-      } else if (qteVal >= 3200 && qteVal <= 13000) {
-        _tempMode = _TempMode.custom;
-        _customK = (qteVal ~/ 100) * 100;
-      }
+      _whHigh = List.unmodifiable([
+        for (var i = 0; i < 3; i++) parseWhiteBalanceHigh(r[i], _whHigh[i]),
+      ]);
+      _whLow = List.unmodifiable([
+        for (var i = 0; i < 3; i++) parseWhiteBalanceLow(r[i + 3], _whLow[i]),
+      ]);
     });
   }
 
-  // QHR/QHG/QHB/QOR/QOG/QOB are shared registers that report whichever User
-  // slot (OTE:04 / OTE:09) is currently active — the projector has no
-  // separate per-slot query command, confirmed live: switching modes changed
-  // what these registers returned, and switching back reproduced the
-  // original values exactly. Without this, the sliders kept showing
-  // whichever slot's values were current when the dialog first opened,
-  // unchanged by a mode switch.
-  Future<void> _refreshWhiteBalance() async {
+  // Read on every switch to the method, also back to one already seen, so
+  // values changed elsewhere meanwhile show up.
+  Future<void> _readMatching(MatchMethod m, int seq) async {
     final results = await Future.wait([
-      _client.query('QHR'),
-      _client.query('QHG'),
-      _client.query('QHB'),
-      _client.query('QOR'),
-      _client.query('QOG'),
-      _client.query('QOB'),
+      for (final c in m.colors) _client.query(colorMatchingQuery(m, c)),
     ]);
-    if (!mounted) return;
+    if (!mounted || seq != _readSeq) return;
     setState(() {
-      _whHigh = _parseWhHigh(results.sublist(0, 3), _whHigh);
-      _whLow = _parseWhLow(results.sublist(3, 6), _whLow);
-    });
-  }
-
-  // QMR/QMG/QMB only report the 3-color method's values — refetched every
-  // time the method is switched to (including back to one already visited
-  // this session) so values changed externally while viewing 7-color still
-  // show up correctly.
-  Future<void> _refreshColorMatching3() async {
-    final results = await Future.wait([
-      _client.query('QMR'),
-      _client.query('QMG'),
-      _client.query('QMB'),
-    ]);
-    if (!mounted) return;
-    const keys3 = ['Red', 'Green', 'Blue'];
-    setState(() {
-      for (int i = 0; i < 3; i++) {
+      final next = {..._values[m]!};
+      for (final (i, c) in m.colors.indexed) {
         final raw = results[i];
-        if (raw != null) {
-          final parsed = _parseRgb(raw);
-          if (parsed != null) _values3[keys3[i]] = parsed;
-        }
+        final rgb = raw == null ? null : parseRgbTriple(raw);
+        if (rgb != null) next[c] = rgb;
       }
+      _values = {..._values, m: next};
     });
   }
 
-  // QVX:C7CS0..6 only report the 7-color method's values — same rationale
-  // as _refreshColorMatching3.
-  Future<void> _refreshColorMatching7() async {
-    final results = await Future.wait([
-      for (var i = 0; i < 7; i++) _client.query('QVX:C7CS$i'),
-    ]);
-    if (!mounted) return;
-    const keys7 = [
-      'Red',
-      'Green',
-      'Blue',
-      'Cyan',
-      'Magenta',
-      'Yellow',
-      'White',
-    ];
+  // ── Writes ────────────────────────────────────────────────────────────
+
+  Future<void> _enqueue(Future<void> Function() op) =>
+      _queue = _queue.then((_) => op());
+
+  void _write(String cmd) => _enqueue(() => _client.writeRaw(cmd));
+
+  /// A slider release or Reset: sent now, replacing a press still waiting.
+  void _sendNow(String key, String cmd) {
+    _debouncers[key]?.cancel();
+    _write(cmd);
+  }
+
+  /// − / +, presets and value fields: [cmd] is built when the burst ends,
+  /// from the value then.
+  void _sendDebounced(String key, String Function() cmd) =>
+      _debouncers.putIfAbsent(key, Debouncer.new).run(() => _write(cmd()));
+
+  void _flushPending() {
+    for (final d in _debouncers.values) {
+      d.flush();
+    }
+  }
+
+  // ── Color Matching ────────────────────────────────────────────────────
+
+  void _selectMethod(MatchMethod m) {
+    final seq = ++_readSeq;
+    // A press still waiting belongs to the method being left.
+    _flushPending();
     setState(() {
-      for (int i = 0; i < 7; i++) {
-        final raw = results[i];
-        if (raw != null) {
-          final valuePart = raw.contains('=') ? raw.split('=').last : raw;
-          final parsed = _parseRgb(valuePart);
-          if (parsed != null) _values7[keys7[i]] = parsed;
-        }
+      _method = m;
+      if (m != MatchMethod.off && !m.colors.contains(_selected)) {
+        _selected = MatchColor.red;
       }
     });
+    _write(m.writeCommand);
+    if (m == MatchMethod.off) {
+      _enqueue(() => _readTemperature(seq));
+    } else {
+      _enqueue(
+        () => Future.wait([_readMatching(m, seq), _readWhiteBalance(seq)]),
+      );
+    }
   }
 
-  List<int>? _parseRgb(String raw) {
-    final parts = raw.trim().split(',');
-    if (parts.length != 3) return null;
-    final values = parts.map((p) => int.tryParse(p.trim())).toList();
-    if (values.any((v) => v == null)) return null;
-    return values.cast<int>();
-  }
+  List<int> get _rgb => _values[_method]![_selected]!;
 
-  static String _fmt(int v) => v.toString().padLeft(4, '0');
-  static String _fmt3(int v) => v.toString().padLeft(3, '0');
-
-  // ── Color Matching sends ──────────────────────────────────────────────────
-  Future<void> _setMethod(int method) async {
-    setState(() => _method = method);
-    final cmd = 'VXX:CMAI0=+${method.toString().padLeft(5, '0')}';
-    await _client.writeRaw(cmd);
-  }
-
-  Future<void> _set3Color(String color, List<int> rgb) async {
-    final prefix = switch (color) {
-      'Red' => 'VMR',
-      'Green' => 'VMG',
-      _ => 'VMB',
+  void _setRgb(MatchColor c, List<int> rgb) => setState(() {
+    _values = {
+      ..._values,
+      _method: {..._values[_method]!, c: List.unmodifiable(rgb)},
     };
-    final cmd = '$prefix:${_fmt(rgb[0])},${_fmt(rgb[1])},${_fmt(rgb[2])}';
-    await _client.writeRaw(cmd);
-  }
+  });
 
-  Future<void> _set7Color(String color, List<int> rgb) async {
-    const keys7 = [
-      'Red',
-      'Green',
-      'Blue',
-      'Cyan',
-      'Magenta',
-      'Yellow',
-      'White',
-    ];
-    final idx = keys7.indexOf(color);
-    if (idx == -1) return;
-    final cmd = 'VXX:C7CS$idx=${_fmt(rgb[0])},${_fmt(rgb[1])},${_fmt(rgb[2])}';
-    await _client.writeRaw(cmd);
-  }
-
-  // ── Color Temperature sends ───────────────────────────────────────────────
-  Future<void> _sendColorTemp(_TempMode mode) async {
-    final code = switch (mode) {
-      _TempMode.defaultTemp => '10',
-      _TempMode.user1 => '04',
-      _TempMode.user2 => '09',
-      _TempMode.custom => '$_customK',
-    };
-    final cmd = 'OTE:$code';
-    await _client.writeRaw(cmd);
-  }
-
-  Future<void> _sendWhHigh(int channel, int value) async {
-    final prefix = switch (channel) {
-      0 => 'VHR',
-      1 => 'VHG',
-      _ => 'VHB',
-    };
-    final cmd = '$prefix:${_fmt3(value)}';
-    await _client.writeRaw(cmd);
-  }
-
-  Future<void> _sendWhLow(int channel, int displayValue) async {
-    final prefix = switch (channel) {
-      0 => 'VOR',
-      1 => 'VOG',
-      _ => 'VOB',
-    };
-    final protocol = (displayValue + 128).clamp(1, 255);
-    final cmd = '$prefix:${_fmt3(protocol)}';
-    await _client.writeRaw(cmd);
-  }
-
-  // ── Shared helpers ────────────────────────────────────────────────────────
-  static Color _swatchFor(String name) => switch (name) {
-    'Red' => Colors.red,
-    'Green' => Colors.green,
-    'Blue' => Colors.blue,
-    'Cyan' => Colors.cyan,
-    'Magenta' => const Color(0xFFCC44CC),
-    'Yellow' => Colors.yellow,
-    _ => Colors.white,
-  };
-
-  static const _rgbChannels = [
-    (0, 'R', Colors.red),
-    (1, 'G', Colors.green),
-    (2, 'B', Colors.blue),
+  List<int> _withChannel(int channel, int v) => [
+    for (var i = 0; i < 3; i++) i == channel ? v : _rgb[i],
   ];
 
-  Widget _buildColorCard(
-    BuildContext context,
-    String colorName,
-    Map<String, List<int>> valuesMap,
-    Future<void> Function(String, List<int>) onSend,
-  ) {
-    final rgb = valuesMap[colorName]!;
-    final swatch = _swatchFor(colorName);
-    final theme = Theme.of(context);
+  String _matchingKey(MatchColor c) => 'match-${_method.name}-${c.name}';
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: SectionCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 16,
-                  height: 16,
-                  decoration: BoxDecoration(
-                    color: swatch,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: theme.colorScheme.outline.withValues(alpha: 0.4),
-                      width: 1.2,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Text(
-                  colorName,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            for (final (i, label, color) in _rgbChannels)
-              LabeledSliderRow(
-                layout: SliderLabelLayout.inline,
-                label: label,
-                color: color,
-                value: rgb[i].toDouble(),
-                min: 0,
-                max: 2048,
-                onChanged: (v) =>
-                    setState(() => valuesMap[colorName]![i] = v.round()),
-                onChangeEnd: (_) =>
-                    onSend(colorName, List.from(valuesMap[colorName]!)),
-              ),
-          ],
-        ),
-      ),
+  void _commitChannel(int channel, int v) {
+    final c = _selected;
+    _setRgb(c, _withChannel(channel, v));
+    _sendNow(_matchingKey(c), colorMatchingWrite(_method, c, _rgb));
+  }
+
+  void _typeChannel(int channel, int v) {
+    final (m, c) = (_method, _selected);
+    _setRgb(c, _withChannel(channel, v));
+    _sendDebounced(
+      _matchingKey(c),
+      () => colorMatchingWrite(m, c, _values[m]![c]!),
     );
   }
 
-  // ── Color Temperature tab ─────────────────────────────────────────────────
-  Widget _buildKelvinCard(BuildContext context) {
-    final theme = Theme.of(context);
-    return SectionCard(
+  void _resetColor() {
+    final c = _selected;
+    _setRgb(c, c.defaultRgb);
+    _sendNow(_matchingKey(c), colorMatchingWrite(_method, c, c.defaultRgb));
+  }
+
+  // ── Color Temperature ─────────────────────────────────────────────────
+
+  void _selectTempMode(TempMode m) {
+    if (m == _tempMode) return;
+    final seq = ++_readSeq;
+    _flushPending();
+    setState(() => _tempMode = m);
+    _write(m.writeCommand(_kelvin));
+    if (m.isUser) _enqueue(() => _readWhiteBalance(seq));
+  }
+
+  static String _wbKey(bool isHigh, int channel) =>
+      'wb-${isHigh ? 'high' : 'low'}-$channel';
+
+  String _wbWrite(bool isHigh, int channel) => isHigh
+      ? whiteBalanceHighWrite(channel, _whHigh[channel])
+      : whiteBalanceLowWrite(channel, _whLow[channel]);
+
+  void _setWb(bool isHigh, int channel, int v) => setState(() {
+    List<int> put(List<int> l) => List.unmodifiable([
+      for (var i = 0; i < 3; i++) i == channel ? v : l[i],
+    ]);
+    if (isHigh) {
+      _whHigh = put(_whHigh);
+    } else {
+      _whLow = put(_whLow);
+    }
+  });
+
+  void _dragWb(bool isHigh, int channel, int v) =>
+      _setWb(isHigh, channel, isHigh ? v : snapWhiteBalanceLow(v));
+
+  void _commitWb(bool isHigh, int channel, int v) {
+    _dragWb(isHigh, channel, v);
+    _sendNow(_wbKey(isHigh, channel), _wbWrite(isHigh, channel));
+  }
+
+  // A typed or stepped value is taken as is: the snap to 0 only helps a
+  // drag land on the neutral point.
+  void _typeWb(bool isHigh, int channel, int v) {
+    _setWb(isHigh, channel, v);
+    _sendDebounced(_wbKey(isHigh, channel), () => _wbWrite(isHigh, channel));
+  }
+
+  static const _kelvinKey = 'kelvin';
+
+  String _kelvinWrite() => TempMode.custom.writeCommand(_kelvin);
+
+  void _commitKelvin(int k) {
+    setState(() => _kelvin = k);
+    _sendNow(_kelvinKey, _kelvinWrite());
+  }
+
+  void _stepKelvin(int steps) {
+    setState(
+      () =>
+          _kelvin = (_kelvin + steps * kelvinStep).clamp(kelvinMin, kelvinMax),
+    );
+    _sendDebounced(_kelvinKey, _kelvinWrite);
+  }
+
+  void _presetKelvin(int k) {
+    setState(() => _kelvin = k);
+    _sendDebounced(_kelvinKey, _kelvinWrite);
+  }
+
+  // ── Layout ────────────────────────────────────────────────────────────
+
+  String? get _temperaturePill {
+    if (_loading) return null;
+    if (_method != MatchMethod.off) return 'Fixed';
+    return _tempMode == TempMode.custom ? '$_kelvin K' : _tempMode.label;
+  }
+
+  Widget _matchingBody() {
+    final first = MethodCard(
+      key: ColorCorrectionDialog.firstCardKey,
+      method: _loading ? null : _method,
+      onChanged: _selectMethod,
+    );
+    if (_loading || _method == MatchMethod.off) {
+      return DialogScrollBody(
+        key: const ValueKey('matching-fill'),
+        padding: _bodyPadding,
+        fillGap: _cardGap,
+        fill: _loading ? const _LoadingCard() : const MatchingOffCard(),
+        child: first,
+      );
+    }
+    return DialogScrollBody(
+      key: const ValueKey('matching-colors'),
+      padding: _bodyPadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
+        spacing: _cardGap,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Color Temperature',
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SleekStepperInput(
-                    initialValue: _customK.toString(),
-                    min: 3200,
-                    max: 13000,
-                    step: 100,
-                    onValueChanged: (s) {
-                      final v = double.tryParse(s);
-                      if (v != null) {
-                        setState(() => _customK = v.round());
-                        _sendColorTemp(_TempMode.custom);
-                      }
-                    },
-                  ),
-                  const SizedBox(width: 4),
-                  Text('K', style: theme.textTheme.titleSmall),
-                ],
-              ),
-            ],
-          ),
-          // Stack: gradient Container behind a transparent-track Slider.
-          // The 24 px horizontal padding matches Flutter's internal slider
-          // track inset so the gradient aligns with the actual track bounds.
-          SizedBox(
-            height: 48,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Container(
-                    height: 10,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(5),
-                      gradient: _kKelvinGradient,
-                    ),
-                  ),
-                ),
-                SliderTheme(
-                  data: SliderTheme.of(context).copyWith(
-                    thumbShape: const _KelvinThumbShape(),
-                    trackHeight: 10,
-                    activeTrackColor: Colors.transparent,
-                    inactiveTrackColor: Colors.transparent,
-                    overlayColor: theme.colorScheme.onSurface.withValues(
-                      alpha: 0.12,
-                    ),
-                  ),
-                  child: Slider(
-                    min: 3200,
-                    max: 13000,
-                    // (13000 - 3200) / 100 = 98 steps → 98 divisions
-                    divisions: 98,
-                    value: _customK.toDouble(),
-                    label: '${_customK}K',
-                    onChanged: (v) =>
-                        setState(() => _customK = (v.round() ~/ 100) * 100),
-                    onChangeEnd: (_) => _sendColorTemp(_TempMode.custom),
-                  ),
-                ),
-              ],
-            ),
+          first,
+          ColorMatchingCard(
+            method: _method,
+            values: _values[_method]!,
+            selected: _selected,
+            onSelect: (c) => setState(() => _selected = c),
+            onChannelChanged: (ch, v) =>
+                _setRgb(_selected, _withChannel(ch, v)),
+            onChannelCommit: _commitChannel,
+            onChannelTyped: _typeChannel,
+            onReset: _resetColor,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildWhiteBalanceCard(
-    BuildContext context, {
-    required String title,
-    required List<int> values,
-    required double min,
-    required double max,
-    required void Function(int channel, int value) onChanged,
-    required void Function(int channel, int value) onChangeEnd,
-  }) {
-    final theme = Theme.of(context);
-    return SectionCard(
+  Widget _temperatureBody() {
+    final matchingOn = _method != MatchMethod.off;
+    final Widget? second = _loading
+        ? null
+        // Color Matching edits the same registers, so white balance stays
+        // usable while it fixes the mode.
+        : matchingOn || _tempMode.isUser
+        ? WhiteBalanceCard(
+            high: _whHigh,
+            low: _whLow,
+            underColorMatching: matchingOn,
+            onChanged: _dragWb,
+            onCommit: _commitWb,
+            onTyped: _typeWb,
+          )
+        : _tempMode == TempMode.custom
+        ? KelvinCard(
+            kelvin: _kelvin,
+            onChanged: (k) => setState(() => _kelvin = k),
+            onCommit: _commitKelvin,
+            onStep: _stepKelvin,
+            onPreset: _presetKelvin,
+          )
+        : null;
+    return DialogScrollBody(
+      key: const ValueKey('temperature'),
+      padding: _bodyPadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
+        spacing: _cardGap,
         children: [
-          Text(
-            title,
-            style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
+          TemperatureModeCard(
+            key: ColorCorrectionDialog.firstCardKey,
+            mode: _tempMode,
+            fixedBy: matchingOn ? _method : null,
+            loading: _loading,
+            onSelected: _selectTempMode,
           ),
-          const SizedBox(height: 4),
-          for (final (i, label, color) in _rgbChannels)
-            LabeledSliderRow(
-              layout: SliderLabelLayout.inline,
-              label: label,
-              color: color,
-              value: values[i].toDouble(),
-              min: min,
-              max: max,
-              onChanged: (v) => onChanged(i, v.round()),
-              onChangeEnd: (v) => onChangeEnd(i, v.round()),
-            ),
+          ?second,
         ],
       ),
     );
   }
 
-  Widget _buildWhiteBalanceSection(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildWhiteBalanceCard(
-            context,
-            title: 'White Balance High',
-            values: _whHigh,
-            min: 0,
-            max: 255,
-            onChanged: (ch, v) => setState(() => _whHigh[ch] = v),
-            onChangeEnd: (ch, v) => _sendWhHigh(ch, v),
-          ),
-          const SizedBox(height: 10),
-          _buildWhiteBalanceCard(
-            context,
-            title: 'White Balance Low',
-            values: _whLow,
-            min: -127,
-            max: 127,
-            onChanged: (ch, v) =>
-                setState(() => _whLow[ch] = v.abs() <= 3 ? 0 : v),
-            onChangeEnd: (ch, v) => _sendWhLow(ch, _whLow[ch]),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildColorTempTab(BuildContext context) {
-    final theme = Theme.of(context);
-    // While Color Matching (3/7 colors) is active, the projector has no
-    // notion of a Color Temperature mode — QTE reads ER401 (confirmed live)
-    // — but White Balance High/Low remain live-editable through the same
-    // VHR/VHG/VHB/VOR/VOG/VOB registers Color Temperature's User 1/2 use.
-    // Lock the mode picker instead of leaving it selectable to a state the
-    // projector rejects, while keeping the sliders themselves usable.
-    final matchingActive = _method != 0;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-          child: SegmentedButton<_TempMode>(
-            segments: const [
-              ButtonSegment(
-                value: _TempMode.defaultTemp,
-                label: Text('Default'),
-              ),
-              ButtonSegment(value: _TempMode.user1, label: Text('User 1')),
-              ButtonSegment(value: _TempMode.user2, label: Text('User 2')),
-              ButtonSegment(value: _TempMode.custom, label: Text('Custom')),
-            ],
-            selected: {_tempMode},
-            showSelectedIcon: false,
-            onSelectionChanged: matchingActive
-                ? null
-                : (s) async {
-                    final mode = s.first;
-                    setState(() => _tempMode = mode);
-                    // Awaited: each NTCONTROL command is its own TCP
-                    // connection, so firing the refresh without waiting for
-                    // this write's response first risks the read reaching
-                    // the projector before the switch actually applied.
-                    await _sendColorTemp(mode);
-                    if (mode == _TempMode.user1 || mode == _TempMode.user2) {
-                      await _refreshWhiteBalance();
-                    }
-                  },
-          ),
-        ),
-        if (matchingActive)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
-            child: Text(
-              'Fixed while Color Matching is active.',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-              ),
-            ),
-          ),
-        const SizedBox(height: 12),
-        const Divider(height: 1),
-        Expanded(
-          child: matchingActive
-              ? _buildWhiteBalanceSection(context)
-              : switch (_tempMode) {
-                  _TempMode.defaultTemp => Center(
-                    child: Text(
-                      'Using the factory default color temperature',
-                      style: TextStyle(
-                        color: theme.colorScheme.onSurface.withValues(
-                          alpha: 0.45,
-                        ),
-                      ),
-                    ),
-                  ),
-                  _TempMode.custom => SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
-                    child: _buildKelvinCard(context),
-                  ),
-                  _TempMode.user1 ||
-                  _TempMode.user2 => _buildWhiteBalanceSection(context),
-                },
-        ),
-      ],
-    );
-  }
+  static const _bodyPadding = EdgeInsets.fromLTRB(24, 16, 24, 20);
+  static const double _cardGap = 16;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Dialog(
       clipBehavior: Clip.antiAlias,
-      child: SizedBox(
-        width: 560,
-        height: 680,
-        child: DefaultTabController(
-          length: 2,
+      // A cap: the smallest window (800×600) leaves about 720×550 inside
+      // the Dialog insets, and the body scrolls there. Within it the dialog
+      // has one size for both tabs, every method and mode, and loading
+      // (SizedBox.expand), so nothing moves on a switch.
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560, maxHeight: 580),
+        child: SizedBox.expand(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -699,137 +432,59 @@ class _ColorCorrectionDialogState extends ConsumerState<ColorCorrectionDialog> {
                 title: 'Color Correction',
                 projectorId: widget.node.id,
               ),
-              TabBar(
-                tabs: const [
-                  Tab(text: 'Color Matching'),
-                  Tab(text: 'Color Temperature'),
-                ],
-                labelStyle: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+                child: SegmentedTabs<_Tab>(
+                  key: ColorCorrectionDialog.tabsKey,
+                  selected: _tab,
+                  onChanged: (t) => setState(() => _tab = t),
+                  tabs: [
+                    SegmentedTab(
+                      value: _Tab.matching,
+                      label: 'Color Matching',
+                      pill: _loading ? null : _method.label,
+                    ),
+                    SegmentedTab(
+                      value: _Tab.temperature,
+                      label: 'Color Temperature',
+                      pill: _temperaturePill,
+                    ),
+                  ],
                 ),
               ),
-              const Divider(height: 1),
-
-              if (_loading)
-                const Expanded(
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else
-                Expanded(
-                  child: TabBarView(
-                    children: [
-                      // ── Color Matching ──────────────────────────────────
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-                            child: SegmentedButton<int>(
-                              segments: const [
-                                ButtonSegment(value: 0, label: Text('Off')),
-                                ButtonSegment(
-                                  value: 1,
-                                  label: Text('3 Colors'),
-                                ),
-                                ButtonSegment(
-                                  value: 2,
-                                  label: Text('7 Colors'),
-                                ),
-                              ],
-                              selected: {_method},
-                              showSelectedIcon: false,
-                              onSelectionChanged: (s) async {
-                                final method = s.first;
-                                // Awaited: same reasoning as the Color
-                                // Temperature switch — the reads below must
-                                // land after CMAI0's write actually applies.
-                                await _setMethod(method);
-                                if (method == 0) {
-                                  // QTE only reports something meaningful
-                                  // once Color Matching is off again —
-                                  // _tempMode may otherwise still be an
-                                  // unverified guess (never resolved if the
-                                  // dialog was opened while already in 3/7
-                                  // colors) or stale from before switching.
-                                  await _refreshTempMode();
-                                  return;
-                                }
-                                // White Balance is the same shared register
-                                // Color Temperature's User 1/2 edit — refresh
-                                // it too whenever Color Matching becomes
-                                // active, since QTE (and so _tempMode) can't
-                                // be trusted to reflect it in that state.
-                                await Future.wait([
-                                  if (method == 1) _refreshColorMatching3(),
-                                  if (method == 2) _refreshColorMatching7(),
-                                  _refreshWhiteBalance(),
-                                ]);
-                              },
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          const Divider(height: 1),
-                          Expanded(
-                            child: _method == 0
-                                ? Center(
-                                    child: Text(
-                                      'Color matching is disabled',
-                                      style: TextStyle(
-                                        color: theme.colorScheme.onSurface
-                                            .withValues(alpha: 0.45),
-                                      ),
-                                    ),
-                                  )
-                                : SingleChildScrollView(
-                                    padding: const EdgeInsets.fromLTRB(
-                                      20,
-                                      14,
-                                      20,
-                                      16,
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.stretch,
-                                      children:
-                                          (_method == 1
-                                                  ? ['Red', 'Green', 'Blue']
-                                                  : [
-                                                      'Red',
-                                                      'Green',
-                                                      'Blue',
-                                                      'Cyan',
-                                                      'Magenta',
-                                                      'Yellow',
-                                                      'White',
-                                                    ])
-                                              .map(
-                                                (c) => _buildColorCard(
-                                                  context,
-                                                  c,
-                                                  _method == 1
-                                                      ? _values3
-                                                      : _values7,
-                                                  _method == 1
-                                                      ? _set3Color
-                                                      : _set7Color,
-                                                ),
-                                              )
-                                              .toList(),
-                                    ),
-                                  ),
-                          ),
-                        ],
-                      ),
-
-                      // ── Color Temperature ───────────────────────────────
-                      _buildColorTempTab(context),
-                    ],
-                  ),
-                ),
+              Expanded(
+                child: switch (_tab) {
+                  _Tab.matching => _matchingBody(),
+                  _Tab.temperature => _temperatureBody(),
+                },
+              ),
+              DialogFooter(message: SentRightAwayNote(loading: _loading)),
             ],
           ),
         ),
       ),
     );
   }
+}
+
+/// Color Matching's second card while the method is still being read.
+class _LoadingCard extends StatelessWidget {
+  const _LoadingCard();
+
+  @override
+  Widget build(BuildContext context) => const ColorCard(
+    child: Center(
+      child: SkeletonPulse(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          spacing: 10,
+          children: [
+            Skeleton(width: 34, height: 34, radius: 10),
+            Skeleton(width: 180, height: 16),
+            Skeleton(width: 300, height: 12),
+          ],
+        ),
+      ),
+    ),
+  );
 }
