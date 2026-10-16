@@ -19,6 +19,12 @@
 // starts blended on Left/Right with non-zero black levels and border widths;
 // the others start at the RQ25K factory values (mode Off, all levels 0).
 //
+// Geometry Correction (the Geometry Correction dialog): every Keystone,
+// Curved and Corner register, the mode and Quad Pixel Drive, with their
+// ranges answered by ER402. Projector 1 starts in Keystone (V +20, H +8),
+// projector 2 in Curved Correction (arcs 30 / -20, throw ratio 0.8), the
+// others with correction off.
+//
 // Self-diagnosis codes (QVX:ERRS2, see the panasonic-ntcontrol skill's
 // Self-diagnosis codes) are set while it runs, by typing into its console:
 //   err 3 F305 U200   projector 3 reports these codes
@@ -95,10 +101,13 @@ class SimProjector {
   }
 
   late final EdgeBlendSim edgeBlend = EdgeBlendSim(demo: index == 1);
+  late final GeometrySim geometry = GeometrySim(index: index);
 
   String reply(String cmd) {
     final blend = edgeBlend.reply(cmd);
     if (blend != null) return blend;
+    final geo = geometry.reply(cmd);
+    if (geo != null) return geo;
     if (cmd == 'PON') {
       if (power == 1 || power == 4) _powerTo(2, 3, warmUp);
       return 'PON';
@@ -293,6 +302,101 @@ class EdgeBlendSim {
 
   static String _nt(int n) =>
       '${n < 0 ? '-' : '+'}${n.abs().toString().padLeft(5, '0')}';
+}
+
+/// Geometry Correction registers (the Geometry Correction dialog) in the wire
+/// formats a PT-RQ25K answers with: degrees and throw ratio as `+20.0` /
+/// `+01.5`, the rest as `+00030`. A write echoes the command, a value out of
+/// the register's range is refused with ER402. Like the hardware, Vertical
+/// Keystone reads back up to ±40 even where the projector applies less.
+class GeometrySim {
+  GeometrySim({required int index}) {
+    // Something for the preview to show on opening: projector 1 in Keystone,
+    // projector 2 in Curved Correction.
+    if (index == 1) {
+      ints['QPDI1'] = 1;
+      ints['GMMI0'] = 1;
+      decimals['GMKS8'] = 20;
+      decimals['GMKS9'] = 8;
+    } else if (index == 2) {
+      ints
+        ..['QPDI1'] = 1
+        ..['GMMI0'] = 2
+        ..['GMCI3'] = 30
+        ..['GMCI7'] = -20
+        ..['GMCIA'] = 1;
+      decimals['GMCS0'] = 0.8;
+    }
+  }
+
+  /// Integer registers and their range. Corner limits are the Tier A
+  /// inward reach (geometry_values.dart): 960 H, 600 V.
+  static final _intRange = <String, (int, int)>{
+    'GMMI0': (0, 10), // 0 off, 1 Keystone, 2 Curved, 10 Corner
+    'QPDI1': (0, 1), // Quad Pixel Drive
+    'GMKI4': (-60, 60),
+    'GMKI7': (-30, 30),
+    'GMCI2': (-60, 60),
+    'GMCI3': (-40, 40),
+    'GMCI6': (-30, 30),
+    'GMCI7': (-40, 40),
+    'GMCIA': (0, 1),
+    for (final k in ['GMFI1', 'GMFI2', 'GMFI3', 'GMFI4']) k: (-600, 600),
+    for (final k in ['GMFI6', 'GMFI7', 'GMFI8', 'GMFI9']) k: (-960, 960),
+    'GMFI5': (-127, 127),
+    'GMFIA': (-127, 127),
+    for (final k in ['GMFIB', 'GMFIC', 'GMFID', 'GMFIE']) k: (-100, 100),
+    'GMFIF': (0, 1),
+  };
+
+  static const _decimalRange = <String, (double, double)>{
+    'GMKS0': (0.7, 16.5), // throw ratio
+    'GMKS8': (-40, 40),
+    'GMKS9': (-15, 15),
+    'GMCS0': (0.7, 16.5),
+    'GMCS8': (-40, 40),
+    'GMCS9': (-15, 15),
+  };
+
+  final ints = {for (final k in _intRange.keys) k: 0};
+  final decimals = <String, double>{
+    for (final k in _decimalRange.keys) k: k.endsWith('S0') ? 1.5 : 0,
+  };
+
+  /// The reply, or null when [cmd] isn't a geometry command.
+  String? reply(String cmd) {
+    if (cmd.startsWith('QVX:')) {
+      final key = cmd.substring(4);
+      if (ints.containsKey(key)) return '$key=${_int(ints[key]!)}';
+      if (decimals.containsKey(key)) return '$key=${_decimal(decimals[key]!)}';
+      return null;
+    }
+    if (!cmd.startsWith('VXX:')) return null;
+    final eq = cmd.indexOf('=');
+    if (eq < 0) return null;
+    final key = cmd.substring(4, eq);
+    final value = cmd.substring(eq + 1);
+    if (_intRange[key] case (final lo, final hi)) {
+      final n = int.tryParse(value);
+      if (n == null || n < lo || n > hi) return 'ER402';
+      if (key == 'GMMI0' && ![0, 1, 2, 10].contains(n)) return 'ER402';
+      ints[key] = n;
+      return cmd;
+    }
+    if (_decimalRange[key] case (final lo, final hi)) {
+      final d = double.tryParse(value);
+      if (d == null || d < lo || d > hi) return 'ER402';
+      decimals[key] = d;
+      return cmd;
+    }
+    return null;
+  }
+
+  static String _int(int n) =>
+      '${n < 0 ? '-' : '+'}${n.abs().toString().padLeft(5, '0')}';
+
+  static String _decimal(double d) =>
+      '${d < 0 ? '-' : '+'}${d.abs().toStringAsFixed(1).padLeft(4, '0')}';
 }
 
 /// What --demo-errors starts with, by projector number.
