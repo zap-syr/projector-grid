@@ -84,18 +84,20 @@ class SegmentedTabs<T> extends StatelessWidget {
             duration: const Duration(milliseconds: 150),
             padding: const EdgeInsets.symmetric(horizontal: 12),
             alignment: Alignment.center,
+            // No shadow: a BoxShadow paints a blurred filled box under the
+            // whole tab, which showed through as a dark flash while the fill
+            // of the tab being left faded out. A border lifts the selected
+            // tab instead; every tab has one (transparent when not selected)
+            // so the width never changes, and both fade to the same colour at
+            // zero alpha rather than to null.
             decoration: BoxDecoration(
-              color: isSelected ? raised : null,
+              color: isSelected ? raised : raised.withValues(alpha: 0),
               borderRadius: BorderRadius.circular(9),
-              boxShadow: isSelected
-                  ? [
-                      BoxShadow(
-                        color: cs.shadow.withValues(alpha: 0.18),
-                        blurRadius: 3,
-                        offset: const Offset(0, 1),
-                      ),
-                    ]
-                  : null,
+              border: Border.all(
+                color: isSelected
+                    ? cs.outlineVariant
+                    : cs.outlineVariant.withValues(alpha: 0),
+              ),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
