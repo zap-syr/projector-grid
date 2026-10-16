@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/theme/app_theme.dart';
+import '../../domain/geometry_preview.dart';
 import '../../domain/geometry_values.dart';
 import '../../domain/projector_node.dart';
 import '../providers/protocol_service_provider.dart';
@@ -16,6 +18,7 @@ import 'common/labeled_slider_row.dart';
 import 'common/projector_settings_client.dart';
 import 'custom_tooltip.dart';
 import 'dialog_title_bar.dart';
+import 'geometry_preview_painter.dart';
 import 'sleek_stepper_input.dart';
 
 // ─── Mode enum ─────────────────────────────────────────────────────────────
@@ -548,7 +551,15 @@ class _GeometryCorrectionDialogState
   // ─── Keystone ────────────────────────────────────────────────────────────
   Widget _buildKeystoneBody() {
     return DialogSplitLayout(
-      left: _buildPreviewUnavailable(),
+      left: _buildPreviewPanel(
+        keystonePreview(
+          throwRatio: _keystone.gmks0,
+          vertical: _keystone.gmks8,
+          horizontal: _keystone.gmks9,
+          verticalBalance: _keystone.gmki4,
+          horizontalBalance: _keystone.gmki7,
+        ),
+      ),
       right: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -607,7 +618,18 @@ class _GeometryCorrectionDialogState
   // ─── Curved ──────────────────────────────────────────────────────────────
   Widget _buildCurvedBody() {
     return DialogSplitLayout(
-      left: _buildPreviewUnavailable(),
+      left: _buildPreviewPanel(
+        curvedPreview(
+          throwRatio: _curved.gmcs0,
+          verticalArc: _curved.gmci3,
+          horizontalArc: _curved.gmci7,
+          vertical: _curved.gmcs8,
+          horizontal: _curved.gmcs9,
+          verticalBalance: _curved.gmci2,
+          horizontalBalance: _curved.gmci6,
+          keepAspect: _curved.gmcia,
+        ),
+      ),
       right: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -697,68 +719,21 @@ class _GeometryCorrectionDialogState
     );
   }
 
-  Widget _buildPreviewUnavailable() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.visibility_off_outlined,
-              size: 36,
-              color: Theme.of(context).colorScheme.onSurface
-                  .withValues(alpha: 0.3),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Preview not available',
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurface
-                    .withValues(alpha: 0.45),
-                fontSize: 13,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // Left panel canvas for keystone/curved modes — fills available height.
-  // ignore: unused_element
-  Widget _buildTrapezoidPanel({
-    required double vKeystone,
-    required double hKeystone,
-    required int vArc,
-    required int hArc,
-    required int vBalance,
-    required int hBalance,
-  }) {
+  // Left panel for Keystone / Curved: the projector's result as the model in
+  // domain/geometry_preview.dart computes it. The redesign (wave B) moves it
+  // into the preview card of DIALOG_REDESIGN_PLAN.md §7.3.
+  Widget _buildPreviewPanel(GeometryPreview preview) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-          child: Text(
-            'Preview',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface
-                  .withValues(alpha: 0.6),
-            ),
-          ),
+          child: Text('Preview', style: AppText.of(context).label),
         ),
         Expanded(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-            child: _TrapezoidCanvas(
-              vKeystone: vKeystone,
-              hKeystone: hKeystone,
-              vArc: vArc,
-              hArc: hArc,
-              vBalance: vBalance,
-              hBalance: hBalance,
-            ),
+            child: GeometryPreviewCanvas(preview: preview),
           ),
         ),
       ],
@@ -800,310 +775,6 @@ class _GeometryCorrectionDialogState
       ],
     );
   }
-}
-
-// ─── Trapezoid Canvas (keystone + curved preview) ──────────────────────────
-class _TrapezoidCanvas extends StatelessWidget {
-  final double vKeystone; // -40..40
-  final double hKeystone; // -15..15
-  final int vArc; // -40..40
-  final int hArc; // -40..40
-  final int vBalance; // -60..60
-  final int hBalance; // -30..30
-
-  const _TrapezoidCanvas({
-    required this.vKeystone,
-    required this.hKeystone,
-    required this.vArc,
-    required this.hArc,
-    required this.vBalance,
-    required this.hBalance,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    // FittedBox scales to fill whatever space the parent gives while preserving
-    // the 480×280 internal coordinate system used by the painter.
-    return FittedBox(
-      fit: BoxFit.contain,
-      child: SizedBox(
-        width: 480,
-        height: 280,
-        child: CustomPaint(
-          painter: _TrapezoidPainter(
-            vKeystone: vKeystone,
-            hKeystone: hKeystone,
-            vArc: vArc,
-            hArc: hArc,
-            vBalance: vBalance,
-            hBalance: hBalance,
-            outline: theme.colorScheme.primary,
-            fill: theme.colorScheme.primary.withValues(alpha: 0.10),
-            defaultColor: theme.dividerColor,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TrapezoidPainter extends CustomPainter {
-  final double vKeystone, hKeystone;
-  final int vArc, hArc;
-  final int vBalance, hBalance;
-  final Color outline, fill, defaultColor;
-
-  _TrapezoidPainter({
-    required this.vKeystone,
-    required this.hKeystone,
-    required this.vArc,
-    required this.hArc,
-    required this.vBalance,
-    required this.hBalance,
-    required this.outline,
-    required this.fill,
-    required this.defaultColor,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    const defaultRect = Rect.fromLTRB(120, 60, 360, 220);
-
-    // Reference outline — outside clip so it is always fully visible.
-    canvas.drawRect(
-      defaultRect,
-      Paint()
-        ..color = defaultColor.withValues(alpha: 0.5)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1,
-    );
-
-    // ── Vertex calculation ──────────────────────────────────────────────────
-    double min(double a, double b) => a < b ? a : b;
-
-    final double vK = vKeystone.abs() / 40.0;
-    final double hK = hKeystone.abs() / 15.0;
-
-    final double vPinchX = vK * 60.0;
-    final double vCompY = vK * 40.0;
-
-    final double hPinchY = hK * 40.0;
-    final double hCompX = hK * 60.0;
-
-    double tlX = defaultRect.left;
-    double tlY = defaultRect.top;
-    double trX = defaultRect.right;
-    double trY = defaultRect.top;
-    double blX = defaultRect.left;
-    double blY = defaultRect.bottom;
-    double brX = defaultRect.right;
-    double brY = defaultRect.bottom;
-
-    // 1. Base Vertical Keystone
-    if (vKeystone > 0) {
-      tlX += vPinchX;
-      trX -= vPinchX; // Top pinches inward
-      blY -= vCompY;
-      brY -= vCompY; // Bottom compensates UP
-    } else if (vKeystone < 0) {
-      blX += vPinchX;
-      brX -= vPinchX; // Bottom pinches inward
-      tlY += vCompY;
-      trY += vCompY; // Top compensates DOWN
-    }
-
-    // 2. Horizontal Keystone with Matrix Overlap Sliding
-
-    // [!] TWEAK THIS VALUE (0.35 - 0.40) TO ADJUST THE MAXIMUM SLIDE LIMIT
-    final double maxSlideY = defaultRect.height * 0.46;
-
-    if (hKeystone > 0) {
-      tlY += hPinchY;
-      blY -= hPinchY; // Left pinches inward
-
-      if (vKeystone > 0) {
-        // vKeystone moved bottom edge UP. LEFT edge slides DOWN to absorb hPinch.
-        double slideY = min(vCompY + hPinchY, 2 * hPinchY);
-        slideY = min(
-          slideY,
-          maxSlideY,
-        ); // Apply hard limit to prevent triangle folding
-        tlY += slideY;
-        blY += slideY;
-
-        double remRatio = hPinchY == 0
-            ? 0.0
-            : ((hPinchY - vCompY) / hPinchY).clamp(0.0, 1.0);
-        trX -= hCompX * remRatio;
-        brX -= hCompX * remRatio;
-      } else if (vKeystone < 0) {
-        // vKeystone moved top edge DOWN. LEFT edge slides UP to absorb hPinch.
-        double slideY = min(vCompY + hPinchY, 2 * hPinchY);
-        slideY = min(
-          slideY,
-          maxSlideY,
-        ); // Apply hard limit to prevent triangle folding
-        tlY -= slideY;
-        blY -= slideY;
-
-        double remRatio = hPinchY == 0
-            ? 0.0
-            : ((hPinchY - vCompY) / hPinchY).clamp(0.0, 1.0);
-        trX -= hCompX * remRatio;
-        brX -= hCompX * remRatio;
-      } else {
-        trX -= hCompX;
-        brX -= hCompX;
-      }
-    } else if (hKeystone < 0) {
-      trY += hPinchY;
-      brY -= hPinchY; // Right pinches inward
-
-      if (vKeystone > 0) {
-        // vKeystone moved bottom edge UP. RIGHT edge slides DOWN to absorb hPinch.
-        double slideY = min(vCompY + hPinchY, 2 * hPinchY);
-        slideY = min(
-          slideY,
-          maxSlideY,
-        ); // Apply hard limit to prevent triangle folding
-        trY += slideY;
-        brY += slideY;
-
-        double remRatio = hPinchY == 0
-            ? 0.0
-            : ((hPinchY - vCompY) / hPinchY).clamp(0.0, 1.0);
-        tlX += hCompX * remRatio;
-        blX += hCompX * remRatio;
-      } else if (vKeystone < 0) {
-        // vKeystone moved top edge DOWN. RIGHT edge slides UP to absorb hPinch.
-        double slideY = min(vCompY + hPinchY, 2 * hPinchY);
-        slideY = min(
-          slideY,
-          maxSlideY,
-        ); // Apply hard limit to prevent triangle folding
-        trY -= slideY;
-        brY -= slideY;
-
-        double remRatio = hPinchY == 0
-            ? 0.0
-            : ((hPinchY - vCompY) / hPinchY).clamp(0.0, 1.0);
-        tlX += hCompX * remRatio;
-        blX += hCompX * remRatio;
-      } else {
-        tlX += hCompX;
-        blX += hCompX;
-      }
-    }
-
-    // ── Balance adjustments ─────────────────────────────────────────────────
-    // Applied after keystone; clamped to defaultRect so nothing escapes.
-    final vBalDelta = (vBalance / 60.0) * 20.0;
-    final hBalDelta = (hBalance / 30.0) * 12.0;
-
-    if (vKeystone.abs() > 0.01) {
-      if (vKeystone > 0) {
-        // vBalance shifts bottom (unpinched) edge vertically — inverted.
-        blY -= vBalDelta;
-        brY -= vBalDelta;
-        // hBalance shifts top (pinched) corners horizontally (positive = left).
-        tlX -= hBalDelta;
-        trX -= hBalDelta;
-      } else {
-        // vBalance shifts top (unpinched) edge — inverted.
-        tlY -= vBalDelta;
-        trY -= vBalDelta;
-        blX -= hBalDelta;
-        brX -= hBalDelta;
-      }
-    }
-
-    if (hKeystone.abs() > 0.01) {
-      if (hKeystone > 0) {
-        // hBalance shifts right (unpinched) edge — inverted.
-        trX += hBalDelta;
-        brX += hBalDelta;
-        // vBalance shifts left (pinched) corners vertically (positive = down).
-        tlY += vBalDelta;
-        blY += vBalDelta;
-      } else {
-        // hBalance shifts left (unpinched) edge — inverted.
-        tlX += hBalDelta;
-        blX += hBalDelta;
-        trY += vBalDelta;
-        brY += vBalDelta;
-      }
-    }
-
-    // Clamp — the physical matrix is the hard limit.
-    double cx(double x) => x.clamp(defaultRect.left, defaultRect.right);
-    double cy(double y) => y.clamp(defaultRect.top, defaultRect.bottom);
-
-    final topLeft = Offset(cx(tlX), cy(tlY));
-    final topRight = Offset(cx(trX), cy(trY));
-    final bottomLeft = Offset(cx(blX), cy(blY));
-    final bottomRight = Offset(cx(brX), cy(brY));
-
-    // ── Arc bows (curved mode only; both 0 in keystone mode) ───────────────
-    final vBow = (vArc / 40.0) * 30.0;
-    final hBow = (hArc / 40.0) * 30.0;
-
-    // ── Build path ──────────────────────────────────────────────────────────
-    final path = Path()..moveTo(topLeft.dx, topLeft.dy);
-
-    final topMid = Offset(
-      (topLeft.dx + topRight.dx) / 2,
-      (topLeft.dy + topRight.dy) / 2 - vBow,
-    );
-    final rightMid = Offset(
-      (topRight.dx + bottomRight.dx) / 2 + hBow,
-      (topRight.dy + bottomRight.dy) / 2,
-    );
-    final botMid = Offset(
-      (bottomRight.dx + bottomLeft.dx) / 2,
-      (bottomRight.dy + bottomLeft.dy) / 2 + vBow,
-    );
-    final leftMid = Offset(
-      (bottomLeft.dx + topLeft.dx) / 2 - hBow,
-      (bottomLeft.dy + topLeft.dy) / 2,
-    );
-
-    path.quadraticBezierTo(topMid.dx, topMid.dy, topRight.dx, topRight.dy);
-    path.quadraticBezierTo(
-      rightMid.dx,
-      rightMid.dy,
-      bottomRight.dx,
-      bottomRight.dy,
-    );
-    path.quadraticBezierTo(botMid.dx, botMid.dy, bottomLeft.dx, bottomLeft.dy);
-    path.quadraticBezierTo(leftMid.dx, leftMid.dy, topLeft.dx, topLeft.dy);
-    path.close();
-
-    // Clip so arc bows cannot bleed outside the grey reference frame.
-    canvas.save();
-    canvas.clipRect(defaultRect);
-    canvas.drawPath(path, Paint()..color = fill);
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = outline
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2,
-    );
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(covariant _TrapezoidPainter old) =>
-      old.vKeystone != vKeystone ||
-      old.hKeystone != hKeystone ||
-      old.vArc != vArc ||
-      old.hArc != hArc ||
-      old.vBalance != vBalance ||
-      old.hBalance != hBalance ||
-      old.outline != outline ||
-      old.fill != fill ||
-      old.defaultColor != defaultColor;
 }
 
 // ─── Corner Correction Canvas ──────────────────────────────────────────────

@@ -131,7 +131,11 @@ Steps, matching §1.1 and `tool/geometry_measure/geo_model.py` line for line:
 
 1.5 ms per call in the debug test runner; the test keeps an 8 ms guard.
 
-### 2.2 `[ ]` Painter `presentation/widgets/geometry_preview_painter.dart`
+### 2.2 `[~]` Painter `presentation/widgets/geometry_preview_painter.dart`
+Painter done 2026-10-16 and shown in today's dialog under a *Preview* header;
+`_TrapezoidPainter` and `_buildPreviewUnavailable` are gone. Left for step 6: the card
+header (pill, **Reset**) and the legend. `tool/projector_simulator.dart` answers the
+geometry registers, so the preview can be checked without a projector.
 - Draws, inside the panel aspect box: the panel frame (legend *Panel*), the image fill and
   outline (legend *Image*), and the two centre lines crossing the image as in the mockup
   (no grid; owner, 2026-10-16).
