@@ -46,8 +46,8 @@ class _AppAboutDialogState extends State<AppAboutDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
+    final cs = Theme.of(context).colorScheme;
+    final t = AppText.of(context);
     final info = _info;
 
     return Dialog(
@@ -67,13 +67,7 @@ class _AppAboutDialogState extends State<AppAboutDialog> {
                     children: [
                       const _AppIcon(),
                       const SizedBox(height: 12),
-                      Text(
-                        _appName,
-                        style: theme.textTheme.headlineSmall?.copyWith(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
+                      Text(_appName, style: t.hero),
                       const SizedBox(height: 8),
                       // Height held while PackageInfo loads, so the rows
                       // below don't jump when the pill appears.
@@ -96,9 +90,9 @@ class _AppAboutDialogState extends State<AppAboutDialog> {
                             ),
                           ],
                         ),
-                        style: theme.textTheme.bodyLarge?.copyWith(
-                          fontSize: 15.5,
-                          color: cs.onSurfaceVariant,
+                        style: t.cardTitle.copyWith(
+                          fontWeight: FontWeight.w400,
+                          color: t.secondary,
                         ),
                       ),
                       const SizedBox(height: 18),
@@ -162,10 +156,7 @@ class _AppAboutDialogState extends State<AppAboutDialog> {
                 child: Text(
                   '© 2025–2026 $_author',
                   textAlign: TextAlign.center,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    fontSize: 12.5,
-                    color: cs.onSurfaceVariant.withValues(alpha: 0.75),
-                  ),
+                  style: t.description,
                 ),
               ),
             ),
@@ -213,23 +204,23 @@ class _VersionPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final t = AppText.of(context);
     // The Column hands the pill a loose width, and Container with an
-    // alignment would fill it; widthFactor keeps it to the text.
+    // alignment would fill it; widthFactor keeps it to the text. Neutral,
+    // not primary: a blue fill is kept for state.
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
-        color: cs.primaryContainer,
+        color: DialogSurfaces.of(context).soft,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Center(
         widthFactor: 1,
         child: Text(
           text,
-          style: TextStyle(
-            fontSize: 12,
+          style: t.caption.copyWith(
             fontWeight: FontWeight.w600,
-            color: cs.onPrimaryContainer,
+            color: t.secondary,
           ),
         ),
       ),
@@ -288,9 +279,9 @@ class _LinkRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final dark = theme.brightness == Brightness.dark;
+    final cs = Theme.of(context).colorScheme;
+    final t = AppText.of(context);
+    final dark = cs.brightness == Brightness.dark;
     return SizedBox(
       height: 44,
       child: Padding(
@@ -299,30 +290,29 @@ class _LinkRow extends StatelessWidget {
         padding: const EdgeInsets.only(left: 10, right: 4),
         child: Row(
           children: [
-            Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                color: heart
-                    ? Colors.pink.withValues(alpha: dark ? 0.22 : 0.12)
-                    : cs.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                icon,
-                size: 16,
-                color: heart
-                    ? (dark ? Colors.pink.shade100 : Colors.pink.shade600)
-                    : cs.onSurfaceVariant,
-              ),
-            ),
+            if (heart)
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: Colors.pink.withValues(alpha: dark ? 0.22 : 0.12),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Icon(
+                  icon,
+                  size: 16,
+                  color: dark ? Colors.pink.shade100 : Colors.pink.shade600,
+                ),
+              )
+            else
+              DialogIconTile(icon, size: 30),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodyMedium?.copyWith(fontSize: 13.5),
+                style: t.body,
               ),
             ),
             const SizedBox(width: 6),
@@ -339,15 +329,7 @@ class _LinkRow extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (hint != null) ...[
-                      Text(
-                        hint!,
-                        style: AppTheme.mono(
-                          TextStyle(
-                            fontSize: 12,
-                            color: cs.onSurfaceVariant.withValues(alpha: 0.75),
-                          ),
-                        ),
-                      ),
+                      Text(hint!, style: t.monoSmall),
                       const SizedBox(width: 12),
                     ],
                     Icon(

@@ -32,11 +32,16 @@ class DialogSurfaces {
   final Color soft;
 }
 
-/// Monospace text for the IP and port fields.
+/// Monospace text for IP, port, command and OSC fields; its placeholder is
+/// mono too (the placeholder takes the font of the value it stands for).
 final monoFieldStyle = AppTheme.mono(const TextStyle(fontSize: 13.5));
 
-/// Plain text fields: 14 px, so a field is 40 px tall like the mono ones.
-const plainFieldStyle = TextStyle(fontSize: 14);
+/// Word fields (names, search): the UI font at 14 px, so a field is 40 px
+/// tall like the mono ones.
+final plainFieldStyle = TextStyle(
+  fontSize: 14,
+  letterSpacing: AppTheme.tracking(14),
+);
 
 /// Height of every field in these dialogs, text fields and [AppDropdown]
 /// alike, so a row of them lines up.
@@ -49,6 +54,7 @@ InputDecoration dialogFieldDecoration(
   BuildContext context, {
   String? hintText,
   Widget? prefix,
+  IconData? prefixIcon,
   Widget? suffixIcon,
   bool error = false,
 }) {
@@ -65,8 +71,16 @@ InputDecoration dialogFieldDecoration(
     filled: true,
     fillColor: surfaces.field,
     hintText: hintText,
-    hintStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.6)),
+    // Colour only: size and font come from the field's own style, so the
+    // placeholder doesn't change font when typing starts.
+    hintStyle: TextStyle(color: cs.outline),
     prefix: prefix,
+    // A leading icon (search) is always shown; [prefix] only appears once
+    // the field is focused or filled.
+    prefixIcon: prefixIcon == null
+        ? null
+        : Icon(prefixIcon, size: 18, color: cs.onSurfaceVariant),
+    prefixIconConstraints: const BoxConstraints(minWidth: 40),
     // The suffix slot sets the height: a dense field's border follows its
     // text (about 32 px), and `constraints` only sizes the box around it,
     // so a field would still draw shorter than the dropdowns beside it.
@@ -103,18 +117,16 @@ class LabeledField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final style = AppText.of(context).label;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
           label,
-          style: TextStyle(
-            fontSize: 12.5,
-            fontWeight: FontWeight.w600,
-            color: error ? cs.error : cs.onSurfaceVariant,
-          ),
+          style: error
+              ? style.copyWith(color: Theme.of(context).colorScheme.error)
+              : style,
         ),
         const SizedBox(height: 6),
         child,
@@ -157,7 +169,10 @@ class FieldHelp extends StatelessWidget {
           const SizedBox(width: 6),
         ],
         Expanded(
-          child: Text(text, style: TextStyle(fontSize: 12, color: color)),
+          child: Text(
+            text,
+            style: AppText.of(context).description.copyWith(color: color),
+          ),
         ),
       ],
     );
@@ -217,23 +232,20 @@ class DialogCard extends StatelessWidget {
 }
 
 /// The square icon tile at the start of a card or section (owner, 2026-10-16):
-/// - default: a neutral tile with a primary icon, so sections stand out
-///   while the filled tile of the title bar stays the dialog's own mark;
-/// - [primary]: filled like the title bar, for a card whose subject is the
-///   primary accent (Brightness);
-/// - [muted]: all grey, for a locked or unavailable card.
+/// a neutral tile with a primary icon, so sections stand out while the
+/// filled tile of the title bar stays the dialog's one mark. [muted]: the
+/// icon in the outline colour, for a locked or unavailable card. Radius 30 %
+/// of the size; the icon is 18 on the 34 card tile, 16 on a 30 tile.
 class DialogIconTile extends StatelessWidget {
   const DialogIconTile(
     this.icon, {
     super.key,
     this.size = 34,
-    this.primary = false,
     this.muted = false,
   });
 
   final IconData icon;
   final double size;
-  final bool primary;
   final bool muted;
 
   @override
@@ -243,17 +255,13 @@ class DialogIconTile extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: primary ? cs.primaryContainer : DialogSurfaces.of(context).soft,
+        color: DialogSurfaces.of(context).soft,
         borderRadius: BorderRadius.circular(size * 0.3),
       ),
       child: Icon(
         icon,
         size: size * 0.53,
-        color: primary
-            ? cs.onPrimaryContainer
-            : muted
-            ? cs.onSurfaceVariant
-            : cs.primary,
+        color: muted ? cs.outline : cs.primary,
       ),
     );
   }
@@ -346,7 +354,7 @@ class DialogFooter extends StatelessWidget {
         children: [
           Expanded(
             child: DefaultTextStyle.merge(
-              style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+              style: AppText.of(context).description,
               child: message ?? const SizedBox.shrink(),
             ),
           ),

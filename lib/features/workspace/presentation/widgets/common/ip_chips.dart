@@ -55,7 +55,7 @@ class _Chip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final style = TextStyle(fontSize: 11.5, color: cs.onSurface, height: 1.2);
+    final t = AppText.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
@@ -63,7 +63,13 @@ class _Chip extends StatelessWidget {
         borderRadius: BorderRadius.circular(6),
         border: Border.all(color: cs.outlineVariant),
       ),
-      child: Text(text, style: mono ? AppTheme.mono(style) : style),
+      child: Text(
+        text,
+        style: (mono ? t.monoSmall : t.caption).copyWith(
+          color: t.primary,
+          height: 1.2,
+        ),
+      ),
     );
   }
 }

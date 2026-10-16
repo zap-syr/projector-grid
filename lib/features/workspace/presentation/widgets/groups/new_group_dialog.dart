@@ -136,12 +136,10 @@ class _JoinsBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
     final count = ips.length;
     final sorted = [...ips]
       ..sort((a, b) => ipSortKey(a).compareTo(ipSortKey(b)));
-    final body = theme.textTheme.bodyMedium?.copyWith(color: cs.onSurface);
+    final t = AppText.of(context);
     return DialogCard(
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
       child: Row(
@@ -155,7 +153,7 @@ class _JoinsBox extends StatelessWidget {
               children: [
                 Text.rich(
                   TextSpan(
-                    style: body,
+                    style: t.body,
                     children: [
                       TextSpan(
                         text:
@@ -176,12 +174,7 @@ class _JoinsBox extends StatelessWidget {
                             sorted.join(', '),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: AppTheme.mono(
-                              TextStyle(
-                                fontSize: 12,
-                                color: cs.onSurfaceVariant,
-                              ),
-                            ),
+                            style: t.monoSmall,
                           ),
                         )
                       : ClipRect(

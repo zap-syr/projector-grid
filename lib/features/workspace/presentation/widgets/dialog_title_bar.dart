@@ -50,13 +50,12 @@ class DialogTitleBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
+    final cs = Theme.of(context).colorScheme;
     final titleText = Text(
       title,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w500),
+      style: AppText.of(context).dialogTitle,
     );
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -72,7 +71,7 @@ class DialogTitleBar extends StatelessWidget {
                 height: 30,
                 decoration: BoxDecoration(
                   color: cs.primaryContainer,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(9),
                 ),
                 child: Icon(icon, size: 18, color: cs.onPrimaryContainer),
               ),
@@ -125,7 +124,6 @@ class _TitleBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (subtitle == null) return title;
-    final theme = Theme.of(context);
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -135,13 +133,7 @@ class _TitleBlock extends StatelessWidget {
           subtitle!,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: AppTheme.mono(
-            TextStyle(
-              fontSize: 12,
-              height: 1.25,
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
+          style: AppText.of(context).monoSmall.copyWith(height: 1.25),
         ),
       ],
     );

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../../core/theme/app_theme.dart';
 import '../../../domain/group_palette.dart';
 
 /// The readable text/icon colour to paint on top of [background]; mirrors
@@ -35,8 +36,7 @@ class GroupColorPalette extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
+    final t = AppText.of(context);
     final rows = groupPalette.length ~/ groupPaletteHues;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -44,30 +44,20 @@ class GroupColorPalette extends StatelessWidget {
       children: [
         Row(
           children: [
-            Expanded(
-              child: Text(
-                'Color',
-                style: theme.textTheme.labelMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: cs.onSurfaceVariant,
-                ),
-              ),
-            ),
+            Expanded(child: Text('Color', style: t.label)),
             if (usedColors.any(groupPalette.contains)) ...[
               Container(
                 width: 6,
                 height: 6,
                 decoration: BoxDecoration(
-                  color: cs.onSurfaceVariant,
+                  color: t.secondary,
                   shape: BoxShape.circle,
                 ),
               ),
               const SizedBox(width: 6),
               Text(
                 'Used by another group',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: cs.onSurfaceVariant,
-                ),
+                style: t.caption.copyWith(color: t.secondary),
               ),
             ],
           ],
@@ -134,7 +124,7 @@ class GroupColorPalette extends StatelessWidget {
             onTap: () => onSelected(value),
             child: Center(
               child: isSelected
-                  ? Icon(Icons.check, size: 15, color: contrastOn(color))
+                  ? Icon(Icons.check, size: 16, color: contrastOn(color))
                   : isUsed
                   ? Container(
                       width: 6,

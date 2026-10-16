@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../../core/theme/app_theme.dart';
 import '../custom_tooltip.dart';
 
 /// One choice in a [ModeTileRow]: icon + label (+ an optional muted line).
@@ -121,8 +122,8 @@ class ModeTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
+    final cs = Theme.of(context).colorScheme;
+    final t = AppText.of(context);
     final enabled = onTap != null;
     final fg = selected ? cs.onPrimaryContainer : cs.onSurface;
     final labelText = Text(
@@ -130,14 +131,14 @@ class ModeTile extends StatelessWidget {
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
       textAlign: iconAbove ? TextAlign.center : TextAlign.start,
-      style: theme.textTheme.labelLarge?.copyWith(
+      style: t.body.copyWith(
         color: fg,
         fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
       ),
     );
     final iconWidget = Icon(
       icon,
-      size: 18,
+      size: 20,
       color: selected ? cs.onPrimaryContainer : cs.onSurfaceVariant,
     );
     final detailText = detail == null
@@ -146,7 +147,7 @@ class ModeTile extends StatelessWidget {
             detail!,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.bodySmall?.copyWith(
+            style: t.caption.copyWith(
               color: selected
                   ? cs.onPrimaryContainer.withValues(alpha: 0.8)
                   : cs.onSurfaceVariant,

@@ -57,8 +57,8 @@ class ConfirmDialog<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
+    final cs = Theme.of(context).colorScheme;
+    final t = AppText.of(context);
     return Dialog(
       clipBehavior: Clip.antiAlias,
       child: ConstrainedBox(
@@ -92,21 +92,10 @@ class ConfirmDialog<T> extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          title,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                          ).copyWith(color: cs.onSurface),
-                        ),
+                        Text(title, style: t.dialogTitle),
                         if (subtitle != null) ...[
                           const SizedBox(height: 4),
-                          Text(
-                            subtitle!,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: cs.onSurfaceVariant,
-                            ),
-                          ),
+                          Text(subtitle!, style: t.description),
                         ],
                       ],
                     ),
@@ -167,9 +156,8 @@ class _ChangesBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final body = theme.textTheme.bodyMedium?.copyWith(color: cs.onSurface);
+    final cs = Theme.of(context).colorScheme;
+    final t = AppText.of(context);
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: BoxDecoration(
@@ -180,12 +168,7 @@ class _ChangesBox extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'What changes',
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: cs.onSurfaceVariant,
-            ),
-          ),
+          Text('What changes', style: t.label),
           for (final c in changes) ...[
             const SizedBox(height: 10),
             Row(
@@ -193,18 +176,18 @@ class _ChangesBox extends StatelessWidget {
               children: [
                 Padding(
                   padding: const EdgeInsets.only(top: 2),
-                  child: Icon(c.icon, size: 16, color: cs.onSurfaceVariant),
+                  child: Icon(c.icon, size: 16, color: t.secondary),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text.rich(
                     TextSpan(
-                      style: body,
+                      style: t.body,
                       children: [
                         TextSpan(
                           text: c.lead,
                           style: c.monoLead
-                              ? AppTheme.mono(body)
+                              ? t.mono
                               : const TextStyle(fontWeight: FontWeight.w600),
                         ),
                         if (c.rest.isNotEmpty) TextSpan(text: ' ${c.rest}'),

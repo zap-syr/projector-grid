@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../../core/theme/app_theme.dart';
+
 import 'dialog_parts.dart';
 
 class AppDropdownItem<T> {
@@ -122,13 +124,7 @@ class AppDropdown<T> extends StatelessWidget {
               ),
               trailingIcon: item.detail == null
                   ? null
-                  : Text(
-                      item.detail!,
-                      style: monoFieldStyle.copyWith(
-                        fontSize: 12.5,
-                        color: cs.onSurfaceVariant,
-                      ),
-                    ),
+                  : Text(item.detail!, style: AppText.of(context).monoSmall),
             ),
         ],
         onSelected: (v) {

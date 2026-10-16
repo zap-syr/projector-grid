@@ -42,7 +42,8 @@ class RangePreview extends StatelessWidget {
     final newCount = addresses.length - inProject.length;
     final count = addresses.length;
     final labelled = count <= _labelledCellLimit;
-    final muted = TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant);
+    final t = AppText.of(context);
+    final muted = t.description;
     return DialogCard(
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: _minCardHeight - 2),
@@ -56,7 +57,7 @@ class RangePreview extends StatelessWidget {
                 children: [
                   Text(
                     count == 1 ? '1 address' : '$count addresses',
-                    style: const TextStyle(fontWeight: FontWeight.w600),
+                    style: t.cardTitle,
                   ),
                   const SizedBox(width: 10),
                   Expanded(
@@ -64,7 +65,7 @@ class RangePreview extends StatelessWidget {
                       count == 1
                           ? '.${range.firstOctet}'
                           : '.${range.firstOctet} to .${range.lastOctet}',
-                      style: AppTheme.mono(muted),
+                      style: t.monoSmall,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -188,7 +189,6 @@ class RangePreviewPlaceholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return DialogCard(
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: _minCardHeight - 2),
@@ -198,7 +198,7 @@ class RangePreviewPlaceholder extends StatelessWidget {
             child: Text(
               'Enter From and To to see which addresses are new',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+              style: AppText.of(context).description,
             ),
           ),
         ),
@@ -216,7 +216,7 @@ class _Legend extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final t = AppText.of(context);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -230,7 +230,7 @@ class _Legend extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 6),
-        Text(label, style: TextStyle(fontSize: 12.5, color: cs.onSurface)),
+        Text(label, style: t.caption.copyWith(color: t.secondary)),
       ],
     );
   }
@@ -245,6 +245,7 @@ class _LabelledStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final t = AppText.of(context);
     final soft = DialogSurfaces.of(context).soft;
     return SizedBox(
       height: 34,
@@ -266,19 +267,15 @@ class _LabelledStrip extends StatelessWidget {
                   fit: BoxFit.scaleDown,
                   child: Text(
                     '.$o',
-                    style: AppTheme.mono(
-                      taken.contains(o)
-                          ? TextStyle(
-                              fontSize: 12,
-                              color: cs.onSurfaceVariant.withValues(alpha: 0.7),
-                              decoration: TextDecoration.lineThrough,
-                            )
-                          : TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: cs.onPrimary,
-                            ),
-                    ),
+                    style: taken.contains(o)
+                        ? t.monoSmall.copyWith(
+                            color: t.tertiary,
+                            decoration: TextDecoration.lineThrough,
+                          )
+                        : t.monoSmall.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: cs.onPrimary,
+                          ),
                   ),
                 ),
               ),
@@ -374,19 +371,16 @@ class _Axis extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final style = AppTheme.mono(
-      TextStyle(fontSize: 11.5, color: cs.onSurfaceVariant),
-    );
+    final style = AppText.of(context).monoSmall;
     final span = last - first;
     return SizedBox(
       height: 16,
       child: Stack(
         children: [
-          for (final t in rangeAxisTicks(first, last))
+          for (final tick in rangeAxisTicks(first, last))
             Align(
-              alignment: Alignment(-1 + 2 * (t - first) / span, 0),
-              child: Text('.$t', style: style),
+              alignment: Alignment(-1 + 2 * (tick - first) / span, 0),
+              child: Text('.$tick', style: style),
             ),
         ],
       ),

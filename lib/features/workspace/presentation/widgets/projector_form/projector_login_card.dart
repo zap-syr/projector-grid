@@ -21,7 +21,7 @@ class _LoginHeading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final t = AppText.of(context);
     return Row(
       children: [
         const DialogIconTile(Icons.lock_outline),
@@ -31,17 +31,17 @@ class _LoginHeading extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'Projector login',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontWeight: FontWeight.w600),
+                style: t.cardTitle,
               ),
               Text(
                 subtitle,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant),
+                style: t.description,
               ),
             ],
           ),
@@ -80,7 +80,7 @@ class ProjectorLoginCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final sc = AppStatusColors.of(context);
-    final muted = TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant);
+    final t = AppText.of(context);
     return DialogCard(
       borderColor: wrongLogin ? sc.warning.withValues(alpha: 0.7) : null,
       child: Column(
@@ -95,9 +95,12 @@ class ProjectorLoginCard extends StatelessWidget {
                   const Expanded(child: _LoginHeading(subtitle: _loginHint)),
                   if (lastUsed) ...[
                     const SizedBox(width: 8),
-                    Icon(Icons.history, size: 14, color: cs.onSurfaceVariant),
+                    Icon(Icons.history, size: 14, color: t.secondary),
                     const SizedBox(width: 5),
-                    Text('Last used', style: muted.copyWith(fontSize: 12)),
+                    Text(
+                      'Last used',
+                      style: t.caption.copyWith(color: t.secondary),
+                    ),
                   ],
                   const SizedBox(width: 12),
                   const _OptionalPill(),
@@ -142,7 +145,7 @@ class ProjectorLoginCard extends StatelessWidget {
                 children: [
                   Icon(
                     Icons.warning_amber_rounded,
-                    size: 15,
+                    size: 16,
                     color: sc.warning,
                   ),
                   const SizedBox(width: 8),
@@ -150,11 +153,7 @@ class ProjectorLoginCard extends StatelessWidget {
                     child: Text(
                       'The projector rejected this login. '
                       'Check the login and password.',
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
-                        color: sc.warning,
-                      ),
+                      style: t.label.copyWith(color: sc.warning),
                     ),
                   ),
                 ],
@@ -412,7 +411,7 @@ class _SmallIconButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return IconButton(
       tooltip: tooltip,
-      iconSize: 17,
+      iconSize: 16,
       color: color,
       padding: EdgeInsets.zero,
       constraints: const BoxConstraints.tightFor(width: 28, height: 28),
@@ -428,7 +427,7 @@ class _OptionalPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final t = AppText.of(context);
     return Container(
       height: 22,
       padding: const EdgeInsets.symmetric(horizontal: 9),
@@ -439,10 +438,9 @@ class _OptionalPill extends StatelessWidget {
       ),
       child: Text(
         'Optional',
-        style: TextStyle(
-          fontSize: 11.5,
+        style: t.caption.copyWith(
           fontWeight: FontWeight.w600,
-          color: cs.onSurfaceVariant,
+          color: t.secondary,
         ),
       ),
     );

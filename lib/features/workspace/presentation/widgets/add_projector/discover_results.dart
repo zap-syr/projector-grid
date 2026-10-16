@@ -90,7 +90,7 @@ class DiscoverResults extends StatelessWidget {
         if (!existingIps.contains(p.ip)) p.ip,
     ];
     final allSelected = newIps.isNotEmpty && selected.length == newIps.length;
-    final muted = TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant);
+    final t = AppText.of(context);
     final count = found.length;
     final headline = switch ((scanning, count)) {
       _ when subnet == null => 'Not scanned yet',
@@ -122,10 +122,7 @@ class DiscoverResults extends StatelessWidget {
                         : cs.onSurfaceVariant,
                   ),
                 const SizedBox(width: 10),
-                Text(
-                  headline,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
+                Text(headline, style: t.cardTitle),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -136,7 +133,7 @@ class DiscoverResults extends StatelessWidget {
                         'Press Scan to look on $targetSubnet.0/24',
                       null => '',
                     },
-                    style: muted,
+                    style: t.description,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -197,11 +194,7 @@ class _HeaderRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final style = TextStyle(
-      fontSize: 11.5,
-      fontWeight: FontWeight.w600,
-      color: cs.onSurfaceVariant,
-    );
+    final style = AppText.of(context).label;
     return Container(
       height: 32,
       decoration: BoxDecoration(
@@ -254,7 +247,7 @@ class _ResultRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final dim = cs.onSurfaceVariant.withValues(alpha: 0.6);
+    final t = AppText.of(context);
     final p = projector;
     return Material(
       type: MaterialType.transparency,
@@ -286,11 +279,17 @@ class _ResultRow extends StatelessWidget {
                   p.modelKnown ? p.name : 'Model unknown',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
+                  // A row already in the project is disabled; an unknown
+                  // model is only a quieter name.
+                  style: t.body.copyWith(
                     fontWeight: inProject || !p.modelKnown
                         ? FontWeight.w400
                         : FontWeight.w500,
-                    color: inProject || !p.modelKnown ? dim : null,
+                    color: inProject
+                        ? t.disabled
+                        : !p.modelKnown
+                        ? t.tertiary
+                        : null,
                   ),
                 ),
               ),
@@ -298,9 +297,9 @@ class _ResultRow extends StatelessWidget {
                 width: _ipCol,
                 child: Text(
                   p.ip,
-                  style: AppTheme.mono(
-                    TextStyle(fontSize: 13, color: inProject ? dim : null),
-                  ),
+                  style: inProject
+                      ? t.mono.copyWith(color: t.disabled)
+                      : t.mono,
                 ),
               ),
               SizedBox(

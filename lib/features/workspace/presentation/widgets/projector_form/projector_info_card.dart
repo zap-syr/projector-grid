@@ -20,7 +20,7 @@ class ProjectorInfoCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final cs = Theme.of(context).colorScheme;
+    final t = AppText.of(context);
     final notifier = ref.read(workspaceProvider.notifier);
     final live = ref.watch(
       workspaceProvider.select((nodes) {
@@ -52,18 +52,11 @@ class ProjectorInfoCard extends ConsumerWidget {
                   modelKnown ? node.name : 'Model not read yet',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: modelKnown ? null : cs.onSurfaceVariant,
-                  ),
+                  style: modelKnown
+                      ? t.cardTitle
+                      : t.cardTitle.copyWith(color: t.secondary),
                 ),
-                Text(
-                  '${node.ipAddress} : ${node.port}',
-                  style: AppTheme.mono(
-                    TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant),
-                  ),
-                ),
+                Text('${node.ipAddress} : ${node.port}', style: t.monoSmall),
               ],
             ),
           ),

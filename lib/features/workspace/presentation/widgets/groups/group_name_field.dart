@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../../../core/theme/app_theme.dart';
 import '../../../domain/group_naming.dart';
+import '../common/dialog_parts.dart';
 
 /// Group name input: label with a `9 / 24` counter on the right, and an
 /// optional colour preview square left of the field (the New group forms).
@@ -27,8 +29,7 @@ class GroupNameField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
+    final t = AppText.of(context);
     final preview = previewColor;
     final field = TextField(
       controller: controller,
@@ -38,15 +39,11 @@ class GroupNameField extends StatelessWidget {
       inputFormatters: [LengthLimitingTextInputFormatter(maxGroupNameLength)],
       onChanged: onChanged,
       onSubmitted: onSubmitted,
-      decoration: InputDecoration(
-        isDense: true,
-        errorText: errorText,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 12,
-          vertical: 11,
-        ),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-      ),
+      style: plainFieldStyle,
+      decoration: dialogFieldDecoration(
+        context,
+        error: errorText != null,
+      ).copyWith(errorText: errorText),
     );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -54,20 +51,12 @@ class GroupNameField extends StatelessWidget {
       children: [
         Row(
           children: [
-            Expanded(
-              child: Text(
-                label,
-                style: theme.textTheme.labelMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: cs.onSurfaceVariant,
-                ),
-              ),
-            ),
+            Expanded(child: Text(label, style: t.label)),
             ValueListenableBuilder<TextEditingValue>(
               valueListenable: controller,
               builder: (_, value, _) => Text(
                 '${value.text.length} / $maxGroupNameLength',
-                style: theme.textTheme.bodySmall?.copyWith(color: cs.outline),
+                style: t.caption,
               ),
             ),
           ],

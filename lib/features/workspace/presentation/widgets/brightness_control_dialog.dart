@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/theme/app_theme.dart';
 import '../../domain/projector_node.dart';
 import '../providers/protocol_service_provider.dart';
 import 'command_failure_notice.dart';
@@ -8,7 +9,6 @@ import 'common/debouncer.dart';
 import 'common/dialog_parts.dart';
 import 'common/mode_tile.dart';
 import 'common/projector_settings_client.dart';
-import 'common/scroll_fade.dart';
 import 'common/skeleton.dart';
 import 'common/slider_tracks.dart';
 import 'common/step_buttons.dart';
@@ -226,7 +226,9 @@ class _BrightnessControlDialogState
       // Maximum size, not a fixed one: the smallest window (800×600) leaves
       // about 720×550 inside the Dialog insets, so the body scrolls there.
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 560, maxHeight: 594),
+        // A cap, not a size: the column takes only what its cards need, so
+        // the body scrolls only in a window too short for them.
+        constraints: const BoxConstraints(maxWidth: 560, maxHeight: 640),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -237,63 +239,59 @@ class _BrightnessControlDialogState
               projectorId: widget.node.id,
             ),
             Flexible(
-              child: ScrollFade(
-                child: Scrollbar(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      spacing: 16,
-                      children: [
-                        _ModeCard(
-                          mode: _loading ? null : _mode,
-                          onSelected: _selectMode,
-                        ),
-                        // A self-contained widget: it tracks its own value
-                        // while the thumb is being dragged, so a drag only
-                        // rebuilds this card instead of the whole dialog.
-                        _PercentSlider(
-                          icon: Icons.wb_sunny_outlined,
-                          title: 'Light output',
-                          subtitle: lightSubtitle,
-                          value: _lightOutput,
-                          cap: lightCap,
-                          loading: _loading,
-                          onCommit: (v) {
-                            _lightDebounce.cancel();
-                            _setLightOutput(v);
-                            _sendLightOutput(v);
-                          },
-                          onStep: (v) {
-                            _setLightOutput(v);
-                            _lightDebounce.run(() => _sendLightOutput(v));
-                          },
-                        ),
-                        _PercentSlider(
-                          icon: Icons.vertical_align_top,
-                          title: 'Max light output',
-                          subtitle: isUserMode
-                              ? 'Ceiling for Light output in this User mode'
-                              : lightCap != null
-                              ? 'Fixed at ${_formatPercent(lightCap)}% in '
-                                    '${_mode.label} mode'
-                              : 'Only in User 1, 2 or 3 mode',
-                          value: _maxLightOutput,
-                          locked: !isUserMode,
-                          loading: _loading,
-                          onCommit: (v) {
-                            _maxDebounce.cancel();
-                            _setMaxLightOutput(v);
-                            _sendMaxLightOutput(v);
-                          },
-                          onStep: (v) {
-                            _setMaxLightOutput(v);
-                            _maxDebounce.run(() => _sendMaxLightOutput(v));
-                          },
-                        ),
-                      ],
+              child: DialogScrollBody(
+                padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  spacing: 16,
+                  children: [
+                    _ModeCard(
+                      mode: _loading ? null : _mode,
+                      onSelected: _selectMode,
                     ),
-                  ),
+                    // A self-contained widget: it tracks its own value
+                    // while the thumb is being dragged, so a drag only
+                    // rebuilds this card instead of the whole dialog.
+                    _PercentSlider(
+                      icon: Icons.wb_sunny_outlined,
+                      title: 'Light output',
+                      subtitle: lightSubtitle,
+                      value: _lightOutput,
+                      cap: lightCap,
+                      loading: _loading,
+                      onCommit: (v) {
+                        _lightDebounce.cancel();
+                        _setLightOutput(v);
+                        _sendLightOutput(v);
+                      },
+                      onStep: (v) {
+                        _setLightOutput(v);
+                        _lightDebounce.run(() => _sendLightOutput(v));
+                      },
+                    ),
+                    _PercentSlider(
+                      icon: Icons.vertical_align_top,
+                      title: 'Max light output',
+                      subtitle: isUserMode
+                          ? 'Ceiling for Light output in this User mode'
+                          : lightCap != null
+                          ? 'Fixed at ${_formatPercent(lightCap)}% in '
+                                '${_mode.label} mode'
+                          : 'Only in User 1, 2 or 3 mode',
+                      value: _maxLightOutput,
+                      locked: !isUserMode,
+                      loading: _loading,
+                      onCommit: (v) {
+                        _maxDebounce.cancel();
+                        _setMaxLightOutput(v);
+                        _sendMaxLightOutput(v);
+                      },
+                      onStep: (v) {
+                        _setMaxLightOutput(v);
+                        _maxDebounce.run(() => _sendMaxLightOutput(v));
+                      },
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -336,8 +334,7 @@ class _CardHeading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
+    final t = AppText.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -346,10 +343,7 @@ class _CardHeading extends StatelessWidget {
           title,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: muted ? cs.onSurfaceVariant : cs.onSurface,
-          ),
+          style: muted ? t.cardTitle.copyWith(color: t.secondary) : t.cardTitle,
         ),
         if (subtitle == null)
           const Padding(
@@ -361,10 +355,7 @@ class _CardHeading extends StatelessWidget {
             subtitle!,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: cs.onSurfaceVariant,
-              fontSize: 12.5,
-            ),
+            style: t.description,
           ),
       ],
     );
@@ -493,8 +484,7 @@ class _PercentSliderState extends State<_PercentSlider> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
+    final t = AppText.of(context);
     final loading = widget.loading;
     final locked = widget.locked && !loading;
     final enabled = !loading && !locked;
@@ -504,11 +494,7 @@ class _PercentSliderState extends State<_PercentSlider> {
         ? null
         : (cap - _minPercent) / (_maxPercent - _minPercent);
 
-    final iconTile = DialogIconTile(
-      widget.icon,
-      primary: !locked,
-      muted: locked,
-    );
+    final iconTile = DialogIconTile(widget.icon, muted: locked);
 
     Widget valueText(String digits) => Text.rich(
       TextSpan(
@@ -516,17 +502,14 @@ class _PercentSliderState extends State<_PercentSlider> {
         children: [
           TextSpan(
             text: '%',
-            style: TextStyle(fontSize: 15, color: cs.onSurfaceVariant),
+            style: t.cardTitle.copyWith(
+              fontWeight: FontWeight.w400,
+              color: t.secondary,
+            ),
           ),
         ],
       ),
-      style: theme.textTheme.headlineSmall?.copyWith(
-        fontSize: 26,
-        height: 32 / 26,
-        fontWeight: FontWeight.w600,
-        letterSpacing: -0.3,
-        fontFeatures: const [FontFeature.tabularFigures()],
-      ),
+      style: t.value.copyWith(height: 32 / 26),
     );
 
     final Widget trailing = loading
@@ -664,12 +647,8 @@ class _Scale extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final style = theme.textTheme.labelSmall?.copyWith(
-      fontSize: 11.5,
-      color: cs.outline,
-      fontWeight: FontWeight.w400,
+    final t = AppText.of(context);
+    final style = t.caption.copyWith(
       fontFeatures: const [FontFeature.tabularFigures()],
     );
     final fraction = capFraction;
@@ -693,8 +672,8 @@ class _Scale extends StatelessWidget {
                     translation: const Offset(-0.5, 0),
                     child: Text(
                       'Max ${_formatPercent(cap!)}%',
-                      style: style?.copyWith(
-                        color: cs.onSurfaceVariant,
+                      style: style.copyWith(
+                        color: t.secondary,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -713,25 +692,24 @@ class _LockPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final t = AppText.of(context);
     return Container(
       height: 24,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest,
+        color: DialogSurfaces.of(context).soft,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         spacing: 6,
         children: [
-          Icon(Icons.lock_outline, size: 13, color: cs.onSurfaceVariant),
+          Icon(Icons.lock_outline, size: 14, color: t.secondary),
           Text(
             'User modes',
-            style: TextStyle(
-              fontSize: 12,
+            style: t.caption.copyWith(
               fontWeight: FontWeight.w600,
-              color: cs.onSurfaceVariant,
+              color: t.secondary,
             ),
           ),
         ],

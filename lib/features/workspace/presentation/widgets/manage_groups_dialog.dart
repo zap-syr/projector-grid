@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/theme/app_theme.dart';
 import '../../domain/projector_group.dart';
 import '../providers/workspace_provider.dart';
 import 'common/dialog_parts.dart';
@@ -93,8 +94,6 @@ class _ManageGroupsDialogState extends ConsumerState<ManageGroupsDialog>
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
     final groups = ref.watch(workspaceProvider.notifier).groups;
     final nodes = ref.watch(workspaceProvider);
     final counts = <String, int>{};
@@ -127,13 +126,13 @@ class _ManageGroupsDialogState extends ConsumerState<ManageGroupsDialog>
                         summary,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: cs.onSurfaceVariant,
-                        ),
+                        style: AppText.of(context).description,
                       ),
                     ),
                     const SizedBox(width: 12),
-                    FilledButton.tonalIcon(
+                    // Filled: the dialog's main action. Disabled while the
+                    // form is open, so its Create is the only filled button.
+                    FilledButton.icon(
                       onPressed: _newOpen ? null : _openNewForm,
                       icon: const Icon(Icons.add, size: 18),
                       label: const Text('New group'),
@@ -208,22 +207,21 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final muted = theme.colorScheme.onSurfaceVariant;
+    final t = AppText.of(context);
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.layers_outlined, size: 40, color: muted),
+            Icon(Icons.layers_outlined, size: 40, color: t.secondary),
             const SizedBox(height: 12),
-            Text('No groups yet', style: theme.textTheme.bodyMedium),
+            Text('No groups yet', style: t.cardTitle),
             const SizedBox(height: 4),
             Text(
               'Create one, then assign projectors via the grid',
               textAlign: TextAlign.center,
-              style: theme.textTheme.bodySmall?.copyWith(color: muted),
+              style: t.description,
             ),
           ],
         ),

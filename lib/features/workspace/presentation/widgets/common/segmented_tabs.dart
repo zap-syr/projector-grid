@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../../core/theme/app_theme.dart';
+
 class SegmentedTab<T> {
   const SegmentedTab({
     required this.value,
@@ -59,6 +61,7 @@ class SegmentedTabs<T> extends StatelessWidget {
   Widget _tab(BuildContext context, SegmentedTab<T> t) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final text = AppText.of(context);
     final isSelected = t.value == selected;
     final fg = isSelected ? cs.onSurface : cs.onSurfaceVariant;
     // Raised above the track: white in light, a lighter step in dark (the
@@ -106,7 +109,7 @@ class SegmentedTabs<T> extends StatelessWidget {
                     t.label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.labelLarge?.copyWith(
+                    style: text.body.copyWith(
                       color: fg,
                       fontWeight: isSelected
                           ? FontWeight.w600
@@ -129,8 +132,7 @@ class SegmentedTabs<T> extends StatelessWidget {
                     ),
                     child: Text(
                       t.pill!,
-                      style: TextStyle(
-                        fontSize: 11,
+                      style: text.caption.copyWith(
                         fontWeight: FontWeight.w600,
                         color: isSelected
                             ? cs.onPrimaryContainer

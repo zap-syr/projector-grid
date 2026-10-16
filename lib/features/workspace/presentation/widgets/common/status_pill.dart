@@ -35,7 +35,7 @@ class StatusPill extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: 13, color: color),
+            Icon(icon, size: 14, color: color),
             const SizedBox(width: 4),
           ] else if (dot) ...[
             Container(
@@ -47,9 +47,8 @@ class StatusPill extends StatelessWidget {
           ],
           Text(
             label,
-            style: TextStyle(
+            style: AppText.of(context).caption.copyWith(
               color: color,
-              fontSize: 11.5,
               fontWeight: FontWeight.w600,
               height: 1.1,
             ),
@@ -92,12 +91,8 @@ class GroupPill extends StatelessWidget {
             child: Text(
               name,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: cs.onSurface,
-                fontSize: 11.5,
-                fontWeight: FontWeight.w500,
-                height: 1.1,
-              ),
+              style: AppText.of(context).caption
+                  .copyWith(color: cs.onSurface, height: 1.1),
             ),
           ),
         ],

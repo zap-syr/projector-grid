@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../../core/theme/app_theme.dart';
 import '../../../domain/group_naming.dart';
 import '../../../domain/group_palette.dart';
 import '../../../domain/projector_group.dart';
@@ -53,8 +54,6 @@ class _NewGroupCardState extends ConsumerState<NewGroupCard> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
     final background = DialogSurfaces.of(context).editor;
     final used = {
       for (final g in ref.watch(workspaceProvider.notifier).groups) g.color,
@@ -94,9 +93,7 @@ class _NewGroupCardState extends ConsumerState<NewGroupCard> {
                     'Assign projectors via the grid',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: cs.onSurfaceVariant,
-                    ),
+                    style: AppText.of(context).description,
                   ),
                 ),
                 TextButton(

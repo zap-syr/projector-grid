@@ -34,8 +34,8 @@ class GroupRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
+    final cs = Theme.of(context).colorScheme;
+    final t = AppText.of(context);
     final surfaces = DialogSurfaces.of(context);
     final rowColor = highlighted
         ? cs.primaryContainer.withValues(alpha: 0.55)
@@ -76,9 +76,7 @@ class GroupRow extends ConsumerWidget {
                       group.name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: t.body.copyWith(fontWeight: FontWeight.w600),
                     ),
                     // One line: wrapping beside the OSC chip and unwrapping
                     // when the editor hides it moved the row's buttons.
@@ -86,9 +84,7 @@ class GroupRow extends ConsumerWidget {
                       '$memberCount projector${memberCount == 1 ? '' : 's'}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: cs.onSurfaceVariant,
-                      ),
+                      style: t.description,
                     ),
                   ],
                 ),
@@ -104,23 +100,21 @@ class GroupRow extends ConsumerWidget {
                     vertical: 3,
                   ),
                   decoration: BoxDecoration(
-                    color: cs.surfaceContainerHighest,
+                    color: surfaces.soft,
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
                     group.oscAddress,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTheme.mono(
-                      TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
-                    ),
+                    style: t.monoSmall,
                   ),
                 ),
               ],
               const SizedBox(width: 6),
               IconButton(
                 onPressed: onToggle,
-                iconSize: 17,
+                iconSize: 18,
                 visualDensity: VisualDensity.compact,
                 tooltip: expanded ? 'Collapse' : 'Edit ${group.name}',
                 icon: Icon(
@@ -133,7 +127,7 @@ class GroupRow extends ConsumerWidget {
               IconButton(
                 key: ValueKey('delete-group-${group.id}'),
                 onPressed: () => confirmDeleteGroup(context, ref, group),
-                iconSize: 17,
+                iconSize: 18,
                 visualDensity: VisualDensity.compact,
                 tooltip: 'Delete ${group.name}',
                 icon: Icon(Icons.delete_outline, color: cs.error),

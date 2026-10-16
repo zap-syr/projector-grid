@@ -109,7 +109,6 @@ class _CustomCommandDialogState extends ConsumerState<CustomCommandDialog> {
                           style: plainFieldStyle,
                           decoration: dialogFieldDecoration(
                             context,
-                            hintText: 'e.g. Dynamic contrast',
                             error: takenBy != null,
                           ),
                           onChanged: (_) => setState(() {}),
@@ -168,17 +167,14 @@ class _OscAddressesCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
+    final cs = Theme.of(context).colorScheme;
+    final t = AppText.of(context);
     final taken = takenBy != null;
-    final muted = cs.onSurfaceVariant.withValues(alpha: 0.6);
-    final addressStyle = AppTheme.mono(
-      TextStyle(
-        fontSize: 12.5,
-        color: taken ? muted : cs.onSurface,
-        decoration: taken ? TextDecoration.lineThrough : null,
-        decorationColor: muted,
-      ),
+    final muted = t.tertiary;
+    final addressStyle = t.mono.copyWith(
+      color: taken ? muted : null,
+      decoration: taken ? TextDecoration.lineThrough : null,
+      decorationColor: muted,
     );
 
     Widget address(List<InlineSpan> spans) => Text.rich(
@@ -196,13 +192,7 @@ class _OscAddressesCard extends StatelessWidget {
     Widget row(String label, Widget value) => Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: theme.textTheme.bodySmall?.copyWith(
-            fontSize: 11.5,
-            color: cs.onSurfaceVariant,
-          ),
-        ),
+        Text(label, style: t.caption),
         const SizedBox(height: 2),
         value,
       ],
@@ -215,16 +205,9 @@ class _OscAddressesCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.sensors, size: 16, color: cs.onSurfaceVariant),
+              Icon(Icons.sensors, size: 16, color: t.secondary),
               const SizedBox(width: 8),
-              Text(
-                'OSC addresses',
-                style: theme.textTheme.labelLarge?.copyWith(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                  color: cs.onSurfaceVariant,
-                ),
-              ),
+              Text('OSC addresses', style: t.label),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
@@ -232,9 +215,9 @@ class _OscAddressesCard extends StatelessWidget {
                   textAlign: TextAlign.end,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: taken ? cs.error : muted,
-                  ),
+                  style: taken
+                      ? t.caption.copyWith(color: cs.error)
+                      : t.caption,
                 ),
               ),
             ],

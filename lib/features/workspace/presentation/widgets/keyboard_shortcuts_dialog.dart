@@ -3,8 +3,10 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
+import '../../../../core/theme/app_theme.dart';
 import '../../domain/keyboard_shortcuts.dart';
 import 'common/dashed_border.dart';
+import 'common/dialog_parts.dart';
 import 'common/key_caps.dart';
 import 'common/scroll_fade.dart';
 import 'dialog_title_bar.dart';
@@ -35,8 +37,7 @@ class _KeyboardShortcutsDialogState extends State<KeyboardShortcutsDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
+    final t = AppText.of(context);
     final searching = _search.text.trim().isNotEmpty;
     final hits = filterShortcuts(_sections, _search.text);
     final shown = hits.fold(0, (n, s) => n + s.hits.length);
@@ -49,11 +50,6 @@ class _KeyboardShortcutsDialogState extends State<KeyboardShortcutsDialog> {
           searching: searching,
         ),
     ];
-
-    final muted = theme.textTheme.bodySmall?.copyWith(
-      fontSize: 12.5,
-      color: cs.onSurfaceVariant.withValues(alpha: 0.75),
-    );
 
     return Dialog(
       clipBehavior: Clip.antiAlias,
@@ -101,14 +97,14 @@ class _KeyboardShortcutsDialogState extends State<KeyboardShortcutsDialog> {
                                     padding: const EdgeInsets.only(bottom: 4),
                                     child: Text(
                                       'No shortcuts match "${_search.text.trim()}".',
-                                      style: theme.textTheme.bodyMedium,
+                                      style: t.body,
                                     ),
                                   )
                                 else
                                   const SizedBox(height: 10),
                                 Text(
                                   'Matches descriptions and keys: try "ctrl g" or "esc".',
-                                  style: muted,
+                                  style: t.description,
                                 ),
                               ],
                             ],
@@ -219,54 +215,41 @@ class _SearchField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    OutlineInputBorder border(Color color, double width) => OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: color, width: width),
-    );
     return TextField(
       controller: controller,
       autofocus: true,
       onChanged: (_) => onChanged(),
-      decoration: InputDecoration(
-        isDense: true,
-        filled: true,
-        fillColor: cs.surfaceContainerLowest,
-        hintText: 'Search shortcuts, e.g. shutter, zoom, undo',
-        hintStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.6)),
-        contentPadding: const EdgeInsets.symmetric(vertical: 12),
-        prefixIcon: Icon(Icons.search, size: 18, color: cs.onSurfaceVariant),
+      style: plainFieldStyle,
+      decoration: dialogFieldDecoration(
+        context,
+        hintText: 'Search shortcuts',
+        prefixIcon: Icons.search,
         suffixIcon: Padding(
           padding: const EdgeInsets.only(left: 8, right: 6),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                count,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: cs.onSurfaceVariant.withValues(alpha: 0.75),
-                ),
+              Text(count, style: AppText.of(context).description),
+              // The clear button's slot is kept while empty, so the count
+              // doesn't move when typing starts.
+              SizedBox.square(
+                dimension: 32,
+                child: controller.text.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: 'Clear search',
+                        iconSize: 16,
+                        padding: EdgeInsets.zero,
+                        icon: const Icon(Icons.close),
+                        onPressed: () {
+                          controller.clear();
+                          onChanged();
+                        },
+                      ),
               ),
-              if (controller.text.isNotEmpty) ...[
-                const SizedBox(width: 2),
-                IconButton(
-                  tooltip: 'Clear search',
-                  iconSize: 16,
-                  visualDensity: VisualDensity.compact,
-                  icon: const Icon(Icons.close),
-                  onPressed: () {
-                    controller.clear();
-                    onChanged();
-                  },
-                ),
-              ] else
-                const SizedBox(width: 6),
             ],
           ),
         ),
-        enabledBorder: border(cs.outline, 1),
-        focusedBorder: border(cs.primary, 2),
       ),
     );
   }
@@ -291,45 +274,23 @@ class _SectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
+    final t = AppText.of(context);
     final section = hits.section;
     final note = searching
         ? '${hits.hits.length} of ${section.entries.length}'
         : section.note;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainer,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: cs.outlineVariant),
-      ),
+    return DialogCard(
+      padding: const EdgeInsets.fromLTRB(13, 9, 13, 7),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           SizedBox(
-            height: 28,
+            height: 30,
             child: Row(
               children: [
-                Container(
-                  width: 26,
-                  height: 26,
-                  decoration: BoxDecoration(
-                    color: cs.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  // Neutral tile, primary icon: the section-tile rule of
-                  // DialogIconTile.
-                  child: Icon(_icon(section.id), size: 15, color: cs.primary),
-                ),
-                const SizedBox(width: 9),
-                Text(
-                  section.title,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                DialogIconTile(_icon(section.id), size: 30),
+                const SizedBox(width: 10),
+                Text(section.title, style: t.cardTitle),
                 if (note != null) ...[
                   const SizedBox(width: 8),
                   Expanded(
@@ -338,9 +299,7 @@ class _SectionCard extends StatelessWidget {
                       textAlign: TextAlign.end,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: cs.onSurfaceVariant.withValues(alpha: 0.75),
-                      ),
+                      style: t.caption,
                     ),
                   ),
                 ],
@@ -376,13 +335,8 @@ class _ShortcutRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final base = theme.textTheme.bodyMedium?.copyWith(
-      fontSize: 13,
-      height: 1.35,
-      color: cs.onSurface.withValues(alpha: 0.88),
-    );
+    final cs = Theme.of(context).colorScheme;
+    final base = AppText.of(context).body.copyWith(height: 1.35);
     return Container(
       constraints: const BoxConstraints(minHeight: 30),
       decoration: divider
@@ -458,28 +412,27 @@ class _MousePill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final t = AppText.of(context);
     return DashedBorder(
       radius: 11,
-      color: cs.outline,
+      color: t.tertiary,
       child: Container(
         height: 22,
         padding: const EdgeInsets.only(left: 6, right: 8),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.mouse_outlined, size: 13, color: cs.onSurfaceVariant),
+            Icon(Icons.mouse_outlined, size: 14, color: t.secondary),
             const SizedBox(width: 5),
             Flexible(
               child: Text(
                 label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 11.5,
+                style: t.caption.copyWith(
                   height: 1,
                   fontWeight: FontWeight.w600,
-                  color: cs.onSurfaceVariant,
+                  color: t.secondary,
                 ),
               ),
             ),

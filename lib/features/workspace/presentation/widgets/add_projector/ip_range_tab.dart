@@ -132,7 +132,7 @@ class _IpRangeTabState extends State<IpRangeTab> {
                       child: Icon(
                         Icons.arrow_forward,
                         size: 20,
-                        color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                        color: cs.outline,
                       ),
                     ),
                     Expanded(
@@ -161,9 +161,7 @@ class _IpRangeTabState extends State<IpRangeTab> {
                                 : Text(
                                     prefix,
                                     style: monoFieldStyle.copyWith(
-                                      color: cs.onSurfaceVariant.withValues(
-                                        alpha: 0.6,
-                                      ),
+                                      color: cs.onSurfaceVariant,
                                     ),
                                   ),
                           ),
