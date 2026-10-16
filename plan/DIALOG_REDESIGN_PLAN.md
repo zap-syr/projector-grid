@@ -55,9 +55,26 @@ Done 2026-10-15. What landed, for the later steps to build on:
   redesigned dialog builds its cards, fields and footer from these.
 - Icon tiles (owner, 2026-10-16, board *Icon tiles of sections and cards*, option 2): the
   title bar tile is filled (`primaryContainer`); a section or card tile inside a dialog is a
-  neutral tile with a **primary icon** (`DialogIconTile` default); filled only where the card's
-  subject is the primary accent (Brightness, `primary: true`); all grey only when locked
-  (`muted: true`).
+  neutral tile with a **primary icon** (`DialogIconTile`), Brightness included (its
+  `primary: true` variant was dropped with the visual rules below); grey icon only when
+  locked (`muted: true`).
+- **Visual rules** (owner, 2026-10-16, boards *Visual rules: type, placeholders, icons,
+  buttons*): one set of rules for every dialog, in the skill
+  `.claude/skills/projector-grid-visual-rules/SKILL.md`. Every redesign step below follows
+  it, and where this plan quotes an older size or colour the skill wins. What landed:
+  UI font **Inter** (bundled, OFL; Plus Jakarta Sans, tried first, stays bundled as the
+  alternative), `AppText` roles in `app_theme.dart` instead
+  of `fontSize` in widgets, four text colours, the placeholder in the font of its value,
+  three icon colour levels, icon sizes 14 / 16 / 18 / 20, tile radius 30 %, one filled
+  button at a time, every card on `DialogSurfaces.card`. The wave A dialogs (Groups, Add
+  and Edit Projector, Brightness, Custom Command, Keyboard Shortcuts, About) and the
+  shared pieces were brought in line.
+- **Hint text** (owner, 2026-10-16, skill §4): placeholders name the action or show the
+  format, never both; no `e.g.`, no example lists, no ellipsis; no placeholder that
+  repeats the label. Only the wave A dialogs were changed. **The other dialogs keep their
+  hint text until their own redesign step**, which applies the rule then: Event Log
+  (`Search…` → `Search log`), Scheduled Tasks (`Select a command...` → `Select command`,
+  `Select a group...` → `Select group`, the command picker search below), Preferences.
 - `CustomTooltip(message:, detail:, shortcut:, warning:, placement:)` with the arrow
   (§7g done); `TooltipBubble` is public for other overlays.
 - Not in the foundation (they belong to one step only): `GroupColorPalette` (§3),
@@ -70,8 +87,9 @@ changing it changes them all.
 - New required parameter `icon` (`IconData`): stock `Icons.*` only. Where the mockup drew
   its own glyph (projector, trapezoid, two overlapping frames) the closest Material icon in
   the table below is used instead (owner, 2026-10-15). Layout, left to right: **icon tile** 30×30,
-  radius 8, `primaryContainer` fill, icon 18 px in `onPrimaryContainer`; gap 12; title
-  (`titleMedium`, weight 500); close button 40×40, circular, `onSurfaceVariant`.
+  radius 9, `primaryContainer` fill, icon 18 px in `onPrimaryContainer`; gap 12; title
+  (`AppText.dialogTitle`, 16, weight 600, since the visual rules of 2026-10-16); close
+  button 40×40, circular, `onSurfaceVariant`.
 - Background stays `surfaceContainerHigh`, divider below stays. Padding `10, 8, 10, 20`
   (top, right, bottom, left).
 - Still no other controls in the bar (the rule in the widget's doc comment stands).
@@ -272,7 +290,8 @@ new group from context menu, 60 projectors*.
 ### 3.1 Manage Groups
 - Width **560** (today wider), height 640. Same width as the compact New Group dialog, so the
   palette tiles come out square in both.
-- Header row: "4 groups, 16 of 20 projectors assigned" and a tonal **New group** button.
+- Header row: "4 groups, 16 of 20 projectors assigned" and a filled **New group** button
+  (was tonal; filled since the visual rules, 2026-10-16: it is the dialog's main action).
 - One card with a row per group: 32 px colour swatch, name, "6 projectors", the **OSC
   address** as a small read-only monospace chip, edit button.
 - **Edit inline**: the edit button expands the row in place (chevron to collapse); the
@@ -380,7 +399,8 @@ The dropdown is replaced:
 - Click opens a **panel** under the field, full editor width. It expands inside the editor
   (`AnimatedSize`, the editor body scrolls), not as an overlay, so focus and placement
   inside the dialog need no extra handling:
-  - search field on top ("Search commands, e.g. hdmi, shutter"), focused on open;
+  - search field on top ("Search commands", per the hint text rule in §1), focused on
+    open;
   - **category rail** on the left with counts: All, Power, Shutter, Input, Custom (and *Cue*
     once F3 lands);
   - **tiles in 3 columns**, names only, grouped by category under small headers when *All*
@@ -477,7 +497,8 @@ Boards: *Brightness Control: Normal mode / User 2 mode / reading values*. Approv
 `Brightness Control - <IP>` with an Operating Mode dropdown and two bare sliders.
 
 - Dialog **560×594**, title bar icon `brightness_6`, title **Brightness Control** without
-  the IP.
+  the IP. The cap is 640 since the visual rules (2026-10-16): the larger card titles made
+  the content a few pixels taller than 594, and the dialog takes only the height it needs.
 - The projector (model + IP, group pill, status) is in the **title bar** (§1.1), no projector
   card (the first mockups had one; dropped 2026-10-14, which took the dialog from 676 to 594).
 - **Operating mode** card: title + "User modes unlock Max light output"; the dropdown becomes
@@ -870,7 +891,8 @@ fields (label inside), a one-line OSC preview (`/pgrid/all/custom/<slug>`) and *
 - Dialog **520×500**, title bar icon `code`, title **Add Command** / **Edit Command**. No
   projector in the title bar: a command isn't tied to one projector.
 - **Name**: label above the field (as in Groups and Add Projectors), focused on open, help
-  line "Shown on the button and used for the OSC address".
+  line "Shown on the button and used for the OSC address". No placeholder: the label names
+  the field (hint text rule, §1).
 - **Command**: monospace field, help line "Sent as is to the selected projectors, in
   NTCONTROL form". Placeholder `OSH:1` (a known-good command; the mockup's `VXX:DYNI0=+00001`
   was only an illustration).
@@ -911,8 +933,8 @@ under uppercase headers, keys as monospace badges, and some descriptions with da
 ("Lens shift — normal speed", "Zoom in / out (50 – 200%)").
 
 - Dialog **860×680**, title bar icon `keyboard`, no footer.
-- **Search field** on top, focused on open: "Search shortcuts, e.g. shutter, zoom, undo",
-  the count on the right (`33 shortcuts`; while searching `5 of 33` and a clear button).
+- **Search field** on top, focused on open: "Search shortcuts" (the examples went with the
+  hint text rule in §1, 2026-10-16), the count on the right (`33 shortcuts`; while searching `5 of 33` and a clear button).
   It matches descriptions and keys ("ctrl g", "esc"); matched text is highlighted, each
   section header shows `4 of 6`, sections without matches are hidden, and a hint line under
   the results says what the search covers. Pure filter function in `domain/` (unit-tested).
