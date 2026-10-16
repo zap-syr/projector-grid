@@ -1,4 +1,5 @@
 import 'dart:io' show Platform;
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -286,24 +287,42 @@ class _SectionCard extends StatelessWidget {
         children: [
           SizedBox(
             height: 30,
-            child: Row(
-              children: [
-                DialogIconTile(_icon(section.id), size: 30),
-                const SizedBox(width: 10),
-                Text(section.title, style: t.cardTitle),
-                if (note != null) ...[
-                  const SizedBox(width: 8),
-                  Expanded(
+            // The title keeps its full width first and the note gets what is
+            // left; in a narrow column the title ellipsizes instead of
+            // overflowing.
+            child: LayoutBuilder(
+              builder: (context, constraints) => Row(
+                children: [
+                  DialogIconTile(_icon(section.id), size: 30),
+                  const SizedBox(width: 10),
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: math.max(
+                        0,
+                        constraints.maxWidth - 40 - (note == null ? 0 : 8),
+                      ),
+                    ),
                     child: Text(
-                      note,
-                      textAlign: TextAlign.end,
+                      section.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: t.caption,
+                      style: t.cardTitle,
                     ),
                   ),
+                  if (note != null) ...[
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        note,
+                        textAlign: TextAlign.end,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: t.caption,
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
           const SizedBox(height: 2),

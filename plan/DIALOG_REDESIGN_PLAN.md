@@ -204,7 +204,16 @@ Every dialog adapts to the app window, down to the smallest window the app allow
 
 ---
 
-## 2. `[ ]` Add Projectors
+## 2. `[x]` Add Projectors
+
+Done 2026-10-16 (wave A, fixes after the owner's check). Differs from the text below:
+- Discover scans only on the **Scan** button (in the results header), not on open; a login
+  edited after a scan resets the login status of the found projectors.
+- IP range: the login card comes first, the range preview fills the rest of the height (its
+  placeholder too). One field height for all tabs (`dialogFieldHeight`, 40); the port field
+  has no "Default 1024" help.
+- Login and password fields have a ✕ clear button inside (the eye comes after it); on
+  Discover the login is a compact one-row card with fixed field widths.
 
 Boards: *Add Projectors: Address / IP range, 12 addresses / IP range, 50 addresses / Discover*.
 Dialog 720×640.
@@ -282,7 +291,13 @@ outlined fields (IP, Login, Password), 400 px wide, password in plain text.
 
 ---
 
-## 3. `[ ]` Groups
+## 3. `[x]` Groups
+
+Done 2026-10-16 (wave A, fixes after the owner's check). Differs from the text below: the
+inline editor has no Delete; each group row has a red delete button (tooltip
+"Delete <name>"). Deleting a group pauses the scheduled tasks that target it
+(`taskHasTarget`, `detachMissingGroups`). The OSC address shown per group stays as it is
+for now (owner: to revisit later).
 
 Boards: *Groups: inline editor / delete confirm / new group / new group from context menu /
 new group from context menu, 60 projectors*.
@@ -490,7 +505,10 @@ Records and actions:
 
 ---
 
-## 5. `[ ]` Brightness Control
+## 5. `[x]` Brightness Control
+
+Done 2026-10-16. Differs from the text below: the values are read again on every mode
+switch, the − / + buttons step **0.1 %** and repeat while held (`StepButton`), not 1 %.
 
 Boards: *Brightness Control: Normal mode / User 2 mode / reading values*. Approved
 2026-10-14. Today (`brightness_control_dialog.dart`) it is a 460 px `AlertDialog` titled
@@ -608,7 +626,11 @@ White Balance High and Low as two separate cards, and a centred grey line for Of
 
 ---
 
-## 7. `[ ]` Geometry Correction
+## 7. `[~]` Geometry Correction
+
+In progress 2026-10-16: the Keystone / Curved preview (`GEOMETRY_PREVIEW_PLAN.md`): the
+pure model and its tests are done, the painter draws into today's dialog. The dialog
+redesign below (frame, mode tiles, cards, loading, small windows) has not started.
 
 Boards (dark only): *Geometry Correction: off / Keystone / Curved Correction / Corner, one
 corner, Auto / Corner, two corners, Manual / reading values*, and the row *Geometry
@@ -883,7 +905,9 @@ captions `name · group` and the IP, and a bare *Pre-show mode* row with a switc
 
 ---
 
-## 7c. `[ ]` Custom Command (Add / Edit Command)
+## 7c. `[x]` Custom Command (Add / Edit Command)
+
+Done 2026-10-15 (wave A), as described below.
 
 Boards (dark only): *Add Command: empty / filled / OSC address taken*, *Edit Command*.
 Approved 2026-10-14. Today (`custom_command_dialog.dart`) it is 400 wide with two outlined
@@ -928,7 +952,11 @@ fields (label inside), a one-line OSC preview (`/pgrid/all/custom/<slug>`) and *
 
 ---
 
-## 7d. `[ ]` Keyboard Shortcuts
+## 7d. `[x]` Keyboard Shortcuts
+
+Done 2026-10-16. Differs from the text below: the cards are not in fixed columns; each
+card goes to the shorter of the two columns by its measured height, so the columns end
+level. The key column is 176 px wide. Section icons follow the icon tile rule (§1).
 
 Boards (dark only): *Keyboard Shortcuts*, *Keyboard Shortcuts: search*. Approved 2026-10-14.
 Today (`keyboard_shortcuts_dialog.dart`) it is 560×620, one long list of eight sections
@@ -956,7 +984,11 @@ under uppercase headers, keys as monospace badges, and some descriptions with da
 
 ---
 
-## 7e. `[ ]` About
+## 7e. `[x]` About
+
+Done 2026-10-16. Differs from the text below: only the hint on the right and its icon are
+the link (hand cursor), not the whole row; *Third-party licenses* has no hint, so its
+chevron is the link. The version pill is as wide as its text, in the accent colour.
 
 Board (dark only): *About*. Approved 2026-10-14, after a look at what About windows usually
 hold (macOS: icon, name, version, copyright, optional credits; GNOME / libadwaita: centred
