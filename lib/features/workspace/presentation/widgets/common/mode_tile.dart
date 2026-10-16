@@ -70,7 +70,10 @@ class ModeTileRow<T> extends StatelessWidget {
         final short = constraints.maxWidth < shortLabelsBelow;
         return SizedBox(
           height: height,
+          // Stretch: a tile whose content is a Row (iconAbove false) would
+          // otherwise shrink to the label's height instead of [height].
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               for (final (i, t) in tiles.indexed) ...[
                 if (i > 0) SizedBox(width: t.gapBefore ? _familyGap : _gap),
