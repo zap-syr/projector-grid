@@ -75,6 +75,9 @@ const double _maxPercent = 100;
 /// LOPI2 / LOPI3 are in tenths of a percent, so 0.1% is the finest step.
 const double _stepPercent = 0.1;
 
+/// Shared by the slider and the scale under it, which places `Max` by it.
+const double _trackHeight = 6;
+
 /// On the 0.1% grid: slider positions and repeated `+ 0.1` drift otherwise
 /// (55.100000000000001).
 double _snap(double pct) => (pct * 10).round() / 10;
@@ -551,7 +554,7 @@ class _PercentSliderState extends State<_PercentSlider> {
                 Expanded(
                   child: SliderTheme(
                     data: SliderTheme.of(context).copyWith(
-                      trackHeight: 6,
+                      trackHeight: _trackHeight,
                       padding: EdgeInsets.zero,
                       trackShape: AppSliderTrackShape(
                         limitFraction: capFraction,
@@ -667,7 +670,14 @@ class _Scale extends StatelessWidget {
                 Positioned(right: 0, child: Text('100%', style: style))
               else
                 Positioned(
-                  left: constraints.maxWidth * fraction,
+                  // Under the cap's tick, which sits where the thumb stops.
+                  left: AppSliderTrackShape.positionOf(
+                    fraction,
+                    left: 0,
+                    width: constraints.maxWidth,
+                    trackHeight: _trackHeight,
+                    isDiscrete: true,
+                  ),
                   child: FractionalTranslation(
                     translation: const Offset(-0.5, 0),
                     child: Text(

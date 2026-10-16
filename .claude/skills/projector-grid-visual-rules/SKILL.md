@@ -85,6 +85,11 @@ No other alpha recipes for text (no `onSurfaceVariant` at 60 % or 75 %). Status 
   filled with `DialogSurfaces.field`, label above it (`LabeledField`) and an optional
   `FieldHelp` under it. A search field passes `prefixIcon: Icons.search`. Dropdowns use
   `AppDropdown`, the same height.
+- **One exception: the value field next to a slider** (the stepper input with ↑ ↓ that
+  shows and types a slider's value: R / G / B, white balance, Geometry degrees and corner
+  H / V) is **32 px** high, so a row of sliders stays compact (owner, 2026-10-16, board
+  *Value field next to a slider*, option 2). Same fill, border and Plex Mono value as the
+  other fields; radius 8. A field that stands on its own (Throw ratio) stays 40.
 - **Field text**: words (names, search, login) use `plainFieldStyle` (UI font, 14); IPs,
   ports, commands and OSC addresses use `monoFieldStyle` (Plex Mono, 13.5).
 - **The placeholder takes the font of the value it stands for**, so it never changes font
@@ -126,6 +131,12 @@ on, a link, a filled button. A pill or tile is never blue just to stand out. One
 2026-10-16): the About version pill is `primaryContainer` with `onPrimaryContainer`
 text, part of the app's identity in that header. Status colours only for status.
 
+A tile doesn't fill to show that something is on (Pre-show on, for one): the switch or
+the selected control shows the state, the tile stays `DialogIconTile`. A lock pill (a
+setting fixed by another one: Brightness' *User modes*, Color Temperature fixed by Color
+Matching) is a neutral pill on `DialogSurfaces.soft` with a lock icon, never amber
+(owner, 2026-10-16).
+
 ### Sizes
 - **14**: inline with text (pill icons, `Last used`, the mouse pill).
 - **16**: small tiles (30 px) and rows (help lines, link chevrons, confirm change rows).
@@ -145,12 +156,32 @@ text, part of the app's identity in that header. Status colours only for status.
   (*New group*) is disabled while it is open.
 - **Tonal**: a secondary action in place (`Scan again` in Discover).
 - **Text**: Cancel and dismiss.
+- **Outlined**: the command buttons of the control bar (*On* / *Standby*, *Open* /
+  *Close*, *Set*, *Show*, *Run*): many of them side by side, so they don't fill (owner,
+  2026-10-16). Not used in dialogs.
 - **Destructive**: filled in `error`, only in confirm dialogs (`ConfirmDialog`). A delete
   inside a dialog is an error icon or text button that opens that confirm.
 - **Dashed**: adds a row inside a list (New task).
 - **Disabled keeps its width**, and a label that changes keeps the width of the longest
   label (`DialogFooter.widestActionLabel`).
 - Icons in buttons are 18.
+
+## 6a. Sliders
+
+Two styles (owner, 2026-10-16), each always built from `AppSliderTrackShape`
+(`common/slider_tracks.dart`):
+- **Large**, for a card with one main value (Brightness' Light output and Max light
+  output, Color Temperature's Kelvin): track 6 px, thumb radius 9, overlay radius 16,
+  − / + `StepButton`s on both sides, a scale row under the track.
+- **Thin**, for dense lists of sliders (Geometry, R / G / B, white balance, Edge
+  Blending): track 2 px, thumb radius 6, as `LabeledSliderRow`, with the 32 px value
+  field (§4) on the right.
+- A symmetric range fills from a centre zero tick (`zeroFraction`), a cap hatches the
+  track past it (`limitFraction`).
+- Anything placed under or over a thumb position (a tick, a scale label such as
+  `Max 80%`) takes its x from `AppSliderTrackShape.positionOf`, never
+  `width * fraction`: a discrete slider keeps the thumb half the track height in from
+  each end.
 
 ## 7. Surfaces, cards and corners
 

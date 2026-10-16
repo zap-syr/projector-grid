@@ -2,7 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-// Compact numeric input (60×26) with integrated up/down stepper buttons.
+import '../../../../core/theme/app_theme.dart';
+import 'common/dialog_parts.dart';
+
+// The value field next to a slider (72×32, visual rules §4: the one field
+// below 40 px, so a row of sliders stays compact), with integrated up/down
+// stepper buttons.
 // Commits via Enter or focus loss; auto-selects text on focus so the user can
 // overwrite immediately. Pass autofocus: true to request focus on first build.
 class SleekStepperInput extends StatefulWidget {
@@ -138,18 +143,18 @@ class _SleekStepperInputState extends State<SleekStepperInput> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final t = AppText.of(context);
     final dividerColor = colorScheme.outlineVariant;
-    final borderColor = _hasFocus
-        ? colorScheme.primary.withValues(alpha: 0.5)
-        : dividerColor;
+    final borderColor = _hasFocus ? colorScheme.primary : dividerColor;
+    final arrowColor = t.secondary;
 
     return Container(
-      width: 60,
-      height: 26,
+      width: 72,
+      height: 32,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: colorScheme.onSurface.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(6),
+        color: DialogSurfaces.of(context).field,
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: borderColor),
       ),
       child: Row(
@@ -159,10 +164,7 @@ class _SleekStepperInputState extends State<SleekStepperInput> {
               controller: _controller,
               focusNode: _focusNode,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 12,
-                fontFeatures: [FontFeature.tabularFigures()],
-              ),
+              style: t.mono,
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
                 signed: true,
@@ -178,7 +180,7 @@ class _SleekStepperInputState extends State<SleekStepperInput> {
           // Vertical divider between text field and stepper buttons.
           Container(width: 1, color: dividerColor),
           SizedBox(
-            width: 16,
+            width: 18,
             child: Column(
               children: [
                 Expanded(
@@ -186,8 +188,12 @@ class _SleekStepperInputState extends State<SleekStepperInput> {
                     onTapDown: (_) => _startStepping(1),
                     onTapUp: (_) => _stopStepping(),
                     onTapCancel: _stopStepping,
-                    child: const Center(
-                      child: Icon(Icons.arrow_drop_up, size: 14),
+                    child: Center(
+                      child: Icon(
+                        Icons.arrow_drop_up,
+                        size: 16,
+                        color: arrowColor,
+                      ),
                     ),
                   ),
                 ),
@@ -197,8 +203,12 @@ class _SleekStepperInputState extends State<SleekStepperInput> {
                     onTapDown: (_) => _startStepping(-1),
                     onTapUp: (_) => _stopStepping(),
                     onTapCancel: _stopStepping,
-                    child: const Center(
-                      child: Icon(Icons.arrow_drop_down, size: 14),
+                    child: Center(
+                      child: Icon(
+                        Icons.arrow_drop_down,
+                        size: 16,
+                        color: arrowColor,
+                      ),
                     ),
                   ),
                 ),

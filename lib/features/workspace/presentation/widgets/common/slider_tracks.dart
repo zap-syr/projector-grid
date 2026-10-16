@@ -14,6 +14,21 @@ class AppSliderTrackShape extends RoundedRectSliderTrackShape {
   final double? zeroFraction;
   final double? limitFraction;
 
+  /// Where [Slider] puts the thumb centre for [fraction] of the range on a
+  /// track that starts at [left] and is [width] long. A discrete slider
+  /// on a rounded track keeps the thumb half the track height in from each
+  /// end, so ticks and labels placed by `left + width * fraction` drift up to
+  /// that half height away from the thumb.
+  static double positionOf(
+    double fraction, {
+    required double left,
+    required double width,
+    required double trackHeight,
+    required bool isDiscrete,
+  }) => isDiscrete
+      ? left + fraction * (width - trackHeight) + trackHeight / 2
+      : left + fraction * width;
+
   @override
   void paint(
     PaintingContext context,
@@ -44,6 +59,13 @@ class AppSliderTrackShape extends RoundedRectSliderTrackShape {
         ? sliderTheme.inactiveTrackColor
         : sliderTheme.disabledInactiveTrackColor)!;
     final radius = Radius.circular(rect.height / 2);
+    double xOf(double fraction) => positionOf(
+      fraction,
+      left: rect.left,
+      width: rect.width,
+      trackHeight: rect.height,
+      isDiscrete: isDiscrete,
+    );
 
     canvas.drawRRect(
       RRect.fromRectAndRadius(rect, radius),
@@ -52,7 +74,7 @@ class AppSliderTrackShape extends RoundedRectSliderTrackShape {
 
     final limit = limitFraction;
     if (limit != null && limit < 1) {
-      final limitX = rect.left + rect.width * limit;
+      final limitX = xOf(limit);
       final hatchRect = Rect.fromLTRB(
         limitX,
         rect.top - 2,
@@ -80,7 +102,7 @@ class AppSliderTrackShape extends RoundedRectSliderTrackShape {
     }
 
     final zero = zeroFraction;
-    final startX = zero == null ? rect.left : rect.left + rect.width * zero;
+    final startX = zero == null ? rect.left : xOf(zero);
     final fill = Rect.fromLTRB(
       startX < thumbCenter.dx ? startX : thumbCenter.dx,
       rect.top,
