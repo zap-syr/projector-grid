@@ -75,6 +75,9 @@ test polling, controls and Alignment mode without hardware (macOS needs `lo0` al
 It also takes `ERRS2` error codes for alert testing: `--demo-errors` at start, or `err 3 F305` /
 `clear all` / `list` typed into its console while it runs.
 `tool/svg2png/` is a Node helper for regenerating lens-shift icons; `tool/generate_icon.dart` builds the app icon.
+`tool/geometry_measure/` is Python (own venv, see its README): it films a projector's Keystone / Curved
+Correction with a webcam and fits `geo_model.py`, the reference model for the Geometry preview
+(`plan/GEOMETRY_PREVIEW_PLAN.md`); `export_fixture.py` writes the preview's test fixture.
 
 ## Architecture
 

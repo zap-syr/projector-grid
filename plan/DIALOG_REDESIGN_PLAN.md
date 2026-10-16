@@ -653,10 +653,13 @@ note**, by `quadPixelTierFor(model)`:
   and image**: *Throw ratio* and the *Maintain aspect ratio* switch ("Keep the image
   proportions while it bends").
 
-**Preview in Keystone and Curved:** approved to add. The drawing follows how VSS renders
-these modes; the owner provides VSS screenshots of both modes as the reference (2026-10-15).
-The unused `_TrapezoidPainter` in the dialog is the starting point. The mockup's schematic
-is the target layout of the card.
+**Preview in Keystone and Curved:** approved to add (2026-10-15). The drawing follows the
+projector's own behaviour, measured with a camera on 2026-10-16, instead of VSS (which
+computes its own corrections; decided by the owner 2026-10-16): model, constants, accuracy
+and implementation in `GEOMETRY_PREVIEW_PLAN.md` (its §3 has the owner's decisions: pill
+*Schematic* kept, no capped-angle hint, two centre lines and no grid). The unused
+`_TrapezoidPainter` is replaced, not extended. The mockup's schematic is the target layout of
+the card.
 
 ### 7.5 Corner Correction
 - **Canvas card**: header *Corners*, a pill with the selection (`Upper right`, `2 selected`),
@@ -703,7 +706,7 @@ The minimum-window boards show where it ends up at 800×600, about 720×510 for 
   `GMCI3`, `GMCI6`, `GMCI7`, `GMCS8`, `GMCS9`. Throw ratio and Maintain aspect ratio are kept.
   **Reset all** in Corner stays as today (the eight `GMFI` corner values).
 - **Quad Pixel Drive note** by tier (§7.2).
-- **Preview** in Keystone and Curved (§7.4, from the owner's VSS screenshots).
+- **Preview** in Keystone and Curved (§7.4, `GEOMETRY_PREVIEW_PLAN.md`).
 - **Loading** layout (§7.6) and the adaptive layout (§7.7, §1.4).
 
 ---
@@ -1329,8 +1332,8 @@ Temperatures, signal details and errors stay in Monitoring (§7i).
 5. **Color Correction** (§6): one file; reuses `SegmentedTabs` and the debounce from
    Brightness Control.
 6. **Geometry Correction** (§7): one file; mode tiles, grouped sliders, corner steppers,
-   adaptive layout (§1.4). The Keystone / Curved preview can follow separately once the
-   owner's VSS screenshots are in.
+   adaptive layout (§1.4). The Keystone / Curved preview lands in the same step
+   (`GEOMETRY_PREVIEW_PLAN.md` §2.5): the pure model and its tests first, then the painter.
 7. **Edge Blending** (§7a): the `edge_blending/` widgets; reuses the Geometry frame (mode
    tiles, canvas card + controls card). The canvas painter keeps its logic and gets the new
    colours, legend and placeholders.
@@ -1426,7 +1429,8 @@ tests below, then a GUI check in both themes (`flutter-windows-gui-check`).
 - ~~Color Matching defaults (§6.5)~~ — decided 2026-10-15: the `_values3` / `_values7`
   initial values are the factory defaults.
 - ~~Geometry preview in Keystone / Curved (§7.4)~~ — decided 2026-10-15: drawn from VSS
-  screenshots the owner provides.
+  screenshots the owner provides. Replaced 2026-10-16: drawn from camera measurements of
+  the projector (VSS differs from it), `GEOMETRY_PREVIEW_PLAN.md`.
 - ~~Compact Geometry layout (§7.7)~~ — decided 2026-10-15: no separate mode, every dialog
   adapts to the window down to 800×600 (§1.4).
 - ~~Missed runs, when~~ — decided 2026-10-15: deferred (§4.8).
