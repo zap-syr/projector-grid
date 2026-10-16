@@ -91,14 +91,14 @@ void main() {
   testWidgets('loads mode and values, no writes on open', (tester) async {
     await pumpDialog(tester, lopi2: 850);
     expect(find.byType(Skeleton), findsNothing);
-    expect(value('85%'), findsOneWidget);
+    expect(value('85.0%'), findsOneWidget);
     expect(find.text('Changes are sent to the projector right away'), findsOne);
     expect(find.text('Done'), findsNothing);
     expect(writes(), isEmpty);
   });
 
   testWidgets('Max card is locked outside User modes', (tester) async {
-    await pumpDialog(tester, mode: '+00001');
+    await pumpDialog(tester);
     expect(find.text('Only in User 1, 2 or 3 mode'), findsOneWidget);
     expect(find.text('User modes'), findsOneWidget);
     expect(iconButtonOf(tester, 2).onPressed, isNull);
@@ -115,12 +115,60 @@ void main() {
     expect(iconButtonOf(tester, 2).onPressed, isNotNull);
   });
 
+  testWidgets('Eco fixes Max at 80% without reading LOPI3', (tester) async {
+    await pumpDialog(tester, mode: '+00001', lopi2: 800);
+    expect(find.text('Fixed at 80% in Eco mode'), findsOneWidget);
+    expect(find.text('Limited to 80% in Eco mode'), findsOneWidget);
+    expect(find.text('Max 80%'), findsOneWidget);
+    expect(iconButtonOf(tester, 1).onPressed, isNull);
+    expect(fake.sentRaw.map((s) => s.$2), isNot(contains('QVX:LOPI3')));
+  });
+
+  testWidgets('switching mode reads the new mode\'s values', (tester) async {
+    await pumpDialog(tester, lopi2: 500);
+    expect(value('50.0%'), findsOneWidget);
+
+    // What the projector reports once it's in User 1.
+    fake.rawResponses
+      ..['QVX:LOPI2'] = 'LOPI2=+00300'
+      ..['QVX:LOPI3'] = 'LOPI3=+00600';
+    fake.sentRaw.clear();
+    await tester.tap(find.text('User 1'));
+    await tester.pump();
+    expect(fake.sentRaw.map((s) => s.$2), [
+      'VXX:OPEI1=+00101',
+      'QVX:LOPI2',
+      'QVX:LOPI3',
+    ]);
+    expect(value('30.0%'), findsOneWidget);
+    expect(value('60.0%'), findsOneWidget);
+
+    // Into Quiet: only Light output is read, Max is the fixed 80%.
+    fake.rawResponses['QVX:LOPI2'] = 'LOPI2=+00250';
+    fake.sentRaw.clear();
+    await tester.tap(find.text('Quiet'));
+    await tester.pump();
+    expect(fake.sentRaw.map((s) => s.$2), ['VXX:OPEI1=+00021', 'QVX:LOPI2']);
+    expect(value('25.0%'), findsOneWidget);
+    expect(find.text('Fixed at 80% in Quiet mode'), findsOneWidget);
+  });
+
+  testWidgets('a pending press is sent before the mode switch', (tester) async {
+    await pumpDialog(tester, lopi2: 500);
+    await tester.tap(stepButton(1)); // Light 50.1%, waiting in the debounce
+    await tester.pump();
+    await tester.tap(find.text('Eco'));
+    await tester.pump();
+    await tester.pump(pastDebounce);
+    expect(writes(), ['VXX:LOPI2=+00501', 'VXX:OPEI1=+00001']);
+  });
+
   testWidgets('Light output is capped at Max in a User mode', (tester) async {
     // Light 90%, Max 80%: shown at the cap, + disabled, a drag stops there.
     await pumpDialog(tester, mode: '+00102', lopi2: 900, lopi3: 800);
     expect(find.text('Limited to 80% by Max light output'), findsOneWidget);
     expect(find.text('Max 80%'), findsOneWidget);
-    expect(value('80%'), findsNWidgets(2));
+    expect(value('80.0%'), findsNWidgets(2));
     expect(iconButtonOf(tester, 1).onPressed, isNull);
 
     final lightSlider = find.byType(Slider).first;
@@ -135,18 +183,58 @@ void main() {
       await tester.tap(stepButton(1));
       await tester.pump(const Duration(milliseconds: 100));
     }
-    expect(value('55%'), findsOneWidget);
+    expect(value('50.5%'), findsOneWidget);
     expect(writes(), isEmpty, reason: 'still inside the debounce');
 
     await tester.pump(pastDebounce);
-    expect(writes(), ['VXX:LOPI2=+00550']);
+    expect(writes(), ['VXX:LOPI2=+00505']);
+  });
+
+  testWidgets('tenths are read, shown and capped', (tester) async {
+    await pumpDialog(tester, mode: '+00101', lopi2: 551, lopi3: 733);
+    expect(value('55.1%'), findsOneWidget);
+    expect(value('73.3%'), findsOneWidget);
+    expect(find.text('Max 73.3%'), findsOneWidget);
+    expect(find.text('Limited to 73.3% by Max light output'), findsOneWidget);
+  });
+
+  testWidgets('holding + repeats, slowly then in whole percents', (
+    tester,
+  ) async {
+    await pumpDialog(tester, lopi2: 500);
+    final gesture = await tester.startGesture(tester.getCenter(stepButton(1)));
+    // Press, 400 ms hold delay, 20 slow ticks (0.1%), 2 fast ones (1%).
+    await tester.pump(const Duration(milliseconds: 400));
+    for (var i = 0; i < 22; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    await gesture.up();
+    await tester.pump();
+    expect(value('54.1%'), findsOneWidget);
+
+    // The debounce may also fire once as the hold starts (same 400 ms).
+    await tester.pump(pastDebounce);
+    expect(writes().last, 'VXX:LOPI2=+00541');
+  });
+
+  testWidgets('holding + stops at the cap', (tester) async {
+    await pumpDialog(tester, mode: '+00001', lopi2: 795);
+    final gesture = await tester.startGesture(tester.getCenter(stepButton(1)));
+    for (var i = 0; i < 40; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    await gesture.up();
+    await tester.pump(pastDebounce);
+    expect(value('80.0%'), findsOneWidget);
+    expect(writes().last, 'VXX:LOPI2=+00800');
+    expect(iconButtonOf(tester, 1).onPressed, isNull);
   });
 
   testWidgets('lowering Max drops a pending Light output press above it', (
     tester,
   ) async {
     await pumpDialog(tester, mode: '+00101', lopi2: 700, lopi3: 800);
-    await tester.tap(stepButton(1)); // Light 71%, waiting in the debounce
+    await tester.tap(stepButton(1)); // Light 70.1%, waiting in the debounce
     await tester.pump();
     await tester.drag(find.byType(Slider).at(1), const Offset(-600, 0));
     await tester.pump();
@@ -163,7 +251,7 @@ void main() {
     await tester.tap(find.byIcon(Icons.close));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-    expect(writes(), ['VXX:LOPI3=+00790']);
+    expect(writes(), ['VXX:LOPI3=+00799']);
   });
 
   testWidgets('loading shows the skeleton layout and the reading footer', (

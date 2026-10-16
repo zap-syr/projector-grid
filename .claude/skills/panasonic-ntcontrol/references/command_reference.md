@@ -246,7 +246,7 @@ Any fade time > 0 applies to every `OSH` command, so a shutter "blink" is not in
 |---|---|
 | `OFZ:0` / `OFZ:1`, `QFZ` | Freeze off / on |
 | `VXX:OPEI1=+nnnnn` | Operating mode (`+00000` normal, `+00001` eco, `+00021` quiet, `+00101`…`+00103` user 1–3) |
-| `VXX:LOPI2=+nnnnn` | Light output, `+00050` (8 %)…`+01000` (100 %) |
+| `VXX:LOPI2=+nnnnn` | Light output, `+00080` (8 %)…`+01000` (100 %), stored per operating mode |
 
 ### Edge Blending
 Live-tested on PT-RQ25K and PT-RZ34K (2026-10-12, `tool/edge_blend_test.dart`); full results

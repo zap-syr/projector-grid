@@ -58,10 +58,31 @@ enum _OperatingMode {
   };
 
   bool get isUserMode => this == user1 || this == user2 || this == user3;
+
+  /// Max light output the projector fixes for this mode, so there's no
+  /// LOPI3 to read (it answers ER401 to a write); null in a User mode,
+  /// where it's adjustable.
+  double? get fixedMaxLightOutput => switch (this) {
+    normal => _maxPercent,
+    eco || quiet => 80,
+    user1 || user2 || user3 => null,
+  };
 }
 
 const double _minPercent = 8;
 const double _maxPercent = 100;
+
+/// LOPI2 / LOPI3 are in tenths of a percent, so 0.1% is the finest step.
+const double _stepPercent = 0.1;
+
+/// On the 0.1% grid: slider positions and repeated `+ 0.1` drift otherwise
+/// (55.100000000000001).
+double _snap(double pct) => (pct * 10).round() / 10;
+
+/// `80` for a whole percent, `55.1` otherwise: for the cap label and the
+/// subtitles, where `80.0%` would read oddly.
+String _formatPercent(double pct) =>
+    pct == pct.roundToDouble() ? '${pct.round()}' : pct.toStringAsFixed(1);
 
 class BrightnessControlDialog extends ConsumerStatefulWidget {
   final ProjectorNode node;
@@ -87,6 +108,15 @@ class _BrightnessControlDialogState
   final _lightDebounce = Debouncer();
   final _maxDebounce = Debouncer();
 
+  // Every write goes through one queue. Each command is its own TCP
+  // connection, so without it a press made in the mode being left could
+  // land after the switch, or two quick switches could swap on the wire.
+  Future<void> _queue = Future.value();
+
+  // Bumped on every mode switch, so a read for a mode the user has already
+  // left doesn't overwrite the values of the current one.
+  int _readSeq = 0;
+
   bool _loading = true;
   _OperatingMode _mode = _OperatingMode.normal;
   double _lightOutput = 100.0; // percentage 8 to 100
@@ -106,50 +136,64 @@ class _BrightnessControlDialogState
     super.dispose();
   }
 
-  // Protocol ↔ percentage conversion.
-  // 80 = 8%, 1000 = 100% (linear).
-  static double _toPercent(int v) => 8.0 + (v - 80) / 920 * 92;
-  static int _toProtocol(double pct) => (80 + (pct - 8) / 92 * 920).round();
+  // Protocol ↔ percentage: tenths of a percent, 80 = 8%, 1000 = 100%.
+  static double _toPercent(int v) => v / 10;
+  static int _toProtocol(double pct) => (pct * 10).round();
 
   Future<void> _loadValues() async {
-    final (modeRaw, lopi2, lopi3) = await (
-      _client.readValue('OPEI1'),
-      _client.readInt('LOPI2'),
-      _client.readInt('LOPI3'),
-    ).wait;
-
+    final modeRaw = await _client.readValue('OPEI1');
     if (!mounted) return;
-
     if (modeRaw != null) _mode = _OperatingMode.fromProtocol(modeRaw);
-    if (lopi2 != null) {
-      _lightOutput = _toPercent(lopi2).clamp(_minPercent, _maxPercent);
-    }
-    if (lopi3 != null) {
-      _maxLightOutput = _toPercent(lopi3).clamp(_minPercent, _maxPercent);
-    }
-
-    setState(() => _loading = false);
+    await _readLevels(_mode, _readSeq);
+    if (mounted) setState(() => _loading = false);
   }
 
-  Future<void> _sendMode(_OperatingMode mode) =>
-      _client.writeRaw('VXX:OPEI1=${mode.protocolValue}');
-
-  Future<void> _sendLightOutput(double pct) =>
-      _client.writeInt('LOPI2', _toProtocol(pct));
-
-  Future<void> _sendMaxLightOutput(double pct) =>
-      _client.writeInt('LOPI3', _toProtocol(pct));
-
-  void _selectMode(_OperatingMode m) {
+  /// Reads the values [mode] holds: each mode keeps its own Light output,
+  /// and a User mode its own Max light output too. [seq] is [_readSeq] when
+  /// the read was asked for.
+  Future<void> _readLevels(_OperatingMode mode, int seq) async {
+    final fixedMax = mode.fixedMaxLightOutput;
+    final (lopi2, lopi3) = await (
+      _client.readInt('LOPI2'),
+      fixedMax == null ? _client.readInt('LOPI3') : Future<int?>.value(),
+    ).wait;
+    if (!mounted || seq != _readSeq) return;
     setState(() {
-      _mode = m;
-      // When switching to user mode clamp light output to max.
-      if (m.isUserMode && _lightOutput > _maxLightOutput) {
-        _lightOutput = _maxLightOutput;
-        _lightDebounce.cancel();
+      if (lopi2 != null) {
+        _lightOutput = _toPercent(lopi2).clamp(_minPercent, _maxPercent);
+      }
+      if (fixedMax != null) {
+        _maxLightOutput = fixedMax;
+      } else if (lopi3 != null) {
+        _maxLightOutput = _toPercent(lopi3).clamp(_minPercent, _maxPercent);
       }
     });
-    _sendMode(m);
+  }
+
+  Future<void> _enqueue(Future<void> Function() op) =>
+      _queue = _queue.then((_) => op());
+
+  Future<void> _sendLightOutput(double pct) =>
+      _enqueue(() => _client.writeInt('LOPI2', _toProtocol(pct)));
+
+  Future<void> _sendMaxLightOutput(double pct) =>
+      _enqueue(() => _client.writeInt('LOPI3', _toProtocol(pct)));
+
+  void _selectMode(_OperatingMode m) {
+    final seq = ++_readSeq;
+    // A press still waiting belongs to the mode being left: it goes out
+    // ahead of the switch and is saved there.
+    _lightDebounce.flush();
+    _maxDebounce.flush();
+    setState(() {
+      _mode = m;
+      final fixedMax = m.fixedMaxLightOutput;
+      if (fixedMax != null) _maxLightOutput = fixedMax;
+    });
+    _enqueue(() => _client.writeRaw('VXX:OPEI1=${m.protocolValue}'));
+    // The projector reports the new mode's values as soon as it has
+    // acknowledged OPEI1 (checked on hardware), so no delay before reading.
+    _enqueue(() => _readLevels(m, seq));
   }
 
   void _setLightOutput(double v) => setState(() => _lightOutput = v);
@@ -168,8 +212,14 @@ class _BrightnessControlDialogState
   @override
   Widget build(BuildContext context) {
     final isUserMode = _mode.isUserMode;
-    // In user modes the light output ceiling is the max light output value.
-    final lightCap = isUserMode ? _maxLightOutput : null;
+    // Light output can't go past Max light output: the projector refuses it
+    // (ER402), also where the mode fixes Max (80% in Eco and Quiet).
+    final lightCap = _maxLightOutput < _maxPercent ? _maxLightOutput : null;
+    final lightSubtitle = lightCap == null
+        ? 'Sent when you release the slider'
+        : isUserMode
+        ? 'Limited to ${_formatPercent(lightCap)}% by Max light output'
+        : 'Limited to ${_formatPercent(lightCap)}% in ${_mode.label} mode';
 
     return Dialog(
       clipBehavior: Clip.antiAlias,
@@ -205,10 +255,7 @@ class _BrightnessControlDialogState
                         _PercentSlider(
                           icon: Icons.wb_sunny_outlined,
                           title: 'Light output',
-                          subtitle: lightCap == null
-                              ? 'Sent when you release the slider'
-                              : 'Limited to ${lightCap.round()}% by Max light '
-                                    'output',
+                          subtitle: lightSubtitle,
                           value: _lightOutput,
                           cap: lightCap,
                           loading: _loading,
@@ -227,6 +274,9 @@ class _BrightnessControlDialogState
                           title: 'Max light output',
                           subtitle: isUserMode
                               ? 'Ceiling for Light output in this User mode'
+                              : lightCap != null
+                              ? 'Fixed at ${_formatPercent(lightCap)}% in '
+                                    '${_mode.label} mode'
                               : 'Only in User 1, 2 or 3 mode',
                           value: _maxLightOutput,
                           locked: !isUserMode,
@@ -427,7 +477,8 @@ class _PercentSliderState extends State<_PercentSlider> {
 
   double get _upper => widget.cap ?? _maxPercent;
 
-  double _clamp(double v) => v.clamp(_minPercent, widget.cap ?? _maxPercent);
+  double _clamp(double v) =>
+      _snap(v).clamp(_minPercent, widget.cap ?? _maxPercent);
 
   @override
   void didUpdateWidget(covariant _PercentSlider old) {
@@ -435,8 +486,10 @@ class _PercentSliderState extends State<_PercentSlider> {
     if (!_dragging) _value = _clamp(widget.value);
   }
 
-  void _step(int delta) =>
-      widget.onStep(_clamp((_value.round() + delta).toDouble()));
+  // Kept locally too: a held button's ticks can come faster than the parent
+  // rebuilds, and each must step from the last one, not the last frame.
+  void _step(int steps) =>
+      widget.onStep(_value = _clamp(_value + steps * _stepPercent));
 
   @override
   Widget build(BuildContext context) {
@@ -446,7 +499,6 @@ class _PercentSliderState extends State<_PercentSlider> {
     final locked = widget.locked && !loading;
     final enabled = !loading && !locked;
     final value = _clamp(_value);
-    final rounded = value.round();
     final cap = widget.cap;
     final capFraction = cap == null || cap >= _maxPercent
         ? null
@@ -458,27 +510,37 @@ class _PercentSliderState extends State<_PercentSlider> {
       muted: locked,
     );
 
+    Widget valueText(String digits) => Text.rich(
+      TextSpan(
+        text: digits,
+        children: [
+          TextSpan(
+            text: '%',
+            style: TextStyle(fontSize: 15, color: cs.onSurfaceVariant),
+          ),
+        ],
+      ),
+      style: theme.textTheme.headlineSmall?.copyWith(
+        fontSize: 26,
+        height: 32 / 26,
+        fontWeight: FontWeight.w600,
+        letterSpacing: -0.3,
+        fontFeatures: const [FontFeature.tabularFigures()],
+      ),
+    );
+
     final Widget trailing = loading
         ? const SkeletonPulse(child: Skeleton(width: 56, height: 26, radius: 8))
         : locked
         ? const _LockPill()
-        : Text.rich(
-            TextSpan(
-              text: '$rounded',
-              children: [
-                TextSpan(
-                  text: '%',
-                  style: TextStyle(fontSize: 15, color: cs.onSurfaceVariant),
-                ),
-              ],
-            ),
-            style: theme.textTheme.headlineSmall?.copyWith(
-              fontSize: 26,
-              height: 32 / 26,
-              fontWeight: FontWeight.w600,
-              letterSpacing: -0.3,
-              fontFeatures: const [FontFeature.tabularFigures()],
-            ),
+        // Sized by an invisible widest value, so the heading beside it
+        // doesn't reflow as the value goes from 9.9% to 10.0% or 100.0%.
+        : Stack(
+            alignment: Alignment.centerRight,
+            children: [
+              Opacity(opacity: 0, child: valueText('100.0')),
+              valueText(value.toStringAsFixed(1)),
+            ],
           );
 
     final sliderRow = SizedBox(
@@ -498,9 +560,9 @@ class _PercentSliderState extends State<_PercentSlider> {
               spacing: 12,
               children: [
                 StepButton.minus(
-                  tooltip: 'Decrease by 1%',
-                  onPressed: enabled && rounded > _minPercent
-                      ? () => _step(-1)
+                  tooltip: 'Decrease by 0.1%',
+                  onStep: enabled && value > _minPercent
+                      ? (steps) => _step(-steps)
                       : null,
                 ),
                 Expanded(
@@ -527,7 +589,8 @@ class _PercentSliderState extends State<_PercentSlider> {
                     child: Slider(
                       min: _minPercent,
                       max: _maxPercent,
-                      divisions: (_maxPercent - _minPercent).round(),
+                      divisions: ((_maxPercent - _minPercent) / _stepPercent)
+                          .round(),
                       value: value,
                       onChanged: enabled
                           ? (v) {
@@ -545,10 +608,8 @@ class _PercentSliderState extends State<_PercentSlider> {
                   ),
                 ),
                 StepButton.plus(
-                  tooltip: 'Increase by 1%',
-                  onPressed: enabled && rounded < _upper
-                      ? () => _step(1)
-                      : null,
+                  tooltip: 'Increase by 0.1%',
+                  onStep: enabled && value < _upper ? _step : null,
                 ),
               ],
             ),
@@ -631,7 +692,7 @@ class _Scale extends StatelessWidget {
                   child: FractionalTranslation(
                     translation: const Offset(-0.5, 0),
                     child: Text(
-                      'Max ${cap!.round()}%',
+                      'Max ${_formatPercent(cap!)}%',
                       style: style?.copyWith(
                         color: cs.onSurfaceVariant,
                         fontWeight: FontWeight.w600,
