@@ -2,7 +2,7 @@
   "state": "live",
   "notice": null,
   "overlay": "testPattern",
-  "signal": "HDMI1 · 1080/60p (67.50kHz/60.00Hz)",
+  "signal": "HDMI1: 1080/60p (67.50 kHz, 60.00 Hz)",
   "preShow": true,
   "preShowApplying": false
 }

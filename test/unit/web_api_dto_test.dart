@@ -217,7 +217,7 @@ void main() {
             Uint8List(0),
             overlay: RemotePreviewOverlay.testPattern,
           ),
-          signal: 'HDMI1 · 1080/60p (67.50kHz/60.00Hz)',
+          signal: 'HDMI1: 1080/60p (67.50 kHz, 60.00 Hz)',
           preShow: (on: true, applying: false),
         ),
       );

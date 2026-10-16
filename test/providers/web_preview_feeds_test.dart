@@ -112,7 +112,7 @@ void main() {
         'state': 'connecting',
         'notice': null,
         'overlay': null,
-        'signal': 'HDMI1 · 1080/60p',
+        'signal': 'HDMI1: 1080/60p',
         'preShow': null,
         'preShowApplying': false,
       },
