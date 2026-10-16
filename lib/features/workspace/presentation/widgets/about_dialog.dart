@@ -204,23 +204,24 @@ class _VersionPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = AppText.of(context);
+    final cs = Theme.of(context).colorScheme;
     // The Column hands the pill a loose width, and Container with an
-    // alignment would fill it; widthFactor keeps it to the text. Neutral,
-    // not primary: a blue fill is kept for state.
+    // alignment would fill it; widthFactor keeps it to the text. In the app's
+    // accent (owner, 2026-10-16): the one exception to "blue fills mean
+    // state", as part of the app's identity in the About header.
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
-        color: DialogSurfaces.of(context).soft,
+        color: cs.primaryContainer,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Center(
         widthFactor: 1,
         child: Text(
           text,
-          style: t.caption.copyWith(
+          style: AppText.of(context).caption.copyWith(
             fontWeight: FontWeight.w600,
-            color: t.secondary,
+            color: cs.onPrimaryContainer,
           ),
         ),
       ),
