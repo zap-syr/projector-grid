@@ -38,6 +38,10 @@ class LabeledSliderRow extends StatelessWidget {
   /// value; the stepper gets it as its max, or its own text would run past.
   final double? limit;
 
+  /// Replaces the inline label's style (Geometry's word labels, `Vertical`,
+  /// take an AppText role instead of the small coloured channel letter).
+  final TextStyle? labelStyle;
+
   const LabeledSliderRow({
     super.key,
     required this.label,
@@ -52,6 +56,7 @@ class LabeledSliderRow extends StatelessWidget {
     this.color,
     this.inlineLabelWidth = 14,
     this.limit,
+    this.labelStyle,
   });
 
   static String _cleanStr(double v) {
@@ -137,11 +142,15 @@ class LabeledSliderRow extends StatelessWidget {
               width: inlineLabelWidth,
               child: Text(
                 label,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color: accent,
-                ),
+                maxLines: labelStyle == null ? null : 1,
+                overflow: labelStyle == null ? null : TextOverflow.ellipsis,
+                style:
+                    labelStyle ??
+                    TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: accent,
+                    ),
               ),
             ),
             const SizedBox(width: 8),
