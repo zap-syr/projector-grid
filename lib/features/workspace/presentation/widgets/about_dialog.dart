@@ -214,19 +214,23 @@ class _VersionPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    // The Column hands the pill a loose width, and Container with an
+    // alignment would fill it; widthFactor keeps it to the text.
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10),
-      alignment: Alignment.center,
       decoration: BoxDecoration(
         color: cs.primaryContainer,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Text(
-        text,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: cs.onPrimaryContainer,
+      child: Center(
+        widthFactor: 1,
+        child: Text(
+          text,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: cs.onPrimaryContainer,
+          ),
         ),
       ),
     );
@@ -287,61 +291,75 @@ class _LinkRow extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final dark = theme.brightness == Brightness.dark;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: SizedBox(
-        height: 44,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          child: Row(
-            children: [
-              Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: heart
-                      ? Colors.pink.withValues(alpha: dark ? 0.22 : 0.12)
-                      : cs.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  icon,
-                  size: 16,
-                  color: heart
-                      ? (dark ? Colors.pink.shade100 : Colors.pink.shade600)
-                      : cs.onSurfaceVariant,
-                ),
+    return SizedBox(
+      height: 44,
+      child: Padding(
+        // The link's own 6px padding brings the trailing icon back to 10px
+        // from the edge, level with the tile on the left.
+        padding: const EdgeInsets.only(left: 10, right: 4),
+        child: Row(
+          children: [
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: heart
+                    ? Colors.pink.withValues(alpha: dark ? 0.22 : 0.12)
+                    : cs.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(8),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodyMedium?.copyWith(fontSize: 13.5),
-                ),
-              ),
-              if (hint != null) ...[
-                const SizedBox(width: 12),
-                Text(
-                  hint!,
-                  style: AppTheme.mono(
-                    TextStyle(
-                      fontSize: 12,
-                      color: cs.onSurfaceVariant.withValues(alpha: 0.75),
-                    ),
-                  ),
-                ),
-              ],
-              const SizedBox(width: 12),
-              Icon(
-                inApp ? Icons.chevron_right : Icons.open_in_new,
+              child: Icon(
+                icon,
                 size: 16,
-                color: cs.onSurfaceVariant,
+                color: heart
+                    ? (dark ? Colors.pink.shade100 : Colors.pink.shade600)
+                    : cs.onSurfaceVariant,
               ),
-            ],
-          ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium?.copyWith(fontSize: 13.5),
+              ),
+            ),
+            const SizedBox(width: 6),
+            // Only the hint and its icon are the link, not the whole row.
+            InkWell(
+              onTap: onTap,
+              mouseCursor: onTap == null
+                  ? SystemMouseCursors.basic
+                  : SystemMouseCursors.click,
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (hint != null) ...[
+                      Text(
+                        hint!,
+                        style: AppTheme.mono(
+                          TextStyle(
+                            fontSize: 12,
+                            color: cs.onSurfaceVariant.withValues(alpha: 0.75),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                    ],
+                    Icon(
+                      inApp ? Icons.chevron_right : Icons.open_in_new,
+                      size: 16,
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

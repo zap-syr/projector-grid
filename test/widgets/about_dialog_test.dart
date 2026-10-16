@@ -55,15 +55,17 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('each external link row opens its page', (tester) async {
+  testWidgets('each external link opens its page from the hint', (
+    tester,
+  ) async {
     await pumpAbout(tester);
-    for (final label in [
-      "What's new in 1.4.2",
-      'Project page',
-      'Report a bug',
-      'Support the project',
+    for (final hint in [
+      'Release notes',
+      'github.com/zap-syr',
+      'GitHub issues',
+      'gumroad.com',
     ]) {
-      await tester.tap(find.text(label));
+      await tester.tap(find.text(hint));
       await tester.pump();
     }
     expect(opened, [
@@ -74,9 +76,16 @@ void main() {
     ]);
   });
 
-  testWidgets('Third-party licenses opens the license page', (tester) async {
+  testWidgets('row labels are not links', (tester) async {
     await pumpAbout(tester);
-    await tester.tap(find.text('Third-party licenses'));
+    await tester.tap(find.text('Project page'), warnIfMissed: false);
+    await tester.pump();
+    expect(opened, isEmpty);
+  });
+
+  testWidgets('the chevron opens the license page', (tester) async {
+    await pumpAbout(tester);
+    await tester.tap(find.byIcon(Icons.chevron_right));
     await tester.pumpAndSettle();
     expect(find.byType(LicensePage), findsOneWidget);
     expect(find.byType(AppAboutDialog), findsNothing);
