@@ -8,6 +8,7 @@ class SegmentedTab<T> {
     required this.label,
     this.icon,
     this.pill,
+    this.neutralPill = false,
   });
 
   final T value;
@@ -17,6 +18,11 @@ class SegmentedTab<T> {
   /// A short state shown in a pill after the label (`3 colors`, `Off`), so
   /// each tab's state is visible without switching to it.
   final String? pill;
+
+  /// The pill stays neutral on the selected tab too: for a count (the
+  /// control bar's Custom tab) rather than a state, as a pill is only blue
+  /// when it shows state.
+  final bool neutralPill;
 }
 
 /// The pill tab strip shared by the dialogs and the control bar: a rounded
@@ -127,7 +133,7 @@ class SegmentedTabs<T> extends StatelessWidget {
                       vertical: 1,
                     ),
                     decoration: BoxDecoration(
-                      color: isSelected
+                      color: isSelected && !t.neutralPill
                           ? cs.primaryContainer
                           : cs.surfaceContainerHigh,
                       borderRadius: BorderRadius.circular(8),
@@ -136,7 +142,7 @@ class SegmentedTabs<T> extends StatelessWidget {
                       t.pill!,
                       style: text.caption.copyWith(
                         fontWeight: FontWeight.w600,
-                        color: isSelected
+                        color: isSelected && !t.neutralPill
                             ? cs.onPrimaryContainer
                             : cs.onSurfaceVariant,
                       ),
