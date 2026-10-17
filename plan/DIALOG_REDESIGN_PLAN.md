@@ -557,12 +557,14 @@ Boards: *Brightness Control: Normal mode / User 2 mode / reading values*. Approv
 
 ## 6. `[x]` Color Correction
 
-Done 2026-10-17 (wave B). Differs from the text below: dialog **560×600** (the 7 colors
-tab had too little room at 580); the value fields are 72×32 (visual rules §4); the
+Done 2026-10-17 (wave B). Differs from the text below: dialog **640×600** (the 7 colors
+tab had too little room at 580, and a 3 colors tile cut `2048, 2048, 2048` at 560); the value fields are 72×32 (visual rules §4); the
 Method subtitle is "Match projectors side by side"; the Kelvin track is 6 px with a white
 outlined thumb (visual rules §6a, large slider); the R / G / B rows use the shared thin
 `LabeledSliderRow`; a typed value is sent after 400 ms, so holding a field's arrow doesn't
 open a connection per step; the Low snap to 0 within ±3 applies to a slider drag only.
+The editor has no "Changed" subtitle: the colour's name sits centred on its preview, and
+the dot on the tile is the only "changed" mark (owner, 2026-10-17).
 
 Boards: *Color Correction: matching off / matching, 3 colors / matching, 7 colors /
 temperature User 1 / temperature Custom / temperature fixed by matching*. Approved

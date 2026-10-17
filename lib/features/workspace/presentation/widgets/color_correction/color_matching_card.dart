@@ -103,9 +103,8 @@ class ColorMatchingCard extends StatelessWidget {
 }
 
 /// The editor's heading: colour preview, the colour's name centred on it,
-/// and *Changed* in small type under the name. The note hangs into the gap
-/// below the row instead of taking a line, so the name never moves and the
-/// card keeps its height whether the colour is changed or not.
+/// and Reset. No "Changed" note: the dot on the colour's tile says it
+/// (owner, 2026-10-17), and Reset is enabled only then.
 class _EditorHeading extends StatelessWidget {
   const _EditorHeading({
     required this.preview,
@@ -124,7 +123,6 @@ class _EditorHeading extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final t = AppText.of(context);
     return Row(
       spacing: 14,
       children: [
@@ -138,31 +136,11 @@ class _EditorHeading extends StatelessWidget {
           ),
         ),
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: t.cardTitle,
-              ),
-              SizedBox(
-                height: 0,
-                child: OverflowBox(
-                  alignment: Alignment.topLeft,
-                  maxHeight: double.infinity,
-                  child: changed
-                      ? Text(
-                          'Changed',
-                          maxLines: 1,
-                          style: t.caption.copyWith(color: t.secondary),
-                        )
-                      : null,
-                ),
-              ),
-            ],
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppText.of(context).cardTitle,
           ),
         ),
         TextButton.icon(

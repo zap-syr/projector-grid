@@ -131,6 +131,11 @@ void main() {
     matching: find.byKey(const ValueKey('color-tile-changed')),
   );
 
+  /// The editor's Reset, enabled only for a changed colour.
+  bool resetEnabled(WidgetTester tester) => tester
+      .widget<ButtonStyleButton>(find.byKey(const ValueKey('color-reset')))
+      .enabled;
+
   Finder field(String key) => find.descendant(
     of: find.byKey(ValueKey(key)),
     matching: find.byType(TextField),
@@ -178,7 +183,9 @@ void main() {
     expect(find.text('2048, 96, 0'), findsOneWidget);
     expect(changedDot('red'), findsOneWidget);
     expect(changedDot('green'), findsNothing);
-    expect(find.text('Changed'), findsOneWidget);
+    // The dot says it; the editor has no "Changed" note.
+    expect(find.text('Changed'), findsNothing);
+    expect(resetEnabled(tester), isTrue);
   });
 
   testWidgets('Reset writes the colour\'s default in one write', (
@@ -192,13 +199,8 @@ void main() {
     await tester.pump();
     expect(writes(), ['VMR:2048,0000,0000']);
     expect(changedDot('red'), findsNothing);
-    expect(find.text('Changed'), findsNothing);
-    // The note hangs under the name, so losing it moves nothing.
     expect(tester.getTopLeft(firstRow), rowBefore);
-    final reset = tester.widget<ButtonStyleButton>(
-      find.byKey(const ValueKey('color-reset')),
-    );
-    expect(reset.enabled, isFalse);
+    expect(resetEnabled(tester), isFalse);
   });
 
   testWidgets('7 colors shows a changed dot only on the changed colour', (
@@ -210,11 +212,11 @@ void main() {
     expect(queries(), isNot(contains('QMR')));
     expect(changedDot('magenta'), findsOneWidget);
     expect(changedDot('red'), findsNothing);
-    expect(find.text('Changed'), findsNothing, reason: 'Red is selected');
+    expect(resetEnabled(tester), isFalse, reason: 'Red is selected');
 
     await tester.tap(tile('magenta'));
     await tester.pump();
-    expect(find.text('Changed'), findsOneWidget);
+    expect(resetEnabled(tester), isTrue);
   });
 
   testWidgets('switching method writes CMAI0, then reads that method', (
@@ -413,7 +415,7 @@ void main() {
       );
       await tester.tap(tile('magenta'));
       await tester.pump();
-      expect(find.text('Changed'), findsOneWidget);
+      expect(resetEnabled(tester), isTrue);
       expect(
         tester.getRect(find.byKey(const ValueKey('color-channel-0'))),
         rowRed3,
@@ -469,7 +471,7 @@ void main() {
         if (tab == 1) await openTemperature(tester);
         expect(tester.takeException(), isNull);
         final dialog = dialogRect(tester);
-        expect(dialog.width, lessThanOrEqualTo(560));
+        expect(dialog.width, lessThanOrEqualTo(640));
         expect(dialog.height, lessThanOrEqualTo(580));
       });
     }

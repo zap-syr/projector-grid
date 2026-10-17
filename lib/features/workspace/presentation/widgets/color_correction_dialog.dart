@@ -420,9 +420,10 @@ class _ColorCorrectionDialogState extends ConsumerState<ColorCorrectionDialog> {
       // A cap: the smallest window (800×600) leaves about 720×550 inside
       // the Dialog insets, and the body scrolls there. Within it the dialog
       // has one size for both tabs, every method and mode, and loading
-      // (SizedBox.expand), so nothing moves on a switch.
+      // (SizedBox.expand), so nothing moves on a switch. 640 wide so a
+      // 3 colors tile fits `2048, 2048, 2048` without an ellipsis.
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 560, maxHeight: 600),
+        constraints: const BoxConstraints(maxWidth: 640, maxHeight: 600),
         child: SizedBox.expand(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
