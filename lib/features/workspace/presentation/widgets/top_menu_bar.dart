@@ -18,6 +18,7 @@ import 'add_projector_dialog.dart';
 import 'alignment_banner.dart';
 import 'monitoring_table.dart';
 import '../../../../core/services/docs_service.dart';
+import '../../../../core/theme/app_theme.dart';
 
 class TopMenuBar extends ConsumerWidget {
   const TopMenuBar({super.key});
@@ -163,6 +164,7 @@ class TopMenuBar extends ConsumerWidget {
 
                 // Open Recent
                 SubmenuButton(
+                  alignmentOffset: AppTheme.submenuOffset,
                   leadingIcon: _leadingGutter(false),
                   menuChildren: recentProjects.isEmpty
                       ? [
@@ -357,10 +359,12 @@ class TopMenuBar extends ConsumerWidget {
                 ),
                 const Divider(),
                 SubmenuButton(
+                  alignmentOffset: AppTheme.submenuOffset,
                   leadingIcon: _leadingGutter(false),
                   menuChildren: [
                     // ── Columns ──────────────────────────────────────────
                     SubmenuButton(
+                      alignmentOffset: AppTheme.submenuOffset,
                       leadingIcon: _leadingGutter(false),
                       menuChildren: [
                         for (final id in MonitoringTable.allColumnIds)
@@ -394,6 +398,7 @@ class TopMenuBar extends ConsumerWidget {
                     ),
                     // ── Presets ──────────────────────────────────────────
                     SubmenuButton(
+                      alignmentOffset: AppTheme.submenuOffset,
                       leadingIcon: _leadingGutter(false),
                       menuChildren: [
                         for (final entry in MonitoringTable.presets.entries)
@@ -410,6 +415,7 @@ class TopMenuBar extends ConsumerWidget {
                     const Divider(),
                     // ── Row density ──────────────────────────────────────
                     SubmenuButton(
+                      alignmentOffset: AppTheme.submenuOffset,
                       leadingIcon: _leadingGutter(false),
                       menuChildren: [
                         for (final d in MonitoringDensity.values)

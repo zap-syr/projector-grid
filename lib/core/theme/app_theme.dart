@@ -282,6 +282,15 @@ class AppTheme {
   /// Text and icons on [alignmentAccent].
   static const Color onAlignmentAccent = Color(0xFF231200);
 
+  /// The inset between a menu's border and its items.
+  static const double menuInset = 6;
+
+  /// `alignmentOffset` of a submenu that opens beside its parent menu (not
+  /// one dropping from the menu bar): a submenu opens at its item's right
+  /// edge, which [menuInset] keeps inside the parent's border, so without
+  /// it the submenu covers the parent's edge.
+  static const Offset submenuOffset = Offset(menuInset, 0);
+
   static ThemeData get lightTheme => _base(Brightness.light);
 
   static ThemeData get darkTheme => _base(Brightness.dark);
@@ -341,9 +350,11 @@ class AppTheme {
     // PopupMenuButton) render with no border by default in M3 — just a faint
     // shadow and tonal tint that all but vanishes on the light theme. Give
     // them an opaque container colour, a visible 1px outline and a real
-    // shadow so they read as a distinct layer above the content.
+    // shadow so they read as a distinct layer above the content. Radius 12
+    // with a 6 px inset and rounded item highlights, as the projector card's
+    // context menu board, for every menu (owner, 2026-10-17).
     final menuShape = RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(12),
       side: BorderSide(color: colorScheme.outlineVariant),
     );
     final menuStyle = MenuStyle(
@@ -355,6 +366,13 @@ class AppTheme {
         BorderSide(color: colorScheme.outlineVariant),
       ),
       shape: WidgetStatePropertyAll(menuShape),
+      padding: const WidgetStatePropertyAll(EdgeInsets.all(menuInset)),
+    );
+    // The highlight of a hovered item, rounded inside the menu's inset.
+    const menuItemShape = WidgetStatePropertyAll<OutlinedBorder>(
+      RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.circular(8)),
+      ),
     );
 
     final theme = ThemeData(
@@ -403,6 +421,9 @@ class AppTheme {
       // Right-click context menus and DropdownMenu popups both resolve their
       // container style through MenuThemeData.
       menuTheme: MenuThemeData(style: menuStyle),
+      menuButtonTheme: const MenuButtonThemeData(
+        style: ButtonStyle(shape: menuItemShape),
+      ),
       // DropdownMenu's own popup list falls back to this before MenuThemeData.
       dropdownMenuTheme: DropdownMenuThemeData(menuStyle: menuStyle),
       // PopupMenuButton / showMenu use a separate theme object.

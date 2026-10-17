@@ -77,7 +77,10 @@ Four, all in `AppText`:
   row already in the project).
 
 No other alpha recipes for text (no `onSurfaceVariant` at 60 % or 75 %). Status colours
-(`error`, `AppStatusColors.success`, `warning`) only for status.
+(`error`, `AppStatusColors.success`, `warning`) only for status. One exception (owner,
+2026-10-17): Edge Blending's **Start** is amber (`warning`) on the canvas lines and
+handles, its slider and its legend, a data colour that sets it apart from Width
+(primary).
 
 ## 4. Fields and placeholders
 
@@ -154,7 +157,8 @@ Matching) is a neutral pill on `DialogSurfaces.soft` with a lock icon, never amb
 - **Filled**: the main action. **Only one filled button is enabled at a time** in a
   dialog. When a second one appears (Manage Groups' form with *Create group*), the first
   (*New group*) is disabled while it is open.
-- **Tonal**: a secondary action in place (`Scan again` in Discover).
+- **Tonal**: a secondary action in place (`Scan again` in Discover; the Monitoring
+  projector panel's *Preview*, *Web UI*, *Find on canvas*, owner 2026-10-17).
 - **Text**: Cancel and dismiss.
 - **Outlined**: the command buttons of the control bar (*On* / *Standby*, *Open* /
   *Close*, lens steps): many of them side by side, so they don't fill (owner,
@@ -205,6 +209,13 @@ Two styles (owner, 2026-10-16), each always built from `AppSliderTrackShape`
   pills fully rounded.
 - Card border `outlineVariant`; highlighted (selected or open form) 2 px `primary`;
   warning a `warning` border.
+- **Menus** (context menus, ⋮ menus, the menu bar's submenus, dropdown lists) all take
+  the theme's menu style (`app_theme.dart`): `surfaceContainerHigh`, 1 px
+  `outlineVariant`, radius 12, a 6 px inset, item highlights rounded 8 (owner,
+  2026-10-17). Don't style a single menu's container on its own. A `SubmenuButton`
+  that opens beside its parent menu (not one dropping from the menu bar) takes
+  `alignmentOffset: AppTheme.submenuOffset`, or the inset lets it cover the parent's
+  edge.
 - Dividers inside a card: `outlineVariant` at 60 %.
 
 ## 8. Layout stability and consistency

@@ -305,6 +305,7 @@ class _ProjectorCardState extends ConsumerState<ProjectorCard> {
                     child: const Text('Select in Group'),
                   ),
                   SubmenuButton(
+                    alignmentOffset: AppTheme.submenuOffset,
                     menuChildren: widget.buildGroupMenuItems(),
                     leadingIcon: const Icon(Icons.workspaces_outlined),
                     child: const Text('Assign to Group'),

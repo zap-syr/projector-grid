@@ -332,6 +332,7 @@ class _PresetsMenuState extends ConsumerState<_PresetsMenu> {
       controller: _controller,
       menuChildren: [
         SubmenuButton(
+          alignmentOffset: AppTheme.submenuOffset,
           menuChildren: [
             for (final p in AlignmentPreset.values)
               MenuItemButton(
@@ -344,6 +345,7 @@ class _PresetsMenuState extends ConsumerState<_PresetsMenu> {
           child: const Text('Preset'),
         ),
         SubmenuButton(
+          alignmentOffset: AppTheme.submenuOffset,
           menuChildren: [
             for (final code in patterns)
               _patternItem(
@@ -357,6 +359,7 @@ class _PresetsMenuState extends ConsumerState<_PresetsMenu> {
           child: const Text('Focused'),
         ),
         SubmenuButton(
+          alignmentOffset: AppTheme.submenuOffset,
           menuChildren: [
             MenuItemButton(
               leadingIcon: _check(state.othersPattern == null),
