@@ -85,6 +85,9 @@ List<ShortcutSection> shortcutSections({required bool macOS}) {
         ctrl,
         _k('G'),
       ], 'Select the whole group of the selected projector'),
+      ShortcutEntry([
+        _k('Space'),
+      ], 'Quick status of the selected projector, open or close'),
     ]),
     ShortcutSection(ShortcutSectionId.projectorControl, 'Projector control', [
       ShortcutEntry([_k('I')], 'Open the shutter'),

@@ -2,6 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:projector_grid/core/theme/app_theme.dart';
 import 'package:projector_grid/features/workspace/domain/alert_rule.dart';
 import 'package:projector_grid/features/workspace/domain/alerts.dart';
 import 'package:projector_grid/features/workspace/domain/projector_node.dart';
@@ -57,8 +58,9 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [alertsProvider.overrideWith(() => _FakeAlerts(alerts))],
-        child: const MaterialApp(
-          home: Scaffold(
+        child: MaterialApp(
+          theme: AppTheme.darkTheme,
+          home: const Scaffold(
             body: Align(
               alignment: Alignment.topLeft,
               child: Padding(
@@ -214,6 +216,7 @@ void main() {
           ),
         ],
         child: MaterialApp(
+          theme: AppTheme.darkTheme,
           home: Scaffold(
             body: Stack(
               children: [
@@ -226,6 +229,7 @@ void main() {
                   onPanUpdate: (_) {},
                   onPanEnd: (_) {},
                   onEdit: () {},
+                  onQuickStatus: () {},
                   onDelete: () {},
                   onColorCorrection: () {},
                   onBrightnessControl: () {},

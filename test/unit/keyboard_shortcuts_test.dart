@@ -9,9 +9,9 @@ void main() {
       for (final h in s.hits) h.entry.description,
   ];
 
-  test('the list has 33 shortcuts in 8 sections', () {
+  test('the list has 34 shortcuts in 8 sections', () {
     expect(sections, hasLength(8));
-    expect(shortcutCount(sections), 33);
+    expect(shortcutCount(sections), 34);
   });
 
   test('an empty query keeps every section', () {

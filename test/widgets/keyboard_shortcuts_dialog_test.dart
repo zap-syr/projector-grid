@@ -22,7 +22,7 @@ void main() {
   testWidgets('lays out in the minimum window and a large one', (tester) async {
     for (final size in const [Size(800, 600), Size(1600, 1000)]) {
       await pumpDialog(tester, size);
-      expect(find.text('33 shortcuts'), findsOneWidget);
+      expect(find.text('34 shortcuts'), findsOneWidget);
       expect(find.text('Project'), findsOneWidget);
       expect(find.text('Selection'), findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -91,19 +91,19 @@ void main() {
     expect(find.text('Canvas navigation'), findsOneWidget);
     expect(find.text('Project'), findsNothing);
     expect(find.text('Alignment'), findsNothing);
-    expect(find.text('5 of 6'), findsOneWidget);
+    expect(find.text('6 of 7'), findsOneWidget);
     expect(find.text('2 of 5'), findsOneWidget);
-    expect(find.text('7 of 33'), findsOneWidget);
+    expect(find.text('8 of 34'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField), 'ctrl g');
     await tester.pump();
-    expect(find.text('1 of 33'), findsOneWidget);
+    expect(find.text('1 of 34'), findsOneWidget);
     expect(find.text('Selection'), findsOneWidget);
     expect(find.text('Canvas navigation'), findsNothing);
 
     await tester.tap(find.byTooltip('Clear search'));
     await tester.pump();
-    expect(find.text('33 shortcuts'), findsOneWidget);
+    expect(find.text('34 shortcuts'), findsOneWidget);
     expect(find.text('Project'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

@@ -2,6 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:projector_grid/core/theme/app_theme.dart';
 import 'package:projector_grid/features/workspace/domain/projector_node.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/projector_card.dart';
 
@@ -15,6 +16,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         child: MaterialApp(
+          theme: AppTheme.darkTheme,
           home: Scaffold(
             body: Stack(
               children: [
@@ -33,6 +35,7 @@ void main() {
                   onPanUpdate: (_) {},
                   onPanEnd: (_) {},
                   onEdit: record('edit'),
+                  onQuickStatus: record('quickStatus'),
                   onDelete: record('delete'),
                   onColorCorrection: record('color'),
                   onBrightnessControl: record('brightness'),
@@ -62,6 +65,7 @@ void main() {
 
   const items = [
     'Edit',
+    'Quick status',
     'Brightness Control',
     'Color Correction',
     'Geometry Correction',
@@ -83,6 +87,7 @@ void main() {
 
   const wiring = {
     'Edit': 'edit',
+    'Quick status': 'quickStatus',
     'Brightness Control': 'brightness',
     'Color Correction': 'color',
     'Geometry Correction': 'geometry',

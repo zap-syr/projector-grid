@@ -1,12 +1,14 @@
 import 'dart:io' show Platform;
 import 'dart:math' show min, max;
 
+import 'package:flutter/foundation.dart' show setEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/alignment_provider.dart';
+import '../providers/app_settings_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../providers/selection_provider.dart';
 import '../../domain/card_layout.dart';
@@ -21,6 +23,7 @@ import 'edge_blending/edge_blending_dialog.dart';
 import 'geometry_correction_dialog.dart';
 import 'manage_groups_dialog.dart';
 import 'remote_preview_dialog.dart';
+import 'quick_status_popover.dart';
 import 'common/confirm_dialog.dart';
 import 'dialog_title_bar.dart' show projectorLabel;
 
@@ -86,12 +89,40 @@ class AlignmentNeighboursIntent extends Intent {
   const AlignmentNeighboursIntent();
 }
 
-class AlignmentExitIntent extends Intent {
-  const AlignmentExitIntent();
+/// Esc on the canvas: closes the quick status popover or leaves Alignment
+/// mode, whichever is active. The two never overlap (Alignment closes the
+/// popover and the popover doesn't open in Alignment), so one key serves
+/// both.
+class CanvasEscapeIntent extends Intent {
+  const CanvasEscapeIntent();
+}
+
+/// Space on the canvas: opens the quick status of the one selected card, or
+/// closes it.
+class QuickStatusIntent extends Intent {
+  const QuickStatusIntent();
+}
+
+/// An action whose enabled state is a closure, so a disabled key falls
+/// through to other handlers.
+class _ConditionalAction<T extends Intent> extends Action<T> {
+  _ConditionalAction({required this.enabled, required this.onInvoke});
+
+  final bool Function() enabled;
+  final VoidCallback onInvoke;
+
+  @override
+  bool isEnabled(T intent) => enabled();
+
+  @override
+  Object? invoke(T intent) {
+    onInvoke();
+    return null;
+  }
 }
 
 /// Enabled only while Alignment mode is on, so outside it `<` `>` `A` `N`
-/// and `Esc` fall through to other handlers and do nothing here.
+/// fall through to other handlers and do nothing here.
 class _AlignmentAction<T extends Intent> extends Action<T> {
   _AlignmentAction(this.ref, this.onInvoke);
 
@@ -148,18 +179,30 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
   bool _isMultiSelect = false;
   bool _isPanning = false;
 
+  // One quick status popover for the whole canvas, outside the cards, so a
+  // card carries no overlay of its own. [_quickStatusId] is the projector
+  // it shows while [_quickStatus] is showing.
+  final _quickStatus = OverlayPortalController();
+  String? _quickStatusId;
+  final _canvasFocus = FocusNode(debugLabel: 'canvas');
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     HardwareKeyboard.instance.addHandler(_handleKeyEvent);
     _isMultiSelect = _checkIsMultiSelect();
+    // The popover is placed for one scroll position and zoom; rather than
+    // follow the card, it closes when either changes.
+    _horizontalController.addListener(_closeQuickStatus);
+    _verticalController.addListener(_closeQuickStatus);
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
+    _canvasFocus.dispose();
     _verticalController.dispose();
     _horizontalController.dispose();
     _marqueeRect.dispose();
@@ -196,9 +239,86 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
     return false;
   }
 
+  bool _canOpenQuickStatus() =>
+      !ref.read(alignmentProvider).active &&
+      ref.read(selectionProvider).length == 1;
+
+  /// Opens the quick status for the one selected card.
+  void _openQuickStatus() {
+    _quickStatusId = ref.read(selectionProvider).single;
+    _quickStatus.show();
+  }
+
+  /// The context menu's *Quick status*: selects that card alone first, as
+  /// the popover belongs to the one selected card.
+  void _openQuickStatusFor(String id) {
+    if (ref.read(alignmentProvider).active) return;
+    ref.read(workspaceProvider.notifier).selectNodeOnTap(id);
+    _openQuickStatus();
+    // Back from the menu, so Space and Esc reach the canvas Shortcuts.
+    _canvasFocus.requestFocus();
+  }
+
+  void _closeQuickStatus() {
+    if (!_quickStatus.isShowing) return;
+    _quickStatus.hide();
+    _quickStatusId = null;
+  }
+
+  void _quickStatusRemotePreview(String id) {
+    _closeQuickStatus();
+    final node = ref
+        .read(workspaceProvider)
+        .where((n) => n.id == id)
+        .firstOrNull;
+    if (node == null) return;
+    final groups = ref.read(workspaceProvider.notifier).groups;
+    showRemotePreviewDialog(
+      context,
+      [node],
+      groups: {for (final g in groups) g.id: g},
+    );
+  }
+
+  /// The popover in the overlay: the selected card's rect from its canvas
+  /// position, the zoom and the scroll offsets, in the overlay's
+  /// coordinates through the viewport's paint transform.
+  Widget _buildQuickStatus(BuildContext context, OverlayChildLayoutInfo info) {
+    final id = _quickStatusId;
+    if (id == null) return const SizedBox.shrink();
+    return Consumer(
+      builder: (context, ref, _) {
+        final position = ref.watch(
+          workspaceProvider.select((nodes) {
+            final n = nodes.where((n) => n.id == id).firstOrNull;
+            return n == null ? null : Offset(n.x, n.y);
+          }),
+        );
+        if (position == null) return const SizedBox.shrink();
+        final scroll = Offset(
+          _horizontalController.hasClients ? _horizontalController.offset : 0,
+          _verticalController.hasClients ? _verticalController.offset : 0,
+        );
+        final card =
+            (position * _currentZoom - scroll) &
+            const Size(kCardWidth, kCardHeight) * _currentZoom;
+        return QuickStatusPopover(
+          anchor: MatrixUtils.transformRect(info.childPaintTransform, card),
+          bounds: MatrixUtils.transformRect(
+            info.childPaintTransform,
+            Offset.zero & info.childSize,
+          ),
+          nodeId: id,
+          onRemotePreview: () => _quickStatusRemotePreview(id),
+        );
+      },
+    );
+  }
+
   void _setZoom(double zoom, {Offset? contentOffset}) {
     final newZoom = zoom.clamp(0.5, 2.0);
     if (newZoom == _currentZoom) return;
+    _closeQuickStatus();
 
     if (_horizontalController.hasClients && _verticalController.hasClients) {
       final oldZoom = _currentZoom;
@@ -278,6 +398,7 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
     if (!_horizontalController.hasClients || !_verticalController.hasClients) {
       return;
     }
+    _closeQuickStatus();
 
     final minX = targets.map((n) => n.x).reduce(min);
     final maxX = targets.map((n) => n.x + _cardWidth).reduce(max);
@@ -403,6 +524,22 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
     final groups = notifier.groups;
     final groupMap = {for (var g in groups) g.id: g};
 
+    // The quick status closes by itself when what it was opened for goes:
+    // the selection changes (a delete deselects too), Alignment starts, or
+    // the view switches to Monitoring.
+    ref.listen(selectionProvider, (previous, next) {
+      if (!setEquals(previous, next)) _closeQuickStatus();
+    });
+    ref.listen(alignmentProvider.select((s) => s.active), (_, active) {
+      if (active) _closeQuickStatus();
+    });
+    ref.listen(appSettingsProvider.select((s) => s.isMonitoringView), (
+      _,
+      monitoring,
+    ) {
+      if (monitoring) _closeQuickStatus();
+    });
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final canvasWidth = (_workspaceWidth * _currentZoom).clamp(
@@ -414,687 +551,745 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
           double.infinity,
         );
 
-        return MouseRegion(
-          cursor: _isPanning
-              ? (Platform.isMacOS
-                    ? SystemMouseCursors.grabbing
-                    : SystemMouseCursors.move)
-              : MouseCursor.defer,
-          child: Stack(
-            children: [
-              // The Scrollable Workspace
-              Shortcuts(
-                shortcuts: {
-                  LogicalKeySet(
-                    LogicalKeyboardKey.control,
-                    LogicalKeyboardKey.keyA,
-                  ): const SelectAllIntent(),
-                  LogicalKeySet(
-                    LogicalKeyboardKey.meta,
-                    LogicalKeyboardKey.keyA,
-                  ): const SelectAllIntent(),
-                  LogicalKeySet(
-                    LogicalKeyboardKey.control,
-                    LogicalKeyboardKey.keyD,
-                  ): const DeselectAllIntent(),
-                  LogicalKeySet(
-                    LogicalKeyboardKey.meta,
-                    LogicalKeyboardKey.keyD,
-                  ): const DeselectAllIntent(),
-                  // Select in Group — takes the group from the first/only
-                  // selected projector (see the action below); a no-op if
-                  // nothing is selected or the selection has no group.
-                  LogicalKeySet(
-                    LogicalKeyboardKey.control,
-                    LogicalKeyboardKey.keyG,
-                  ): const SelectGroupIntent(),
-                  LogicalKeySet(
-                    LogicalKeyboardKey.meta,
-                    LogicalKeyboardKey.keyG,
-                  ): const SelectGroupIntent(),
-                  LogicalKeySet(LogicalKeyboardKey.delete):
-                      const DeleteIntent(),
-                  LogicalKeySet(
-                    LogicalKeyboardKey.control,
-                    LogicalKeyboardKey.keyZ,
-                  ): const UndoIntent(),
-                  LogicalKeySet(
-                    LogicalKeyboardKey.meta,
-                    LogicalKeyboardKey.keyZ,
-                  ): const UndoIntent(),
-                  // Redo is Ctrl+Y here (Windows/Linux convention). macOS
-                  // uses Cmd+Shift+Z instead, matching platform convention —
-                  // bound via the native Edit menu in mac_menu_bar.dart, not
-                  // here, so there's exactly one macOS Redo binding rather
-                  // than this plus a non-standard Cmd+Y.
-                  LogicalKeySet(
-                    LogicalKeyboardKey.control,
-                    LogicalKeyboardKey.keyY,
-                  ): const RedoIntent(),
+        return OverlayPortal.overlayChildLayoutBuilder(
+          controller: _quickStatus,
+          overlayChildBuilder: _buildQuickStatus,
+          child: MouseRegion(
+            cursor: _isPanning
+                ? (Platform.isMacOS
+                      ? SystemMouseCursors.grabbing
+                      : SystemMouseCursors.move)
+                : MouseCursor.defer,
+            child: Stack(
+              children: [
+                // The Scrollable Workspace
+                Shortcuts(
+                  shortcuts: {
+                    LogicalKeySet(
+                      LogicalKeyboardKey.control,
+                      LogicalKeyboardKey.keyA,
+                    ): const SelectAllIntent(),
+                    LogicalKeySet(
+                      LogicalKeyboardKey.meta,
+                      LogicalKeyboardKey.keyA,
+                    ): const SelectAllIntent(),
+                    LogicalKeySet(
+                      LogicalKeyboardKey.control,
+                      LogicalKeyboardKey.keyD,
+                    ): const DeselectAllIntent(),
+                    LogicalKeySet(
+                      LogicalKeyboardKey.meta,
+                      LogicalKeyboardKey.keyD,
+                    ): const DeselectAllIntent(),
+                    // Select in Group — takes the group from the first/only
+                    // selected projector (see the action below); a no-op if
+                    // nothing is selected or the selection has no group.
+                    LogicalKeySet(
+                      LogicalKeyboardKey.control,
+                      LogicalKeyboardKey.keyG,
+                    ): const SelectGroupIntent(),
+                    LogicalKeySet(
+                      LogicalKeyboardKey.meta,
+                      LogicalKeyboardKey.keyG,
+                    ): const SelectGroupIntent(),
+                    LogicalKeySet(LogicalKeyboardKey.delete):
+                        const DeleteIntent(),
+                    LogicalKeySet(
+                      LogicalKeyboardKey.control,
+                      LogicalKeyboardKey.keyZ,
+                    ): const UndoIntent(),
+                    LogicalKeySet(
+                      LogicalKeyboardKey.meta,
+                      LogicalKeyboardKey.keyZ,
+                    ): const UndoIntent(),
+                    // Redo is Ctrl+Y here (Windows/Linux convention). macOS
+                    // uses Cmd+Shift+Z instead, matching platform convention —
+                    // bound via the native Edit menu in mac_menu_bar.dart, not
+                    // here, so there's exactly one macOS Redo binding rather
+                    // than this plus a non-standard Cmd+Y.
+                    LogicalKeySet(
+                      LogicalKeyboardKey.control,
+                      LogicalKeyboardKey.keyY,
+                    ): const RedoIntent(),
 
-                  // ── Lens Shift — normal speed (arrow only) ───────────────────
-                  const SingleActivator(LogicalKeyboardKey.arrowUp):
-                      const SendCommandIntent('VXX:LNSI3=+00100'),
-                  const SingleActivator(LogicalKeyboardKey.arrowDown):
-                      const SendCommandIntent('VXX:LNSI3=+00101'),
-                  const SingleActivator(LogicalKeyboardKey.arrowLeft):
-                      const SendCommandIntent('VXX:LNSI2=+00101'),
-                  const SingleActivator(LogicalKeyboardKey.arrowRight):
-                      const SendCommandIntent('VXX:LNSI2=+00100'),
+                    // ── Lens Shift — normal speed (arrow only) ───────────────────
+                    const SingleActivator(LogicalKeyboardKey.arrowUp):
+                        const SendCommandIntent('VXX:LNSI3=+00100'),
+                    const SingleActivator(LogicalKeyboardKey.arrowDown):
+                        const SendCommandIntent('VXX:LNSI3=+00101'),
+                    const SingleActivator(LogicalKeyboardKey.arrowLeft):
+                        const SendCommandIntent('VXX:LNSI2=+00101'),
+                    const SingleActivator(LogicalKeyboardKey.arrowRight):
+                        const SendCommandIntent('VXX:LNSI2=+00100'),
 
-                  // ── Lens Shift — fast speed (Shift + arrow) ──────────────────
-                  const SingleActivator(
-                    LogicalKeyboardKey.arrowUp,
-                    shift: true,
-                  ): const SendCommandIntent(
-                    'VXX:LNSI3=+00200',
-                  ),
-                  const SingleActivator(
-                    LogicalKeyboardKey.arrowDown,
-                    shift: true,
-                  ): const SendCommandIntent(
-                    'VXX:LNSI3=+00201',
-                  ),
-                  const SingleActivator(
-                    LogicalKeyboardKey.arrowLeft,
-                    shift: true,
-                  ): const SendCommandIntent(
-                    'VXX:LNSI2=+00201',
-                  ),
-                  const SingleActivator(
-                    LogicalKeyboardKey.arrowRight,
-                    shift: true,
-                  ): const SendCommandIntent(
-                    'VXX:LNSI2=+00200',
-                  ),
+                    // ── Lens Shift — fast speed (Shift + arrow) ──────────────────
+                    const SingleActivator(
+                      LogicalKeyboardKey.arrowUp,
+                      shift: true,
+                    ): const SendCommandIntent(
+                      'VXX:LNSI3=+00200',
+                    ),
+                    const SingleActivator(
+                      LogicalKeyboardKey.arrowDown,
+                      shift: true,
+                    ): const SendCommandIntent(
+                      'VXX:LNSI3=+00201',
+                    ),
+                    const SingleActivator(
+                      LogicalKeyboardKey.arrowLeft,
+                      shift: true,
+                    ): const SendCommandIntent(
+                      'VXX:LNSI2=+00201',
+                    ),
+                    const SingleActivator(
+                      LogicalKeyboardKey.arrowRight,
+                      shift: true,
+                    ): const SendCommandIntent(
+                      'VXX:LNSI2=+00200',
+                    ),
 
-                  // ── Lens Shift — slow speed (Ctrl + arrow; also Cmd + arrow
-                  // on macOS, matching how every other Ctrl-bound shortcut in
-                  // this map registers a meta variant too, and how the
-                  // Keyboard Shortcuts dialog already labels this row ⌘ on
-                  // macOS) ───────────────────
-                  const SingleActivator(
-                    LogicalKeyboardKey.arrowUp,
-                    control: true,
-                  ): const SendCommandIntent(
-                    'VXX:LNSI3=+00000',
-                  ),
-                  const SingleActivator(
-                    LogicalKeyboardKey.arrowDown,
-                    control: true,
-                  ): const SendCommandIntent(
-                    'VXX:LNSI3=+00001',
-                  ),
-                  const SingleActivator(
-                    LogicalKeyboardKey.arrowLeft,
-                    control: true,
-                  ): const SendCommandIntent(
-                    'VXX:LNSI2=+00001',
-                  ),
-                  const SingleActivator(
-                    LogicalKeyboardKey.arrowRight,
-                    control: true,
-                  ): const SendCommandIntent(
-                    'VXX:LNSI2=+00000',
-                  ),
-                  const SingleActivator(LogicalKeyboardKey.arrowUp, meta: true):
-                      const SendCommandIntent('VXX:LNSI3=+00000'),
-                  const SingleActivator(
-                    LogicalKeyboardKey.arrowDown,
-                    meta: true,
-                  ): const SendCommandIntent(
-                    'VXX:LNSI3=+00001',
-                  ),
-                  const SingleActivator(
-                    LogicalKeyboardKey.arrowLeft,
-                    meta: true,
-                  ): const SendCommandIntent(
-                    'VXX:LNSI2=+00001',
-                  ),
-                  const SingleActivator(
-                    LogicalKeyboardKey.arrowRight,
-                    meta: true,
-                  ): const SendCommandIntent(
-                    'VXX:LNSI2=+00000',
-                  ),
+                    // ── Lens Shift — slow speed (Ctrl + arrow; also Cmd + arrow
+                    // on macOS, matching how every other Ctrl-bound shortcut in
+                    // this map registers a meta variant too, and how the
+                    // Keyboard Shortcuts dialog already labels this row ⌘ on
+                    // macOS) ───────────────────
+                    const SingleActivator(
+                      LogicalKeyboardKey.arrowUp,
+                      control: true,
+                    ): const SendCommandIntent(
+                      'VXX:LNSI3=+00000',
+                    ),
+                    const SingleActivator(
+                      LogicalKeyboardKey.arrowDown,
+                      control: true,
+                    ): const SendCommandIntent(
+                      'VXX:LNSI3=+00001',
+                    ),
+                    const SingleActivator(
+                      LogicalKeyboardKey.arrowLeft,
+                      control: true,
+                    ): const SendCommandIntent(
+                      'VXX:LNSI2=+00001',
+                    ),
+                    const SingleActivator(
+                      LogicalKeyboardKey.arrowRight,
+                      control: true,
+                    ): const SendCommandIntent(
+                      'VXX:LNSI2=+00000',
+                    ),
+                    const SingleActivator(
+                      LogicalKeyboardKey.arrowUp,
+                      meta: true,
+                    ): const SendCommandIntent(
+                      'VXX:LNSI3=+00000',
+                    ),
+                    const SingleActivator(
+                      LogicalKeyboardKey.arrowDown,
+                      meta: true,
+                    ): const SendCommandIntent(
+                      'VXX:LNSI3=+00001',
+                    ),
+                    const SingleActivator(
+                      LogicalKeyboardKey.arrowLeft,
+                      meta: true,
+                    ): const SendCommandIntent(
+                      'VXX:LNSI2=+00001',
+                    ),
+                    const SingleActivator(
+                      LogicalKeyboardKey.arrowRight,
+                      meta: true,
+                    ): const SendCommandIntent(
+                      'VXX:LNSI2=+00000',
+                    ),
 
-                  // ── Shutter ───────────────────────────────────────────────────
-                  const SingleActivator(LogicalKeyboardKey.keyI):
-                      const SendCommandIntent('OSH:1'),
-                  const SingleActivator(LogicalKeyboardKey.keyO):
-                      const SendCommandIntent('OSH:0'),
+                    // ── Shutter ───────────────────────────────────────────────────
+                    const SingleActivator(LogicalKeyboardKey.keyI):
+                        const SendCommandIntent('OSH:1'),
+                    const SingleActivator(LogicalKeyboardKey.keyO):
+                        const SendCommandIntent('OSH:0'),
 
-                  // ── Focus (F = selected, falls back to all; Shift+F = all) ───
-                  const SingleActivator(LogicalKeyboardKey.keyF):
-                      const FocusOnNodesIntent(allProjectors: false),
-                  const SingleActivator(LogicalKeyboardKey.keyF, shift: true):
-                      const FocusOnNodesIntent(allProjectors: true),
+                    // ── Focus (F = selected, falls back to all; Shift+F = all) ───
+                    const SingleActivator(LogicalKeyboardKey.keyF):
+                        const FocusOnNodesIntent(allProjectors: false),
+                    const SingleActivator(LogicalKeyboardKey.keyF, shift: true):
+                        const FocusOnNodesIntent(allProjectors: true),
 
-                  // ── Alignment mode (only while it's on) ─────────────────
-                  // `<` / `>` are Shift+comma / Shift+period; the bare keys
-                  // work too so no modifier is needed.
-                  const SingleActivator(LogicalKeyboardKey.comma):
-                      const AlignmentStepIntent(-1),
-                  const SingleActivator(LogicalKeyboardKey.comma, shift: true):
-                      const AlignmentStepIntent(-1),
-                  const SingleActivator(LogicalKeyboardKey.period):
-                      const AlignmentStepIntent(1),
-                  const SingleActivator(LogicalKeyboardKey.period, shift: true):
-                      const AlignmentStepIntent(1),
-                  const SingleActivator(LogicalKeyboardKey.keyA):
-                      const AlignmentShowAllIntent(),
-                  const SingleActivator(LogicalKeyboardKey.keyN):
-                      const AlignmentNeighboursIntent(),
-                  const SingleActivator(LogicalKeyboardKey.escape):
-                      const AlignmentExitIntent(),
-                },
-                child: Actions(
-                  actions: {
-                    AlignmentStepIntent: _AlignmentAction<AlignmentStepIntent>(
-                      ref,
-                      (a, intent) => intent.delta > 0 ? a.next() : a.previous(),
+                    // ── Alignment mode (only while it's on) ─────────────────
+                    // `<` / `>` are Shift+comma / Shift+period; the bare keys
+                    // work too so no modifier is needed.
+                    const SingleActivator(LogicalKeyboardKey.comma):
+                        const AlignmentStepIntent(-1),
+                    const SingleActivator(
+                      LogicalKeyboardKey.comma,
+                      shift: true,
+                    ): const AlignmentStepIntent(
+                      -1,
                     ),
-                    AlignmentShowAllIntent:
-                        _AlignmentAction<AlignmentShowAllIntent>(
-                          ref,
-                          (a, _) => a.toggleShowAll(),
-                        ),
-                    AlignmentNeighboursIntent:
-                        _AlignmentAction<AlignmentNeighboursIntent>(
-                          ref,
-                          (a, _) => a.toggleNeighbours(),
-                        ),
-                    AlignmentExitIntent: _AlignmentAction<AlignmentExitIntent>(
-                      ref,
-                      (a, _) => a.exit(),
+                    const SingleActivator(LogicalKeyboardKey.period):
+                        const AlignmentStepIntent(1),
+                    const SingleActivator(
+                      LogicalKeyboardKey.period,
+                      shift: true,
+                    ): const AlignmentStepIntent(
+                      1,
                     ),
-                    SelectAllIntent: CallbackAction<SelectAllIntent>(
-                      onInvoke: (intent) => notifier.selectAll(),
-                    ),
-                    DeselectAllIntent: CallbackAction<DeselectAllIntent>(
-                      onInvoke: (intent) => notifier.deselectAll(),
-                    ),
-                    SelectGroupIntent: CallbackAction<SelectGroupIntent>(
-                      onInvoke: (intent) {
-                        final selectedIds = ref.read(selectionProvider);
-                        if (selectedIds.isEmpty) return null;
-                        // "First" means first in canvas/list order, not
-                        // insertion order into the (unordered) selection set.
-                        final anchor = nodes.firstWhere(
-                          (n) => selectedIds.contains(n.id),
-                        );
-                        final groupId = anchor.groupId;
-                        if (groupId != null) {
-                          notifier.selectNodesInGroup(groupId);
-                        }
-                        return null;
-                      },
-                    ),
-                    SendCommandIntent: CallbackAction<SendCommandIntent>(
-                      onInvoke: (intent) =>
-                          notifier.sendCommandToSelected(intent.command),
-                    ),
-                    UndoIntent: CallbackAction<UndoIntent>(
-                      onInvoke: (intent) => notifier.undo(),
-                    ),
-                    RedoIntent: CallbackAction<RedoIntent>(
-                      onInvoke: (intent) => notifier.redo(),
-                    ),
-                    FocusOnNodesIntent: CallbackAction<FocusOnNodesIntent>(
-                      onInvoke: (intent) {
-                        final selectedIds = ref.read(selectionProvider);
-                        final targets =
-                            (intent.allProjectors || selectedIds.isEmpty)
-                            ? nodes
-                            : nodes
-                                  .where((n) => selectedIds.contains(n.id))
-                                  .toList();
-                        _focusOnNodes(targets);
-                        return null;
-                      },
-                    ),
-                    DeleteIntent: CallbackAction<DeleteIntent>(
-                      onInvoke: (intent) async {
-                        final selectedCount = ref
-                            .read(selectionProvider)
-                            .length;
-                        if (selectedCount == 0) return;
-                        final confirm = await _confirmDeleteProjectors(
-                          context,
-                          selectedCount,
-                        );
-                        if (confirm) notifier.deleteSelected();
-                        return null;
-                      },
-                    ),
+                    const SingleActivator(LogicalKeyboardKey.keyA):
+                        const AlignmentShowAllIntent(),
+                    const SingleActivator(LogicalKeyboardKey.keyN):
+                        const AlignmentNeighboursIntent(),
+                    const SingleActivator(LogicalKeyboardKey.escape):
+                        const CanvasEscapeIntent(),
+
+                    // ── Quick status of the one selected card ───────────────
+                    // A held Space would toggle it on every repeat.
+                    const SingleActivator(
+                      LogicalKeyboardKey.space,
+                      includeRepeats: false,
+                    ): const QuickStatusIntent(),
                   },
-                  child: Focus(
-                    autofocus: true,
-                    canRequestFocus: true,
-                    // Outer listener: Captures middle-mouse panning independently of scroll contents
-                    child: Listener(
-                      onPointerDown: (event) {
-                        if (event.buttons == kMiddleMouseButton) {
-                          setState(() => _isPanning = true);
-                        }
-                      },
-                      onPointerUp: (event) {
-                        if (_isPanning) setState(() => _isPanning = false);
-                      },
-                      onPointerMove: (event) {
-                        final panning = event.buttons == kMiddleMouseButton;
-                        if (panning != _isPanning) {
-                          setState(() => _isPanning = panning);
-                        }
-                        if (panning) {
-                          if (_horizontalController.hasClients) {
-                            _horizontalController.jumpTo(
-                              (_horizontalController.offset - event.delta.dx)
-                                  .clamp(
-                                    0.0,
-                                    _horizontalController
-                                        .position
-                                        .maxScrollExtent,
-                                  ),
-                            );
+                  child: Actions(
+                    actions: {
+                      AlignmentStepIntent:
+                          _AlignmentAction<AlignmentStepIntent>(
+                            ref,
+                            (a, intent) =>
+                                intent.delta > 0 ? a.next() : a.previous(),
+                          ),
+                      AlignmentShowAllIntent:
+                          _AlignmentAction<AlignmentShowAllIntent>(
+                            ref,
+                            (a, _) => a.toggleShowAll(),
+                          ),
+                      AlignmentNeighboursIntent:
+                          _AlignmentAction<AlignmentNeighboursIntent>(
+                            ref,
+                            (a, _) => a.toggleNeighbours(),
+                          ),
+                      CanvasEscapeIntent:
+                          _ConditionalAction<CanvasEscapeIntent>(
+                            enabled: () =>
+                                _quickStatus.isShowing ||
+                                ref.read(alignmentProvider).active,
+                            onInvoke: () {
+                              if (_quickStatus.isShowing) {
+                                _closeQuickStatus();
+                              } else {
+                                ref.read(alignmentProvider.notifier).exit();
+                              }
+                            },
+                          ),
+                      QuickStatusIntent: _ConditionalAction<QuickStatusIntent>(
+                        enabled: () =>
+                            _quickStatus.isShowing || _canOpenQuickStatus(),
+                        onInvoke: () => _quickStatus.isShowing
+                            ? _closeQuickStatus()
+                            : _openQuickStatus(),
+                      ),
+                      SelectAllIntent: CallbackAction<SelectAllIntent>(
+                        onInvoke: (intent) => notifier.selectAll(),
+                      ),
+                      DeselectAllIntent: CallbackAction<DeselectAllIntent>(
+                        onInvoke: (intent) => notifier.deselectAll(),
+                      ),
+                      SelectGroupIntent: CallbackAction<SelectGroupIntent>(
+                        onInvoke: (intent) {
+                          final selectedIds = ref.read(selectionProvider);
+                          if (selectedIds.isEmpty) return null;
+                          // "First" means first in canvas/list order, not
+                          // insertion order into the (unordered) selection set.
+                          final anchor = nodes.firstWhere(
+                            (n) => selectedIds.contains(n.id),
+                          );
+                          final groupId = anchor.groupId;
+                          if (groupId != null) {
+                            notifier.selectNodesInGroup(groupId);
                           }
-                          if (_verticalController.hasClients) {
-                            _verticalController.jumpTo(
-                              (_verticalController.offset - event.delta.dy)
-                                  .clamp(
-                                    0.0,
-                                    _verticalController
-                                        .position
-                                        .maxScrollExtent,
-                                  ),
-                            );
+                          return null;
+                        },
+                      ),
+                      SendCommandIntent: CallbackAction<SendCommandIntent>(
+                        onInvoke: (intent) =>
+                            notifier.sendCommandToSelected(intent.command),
+                      ),
+                      UndoIntent: CallbackAction<UndoIntent>(
+                        onInvoke: (intent) => notifier.undo(),
+                      ),
+                      RedoIntent: CallbackAction<RedoIntent>(
+                        onInvoke: (intent) => notifier.redo(),
+                      ),
+                      FocusOnNodesIntent: CallbackAction<FocusOnNodesIntent>(
+                        onInvoke: (intent) {
+                          final selectedIds = ref.read(selectionProvider);
+                          final targets =
+                              (intent.allProjectors || selectedIds.isEmpty)
+                              ? nodes
+                              : nodes
+                                    .where((n) => selectedIds.contains(n.id))
+                                    .toList();
+                          _focusOnNodes(targets);
+                          return null;
+                        },
+                      ),
+                      DeleteIntent: CallbackAction<DeleteIntent>(
+                        onInvoke: (intent) async {
+                          final selectedCount = ref
+                              .read(selectionProvider)
+                              .length;
+                          if (selectedCount == 0) return;
+                          final confirm = await _confirmDeleteProjectors(
+                            context,
+                            selectedCount,
+                          );
+                          if (confirm) notifier.deleteSelected();
+                          return null;
+                        },
+                      ),
+                    },
+                    child: Focus(
+                      focusNode: _canvasFocus,
+                      autofocus: true,
+                      canRequestFocus: true,
+                      // Outer listener: Captures middle-mouse panning independently of scroll contents
+                      child: Listener(
+                        onPointerDown: (event) {
+                          if (event.buttons == kMiddleMouseButton) {
+                            setState(() => _isPanning = true);
                           }
-                        }
-                      },
-                      child: Scrollbar(
-                        controller: _verticalController,
-                        thumbVisibility: true,
+                        },
+                        onPointerUp: (event) {
+                          if (_isPanning) setState(() => _isPanning = false);
+                        },
+                        onPointerMove: (event) {
+                          final panning = event.buttons == kMiddleMouseButton;
+                          if (panning != _isPanning) {
+                            setState(() => _isPanning = panning);
+                          }
+                          if (panning) {
+                            if (_horizontalController.hasClients) {
+                              _horizontalController.jumpTo(
+                                (_horizontalController.offset - event.delta.dx)
+                                    .clamp(
+                                      0.0,
+                                      _horizontalController
+                                          .position
+                                          .maxScrollExtent,
+                                    ),
+                              );
+                            }
+                            if (_verticalController.hasClients) {
+                              _verticalController.jumpTo(
+                                (_verticalController.offset - event.delta.dy)
+                                    .clamp(
+                                      0.0,
+                                      _verticalController
+                                          .position
+                                          .maxScrollExtent,
+                                    ),
+                              );
+                            }
+                          }
+                        },
                         child: Scrollbar(
-                          controller: _horizontalController,
+                          controller: _verticalController,
                           thumbVisibility: true,
-                          notificationPredicate: (notif) => notif.depth == 1,
-                          child: SingleChildScrollView(
-                            controller: _verticalController,
-                            scrollDirection: Axis.vertical,
-                            physics: _isMultiSelect
-                                ? const NeverScrollableScrollPhysics()
-                                : null,
+                          child: Scrollbar(
+                            controller: _horizontalController,
+                            thumbVisibility: true,
+                            notificationPredicate: (notif) => notif.depth == 1,
                             child: SingleChildScrollView(
-                              controller: _horizontalController,
-                              scrollDirection: Axis.horizontal,
+                              controller: _verticalController,
+                              scrollDirection: Axis.vertical,
                               physics: _isMultiSelect
                                   ? const NeverScrollableScrollPhysics()
                                   : null,
-                              // Inner listener: Captures scroll wheel zoom and intercepts it before SingleChildScrollView acts
-                              child: Listener(
-                                onPointerSignal: (pointerSignal) {
-                                  if (pointerSignal is PointerScrollEvent) {
-                                    if (_isMultiSelect) {
-                                      final double scrollDelta =
-                                          pointerSignal.scrollDelta.dy;
-                                      if (scrollDelta > 0) {
-                                        final newZoom = double.parse(
-                                          (_currentZoom - 0.1).toStringAsFixed(
-                                            1,
-                                          ),
-                                        );
-                                        _setZoom(
-                                          newZoom.clamp(0.5, 2.0),
-                                          contentOffset:
-                                              pointerSignal.localPosition,
-                                        );
-                                      } else if (scrollDelta < 0) {
-                                        final newZoom = double.parse(
-                                          (_currentZoom + 0.1).toStringAsFixed(
-                                            1,
-                                          ),
-                                        );
-                                        _setZoom(
-                                          newZoom.clamp(0.5, 2.0),
-                                          contentOffset:
-                                              pointerSignal.localPosition,
-                                        );
+                              child: SingleChildScrollView(
+                                controller: _horizontalController,
+                                scrollDirection: Axis.horizontal,
+                                physics: _isMultiSelect
+                                    ? const NeverScrollableScrollPhysics()
+                                    : null,
+                                // Inner listener: Captures scroll wheel zoom and intercepts it before SingleChildScrollView acts
+                                child: Listener(
+                                  onPointerSignal: (pointerSignal) {
+                                    if (pointerSignal is PointerScrollEvent) {
+                                      if (_isMultiSelect) {
+                                        final double scrollDelta =
+                                            pointerSignal.scrollDelta.dy;
+                                        if (scrollDelta > 0) {
+                                          final newZoom = double.parse(
+                                            (_currentZoom - 0.1)
+                                                .toStringAsFixed(1),
+                                          );
+                                          _setZoom(
+                                            newZoom.clamp(0.5, 2.0),
+                                            contentOffset:
+                                                pointerSignal.localPosition,
+                                          );
+                                        } else if (scrollDelta < 0) {
+                                          final newZoom = double.parse(
+                                            (_currentZoom + 0.1)
+                                                .toStringAsFixed(1),
+                                          );
+                                          _setZoom(
+                                            newZoom.clamp(0.5, 2.0),
+                                            contentOffset:
+                                                pointerSignal.localPosition,
+                                          );
+                                        }
                                       }
                                     }
-                                  }
-                                },
-                                child: GestureDetector(
-                                  onTap: () {
-                                    notifier.deselectAll();
                                   },
-                                  onPanStart: (details) {
-                                    if (_isPanning) return;
-                                    _selectionAnchor = details.localPosition;
-                                    _marqueeRect.value =
-                                        details.localPosition & Size.zero;
-                                    notifier.startMarqueeSelection(
-                                      append: _isMultiSelect,
-                                    );
-                                  },
-                                  onPanUpdate: (details) {
-                                    if (_isPanning) return;
-                                    final anchor = _selectionAnchor;
-                                    if (anchor == null) return;
-                                    _marqueeRect.value = Rect.fromPoints(
-                                      anchor,
-                                      details.localPosition,
-                                    );
-                                    notifier.selectNodesInRect(
-                                      Rect.fromPoints(
-                                        anchor / _currentZoom,
-                                        details.localPosition / _currentZoom,
-                                      ),
-                                      append: _isMultiSelect,
-                                    );
-                                  },
-                                  onPanEnd: (details) {
-                                    if (_isPanning) return;
-                                    _selectionAnchor = null;
-                                    _marqueeRect.value = null;
-                                    notifier.endMarqueeSelection();
-                                  },
-                                  child: Container(
-                                    width: canvasWidth,
-                                    height: canvasHeight,
-                                    color:
-                                        Colors.transparent, // Capture gestures
-                                    child: Stack(
-                                      clipBehavior: Clip.none,
-                                      children: [
-                                        // Background grid isolated in its own
-                                        // layer (RepaintBoundary) so it
-                                        // rasterizes once and stays cached while
-                                        // cards are dragged on top of it,
-                                        // instead of the whole 3000x3000 grid
-                                        // repainting on every pointer move.
-                                        Positioned.fill(
-                                          child: RepaintBoundary(
-                                            child: CustomPaint(
-                                              painter: GridPainter(
-                                                Theme.of(context).dividerColor
-                                                    .withValues(alpha: 0.1),
-                                                _gridStep * _currentZoom,
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      notifier.deselectAll();
+                                    },
+                                    onPanStart: (details) {
+                                      if (_isPanning) return;
+                                      _closeQuickStatus();
+                                      _selectionAnchor = details.localPosition;
+                                      _marqueeRect.value =
+                                          details.localPosition & Size.zero;
+                                      notifier.startMarqueeSelection(
+                                        append: _isMultiSelect,
+                                      );
+                                    },
+                                    onPanUpdate: (details) {
+                                      if (_isPanning) return;
+                                      final anchor = _selectionAnchor;
+                                      if (anchor == null) return;
+                                      _marqueeRect.value = Rect.fromPoints(
+                                        anchor,
+                                        details.localPosition,
+                                      );
+                                      notifier.selectNodesInRect(
+                                        Rect.fromPoints(
+                                          anchor / _currentZoom,
+                                          details.localPosition / _currentZoom,
+                                        ),
+                                        append: _isMultiSelect,
+                                      );
+                                    },
+                                    onPanEnd: (details) {
+                                      if (_isPanning) return;
+                                      _selectionAnchor = null;
+                                      _marqueeRect.value = null;
+                                      notifier.endMarqueeSelection();
+                                    },
+                                    child: Container(
+                                      width: canvasWidth,
+                                      height: canvasHeight,
+                                      color: Colors
+                                          .transparent, // Capture gestures
+                                      child: Stack(
+                                        clipBehavior: Clip.none,
+                                        children: [
+                                          // Background grid isolated in its own
+                                          // layer (RepaintBoundary) so it
+                                          // rasterizes once and stays cached while
+                                          // cards are dragged on top of it,
+                                          // instead of the whole 3000x3000 grid
+                                          // repainting on every pointer move.
+                                          Positioned.fill(
+                                            child: RepaintBoundary(
+                                              child: CustomPaint(
+                                                painter: GridPainter(
+                                                  Theme.of(context).dividerColor
+                                                      .withValues(alpha: 0.1),
+                                                  _gridStep * _currentZoom,
+                                                ),
                                               ),
                                             ),
                                           ),
-                                        ),
-                                        // Render projector nodes
-                                        ...nodes.map(
-                                          (node) => ProjectorCard(
-                                            key: ValueKey(node.id),
-                                            node: node,
-                                            group: node.groupId != null
-                                                ? groupMap[node.groupId]
-                                                : null,
-                                            dragOverrides: _dragOverrides,
-                                            zoom: _currentZoom,
-                                            onTap: () {
-                                              // In Alignment mode a click
-                                              // focuses the card and
-                                              // Ctrl+click toggles it as a
-                                              // neighbour instead of
-                                              // selecting.
-                                              final alignment = ref.read(
-                                                alignmentProvider.notifier,
-                                              );
-                                              if (ref
-                                                  .read(alignmentProvider)
-                                                  .active) {
-                                                _isMultiSelect
-                                                    ? alignment
-                                                          .toggleManualNeighbour(
-                                                            node.id,
-                                                          )
-                                                    : alignment.focus(node.id);
-                                                return;
-                                              }
-                                              notifier.selectNodeOnTap(
-                                                node.id,
-                                                multiSelect: _isMultiSelect,
-                                              );
-                                            },
-                                            onPanDown: (details) {
-                                              if (_isMultiSelect &&
-                                                  ref
-                                                      .read(alignmentProvider)
-                                                      .active) {
-                                                return;
-                                              }
-                                              notifier.selectNodeOnDown(
-                                                node.id,
-                                                multiSelect: _isMultiSelect,
-                                              );
-                                            },
-                                            onPanUpdate: (details) {
-                                              if (_panStartPositions == null) {
-                                                notifier.saveBeforeMove();
-                                                final selectedIds = ref.read(
-                                                  selectionProvider,
+                                          // Render projector nodes
+                                          ...nodes.map(
+                                            (node) => ProjectorCard(
+                                              key: ValueKey(node.id),
+                                              node: node,
+                                              group: node.groupId != null
+                                                  ? groupMap[node.groupId]
+                                                  : null,
+                                              dragOverrides: _dragOverrides,
+                                              zoom: _currentZoom,
+                                              onTap: () {
+                                                // In Alignment mode a click
+                                                // focuses the card and
+                                                // Ctrl+click toggles it as a
+                                                // neighbour instead of
+                                                // selecting.
+                                                final alignment = ref.read(
+                                                  alignmentProvider.notifier,
                                                 );
-                                                final affected =
-                                                    selectedIds.contains(
-                                                      node.id,
-                                                    )
-                                                    ? nodes.where(
-                                                        (n) => selectedIds
-                                                            .contains(n.id),
-                                                      )
-                                                    : [node];
-                                                _panStartPositions = {
-                                                  for (final n in affected)
-                                                    n.id: Offset(n.x, n.y),
-                                                };
-                                                _panTotalDelta = Offset.zero;
-                                              }
-                                              _panTotalDelta += details.delta;
-                                              // Ephemeral, local-only update —
-                                              // workspaceProvider isn't
-                                              // written until onPanEnd, so
-                                              // this never rebuilds
-                                              // ProjectorWorkspace or any
-                                              // other card.
-                                              _dragOverrides.value = {
-                                                for (final entry
-                                                    in _panStartPositions!
-                                                        .entries)
-                                                  entry.key: Offset(
-                                                    _clampX(
-                                                      entry.value.dx +
-                                                          _panTotalDelta.dx,
-                                                    ),
-                                                    _clampY(
-                                                      entry.value.dy +
-                                                          _panTotalDelta.dy,
-                                                    ),
-                                                  ),
-                                              };
-                                            },
-                                            onPanEnd: (details) {
-                                              // Commit the accumulated drag to
-                                              // workspaceProvider exactly
-                                              // once, then clear the local
-                                              // preview before the resulting
-                                              // rebuild sees the real
-                                              // (identical) position — no
-                                              // visible jump, since
-                                              // _dragOverrides was already
-                                              // clamped the same way.
-                                              if (_panStartPositions != null) {
-                                                notifier
-                                                    .setNodePositionsFromDrag(
-                                                      node.id,
-                                                      _panTotalDelta,
-                                                      _panStartPositions!,
-                                                    );
-                                              }
-                                              _panStartPositions = null;
-                                              _panTotalDelta = Offset.zero;
-                                              _dragOverrides.value = const {};
-                                              notifier.snapNodeToGrid(node.id);
-                                              notifier.endMove();
-                                            },
-                                            onEdit: () {
-                                              showDialog(
-                                                context: context,
-                                                builder: (context) =>
-                                                    EditProjectorDialog(
-                                                      node: node,
-                                                      existingIps: nodes
-                                                          .map(
-                                                            (n) => n.ipAddress,
-                                                          )
-                                                          .where(
-                                                            (ip) =>
-                                                                ip !=
-                                                                node.ipAddress,
-                                                          )
-                                                          .toSet(),
-                                                      onSave:
-                                                          (
-                                                            ip,
-                                                            port,
-                                                            login,
-                                                            password,
-                                                          ) {
-                                                            notifier.updateNode(
+                                                if (ref
+                                                    .read(alignmentProvider)
+                                                    .active) {
+                                                  _isMultiSelect
+                                                      ? alignment
+                                                            .toggleManualNeighbour(
                                                               node.id,
+                                                            )
+                                                      : alignment.focus(
+                                                          node.id,
+                                                        );
+                                                  return;
+                                                }
+                                                notifier.selectNodeOnTap(
+                                                  node.id,
+                                                  multiSelect: _isMultiSelect,
+                                                );
+                                              },
+                                              onPanDown: (details) {
+                                                if (_isMultiSelect &&
+                                                    ref
+                                                        .read(alignmentProvider)
+                                                        .active) {
+                                                  return;
+                                                }
+                                                notifier.selectNodeOnDown(
+                                                  node.id,
+                                                  multiSelect: _isMultiSelect,
+                                                );
+                                              },
+                                              onPanUpdate: (details) {
+                                                if (_panStartPositions ==
+                                                    null) {
+                                                  _closeQuickStatus();
+                                                  notifier.saveBeforeMove();
+                                                  final selectedIds = ref.read(
+                                                    selectionProvider,
+                                                  );
+                                                  final affected =
+                                                      selectedIds.contains(
+                                                        node.id,
+                                                      )
+                                                      ? nodes.where(
+                                                          (n) => selectedIds
+                                                              .contains(n.id),
+                                                        )
+                                                      : [node];
+                                                  _panStartPositions = {
+                                                    for (final n in affected)
+                                                      n.id: Offset(n.x, n.y),
+                                                  };
+                                                  _panTotalDelta = Offset.zero;
+                                                }
+                                                _panTotalDelta += details.delta;
+                                                // Ephemeral, local-only update —
+                                                // workspaceProvider isn't
+                                                // written until onPanEnd, so
+                                                // this never rebuilds
+                                                // ProjectorWorkspace or any
+                                                // other card.
+                                                _dragOverrides.value = {
+                                                  for (final entry
+                                                      in _panStartPositions!
+                                                          .entries)
+                                                    entry.key: Offset(
+                                                      _clampX(
+                                                        entry.value.dx +
+                                                            _panTotalDelta.dx,
+                                                      ),
+                                                      _clampY(
+                                                        entry.value.dy +
+                                                            _panTotalDelta.dy,
+                                                      ),
+                                                    ),
+                                                };
+                                              },
+                                              onPanEnd: (details) {
+                                                // Commit the accumulated drag to
+                                                // workspaceProvider exactly
+                                                // once, then clear the local
+                                                // preview before the resulting
+                                                // rebuild sees the real
+                                                // (identical) position — no
+                                                // visible jump, since
+                                                // _dragOverrides was already
+                                                // clamped the same way.
+                                                if (_panStartPositions !=
+                                                    null) {
+                                                  notifier
+                                                      .setNodePositionsFromDrag(
+                                                        node.id,
+                                                        _panTotalDelta,
+                                                        _panStartPositions!,
+                                                      );
+                                                }
+                                                _panStartPositions = null;
+                                                _panTotalDelta = Offset.zero;
+                                                _dragOverrides.value = const {};
+                                                notifier.snapNodeToGrid(
+                                                  node.id,
+                                                );
+                                                notifier.endMove();
+                                              },
+                                              onEdit: () {
+                                                showDialog(
+                                                  context: context,
+                                                  builder: (context) =>
+                                                      EditProjectorDialog(
+                                                        node: node,
+                                                        existingIps: nodes
+                                                            .map(
+                                                              (n) =>
+                                                                  n.ipAddress,
+                                                            )
+                                                            .where(
+                                                              (ip) =>
+                                                                  ip !=
+                                                                  node.ipAddress,
+                                                            )
+                                                            .toSet(),
+                                                        onSave:
+                                                            (
                                                               ip,
                                                               port,
                                                               login,
                                                               password,
-                                                            );
-                                                          },
-                                                    ),
-                                              );
-                                            },
-                                            onDelete: () async {
-                                              final selectedIds = ref.read(
-                                                selectionProvider,
-                                              );
-                                              final selectedCount =
-                                                  selectedIds.length;
-                                              final isMultiDelete =
-                                                  selectedIds.contains(
-                                                    node.id,
-                                                  ) &&
-                                                  selectedCount > 1;
-                                              final confirm =
-                                                  await _confirmDeleteProjectors(
-                                                    context,
-                                                    isMultiDelete
-                                                        ? selectedCount
-                                                        : 1,
-                                                    single: isMultiDelete
-                                                        ? null
-                                                        : node,
-                                                  );
-                                              if (confirm) {
-                                                if (isMultiDelete) {
-                                                  notifier.deleteSelected();
-                                                } else {
-                                                  notifier.deleteNode(node.id);
+                                                            ) {
+                                                              notifier
+                                                                  .updateNode(
+                                                                    node.id,
+                                                                    ip,
+                                                                    port,
+                                                                    login,
+                                                                    password,
+                                                                  );
+                                                            },
+                                                      ),
+                                                );
+                                              },
+                                              onQuickStatus: () =>
+                                                  _openQuickStatusFor(node.id),
+                                              onDelete: () async {
+                                                final selectedIds = ref.read(
+                                                  selectionProvider,
+                                                );
+                                                final selectedCount =
+                                                    selectedIds.length;
+                                                final isMultiDelete =
+                                                    selectedIds.contains(
+                                                      node.id,
+                                                    ) &&
+                                                    selectedCount > 1;
+                                                final confirm =
+                                                    await _confirmDeleteProjectors(
+                                                      context,
+                                                      isMultiDelete
+                                                          ? selectedCount
+                                                          : 1,
+                                                      single: isMultiDelete
+                                                          ? null
+                                                          : node,
+                                                    );
+                                                if (confirm) {
+                                                  if (isMultiDelete) {
+                                                    notifier.deleteSelected();
+                                                  } else {
+                                                    notifier.deleteNode(
+                                                      node.id,
+                                                    );
+                                                  }
                                                 }
-                                              }
-                                            },
-                                            onColorCorrection: () {
-                                              showDialog(
-                                                context: context,
-                                                builder: (_) =>
-                                                    ColorCorrectionDialog(
-                                                      node: node,
-                                                    ),
-                                              );
-                                            },
-                                            onBrightnessControl: () {
-                                              showDialog(
-                                                context: context,
-                                                builder: (_) =>
-                                                    BrightnessControlDialog(
-                                                      node: node,
-                                                    ),
-                                              );
-                                            },
-                                            onGeometryCorrection: () {
-                                              showDialog(
-                                                context: context,
-                                                builder: (_) =>
-                                                    GeometryCorrectionDialog(
-                                                      node: node,
-                                                    ),
-                                              );
-                                            },
-                                            onEdgeBlending: () {
-                                              final targets = edgeBlendTargets(
-                                                node,
-                                                ref.read(selectionProvider),
-                                                nodes,
-                                              );
-                                              showDialog(
-                                                context: context,
-                                                builder: (_) =>
-                                                    EdgeBlendingDialog(
-                                                      nodes: targets,
-                                                    ),
-                                              );
-                                            },
-                                            onRemotePreview: () {
-                                              final selectedIds = ref.read(
-                                                selectionProvider,
-                                              );
-                                              final targets =
-                                                  selectedIds.contains(
-                                                        node.id,
-                                                      ) &&
-                                                      selectedIds.length > 1
-                                                  ? nodes
-                                                        .where(
-                                                          (n) => selectedIds
-                                                              .contains(n.id),
+                                              },
+                                              onColorCorrection: () {
+                                                showDialog(
+                                                  context: context,
+                                                  builder: (_) =>
+                                                      ColorCorrectionDialog(
+                                                        node: node,
+                                                      ),
+                                                );
+                                              },
+                                              onBrightnessControl: () {
+                                                showDialog(
+                                                  context: context,
+                                                  builder: (_) =>
+                                                      BrightnessControlDialog(
+                                                        node: node,
+                                                      ),
+                                                );
+                                              },
+                                              onGeometryCorrection: () {
+                                                showDialog(
+                                                  context: context,
+                                                  builder: (_) =>
+                                                      GeometryCorrectionDialog(
+                                                        node: node,
+                                                      ),
+                                                );
+                                              },
+                                              onEdgeBlending: () {
+                                                final targets =
+                                                    edgeBlendTargets(
+                                                      node,
+                                                      ref.read(
+                                                        selectionProvider,
+                                                      ),
+                                                      nodes,
+                                                    );
+                                                showDialog(
+                                                  context: context,
+                                                  builder: (_) =>
+                                                      EdgeBlendingDialog(
+                                                        nodes: targets,
+                                                      ),
+                                                );
+                                              },
+                                              onRemotePreview: () {
+                                                final selectedIds = ref.read(
+                                                  selectionProvider,
+                                                );
+                                                final targets =
+                                                    selectedIds.contains(
+                                                          node.id,
+                                                        ) &&
+                                                        selectedIds.length > 1
+                                                    ? nodes
+                                                          .where(
+                                                            (n) => selectedIds
+                                                                .contains(n.id),
+                                                          )
+                                                          .toList()
+                                                    : [node];
+                                                showRemotePreviewDialog(
+                                                  context,
+                                                  targets,
+                                                  groups: groupMap,
+                                                );
+                                              },
+                                              onSelectGroup:
+                                                  node.groupId != null
+                                                  ? () => notifier
+                                                        .selectNodesInGroup(
+                                                          node.groupId!,
                                                         )
-                                                        .toList()
-                                                  : [node];
-                                              showRemotePreviewDialog(
-                                                context,
-                                                targets,
-                                                groups: groupMap,
-                                              );
-                                            },
-                                            onSelectGroup: node.groupId != null
-                                                ? () => notifier
-                                                      .selectNodesInGroup(
-                                                        node.groupId!,
-                                                      )
-                                                : null,
-                                            buildGroupMenuItems: () =>
-                                                _buildGroupMenuItems(
-                                                  node,
-                                                  notifier,
-                                                  groups,
-                                                ),
+                                                  : null,
+                                              buildGroupMenuItems: () =>
+                                                  _buildGroupMenuItems(
+                                                    node,
+                                                    notifier,
+                                                    groups,
+                                                  ),
+                                            ),
                                           ),
-                                        ),
 
-                                        // Selection marquee — painted from a
-                                        // ValueNotifier so the drag repaints
-                                        // only this overlay, not the card tree.
-                                        Positioned.fill(
-                                          child: IgnorePointer(
-                                            child: CustomPaint(
-                                              painter: _MarqueePainter(
-                                                rect: _marqueeRect,
-                                                color: Theme.of(context)
-                                                    .colorScheme
-                                                    .primary,
+                                          // Selection marquee — painted from a
+                                          // ValueNotifier so the drag repaints
+                                          // only this overlay, not the card tree.
+                                          Positioned.fill(
+                                            child: IgnorePointer(
+                                              child: CustomPaint(
+                                                painter: _MarqueePainter(
+                                                  rect: _marqueeRect,
+                                                  color: Theme.of(context)
+                                                      .colorScheme
+                                                      .primary,
+                                                ),
                                               ),
                                             ),
                                           ),
-                                        ),
-                                      ],
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -1106,18 +1301,18 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
                     ),
                   ),
                 ),
-              ),
 
-              // Zoom Controls overlay at bottom left
-              Positioned(
-                bottom: 16,
-                left: 16,
-                child: _ZoomControl(
-                  currentZoom: _currentZoom,
-                  onZoomChanged: (zoom) => _setZoom(zoom),
+                // Zoom Controls overlay at bottom left
+                Positioned(
+                  bottom: 16,
+                  left: 16,
+                  child: _ZoomControl(
+                    currentZoom: _currentZoom,
+                    onZoomChanged: (zoom) => _setZoom(zoom),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },
