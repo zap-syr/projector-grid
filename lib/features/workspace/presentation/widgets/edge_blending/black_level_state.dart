@@ -7,11 +7,14 @@ import '../../../domain/geometry_values.dart';
 /// `VXX:EBMI1`: whether the blend zones get the soft edge or only the black
 /// level lift.
 enum BlackLevelMode {
-  softEdgeAndBlack('Soft edge + Black level'),
-  blackOnly('Black level only');
+  softEdgeAndBlack('Soft edge + Black level', pill: 'Soft edge + level'),
+  blackOnly('Black level only', pill: 'Black level only');
 
   final String label;
-  const BlackLevelMode(this.label);
+
+  /// The shorter form in the Black Level tab's pill.
+  final String pill;
+  const BlackLevelMode(this.label, {required this.pill});
 
   static BlackLevelMode fromProtocol(int? v) =>
       v == 1 ? blackOnly : softEdgeAndBlack;

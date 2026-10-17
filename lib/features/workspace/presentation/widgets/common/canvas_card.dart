@@ -10,25 +10,39 @@ import 'dialog_parts.dart';
 class CanvasCard extends StatelessWidget {
   const CanvasCard({
     super.key,
-    required this.title,
-    required this.resetLabel,
-    required this.onReset,
+    this.title,
+    this.resetLabel,
+    this.onReset,
     required this.body,
     required this.legend,
     this.pill,
     this.help,
     this.note,
+    this.leading,
+    this.actions,
   });
 
-  final String title;
+  /// Null leaves the header's left side to [leading] (Edge Blending).
+  final String? title;
   final Widget? pill;
+
+  /// Controls at the left of the header in place of [title] (Edge
+  /// Blending's arrangement and swap in a pair); it gets what the right
+  /// side leaves.
+  final Widget? leading;
 
   /// A help icon before Reset (the corner hint in a small window).
   final Widget? help;
-  final String resetLabel;
+
+  /// The Reset text button's label; no Reset button when null.
+  final String? resetLabel;
 
   /// Null disables Reset (while loading).
   final VoidCallback? onReset;
+
+  /// Buttons at the right of the header, after [help] and in place of the
+  /// Reset text button (Edge Blending's icon toggles and icon Reset).
+  final List<Widget>? actions;
   final Widget body;
   final Widget legend;
   final Widget? note;
@@ -59,14 +73,16 @@ class CanvasCard extends StatelessWidget {
                   Expanded(
                     child: Row(
                       children: [
-                        Flexible(
-                          child: Text(
-                            title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: t.cardTitle,
+                        if (title != null)
+                          Flexible(
+                            child: Text(
+                              title!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: t.cardTitle,
+                            ),
                           ),
-                        ),
+                        if (leading != null) Flexible(child: leading!),
                         if (pill != null) ...[
                           const SizedBox(width: 10),
                           Flexible(child: pill!),
@@ -75,11 +91,13 @@ class CanvasCard extends StatelessWidget {
                     ),
                   ),
                   ?help,
-                  TextButton.icon(
-                    onPressed: onReset,
-                    icon: const Icon(Icons.restart_alt, size: 18),
-                    label: Text(resetLabel),
-                  ),
+                  ...?actions,
+                  if (actions == null && resetLabel != null)
+                    TextButton.icon(
+                      onPressed: onReset,
+                      icon: const Icon(Icons.restart_alt, size: 18),
+                      label: Text(resetLabel!),
+                    ),
                 ],
               ),
             ),

@@ -8,12 +8,15 @@ import '../../../domain/geometry_values.dart';
 
 /// `VXX:EDBI0`: Off / On / User (the user curve lives on the projector).
 enum EdgeBlendMode {
-  off('Off'),
-  on('On'),
-  user('User');
+  off('Off', detail: 'No blending'),
+  on('On', detail: 'Built-in blend curve'),
+  user('User', detail: 'Curve stored on the projector');
 
   final String label;
-  const EdgeBlendMode(this.label);
+
+  /// The mode tile's muted second line.
+  final String detail;
+  const EdgeBlendMode(this.label, {required this.detail});
 
   static EdgeBlendMode fromProtocol(int? v) => switch (v) {
     1 => on,
