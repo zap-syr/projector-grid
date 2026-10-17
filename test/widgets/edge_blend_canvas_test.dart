@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:projector_grid/core/theme/app_theme.dart';
 import 'package:projector_grid/features/workspace/domain/blend_edge.dart';
 import 'package:projector_grid/features/workspace/domain/projector_node.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/edge_blending/black_level_state.dart';
@@ -59,6 +60,7 @@ void main() {
     EdgeSelection? selection;
     return tester.pumpWidget(
       MaterialApp(
+        theme: AppTheme.darkTheme,
         home: Scaffold(
           body: Center(
             child: SizedBox.fromSize(

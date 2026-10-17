@@ -11,10 +11,15 @@ import '../../../domain/blend_edge.dart';
 import '../../../domain/edge_blend_limits.dart';
 import '../../../domain/edge_blend_values.dart';
 import '../../../domain/edge_blend_pair.dart';
+import '../../../domain/edge_blend_labels.dart';
 import '../../../domain/projector_node.dart';
+import '../../../../../core/theme/app_theme.dart';
+import '../common/dialog_parts.dart';
 import '../common/key_hold_repeater.dart';
 import '../custom_tooltip.dart';
+import '../dialog_title_bar.dart';
 import 'black_level_state.dart';
+import 'edge_blend_parts.dart';
 import 'edge_blend_state.dart';
 
 typedef EdgePick = ({BlendEdge edge, EdgePart part});
@@ -24,7 +29,9 @@ typedef EdgePick = ({BlendEdge edge, EdgePart part});
 typedef EdgeSelection = ({int side, BlendEdge edge, EdgePart part});
 
 /// One projector as the canvas draws it. [state] is null until it has
-/// loaded; the raster is then a placeholder labelled [status].
+/// loaded; the raster is then a placeholder labelled [status], or, when it
+/// never answered ([unreachable]), a dashed placeholder with *No reply* and
+/// [onRetry], in its place so nothing jumps when it answers.
 @immutable
 class BlendCanvasSide {
   const BlendCanvasSide({
@@ -33,6 +40,8 @@ class BlendCanvasSide {
     this.state,
     this.black,
     this.status = '',
+    this.unreachable = false,
+    this.onRetry,
   });
 
   final ProjectorNode node;
@@ -42,6 +51,8 @@ class BlendCanvasSide {
   /// Null until this projector's Black Level values have loaded.
   final BlackLevelState? black;
   final String status;
+  final bool unreachable;
+  final VoidCallback? onRetry;
 }
 
 /// The projector raster with each edge's blend zone: drag the Start / Width
@@ -65,6 +76,8 @@ class EdgeBlendCanvas extends StatefulWidget {
     this.active = 0,
     this.arrangement = PairArrangement.sideBySide,
     this.blackTab = false,
+    this.linked = false,
+    this.compact = false,
     required this.selection,
     this.maxFor,
     this.onActivate,
@@ -79,6 +92,13 @@ class EdgeBlendCanvas extends StatefulWidget {
   final int active;
   final PairArrangement arrangement;
   final bool blackTab;
+
+  /// A pair's Link applies: a *Linked* pill between the rasters.
+  final bool linked;
+
+  /// A narrow canvas: the pair pills show the letter only, the IP goes
+  /// into their tooltip.
+  final bool compact;
   final EdgeSelection? selection;
 
   /// The limit a drag or arrow stops at; defaults to the side's own §8
@@ -120,6 +140,9 @@ class _EdgeBlendCanvasState extends State<EdgeBlendCanvas> {
   );
 
   List<_RasterBox> _boxes = const [];
+
+  /// A pair's overlap, once both projectors have loaded.
+  ({int px, int percent})? _readout;
   EdgeSelection? _hover;
   bool _hoverOnHandle = false;
 
@@ -227,6 +250,7 @@ class _EdgeBlendCanvasState extends State<EdgeBlendCanvas> {
     final fa = facing(a, arrangement.facingA);
     final fb = facing(b, arrangement.facingB);
     // Until both have loaded there is no overlap to show: they just touch.
+    _readout = fa == null || fb == null ? null : pairOverlapReadout(fa, fb);
     final pos = pairPositions(
       fa == null || fb == null ? 0 : pairOverlap(fa, fb),
     );
@@ -446,13 +470,25 @@ class _EdgeBlendCanvasState extends State<EdgeBlendCanvas> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final status = AppStatusColors.of(context);
+    final t = AppText.of(context);
     final colors = (
       raster: scheme.surfaceContainerHighest,
       outline: scheme.outline,
-      start: scheme.primary,
-      end: scheme.tertiary,
+      start: status.warning,
+      startContainer: status.warningContainer,
+      width: scheme.primary,
+      widthContainer: scheme.primaryContainer,
+      onWidthContainer: scheme.onPrimaryContainer,
+      border: scheme.onSurfaceVariant,
+      borderSelected: scheme.onSurface,
+      borderContainer: scheme.surfaceContainerHigh,
       idle: scheme.outlineVariant,
-      text: scheme.onSurfaceVariant,
+      error: scheme.error,
+      handleFill: scheme.surfaceContainer,
+      halo: scheme.surface,
+      text: t.caption,
+      value: t.caption.copyWith(fontWeight: FontWeight.w600, height: 1.2),
     );
     return Focus(
       focusNode: _focusNode,
@@ -493,6 +529,8 @@ class _EdgeBlendCanvasState extends State<EdgeBlendCanvas> {
                           state: widget.sides[i].state,
                           black: widget.blackTab ? widget.sides[i].black : null,
                           status: widget.sides[i].status,
+                          unreachable: widget.sides[i].unreachable,
+                          inactive: _pair && i != widget.active,
                           editable: _editable(i),
                           selection: sel != null && sel.side == i
                               ? (edge: sel.edge, part: sel.part)
@@ -512,11 +550,38 @@ class _EdgeBlendCanvasState extends State<EdgeBlendCanvas> {
                 ),
               ),
             );
-            if (!_pair) return canvas;
+            final placeholders = [
+              for (var i = 0; i < widget.sides.length; i++)
+                if (widget.sides[i] case BlendCanvasSide(
+                  unreachable: true,
+                  :final onRetry?,
+                ))
+                  Positioned.fromRect(
+                    rect: boxes[i].rect,
+                    child: NoReplyView(
+                      title: 'No reply',
+                      detail: _pair
+                          ? '${sideLetter(i)} did not answer the first read'
+                          : '${widget.sides[i].node.ipAddress} did not '
+                                'answer the first read',
+                      onRetry: onRetry,
+                    ),
+                  ),
+            ];
+            if (!_pair) {
+              return Stack(
+                children: [
+                  Positioned.fill(child: canvas),
+                  ...placeholders,
+                ],
+              );
+            }
             return Stack(
               clipBehavior: Clip.none,
               children: [
                 Positioned.fill(child: ClipRect(child: canvas)),
+                ...placeholders,
+                ..._linkAndOverlap(boxes, size),
                 for (var i = 0; i < 2; i++) _pill(i, boxes[i].rect, size),
               ],
             );
@@ -529,11 +594,15 @@ class _EdgeBlendCanvasState extends State<EdgeBlendCanvas> {
   /// Side by side: above A's left corner and B's right one; stacked: left of
   /// A's top and B's bottom. Opposite corners, so the two never collide.
   Widget _pill(int i, Rect rect, Size size) {
+    final s = widget.sides[i];
     final pill = ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: _pillBandLeft - 2 * _pillGap),
       child: _ProjectorPill(
-        node: widget.sides[i].node,
+        letter: sideLetter(i),
+        node: s.node,
         active: i == widget.active,
+        silent: s.unreachable,
+        compact: widget.compact,
         onTap: () => widget.onActivate?.call(i),
       ),
     );
@@ -553,33 +622,183 @@ class _EdgeBlendCanvasState extends State<EdgeBlendCanvas> {
       ),
     };
   }
+
+  /// The *Linked* pill between the two projector pills, and the overlap
+  /// readout by the facing edges: under them side by side, left of them
+  /// stacked (in the pill band).
+  List<Widget> _linkAndOverlap(List<_RasterBox> boxes, Size size) {
+    final a = boxes[0].rect;
+    final b = boxes[1].rect;
+    final readout = _readout;
+    final t = AppText.of(context);
+    final sideBySide = widget.arrangement == PairArrangement.sideBySide;
+    // The middle of the overlap (or of the seam, when they only touch).
+    final mid = sideBySide ? (a.right + b.left) / 2 : (a.bottom + b.top) / 2;
+    const bandWidth = _pillBandLeft - 2 * _pillGap;
+    final linked = widget.linked
+        ? const _LinkedPill()
+        : const SizedBox.shrink();
+    final text = readout == null
+        ? null
+        : Text(
+            pairOverlapLabel(readout),
+            key: const ValueKey('edge-blend-overlap'),
+            textAlign: sideBySide ? TextAlign.center : TextAlign.right,
+            style: t.caption,
+          );
+    if (sideBySide) {
+      return [
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: size.height - a.top + _pillGap,
+          child: Align(
+            alignment: Alignment(mid / size.width * 2 - 1, 0),
+            child: linked,
+          ),
+        ),
+        if (text != null)
+          Positioned(
+            left: 0,
+            right: 0,
+            top: max(a.bottom, b.bottom) + _pillGap,
+            child: Align(
+              alignment: Alignment(mid / size.width * 2 - 1, 0),
+              child: text,
+            ),
+          ),
+      ];
+    }
+    return [
+      Positioned(
+        right: size.width - a.left + _pillGap,
+        width: bandWidth,
+        top: 0,
+        bottom: 0,
+        child: Align(
+          alignment: Alignment(1, mid / size.height * 2 - 1),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            spacing: 4,
+            children: [linked, ?text],
+          ),
+        ),
+      ),
+    ];
+  }
 }
 
-/// Picks the active projector in a pair. Filled with a primary outline when
-/// active, outlined otherwise.
+/// Between the two projector pills while Link applies.
+class _LinkedPill extends StatelessWidget {
+  const _LinkedPill();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final t = AppText.of(context);
+    return Container(
+      height: 22,
+      padding: const EdgeInsets.symmetric(horizontal: 9),
+      decoration: BoxDecoration(
+        color: cs.primaryContainer,
+        borderRadius: BorderRadius.circular(11),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.link, size: 14, color: cs.onPrimaryContainer),
+          const SizedBox(width: 5),
+          Text(
+            'Linked',
+            style: t.caption.copyWith(
+              fontWeight: FontWeight.w600,
+              color: cs.onPrimaryContainer,
+              height: 1.1,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Picks the active projector in a pair: its letter and IP (letter only in
+/// a narrow canvas), filled when active, an error dot while it doesn't
+/// reply.
 class _ProjectorPill extends StatelessWidget {
   const _ProjectorPill({
+    required this.letter,
     required this.node,
     required this.active,
+    required this.silent,
+    required this.compact,
     required this.onTap,
   });
 
+  final String letter;
   final ProjectorNode node;
   final bool active;
+  final bool silent;
+  final bool compact;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final cs = Theme.of(context).colorScheme;
+    final t = AppText.of(context);
+    final fg = active ? cs.onPrimaryContainer : t.secondary;
     return CustomTooltip(
-      message: '${node.name}, ${node.ipAddress}',
-      child: ChoiceChip(
-        label: Text(node.name, overflow: TextOverflow.ellipsis),
-        selected: active,
-        showCheckmark: false,
-        visualDensity: VisualDensity.compact,
-        side: BorderSide(color: active ? scheme.primary : scheme.outline),
-        onSelected: (_) => onTap(),
+      message: projectorLabel(node.name, node.ipAddress),
+      detail: silent ? 'No reply' : null,
+      child: Material(
+        color: active ? cs.primaryContainer : DialogSurfaces.of(context).soft,
+        shape: StadiumBorder(
+          side: BorderSide(color: active ? cs.primary : cs.outlineVariant),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Container(
+            height: 24,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  letter,
+                  style: t.caption.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: fg,
+                    height: 1.1,
+                  ),
+                ),
+                if (!compact) ...[
+                  const SizedBox(width: 7),
+                  Flexible(
+                    child: Text(
+                      node.ipAddress,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: t.monoSmall.copyWith(color: fg, height: 1.1),
+                    ),
+                  ),
+                ],
+                if (silent) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    width: 7,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      color: cs.error,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -693,19 +912,33 @@ typedef _PaintSide = ({
   EdgeBlendState? state,
   BlackLevelState? black,
   String status,
+  bool unreachable,
+  bool inactive,
   bool editable,
   EdgePick? selection,
   BlendEdge? hoverEdge,
   EdgePick? dragging,
 });
 
+/// Theme colours and text styles of a paint pass: Start amber, Width
+/// primary, the black border neutral (owner, 2026-10-14).
 typedef _CanvasColors = ({
   Color raster,
   Color outline,
   Color start,
-  Color end,
+  Color startContainer,
+  Color width,
+  Color widthContainer,
+  Color onWidthContainer,
+  Color border,
+  Color borderSelected,
+  Color borderContainer,
   Color idle,
-  Color text,
+  Color error,
+  Color handleFill,
+  Color halo,
+  TextStyle text,
+  TextStyle value,
 });
 
 class _EdgeBlendPainter extends CustomPainter {
@@ -740,18 +973,44 @@ class _EdgeBlendPainter extends CustomPainter {
       canvas.restore();
     }
     _paintHandles(canvas, main);
+    // The selected handle's value, or the dragged one's: a drag selects.
     for (final side in sides) {
-      final drag = side.dragging;
-      if (drag != null) _paintValueChip(canvas, side, drag.edge, drag.part);
+      final pick = side.dragging ?? side.selection;
+      if (pick != null && side.editable && _hasHandle(side, pick)) {
+        _paintValuePill(canvas, side, pick.edge, pick.part);
+      }
     }
   }
+
+  /// Whether [pick]'s handle is drawn on this tab.
+  bool _hasHandle(_PaintSide side, EdgePick pick) =>
+      side.state![pick.edge].enabled &&
+      (blackTab
+          ? pick.part == EdgePart.border && side.black != null
+          : pick.part != EdgePart.border);
 
   void _paintBody(Canvas canvas, _PaintSide side) {
     final box = side.box;
     final rect = box.rect;
+    final state = side.state;
+    if (side.unreachable && state == null) {
+      // Its place, dashed in the error colour; the widget over it says
+      // *No reply* and offers Retry.
+      canvas.drawRect(
+        rect,
+        Paint()..color = colors.error.withValues(alpha: 0.06),
+      );
+      _dashedRect(
+        canvas,
+        rect,
+        Paint()
+          ..color = colors.error.withValues(alpha: 0.6)
+          ..strokeWidth = 1.2,
+      );
+      return;
+    }
     canvas.drawRect(rect, Paint()..color = colors.raster);
 
-    final state = side.state;
     if (state == null) {
       _paintStatus(canvas, rect, side.status);
     } else {
@@ -782,27 +1041,26 @@ class _EdgeBlendPainter extends CustomPainter {
         canvas.drawRect(
           box.bandHitRect(hover, depth, 4),
           Paint()
-            ..color = colors.start.withValues(alpha: 0.6)
+            ..color = colors.width.withValues(alpha: 0.6)
             ..style = PaintingStyle.stroke
             ..strokeWidth = 1.5,
         );
       }
     }
 
-    canvas.drawRect(
-      rect,
-      Paint()
-        ..color = colors.outline
-        ..style = PaintingStyle.stroke,
-    );
+    // The other projector of a pair reads as a guide: dashed.
+    final frame = Paint()
+      ..color = colors.outline
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+    side.inactive
+        ? _dashedRect(canvas, rect, frame)
+        : canvas.drawRect(rect, frame);
   }
 
   void _paintStatus(Canvas canvas, Rect rect, String status) {
     final text = TextPainter(
-      text: TextSpan(
-        text: status,
-        style: TextStyle(color: colors.text, fontSize: 12),
-      ),
+      text: TextSpan(text: status, style: colors.text),
       textDirection: TextDirection.ltr,
     )..layout(maxWidth: rect.width);
     text.paint(canvas, rect.center - Offset(text.width / 2, text.height / 2));
@@ -882,35 +1140,57 @@ class _EdgeBlendPainter extends CustomPainter {
         _hatch(canvas, c, hatch);
       }
       // Where the levels change: Start and the zone end (the markers'
-      // lines on the screen), then the border line the handle moves.
-      final thin = Paint()
-        ..color = colors.idle
-        ..strokeWidth = 1;
-      _dashedLine(canvas, box, edge, box.lineAt(edge, bands.start), thin);
-      _dashedLine(canvas, box, edge, box.lineAt(edge, bands.end), thin);
+      // lines on the screen), in their own colours.
+      _dashedLine(
+        canvas,
+        box,
+        edge,
+        box.lineAt(edge, bands.start),
+        Paint()
+          ..color = colors.start.withValues(alpha: 0.7)
+          ..strokeWidth = 1.2,
+      );
+      _dashedLine(
+        canvas,
+        box,
+        edge,
+        box.lineAt(edge, bands.end),
+        Paint()
+          ..color = colors.width.withValues(alpha: 0.7)
+          ..strokeWidth = 1.2,
+      );
     }
+    // Then the border line the handle moves.
     for (final edge in BlendEdge.values) {
+      final selected = side.selection?.edge == edge;
       _line(
         canvas,
         box,
         edge,
         box.lineAt(edge, state[edge].line),
         Paint()
-          ..color = state[edge].enabled ? colors.start : colors.idle
-          ..strokeWidth = side.selection?.edge == edge ? 2.5 : 2.0,
+          ..color = !state[edge].enabled
+              ? colors.idle
+              : selected
+              ? colors.borderSelected
+              : colors.border
+          ..strokeWidth = selected ? 2.0 : 1.5,
       );
     }
   }
 
-  /// Solid dark from the raster edge to Start, then fading out at
-  /// Start + Width, as the projector darkens towards its own edge.
+  /// Black from the raster edge to Start, then the blend zone as a ramp
+  /// that fades out at Start + Width, as the projector darkens towards its
+  /// own edge. Start's line is amber, the zone end's primary (owner,
+  /// 2026-10-14); a selected edge's zone end is solid and its zone
+  /// outlined.
   void _paintZone(
     Canvas canvas,
     _PaintSide side,
     BlendEdge edge,
     EdgeSettings s,
   ) {
-    const dark = Color(0xD9000000); // black at 85 %
+    const dark = Color(0xEB000000); // black at 92 %
     final box = side.box;
     if (s.start > 0) {
       canvas.drawRect(box.band(edge, 0, s.start), Paint()..color = dark);
@@ -929,33 +1209,47 @@ class _EdgeBlendPainter extends CustomPainter {
         zone,
         Paint()
           ..shader = ui.Gradient.linear(from, to, [
-            dark,
-            dark.withValues(alpha: 0),
+            colors.width.withValues(alpha: 0.5),
+            colors.width.withValues(alpha: 0.03),
           ]),
       );
     }
     final selected = side.selection?.edge == edge;
-    final width = selected ? 2.5 : 2.0;
-    _line(
+    if (selected && s.width > 0) {
+      canvas.drawRect(
+        zone,
+        Paint()
+          ..color = colors.width
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5,
+      );
+    }
+    _dashedLine(
       canvas,
       box,
       edge,
       a,
       Paint()
-        ..color = colors.start
-        ..strokeWidth = width,
+        ..color = colors.start.withValues(alpha: selected ? 1 : 0.7)
+        ..strokeWidth = 1.5,
     );
-    _dashedLine(
-      canvas,
-      box,
-      edge,
-      b,
-      Paint()
-        ..color = colors.end
-        ..strokeWidth = width,
-    );
+    final end = Paint()
+      ..color = colors.width.withValues(alpha: selected ? 1 : 0.6)
+      ..strokeWidth = selected ? 2 : 1.5;
+    selected
+        ? _line(canvas, box, edge, b, end)
+        : _dashedLine(canvas, box, edge, b, end);
   }
 
+  Color _partColor(EdgePart part) => switch (part) {
+    EdgePart.start => colors.start,
+    EdgePart.width => colors.width,
+    EdgePart.border => colors.border,
+  };
+
+  /// A capsule across the line at its midpoint (at the same height on
+  /// every line): ringed in its part's colour, filled when it's the
+  /// selected one; other edges' handles a little faded.
   void _paintHandle(
     Canvas canvas,
     _PaintSide side,
@@ -969,37 +1263,41 @@ class _EdgeBlendPainter extends CustomPainter {
     );
     final selectedEdge = sel?.edge == edge;
     final active = selectedEdge && sel?.part == part;
-    final r = selectedEdge ? 8.0 : 7.0;
-    if (active) {
-      canvas.drawCircle(
-        center,
-        r + 5,
-        Paint()..color = colors.start.withValues(alpha: 0.24),
-      );
-    }
-    canvas.drawCircle(
-      center,
-      r,
+    final color = active && part == EdgePart.border
+        ? colors.borderSelected
+        : _partColor(part);
+    final rect = Rect.fromCenter(
+      center: center,
+      width: edge.isHorizontal ? 10 : 30,
+      height: edge.isHorizontal ? 30 : 10,
+    );
+    final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(5));
+    final opacity = sel == null || selectedEdge ? 1.0 : 0.8;
+    canvas.drawRRect(
+      rrect.shift(const Offset(0, 1)),
       Paint()
-        ..color = Colors.black.withValues(alpha: 0.25)
+        ..color = Colors.black.withValues(alpha: 0.25 * opacity)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
     );
-    canvas.drawCircle(
-      center,
-      r,
-      Paint()..color = part == EdgePart.width ? colors.end : colors.start,
-    );
-    canvas.drawCircle(
-      center,
-      r,
+    canvas.drawRRect(
+      rrect,
       Paint()
-        ..color = Colors.white
+        ..color = (active ? color : colors.handleFill).withValues(
+          alpha: opacity,
+        ),
+    );
+    canvas.drawRRect(
+      rrect,
+      Paint()
+        ..color = (active ? colors.halo : color).withValues(alpha: opacity)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = selectedEdge ? 3 : 2,
+        ..strokeWidth = 2,
     );
   }
 
-  void _paintValueChip(
+  /// The selected handle's value in a pill beside it, on the zone's inner
+  /// side, kept inside the raster: `Width 640`.
+  void _paintValuePill(
     Canvas canvas,
     _PaintSide side,
     BlendEdge edge,
@@ -1007,28 +1305,39 @@ class _EdgeBlendPainter extends CustomPainter {
   ) {
     final state = side.state!;
     final units = _handleUnits(state, edge, part);
-    final label = switch (part) {
-      EdgePart.start => 'Start ${state[edge].start}',
-      EdgePart.width => 'Width ${state[edge].width}',
-      EdgePart.border => 'Border ${state[edge].border}',
+    final (label, fill, fg) = switch (part) {
+      EdgePart.start => (
+        'Start ${state[edge].start}',
+        colors.startContainer,
+        colors.start,
+      ),
+      EdgePart.width => (
+        'Width ${state[edge].width}',
+        colors.widthContainer,
+        colors.onWidthContainer,
+      ),
+      EdgePart.border => (
+        'Border ${state[edge].border}',
+        colors.borderContainer,
+        colors.borderSelected,
+      ),
     };
     final text = TextPainter(
       text: TextSpan(
         text: label,
-        style: const TextStyle(color: Colors.white, fontSize: 11),
+        style: colors.value.copyWith(color: fg),
       ),
       textDirection: TextDirection.ltr,
     )..layout();
     final handle = side.box.handleAt(edge, units);
-    const pad = EdgeInsets.symmetric(horizontal: 6, vertical: 2);
+    const pad = EdgeInsets.symmetric(horizontal: 8, vertical: 3);
     final chipSize = Size(
       text.width + pad.horizontal,
       text.height + pad.vertical,
     );
-    // Beside the handle on the zone's inner side, kept inside the raster.
     final inwardOffset = switch (edge) {
-      BlendEdge.left => const Offset(14, -8),
-      BlendEdge.right => Offset(-14 - chipSize.width, -8),
+      BlendEdge.left => Offset(12, -chipSize.height / 2),
+      BlendEdge.right => Offset(-12 - chipSize.width, -chipSize.height / 2),
       BlendEdge.upper => Offset(-chipSize.width / 2, 12),
       BlendEdge.lower => Offset(-chipSize.width / 2, -12 - chipSize.height),
     };
@@ -1039,8 +1348,8 @@ class _EdgeBlendPainter extends CustomPainter {
       topLeft.dy.clamp(r.top, max(r.top, r.bottom - chipSize.height)),
     );
     canvas.drawRRect(
-      RRect.fromRectAndRadius(topLeft & chipSize, const Radius.circular(4)),
-      Paint()..color = Colors.black.withValues(alpha: 0.75),
+      RRect.fromRectAndRadius(topLeft & chipSize, const Radius.circular(6)),
+      Paint()..color = fill,
     );
     text.paint(canvas, topLeft + Offset(pad.left, pad.top));
   }

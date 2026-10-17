@@ -2,30 +2,46 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../../core/theme/app_theme.dart';
 import '../../../domain/blend_edge.dart';
+import '../../../domain/edge_blend_labels.dart';
 import '../../../domain/edge_blend_pair.dart';
 import '../../../domain/projector_node.dart';
 import '../../providers/protocol_service_provider.dart';
 import '../command_failure_notice.dart';
-import '../common/dialog_split_layout.dart';
+import '../common/controls_card.dart';
+import '../common/dialog_parts.dart';
+import '../common/mode_tile.dart';
 import '../common/projector_settings_client.dart';
+import '../common/segmented_tabs.dart';
+import '../common/status_pill.dart';
 import '../custom_tooltip.dart';
 import '../dialog_title_bar.dart';
+import '../geometry/geometry_split.dart';
 import 'black_level_panel.dart';
 import 'edge_blend_canvas.dart';
+import 'edge_blend_canvas_card.dart';
 import 'edge_blend_link.dart';
 import 'edge_blend_panel.dart';
+import 'edge_blend_parts.dart';
 import 'edge_blend_side.dart';
 import 'edge_blend_state.dart';
 
 /// Edge Blending and Black Level for one projector, or for two in pair mode
-/// (plan §9): both rasters on one canvas, the panel shows the active one,
-/// and mode, Markers and Auto test pattern are written to both.
+/// (DIALOG_REDESIGN_PLAN §7a, EDGE_BLENDING_PLAN §9): mode tiles, the two
+/// tabs, the canvas card beside the controls card, and an info footer.
+/// Both rasters share one canvas in a pair, the controls show the active
+/// one, and mode, Markers and Auto test pattern are written to both.
 class EdgeBlendingDialog extends ConsumerStatefulWidget {
   const EdgeBlendingDialog({super.key, required this.nodes})
     : assert(nodes.length == 1 || nodes.length == 2);
 
   final List<ProjectorNode> nodes;
+
+  /// The size cap; the dialog takes all of it (or all a smaller window
+  /// leaves), so it never changes size between tabs, modes or states.
+  static const double maxWidth = 960;
+  static const double maxHeight = 800;
 
   @override
   ConsumerState<EdgeBlendingDialog> createState() => _EdgeBlendingDialogState();
@@ -55,10 +71,13 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
 
   bool get _pair => _sides.length == 2;
 
+  bool get _blackTab => _tab == 1;
+
+  static bool _ready(EdgeBlendSide s) => !s.loading && !s.unreachable;
+
   /// Shared writes skip a projector that never answered: it shows its own
   /// "No reply" and gets the values on Retry from the projector itself.
-  Iterable<EdgeBlendSide> get _reachable =>
-      _sides.where((s) => !s.loading && !s.unreachable);
+  Iterable<EdgeBlendSide> get _reachable => _sides.where(_ready);
 
   @override
   void initState() {
@@ -123,17 +142,21 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
     _loadBlackIfShown();
   }
 
+  void _setTab(int tab) {
+    setState(() => _tab = tab);
+    _loadBlackIfShown();
+  }
+
   /// Black Level loads per projector, the first time it's shown on that
   /// tab: its ~17 queries are wasted if the user never goes there. While
   /// linked the other projector loads too, so the overlapped level can
   /// mirror into it. After a failed load only Retry tries again.
   void _loadBlackIfShown() {
-    if (_tab != 1) return;
+    if (!_blackTab) return;
     final link = _link;
     for (final side in _sides) {
       if (side != _side && !link.linked) continue;
-      if (!side.loading &&
-          !side.unreachable &&
+      if (_ready(side) &&
           side.black == null &&
           !side.blackLoading &&
           !side.blackUnreachable) {
@@ -155,25 +178,48 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
     _loadBlackIfShown();
   }
 
-  /// The facing edge's Link toggle for the active projector's panel; null
-  /// in single mode.
+  /// `B Left`: the other projector's facing edge, as the Link labels name
+  /// it.
+  String get _partnerName {
+    final other = 1 - _active;
+    return '${sideLetter(other)} ${_arrangement.facingOf(other).label}';
+  }
+
+  /// The facing edge's Link chip on the active projector's card; null in
+  /// single mode.
   EdgeLinkControl? _linkControl() {
     if (!_pair) return null;
     final link = _link;
-    final other = 1 - _active;
-    final otherName = _sides[other].node.name;
-    final otherEdge = _arrangement.facingOf(other).label;
+    final partner = _partnerName;
+    final edge = _arrangement.facingOf(_active);
+    if (link.mixedRasters) {
+      return (
+        edge: edge,
+        on: false,
+        label: 'Link unavailable',
+        tooltip: "Different rasters: widths are in each projector's own units",
+        onChanged: null,
+      );
+    }
+    if (!link.available) {
+      return (
+        edge: edge,
+        on: false,
+        label: 'Link needs ${sideLetter(1 - _active)}',
+        tooltip: 'Link needs both projectors',
+        onChanged: null,
+      );
+    }
     return (
-      edge: _arrangement.facingOf(_active),
+      edge: edge,
       on: link.linked,
-      tooltip: link.mixedRasters
-          ? "Different rasters: widths are in each projector's own units"
-          : !link.available
-          ? 'Link needs both projectors'
-          : link.linked
-          ? 'Linked with $otherName $otherEdge'
-          : 'Link with $otherName $otherEdge',
-      onChanged: link.available ? _setLink : null,
+      label: link.linked ? 'Linked with $partner' : 'Link with $partner',
+      tooltip: link.linked
+          ? 'On, Width and the overlapped black level also go to $partner. '
+                'Click to unlink.'
+          : 'Click to send on, Width and the overlapped black level to '
+                '$partner as well.',
+      onChanged: _setLink,
     );
   }
 
@@ -237,87 +283,54 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
     return KeyEventResult.ignored;
   }
 
+  void _reset(int side, BlendEdge edge) {
+    _blackTab ? _sides[side].resetBorder(edge) : _link.resetEdge(side, edge);
+  }
+
+  // ─── Build ───────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final screenHeight = MediaQuery.of(context).size.height;
-    final title = _pair
-        ? _sides.map((s) => s.node.name).join(', ')
-        : _side.node.ipAddress;
-
+    final loading =
+        _sides.any((s) => s.loading) || (_blackTab && _side.blackLoading);
     return Focus(
       canRequestFocus: false,
       skipTraversal: true,
       onKeyEvent: _onKey,
       child: Dialog(
         clipBehavior: Clip.antiAlias,
+        // A cap the dialog fills: one size on both tabs, in every mode and
+        // state; the smallest window (800×600) leaves about 720×550.
         child: ConstrainedBox(
-          constraints: BoxConstraints(
-            minWidth: 560,
-            maxWidth: 960,
-            maxHeight: screenHeight * 0.9,
+          constraints: const BoxConstraints(
+            maxWidth: EdgeBlendingDialog.maxWidth,
+            maxHeight: EdgeBlendingDialog.maxHeight,
           ),
-          child: DefaultTabController(
-            length: 2,
+          child: SizedBox.expand(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                DialogTitleBar(
-                  icon: Icons.gradient,
-                  title: 'Edge Blending - $title',
-                ),
-                if (_reachable.isEmpty)
-                  Expanded(
-                    child: _sides.any((s) => s.loading)
-                        ? const Center(child: CircularProgressIndicator())
-                        : _buildNoReply(_sides, () {
-                            for (final s in _sides) {
-                              s.load();
-                            }
-                          }),
-                  )
-                else ...[
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
-                    child: SegmentedButton<EdgeBlendMode>(
-                      segments: [
-                        for (final m in EdgeBlendMode.values)
-                          ButtonSegment(value: m, label: Text(m.label)),
+                _titleBar(),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _modeTiles(),
+                        const SizedBox(height: 16),
+                        _tabs(),
+                        const SizedBox(height: 16),
+                        Expanded(
+                          child: GeometrySplit(
+                            builder: (compact) =>
+                                (_canvasCard(compact), _controlsCard()),
+                          ),
+                        ),
                       ],
-                      selected: {?_shared((s) => s.blend.mode)},
-                      // Mixed modes in a pair: no segment is selected.
-                      emptySelectionAllowed: true,
-                      showSelectedIcon: false,
-                      onSelectionChanged: (s) {
-                        if (s.isEmpty) return;
-                        for (final side in _reachable) {
-                          side.setMode(s.first);
-                        }
-                      },
                     ),
                   ),
-                  const Divider(height: 1),
-                  TabBar(
-                    onTap: (i) {
-                      _tab = i;
-                      _loadBlackIfShown();
-                    },
-                    tabs: const [
-                      Tab(text: 'Edge Blending'),
-                      Tab(text: 'Black Level'),
-                    ],
-                    labelStyle: Theme.of(context).textTheme.titleSmall
-                        ?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                  const Divider(height: 1),
-                  Expanded(
-                    child: TabBarView(
-                      // Horizontal handle drags on the canvas must never
-                      // turn into a tab swipe.
-                      physics: const NeverScrollableScrollPhysics(),
-                      children: [_buildBlendTab(), _buildBlackTab()],
-                    ),
-                  ),
-                ],
+                ),
+                DialogFooter(message: SentRightAwayNote(loading: loading)),
               ],
             ),
           ),
@@ -326,274 +339,438 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
     );
   }
 
-  /// Off greys out the controls but keeps them in place (and their State),
-  /// so the zones stay readable; the projector itself accepts writes while
-  /// Off, this is only a cue that they have no effect.
-  Widget _dimmedWhenOff(Widget child) {
-    final off = _side.blend.mode == EdgeBlendMode.off;
-    return IgnorePointer(
-      ignoring: off,
-      child: AnimatedOpacity(
-        opacity: off ? 0.38 : 1,
-        duration: const Duration(milliseconds: 150),
-        child: child,
-      ),
+  Widget _titleBar() {
+    if (!_pair) {
+      return DialogTitleBar(
+        icon: Icons.gradient,
+        title: 'Edge Blending',
+        projectorId: _side.node.id,
+      );
+    }
+    final reply = pairReplyOf(
+      (loading: _sides[0].loading, unreachable: _sides[0].unreachable),
+      (loading: _sides[1].loading, unreachable: _sides[1].unreachable),
+    );
+    final t = AppText.of(context);
+    final status = AppStatusColors.of(context);
+    return DialogTitleBar(
+      icon: Icons.gradient,
+      title: 'Edge Blending',
+      pairIds: (_sides[0].node.id, _sides[1].node.id),
+      badges: [
+        StatusPill(
+          key: const ValueKey('edge-blend-pair-status'),
+          label: pairReplyLabel(reply),
+          dot: true,
+          color: switch (reply) {
+            PairReply.reading => t.tertiary,
+            PairReply.online => status.success,
+            PairReply.aSilent || PairReply.bSilent => status.warning,
+            PairReply.bothSilent => Theme.of(context).colorScheme.error,
+          },
+        ),
+      ],
     );
   }
 
-  /// The active projector's own load state on the Edge Blending tab, or
-  /// null once it's ready. In a pair the other projector stays usable.
-  Widget? _blendStatus(EdgeBlendSide side) {
-    if (side.loading) return const Center(child: CircularProgressIndicator());
-    if (side.unreachable) return _buildNoReply([side], side.load);
-    return null;
+  static IconData _modeIcon(EdgeBlendMode m) => switch (m) {
+    EdgeBlendMode.off => Icons.block,
+    EdgeBlendMode.on => Icons.auto_awesome_motion,
+    EdgeBlendMode.user => Icons.show_chart,
+  };
+
+  /// Mixed modes in a pair select none; until a projector answers they're
+  /// disabled.
+  Widget _modeTiles() {
+    final ready = _reachable.isNotEmpty;
+    return ModeTileRow<EdgeBlendMode>(
+      key: edgeBlendModeTilesKey,
+      height: 54,
+      iconAbove: false,
+      selected: ready ? _shared((s) => s.blend.mode) : null,
+      onSelected: ready
+          ? (m) {
+              for (final side in _reachable) {
+                side.setMode(m);
+              }
+            }
+          : null,
+      tiles: [
+        for (final m in EdgeBlendMode.values)
+          ModeTileData(
+            value: m,
+            icon: _modeIcon(m),
+            label: m.label,
+            detail: m.detail,
+          ),
+      ],
+    );
   }
 
-  Widget? _blackStatus(EdgeBlendSide side) {
-    final status = _blendStatus(side);
-    if (status != null) return status;
-    if (side.blackUnreachable) return _buildNoReply([side], side.loadBlack);
-    if (side.black == null) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    return null;
-  }
-
-  Widget _buildBlendTab() {
+  Widget _tabs() {
     final side = _side;
-    final status = _blendStatus(side);
-    return DialogSplitLayout(
-      left: _buildLeft(blackTab: false, ready: status == null),
-      right: _buildRight(
-        status ?? _buildBlendPanel(side),
-        ready: status == null,
-      ),
+    final ready = _ready(side);
+    return SegmentedTabs<int>(
+      key: edgeBlendTabsKey,
+      selected: _tab,
+      onChanged: _setTab,
+      tabs: [
+        SegmentedTab(
+          value: 0,
+          label: 'Edge Blending',
+          icon: Icons.auto_awesome_motion,
+          pill: ready
+              ? blendTabPill(
+                  loaded: true,
+                  off: side.blend.mode == EdgeBlendMode.off,
+                  linked: _link.linked,
+                  enabledEdges: BlendEdge.values
+                      .where((e) => side.blend[e].enabled)
+                      .length,
+                )
+              : null,
+        ),
+        SegmentedTab(
+          value: 1,
+          label: 'Black Level',
+          icon: Icons.contrast,
+          pill: side.black?.mode.pill,
+        ),
+      ],
     );
   }
 
   /// The canvas as seen by [EdgeBlendCanvas]: a projector that hasn't
-  /// loaded is a labelled placeholder, so the pills stay there to switch
-  /// to the other one.
+  /// loaded is a placeholder in its place, so the pills stay there to
+  /// switch to the other one.
   BlendCanvasSide _canvasSide(EdgeBlendSide s) {
-    final ready = !s.loading && !s.unreachable;
+    final ready = _ready(s);
     return BlendCanvasSide(
       node: s.node,
       raster: s.raster,
       state: ready ? s.blend : null,
       black: ready ? s.black : null,
-      status: s.loading ? 'Loading' : 'No reply',
+      status: s.loading ? 'Reading from the projector' : '',
+      unreachable: s.unreachable,
+      onRetry: s.load,
     );
   }
 
-  /// The pair controls and Reset all over the canvas, which is the same on
-  /// both tabs; on Black Level its handles move the border widths, so the
-  /// selection is shown as [EdgePart.border] there. [ready]: the active
-  /// projector has its values for this tab.
-  Widget _buildLeft({required bool blackTab, required bool ready}) {
+  /// The silent one of a pair, while the other replies.
+  int? get _silentSide {
+    if (!_pair) return null;
+    final silent = [
+      for (var i = 0; i < 2; i++)
+        if (_sides[i].unreachable) i,
+    ];
+    return silent.length == 1 ? silent.single : null;
+  }
+
+  Widget _canvasCard(bool compact) {
     final side = _side;
+    final ready = _ready(side);
+    final off = ready && side.blend.mode == EdgeBlendMode.off;
+    final interactive = ready && !off && (!_blackTab || side.black != null);
     final sel = _selection;
-    final interactive = ready && side.blend.mode != EdgeBlendMode.off;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            if (_pair) ...[
-              const SizedBox(width: 12),
-              SegmentedButton<PairArrangement>(
-                segments: [
-                  for (final a in PairArrangement.values)
-                    ButtonSegment(value: a, label: Text(a.label)),
-                ],
-                selected: {_arrangement},
-                showSelectedIcon: false,
-                style: const ButtonStyle(visualDensity: VisualDensity.compact),
-                onSelectionChanged: (s) =>
-                    setState(() => _arrangement = s.first),
-              ),
-              CustomTooltip(
-                message: 'Swap projectors',
-                child: IconButton(
-                  icon: const Icon(Icons.swap_horiz),
-                  iconSize: 20,
-                  onPressed: _swap,
-                ),
-              ),
-            ],
-            const Spacer(),
-            CustomTooltip(
-              message: blackTab ? 'Reset all border widths' : 'Reset all edges',
-              child: IconButton(
-                icon: const Icon(Icons.restart_alt),
-                iconSize: 20,
-                onPressed: interactive
-                    ? () {
-                        for (final edge in BlendEdge.values) {
-                          _reset(_active, edge, blackTab: blackTab);
-                        }
-                      }
-                    : null,
-              ),
-            ),
-          ],
+    final silent = _silentSide;
+    final reachable = _reachable.isNotEmpty;
+    final onBoth = _pair && silent == null;
+    String scope(String name) => silent != null
+        ? '$name, sent to ${sideLetter(1 - silent)} only until '
+              '${sideLetter(silent)} replies'
+        : onBoth
+        ? '$name on both projectors'
+        : name;
+    final togglesEnabled = reachable && !off;
+    final ofA = _pair ? ' of ${sideLetter(_active)}' : '';
+    final actions = [
+      EdgeBlendToggle(
+        key: const ValueKey('edge-blend-markers'),
+        icon: Icons.width_normal,
+        tooltip: scope('Markers'),
+        detail: 'Start and zone end lines on the image',
+        selected: reachable && (_shared((s) => s.blend.markers) ?? false),
+        onChanged: togglesEnabled
+            ? (on) {
+                for (final s in _reachable) {
+                  s.setMarkers(on);
+                }
+              }
+            : null,
+      ),
+      const SizedBox(width: 6),
+      EdgeBlendToggle(
+        key: const ValueKey('edge-blend-auto-pattern'),
+        icon: Icons.grid_on,
+        tooltip: scope('Auto test pattern'),
+        warning: _reachable.any((s) => s.autoPatternRefused)
+            ? 'Not available while a test pattern is on'
+            : null,
+        selected: reachable && (_shared((s) => s.blend.autoPattern) ?? false),
+        onChanged: togglesEnabled
+            ? (on) {
+                for (final s in _reachable) {
+                  s.setAutoPattern(on);
+                }
+              }
+            : null,
+      ),
+      const SizedBox(width: 2),
+      CustomTooltip(
+        message: _blackTab
+            ? 'Reset all border widths$ofA'
+            : 'Reset all edges$ofA',
+        child: IconButton(
+          key: const ValueKey('edge-blend-reset'),
+          icon: const Icon(Icons.restart_alt, size: 18),
+          onPressed: interactive
+              ? () {
+                  for (final edge in BlendEdge.values) {
+                    _reset(_active, edge);
+                  }
+                }
+              : null,
         ),
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
-            child: EdgeBlendCanvas(
-              sides: [for (final s in _sides) _canvasSide(s)],
-              active: _active,
-              arrangement: _arrangement,
-              blackTab: blackTab,
-              selection: sel == null
-                  ? null
-                  : (
-                      side: sel.side,
-                      edge: sel.edge,
-                      part: blackTab ? EdgePart.border : sel.part,
-                    ),
-              maxFor: _link.maxFor,
-              onActivate: _setActive,
-              onSelect: _select,
-              onClearSelection: () => setState(() => _selection = null),
-              onPreview: _link.preview,
-              onCommit: _link.commit,
-              onResetEdge: (i, edge) => _reset(i, edge, blackTab: blackTab),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  void _reset(int side, BlendEdge edge, {required bool blackTab}) {
-    blackTab ? _sides[side].resetBorder(edge) : _link.resetEdge(side, edge);
-  }
-
-  /// The panel, under the active projector's header in a pair. The header
-  /// isn't dimmed by Off: it names whose values these are. Until [ready],
-  /// [panel] is the active projector's load state.
-  Widget _buildRight(Widget panel, {required bool ready}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (_pair) _buildPanelHeader(),
-        if (ready)
-          _dimmedWhenOff(panel)
-        else
-          Padding(padding: const EdgeInsets.only(top: 48), child: panel),
-      ],
-    );
-  }
-
-  Widget _buildPanelHeader() {
-    final theme = Theme.of(context);
-    final muted = theme.textTheme.bodySmall?.copyWith(
-      color: theme.colorScheme.onSurfaceVariant,
-    );
-    final node = _side.node;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Flexible(
-                child: Text(
-                  node.name,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+      ),
+    ];
+    return EdgeBlendCanvasCard(
+      compact: compact,
+      off: off,
+      hint: _blackTab
+          ? EdgeBlendHint.black
+          : _pair
+          ? EdgeBlendHint.pair
+          : EdgeBlendHint.single,
+      notice: silent == null
+          ? null
+          : '${sideLetter(silent)} is not replying: Markers and Auto test '
+                'pattern go to ${sideLetter(1 - silent)} only until it does.',
+      leading: _pair ? _arrangementControls(compact) : null,
+      actions: actions,
+      body: Padding(
+        padding: const EdgeInsets.all(12),
+        child: EdgeBlendCanvas(
+          sides: [for (final s in _sides) _canvasSide(s)],
+          active: _active,
+          arrangement: _arrangement,
+          blackTab: _blackTab,
+          linked: _pair && _link.linked,
+          compact: compact,
+          selection: sel == null
+              ? null
+              : (
+                  side: sel.side,
+                  edge: sel.edge,
+                  part: _blackTab ? EdgePart.border : sel.part,
                 ),
-              ),
-              const SizedBox(width: 8),
-              Text(node.ipAddress, style: muted),
-              const Spacer(),
-              Text('Switch on the canvas', style: muted),
-            ],
-          ),
-          const SizedBox(height: 8),
-          const Divider(height: 1),
-        ],
+          maxFor: _link.maxFor,
+          onActivate: _setActive,
+          onSelect: _select,
+          onClearSelection: () => setState(() => _selection = null),
+          onPreview: _link.preview,
+          onCommit: _link.commit,
+          onResetEdge: _reset,
+        ),
       ),
     );
   }
 
-  Widget _buildBlackTab() {
+  /// The width the arrangement tabs need with their names: each name in the
+  /// selected tab's weight, the tab padding (12 a side) and the track's 3.
+  double _arrangementWidth() {
+    final style = AppText.of(context).body
+        .copyWith(fontWeight: FontWeight.w600);
+    var width = 6.0 + 2;
+    for (final a in PairArrangement.values) {
+      final painter = TextPainter(
+        text: TextSpan(text: a.label, style: style),
+        textDirection: TextDirection.ltr,
+        textScaler: MediaQuery.textScalerOf(context),
+      )..layout();
+      width += painter.width + 24 + 2;
+      painter.dispose();
+    }
+    return width;
+  }
+
+  /// Side by side / Stacked and the swap button; icons only where the names
+  /// don't fit (a narrow card), the names then in the tooltip.
+  Widget _arrangementControls(bool narrowCard) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(
+          child: LayoutBuilder(
+            builder: (context, constraints) => _arrangementTabs(
+              narrowCard || constraints.maxWidth < _arrangementWidth(),
+            ),
+          ),
+        ),
+        const SizedBox(width: 2),
+        CustomTooltip(
+          message: 'Swap projectors',
+          child: IconButton(
+            icon: const Icon(Icons.swap_horiz, size: 18),
+            onPressed: _swap,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _arrangementTabs(bool compact) {
+    // Too narrow for the two named tabs: one button that shows the current
+    // arrangement and switches to the other one.
+    if (compact) {
+      final next = PairArrangement.values.firstWhere((a) => a != _arrangement);
+      return CustomTooltip(
+        message: _arrangement.label,
+        detail: 'Click for ${next.label.toLowerCase()}',
+        child: IconButton(
+          key: const ValueKey('edge-blend-arrangement'),
+          icon: Icon(switch (_arrangement) {
+            PairArrangement.sideBySide => Icons.view_column,
+            PairArrangement.stacked => Icons.view_agenda,
+          }, size: 18),
+          onPressed: () => setState(() => _arrangement = next),
+        ),
+      );
+    }
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(
+          child: CustomTooltip(
+            message: 'Arrangement',
+            detail: 'Side by side or stacked',
+            child: SegmentedTabs<PairArrangement>(
+              key: const ValueKey('edge-blend-arrangement'),
+              expand: false,
+              selected: _arrangement,
+              onChanged: (a) => setState(() => _arrangement = a),
+              tabs: [
+                for (final a in PairArrangement.values)
+                  SegmentedTab(value: a, label: a.label),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// The A / B switch at the top of a pair's controls card, on both tabs.
+  Widget? _projectorSwitch() {
+    if (!_pair) return null;
+    final t = AppText.of(context);
+    final status = AppStatusColors.of(context);
+    final error = Theme.of(context).colorScheme.error;
+    return ProjectorSwitch(
+      key: const ValueKey('edge-blend-projector-switch'),
+      selected: _active,
+      onChanged: _setActive,
+      items: [
+        for (final (i, s) in _sides.indexed)
+          (
+            letter: sideLetter(i),
+            ip: s.node.ipAddress,
+            dot: s.unreachable
+                ? error
+                : s.loading
+                ? t.tertiary
+                : status.success,
+          ),
+      ],
+    );
+  }
+
+  String get _edgesTitle => _pair ? 'Edges of ${sideLetter(_active)}' : 'Edges';
+
+  Widget _controlsCard() {
     final side = _side;
-    final status = _blackStatus(side);
-    final link = _link;
-    final linkedEdge = _arrangement.facingOf(_active);
-    final other = 1 - _active;
-    return DialogSplitLayout(
-      left: _buildLeft(blackTab: true, ready: status == null),
-      right: _buildRight(
-        ready: status == null,
-        status ??
-            BlackLevelPanel(
-              black: side.black!,
-              blend: side.blend,
-              raster: side.raster,
-              selectedEdge: _selectedEdge,
-              linked: link.linked
-                  ? (
-                      edge: linkedEdge,
-                      tooltip:
-                          'Linked with ${_sides[other].node.name} '
-                          '${_arrangement.facingOf(other).label}',
-                    )
-                  : null,
-              onModeChanged: side.setBlackMode,
-              onLevelChanged: (slot, channel, v) {
-                final edge = slot.edge;
-                if (edge != null && _selectedEdge != edge) {
-                  _select(_active, edge, EdgePart.border);
-                }
-                link.previewLevel(_active, slot, channel, v);
-              },
-              onLevelCommitted: (slot) => link.commitLevel(_active, slot),
-              onInterlockedChanged: (slot, on) =>
-                  link.setInterlocked(_active, slot, on),
-              onBorderWidthChanged: (edge, v) {
-                if (_selectedEdge != edge) {
-                  _select(_active, edge, EdgePart.border);
-                }
-                side.preview(edge, EdgePart.border, v);
-              },
-              onBorderWidthCommitted: (edge) =>
-                  side.commit(edge, EdgePart.border),
+    final top = _projectorSwitch();
+    if (!_ready(side)) {
+      return EdgeBlendControlsSkeleton(
+        groups: _blackTab ? const [1, 4, 3, 3] : const [4],
+        pulse: side.loading,
+        top: top,
+      );
+    }
+    if (!_blackTab) return _blendControls(side, top);
+    final black = side.black;
+    if (side.blackUnreachable) {
+      return ControlsCard(
+        key: edgeBlendControlsCardKey,
+        groups: [
+          ?top,
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 40),
+            child: NoReplyView(
+              title: 'No reply',
+              detail: 'The Black Level values could not be read',
+              onRetry: side.loadBlack,
             ),
-      ),
-    );
-  }
-
-  /// Markers and Auto test pattern are shared: they show on only when on
-  /// for both, and a toggle writes both.
-  Widget _buildBlendPanel(EdgeBlendSide side) {
+          ),
+        ],
+      );
+    }
+    if (black == null) {
+      return EdgeBlendControlsSkeleton(
+        groups: const [1, 4, 3, 3],
+        pulse: true,
+        top: top,
+      );
+    }
     final link = _link;
-    return EdgeBlendPanel(
-      state: side.blend.copyWith(
-        markers: _shared((s) => s.blend.markers) ?? false,
-        autoPattern: _shared((s) => s.blend.autoPattern) ?? false,
-      ),
+    return BlackLevelControls(
+      black: black,
+      blend: side.blend,
       raster: side.raster,
       selectedEdge: _selectedEdge,
+      title: _edgesTitle,
+      top: top,
+      linked: link.linked
+          ? (
+              edge: _arrangement.facingOf(_active),
+              tooltip: 'Linked with $_partnerName',
+            )
+          : null,
+      onModeChanged: side.setBlackMode,
+      onLevelChanged: (slot, channel, v) {
+        final edge = slot.edge;
+        if (edge != null && _selectedEdge != edge) {
+          _select(_active, edge, EdgePart.border);
+        }
+        link.previewLevel(_active, slot, channel, v);
+      },
+      onLevelCommitted: (slot) => link.commitLevel(_active, slot),
+      onInterlockedChanged: (slot, on) =>
+          link.setInterlocked(_active, slot, on),
+      onBorderWidthChanged: (edge, v) {
+        if (_selectedEdge != edge) _select(_active, edge, EdgePart.border);
+        side.preview(edge, EdgePart.border, v);
+      },
+      onBorderWidthCommitted: (edge) => side.commit(edge, EdgePart.border),
+    );
+  }
+
+  Widget _blendControls(EdgeBlendSide side, Widget? top) {
+    final link = _link;
+    final other = sideLetter(1 - _active);
+    return EdgeBlendControls(
+      state: side.blend,
+      raster: side.raster,
+      selectedEdge: _selectedEdge,
+      title: _edgesTitle,
+      top: top,
+      note: _pair
+          ? 'Linked: on, Width and the overlapped black level go to $other '
+                'as well. Start stays per projector.'
+          : 'The tick on a track is the limit: the border lines of opposite '
+                "edges never cross, so each edge's Start, Width and border "
+                'limit the other.',
       maxFor: (edge, part) => link.maxFor(_active, edge, part),
       link: _linkControl(),
-      onMarkersChanged: (on) {
-        for (final s in _reachable) {
-          s.setMarkers(on);
-        }
-      },
-      onAutoPatternChanged: (on) {
-        for (final s in _reachable) {
-          s.setAutoPattern(on);
-        }
-      },
-      autoPatternRefused: _reachable.any((s) => s.autoPatternRefused),
       onEnabledChanged: (edge, on) => link.setEnabled(_active, edge, on),
       onValueChanged: (edge, part, v) {
         if (_selectedEdge != edge || _selection?.part != part) {
@@ -602,21 +779,6 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
         link.preview(_active, edge, part, v);
       },
       onValueCommitted: (edge, part) => link.commit(_active, edge, part),
-    );
-  }
-
-  Widget _buildNoReply(List<EdgeBlendSide> sides, VoidCallback onRetry) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'No reply from ${sides.map((s) => s.node.ipAddress).join(', ')}',
-          ),
-          const SizedBox(height: 12),
-          OutlinedButton(onPressed: onRetry, child: const Text('Retry')),
-        ],
-      ),
     );
   }
 }

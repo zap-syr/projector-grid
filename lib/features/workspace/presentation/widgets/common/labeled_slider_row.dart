@@ -25,7 +25,12 @@ class LabeledSliderRow extends StatelessWidget {
     this.zeroFraction,
     this.limit,
     this.onTyped,
+    this.labelMark,
   });
+
+  /// A small mark before [label], inside [labelWidth] (Edge Blending's
+  /// Start and Width squares, which tie a slider to its canvas colour).
+  final Widget? labelMark;
 
   /// Null for no label column (Color's rows put a channel tile there).
   final String? label;
@@ -140,6 +145,16 @@ class LabeledSliderRow extends StatelessWidget {
     );
 
     final label = this.label;
+    final labelText = label == null
+        ? null
+        : Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style:
+                labelStyle ??
+                t.caption.copyWith(fontWeight: FontWeight.w700, color: accent),
+          );
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: SizedBox(
@@ -149,17 +164,15 @@ class LabeledSliderRow extends StatelessWidget {
             if (label != null) ...[
               SizedBox(
                 width: labelWidth,
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style:
-                      labelStyle ??
-                      t.caption.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: accent,
+                child: labelMark == null
+                    ? labelText
+                    : Row(
+                        children: [
+                          labelMark!,
+                          const SizedBox(width: 7),
+                          Flexible(child: labelText!),
+                        ],
                       ),
-                ),
               ),
               const SizedBox(width: 8),
             ],

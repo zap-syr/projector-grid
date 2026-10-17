@@ -2,35 +2,30 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import '../../../../../core/theme/app_theme.dart';
 import '../../../domain/blend_edge.dart';
 import '../../../domain/edge_blend_limits.dart';
+import '../common/canvas_card.dart';
+import '../common/controls_card.dart';
+import '../common/dialog_parts.dart';
 import '../common/labeled_slider_row.dart';
-import '../common/section_card.dart';
-import '../custom_tooltip.dart';
+import 'edge_blend_parts.dart';
 import 'edge_blend_state.dart';
 
-/// Pair mode's Link toggle, on the facing edge's card. [onChanged] is null
-/// when Link isn't possible ([tooltip] says why).
-typedef EdgeLinkControl = ({
-  BlendEdge edge,
-  bool on,
-  String tooltip,
-  ValueChanged<bool>? onChanged,
-});
-
-/// Right-hand controls of the Edge Blending tab: Markers, Auto test pattern
-/// and one card per edge.
-class EdgeBlendPanel extends StatelessWidget {
-  const EdgeBlendPanel({
+/// The Edge Blending tab's controls card (§7a.2): one card per edge with
+/// its switch, and Start and Width for an enabled edge, then a note. [top]
+/// is the pair's A / B switch, which Off doesn't dim.
+class EdgeBlendControls extends StatelessWidget {
+  const EdgeBlendControls({
     super.key,
     required this.state,
     required this.raster,
     required this.selectedEdge,
+    required this.title,
+    required this.note,
+    this.top,
     this.maxFor,
     this.link,
-    required this.onMarkersChanged,
-    required this.onAutoPatternChanged,
-    this.autoPatternRefused = false,
     required this.onEnabledChanged,
     required this.onValueChanged,
     required this.onValueCommitted,
@@ -40,16 +35,15 @@ class EdgeBlendPanel extends StatelessWidget {
   final EdgeBlendRaster raster;
   final BlendEdge? selectedEdge;
 
+  /// `Edges`, or `Edges of A` in a pair.
+  final String title;
+  final String note;
+  final Widget? top;
+
   /// The limit of each value; defaults to this projector's own §8 limit
   /// (a linked Width also has to fit the other projector).
   final int Function(BlendEdge edge, EdgePart part)? maxFor;
   final EdgeLinkControl? link;
-  final ValueChanged<bool> onMarkersChanged;
-  final ValueChanged<bool> onAutoPatternChanged;
-
-  /// The projector refused the last Auto test pattern change (ER401, a test
-  /// pattern is on).
-  final bool autoPatternRefused;
   final void Function(BlendEdge edge, bool on) onEnabledChanged;
 
   /// Every slider move (not sent yet).
@@ -63,91 +57,47 @@ class EdgeBlendPanel extends StatelessWidget {
     final maxFor =
         this.maxFor ?? (edge, part) => state.maxFor(edge, part, raster);
     final link = this.link;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Wrap(
-          spacing: 24,
-          children: [
-            _LabeledSwitch(
-              label: 'Markers',
-              value: state.markers,
-              onChanged: onMarkersChanged,
-            ),
-            _LabeledSwitch(
-              label: 'Auto test pattern',
-              value: state.autoPattern,
-              onChanged: onAutoPatternChanged,
-              warning: autoPatternRefused
-                  ? 'Not available while a test pattern is on'
-                  : null,
-            ),
-          ],
+    final off = state.mode == EdgeBlendMode.off;
+    return ControlsCard(
+      key: edgeBlendControlsCardKey,
+      groups: [
+        ?top,
+        OffDim(
+          off: off,
+          child: ControlsGroup(
+            header: ControlsGroupHeader(title: title, unit: 'panel pixels'),
+            rows: [
+              for (final edge in BlendEdge.values)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: EdgeCard(
+                    edge: edge,
+                    settings: state[edge],
+                    span: edgeBlendSpan(raster, edge),
+                    maxStart: maxFor(edge, EdgePart.start),
+                    maxWidth: maxFor(edge, EdgePart.width),
+                    selected: edge == selectedEdge,
+                    link: link?.edge == edge ? link : null,
+                    onEnabledChanged: (on) => onEnabledChanged(edge, on),
+                    onValueChanged: (part, v) => onValueChanged(edge, part, v),
+                    onValueCommitted: (part) => onValueCommitted(edge, part),
+                  ),
+                ),
+              const SizedBox(height: 6),
+              CanvasNote(child: Text(note)),
+            ],
+          ),
         ),
-        for (final edge in BlendEdge.values) ...[
-          const SizedBox(height: 10),
-          _EdgeCard(
-            edge: edge,
-            settings: state[edge],
-            span: edgeBlendSpan(raster, edge),
-            maxStart: maxFor(edge, EdgePart.start),
-            maxWidth: maxFor(edge, EdgePart.width),
-            selected: edge == selectedEdge,
-            link: link?.edge == edge ? link : null,
-            onEnabledChanged: (on) => onEnabledChanged(edge, on),
-            onValueChanged: (part, v) => onValueChanged(edge, part, v),
-            onValueCommitted: (part) => onValueCommitted(edge, part),
-          ),
-        ],
       ],
     );
   }
 }
 
-class _LabeledSwitch extends StatelessWidget {
-  const _LabeledSwitch({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-    this.warning,
-  });
-
-  final String label;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  /// Shown as an icon with a tooltip after the label, so nothing below
-  /// moves when it comes and goes.
-  final String? warning;
-
-  @override
-  Widget build(BuildContext context) {
-    final warning = this.warning;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(label),
-        if (warning != null) ...[
-          const SizedBox(width: 4),
-          CustomTooltip(
-            message: warning,
-            warning: true,
-            child: Icon(
-              Icons.info_outline,
-              size: 16,
-              color: Theme.of(context).colorScheme.error,
-            ),
-          ),
-        ],
-        const SizedBox(width: 8),
-        Switch(value: value, onChanged: onChanged),
-      ],
-    );
-  }
-}
-
-class _EdgeCard extends StatelessWidget {
-  const _EdgeCard({
+/// One edge: side icon, name, the Link chip on a pair's facing edge and
+/// the switch. A disabled edge collapses to that one row (§7a.6).
+class EdgeCard extends StatelessWidget {
+  const EdgeCard({
+    super.key,
     required this.edge,
     required this.settings,
     required this.span,
@@ -173,105 +123,81 @@ class _EdgeCard extends StatelessWidget {
   final void Function(EdgePart part, int v) onValueChanged;
   final void Function(EdgePart part) onValueCommitted;
 
+  static const double headerHeight = 34;
+
   @override
   Widget build(BuildContext context) {
-    return SectionCard(
-      highlighted: selected && settings.enabled,
+    final t = AppText.of(context);
+    final enabled = settings.enabled;
+    final link = this.link;
+    return DialogCard(
+      highlighted: selected && enabled,
+      padding: EdgeInsets.fromLTRB(12, 2, 8, enabled ? 6 : 2),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              EdgeSideIcon(edge: edge, enabled: settings.enabled),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
+          SizedBox(
+            height: headerHeight,
+            child: Row(
+              children: [
+                EdgeSideIcon(edge: edge, enabled: enabled),
+                const SizedBox(width: 10),
+                Text(
                   edge.label,
-                  style: Theme.of(context).textTheme.titleSmall
-                      ?.copyWith(fontWeight: FontWeight.bold),
+                  style: t.body.copyWith(fontWeight: FontWeight.w600),
                 ),
-              ),
-              if (link case final link?) _LinkToggle(link: link),
-              Switch(value: settings.enabled, onChanged: onEnabledChanged),
-            ],
+                if (!enabled) ...[
+                  const SizedBox(width: 8),
+                  Text('Off', style: t.description.copyWith(color: t.tertiary)),
+                ],
+                // The chip takes what the name leaves, right-aligned.
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: link == null
+                        ? null
+                        : Padding(
+                            padding: const EdgeInsets.only(left: 8, right: 6),
+                            child: LinkChip(link: link),
+                          ),
+                  ),
+                ),
+                Switch(
+                  value: enabled,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  onChanged: onEnabledChanged,
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 4),
-          _row(context, EdgePart.start, 'Start', maxStart),
-          _row(context, EdgePart.width, 'Width', maxWidth),
+          if (enabled) ...[
+            _row(context, EdgePart.start, 'Start', maxStart),
+            _row(context, EdgePart.width, 'Width', maxWidth),
+          ],
         ],
       ),
     );
   }
 
   Widget _row(BuildContext context, EdgePart part, String label, int limit) {
-    final enabled = settings.enabled;
+    final t = AppText.of(context);
+    final color = edgePartColor(context, part);
     // The range is the whole raster, not the §8 limit: that limit moves with
     // the other values (Width's with Start), and a moving range would slide
     // the thumb while its value stays put. The limit is a stop instead.
     return LabeledSliderRow(
+      key: ValueKey('edge-${edge.name}-${part.name}'),
       label: label,
+      labelMark: PartMark(color: color),
+      labelStyle: t.body.copyWith(color: t.secondary),
+      labelWidth: 64,
+      color: color,
       value: settings.valueOf(part).toDouble(),
       min: 0,
       max: span.toDouble(),
       limit: limit.toDouble(),
-      labelWidth: 44,
-      onChanged: enabled
-          ? (v) => onValueChanged(part, min(v.round(), limit))
-          : null,
-      onChangeEnd: enabled ? (_) => onValueCommitted(part) : null,
-    );
-  }
-}
-
-class _LinkToggle extends StatelessWidget {
-  const _LinkToggle({required this.link});
-
-  final EdgeLinkControl link;
-
-  @override
-  Widget build(BuildContext context) {
-    final onChanged = link.onChanged;
-    return CustomTooltip(
-      message: link.tooltip,
-      child: IconButton(
-        isSelected: link.on,
-        icon: const Icon(Icons.link_off),
-        selectedIcon: const Icon(Icons.link),
-        iconSize: 20,
-        visualDensity: VisualDensity.compact,
-        onPressed: onChanged == null ? null : () => onChanged(!link.on),
-      ),
-    );
-  }
-}
-
-/// A small frame with the edge's side drawn thick, so the four cards read
-/// at a glance.
-class EdgeSideIcon extends StatelessWidget {
-  const EdgeSideIcon({super.key, required this.edge, required this.enabled});
-
-  final BlendEdge edge;
-  final bool enabled;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final thin = BorderSide(color: scheme.onSurfaceVariant, width: 1.5);
-    final thick = BorderSide(
-      color: enabled ? scheme.primary : scheme.onSurfaceVariant,
-      width: 4,
-    );
-    return Container(
-      width: 18,
-      height: 13,
-      decoration: BoxDecoration(
-        border: Border(
-          top: edge == BlendEdge.upper ? thick : thin,
-          bottom: edge == BlendEdge.lower ? thick : thin,
-          left: edge == BlendEdge.left ? thick : thin,
-          right: edge == BlendEdge.right ? thick : thin,
-        ),
-      ),
+      onChanged: (v) => onValueChanged(part, min(v.round(), limit)),
+      onChangeEnd: (_) => onValueCommitted(part),
     );
   }
 }
