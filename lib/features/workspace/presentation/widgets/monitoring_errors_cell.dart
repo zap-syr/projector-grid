@@ -25,10 +25,6 @@ class MonitoringErrorsCell extends ConsumerWidget {
   static const double _iconSize = 13;
   static const double _iconGap = 6;
   static const double _tagGap = 4;
-  static const _plusStyle = TextStyle(
-    fontSize: 11,
-    fontWeight: FontWeight.w700,
-  );
 
   final ProjectorNode node;
 
@@ -68,7 +64,9 @@ class MonitoringErrorsCell extends ConsumerWidget {
     );
     final top = items.first.severity;
     final palette = AlertPalette.of(context);
-    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
+    final t = AppText.of(context);
+    final plusStyle = t.caption.copyWith(fontWeight: FontWeight.w700);
+    final tagStyle = _CodeTag.styleOf(context);
 
     return HoverPanel(
       width: _ErrorsPanel.width,
@@ -78,13 +76,12 @@ class MonitoringErrorsCell extends ConsumerWidget {
       builder: (context, active) => LayoutBuilder(
         builder: (context, constraints) {
           double plusWidth(int hidden) =>
-              _textWidth(context, '+$hidden', _plusStyle);
+              _textWidth(context, '+$hidden', plusStyle);
           final inner = constraints.maxWidth - 2 * _padding;
           final shown = tagsThatFit(
             tagWidths: [
               for (final e in items)
-                _textWidth(context, e.id, _CodeTag.style) +
-                    2 * _CodeTag.padding,
+                _textWidth(context, e.id, tagStyle) + 2 * _CodeTag.padding,
             ],
             available: inner - _iconSize - _iconGap,
             gap: _tagGap,
@@ -133,10 +130,7 @@ class MonitoringErrorsCell extends ConsumerWidget {
                     ],
                     if (hidden > 0) ...[
                       if (shown > 0) const SizedBox(width: _tagGap),
-                      Text(
-                        '+$hidden',
-                        style: _plusStyle.copyWith(color: muted),
-                      ),
+                      Text('+$hidden', style: plusStyle),
                     ],
                   ],
                 ),
@@ -154,9 +148,8 @@ class _CodeTag extends StatelessWidget {
 
   /// Horizontal padding and text style, also used to measure a tag.
   static const double padding = 5;
-  static final style = AppTheme.mono(
-    const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
-  );
+  static TextStyle styleOf(BuildContext context) =>
+      AppText.of(context).monoSmall.copyWith(fontWeight: FontWeight.w600);
 
   final String code;
   final Color color;
@@ -168,7 +161,7 @@ class _CodeTag extends StatelessWidget {
       color: color.withValues(alpha: 0.13),
       borderRadius: BorderRadius.circular(4),
     ),
-    child: Text(code, style: style.copyWith(color: color)),
+    child: Text(code, style: styleOf(context).copyWith(color: color)),
   );
 }
 
@@ -192,7 +185,7 @@ class _ErrorsPanel extends StatelessWidget {
     final colors = theme.colorScheme;
     final palette = AlertPalette.of(context);
     final now = DateTime.now();
-    final muted = colors.onSurfaceVariant.withValues(alpha: 0.75);
+    final t = AppText.of(context);
 
     return AlertPanelSurface(
       width: width,
@@ -233,8 +226,7 @@ class _ErrorsPanel extends StatelessWidget {
                         e.name ?? 'Unknown error',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontSize: 13,
+                        style: t.body.copyWith(
                           fontWeight: FontWeight.w600,
                           color: palette.text(e.severity),
                         ),
@@ -249,15 +241,7 @@ class _ErrorsPanel extends StatelessWidget {
                         color: colors.onSurface.withValues(alpha: 0.07),
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: Text(
-                        e.id,
-                        style: AppTheme.mono(
-                          TextStyle(
-                            fontSize: 11,
-                            color: colors.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
+                      child: Text(e.id, style: t.monoSmall),
                     ),
                     SizedBox(
                       width: 52,
@@ -267,9 +251,7 @@ class _ErrorsPanel extends StatelessWidget {
                           null => '',
                         },
                         textAlign: TextAlign.right,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          fontSize: 11,
-                          color: muted,
+                        style: t.caption.copyWith(
                           fontFeatures: const [FontFeature.tabularFigures()],
                         ),
                       ),

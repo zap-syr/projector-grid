@@ -8,6 +8,7 @@ import '../../../../core/services/docs_service.dart';
 import '../providers/alignment_provider.dart';
 import '../providers/app_settings_provider.dart';
 import '../providers/edit_history_status_provider.dart';
+import '../providers/monitoring_view_provider.dart';
 import '../providers/project_provider.dart';
 import '../providers/workspace_provider.dart';
 import 'about_dialog.dart';
@@ -48,8 +49,9 @@ class MacMenuBar extends ConsumerWidget {
       appSettingsProvider.select((s) => s.isMonitoringView),
     );
     final monitoringColumns = ref.watch(
-      appSettingsProvider.select((s) => s.monitoringColumns),
+      monitoringViewProvider.select((s) => s.columns),
     );
+    final monitoringView = ref.read(monitoringViewProvider.notifier);
     final monitoringFitToWidth = ref.watch(
       appSettingsProvider.select((s) => s.monitoringFitToWidth),
     );
@@ -57,7 +59,7 @@ class MacMenuBar extends ConsumerWidget {
       appSettingsProvider.select((s) => s.monitoringDensity),
     );
     final monitoringGroupBy = ref.watch(
-      appSettingsProvider.select((s) => s.monitoringGroupBy),
+      monitoringViewProvider.select((s) => s.groupByGroup),
     );
     final visibleColumns = MonitoringTable.resolveVisible(monitoringColumns);
     final settingsNotifier = ref.read(appSettingsProvider.notifier);
@@ -384,9 +386,7 @@ class MacMenuBar extends ConsumerWidget {
                                             id,
                                           );
                                       if (next != null) {
-                                        settingsNotifier.setMonitoringColumns(
-                                          next,
-                                        );
+                                        monitoringView.setColumns(next);
                                       }
                                     },
                                   ),
@@ -396,10 +396,9 @@ class MacMenuBar extends ConsumerWidget {
                               members: <PlatformMenuItem>[
                                 PlatformMenuItem(
                                   label: 'Show all columns',
-                                  onSelected: () =>
-                                      settingsNotifier.setMonitoringColumns(
-                                        MonitoringTable.showAllColumns,
-                                      ),
+                                  onSelected: () => monitoringView.setColumns(
+                                    MonitoringTable.showAllColumns,
+                                  ),
                                 ),
                               ],
                             ),
@@ -411,8 +410,8 @@ class MacMenuBar extends ConsumerWidget {
                             for (final entry in MonitoringTable.presets.entries)
                               PlatformMenuItem(
                                 label: entry.key,
-                                onSelected: () => settingsNotifier
-                                    .setMonitoringColumns(entry.value),
+                                onSelected: () =>
+                                    monitoringView.setColumns(entry.value),
                               ),
                           ],
                         ),
@@ -448,8 +447,9 @@ class MacMenuBar extends ConsumerWidget {
                           label: monitoringGroupBy
                               ? '✓ Merge into groups'
                               : '   Merge into groups',
-                          onSelected: () => settingsNotifier
-                              .setMonitoringGroupBy(!monitoringGroupBy),
+                          onSelected: () => monitoringView.setGroupByGroup(
+                            !monitoringGroupBy,
+                          ),
                         ),
                       ],
                     ),
