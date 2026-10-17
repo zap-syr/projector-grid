@@ -7,6 +7,7 @@ import '../providers/workspace_provider.dart';
 import '../providers/project_provider.dart';
 import '../providers/app_settings_provider.dart';
 import '../providers/edit_history_status_provider.dart';
+import '../providers/monitoring_view_provider.dart';
 import 'preferences_dialog.dart';
 import 'manage_groups_dialog.dart';
 import 'scheduled_tasks_dialog.dart';
@@ -113,8 +114,9 @@ class TopMenuBar extends ConsumerWidget {
       alignmentProvider.select((s) => s.active),
     );
     final monitoringColumns = ref.watch(
-      appSettingsProvider.select((s) => s.monitoringColumns),
+      monitoringViewProvider.select((s) => s.columns),
     );
+    final monitoringView = ref.read(monitoringViewProvider.notifier);
     final monitoringFitToWidth = ref.watch(
       appSettingsProvider.select((s) => s.monitoringFitToWidth),
     );
@@ -122,7 +124,7 @@ class TopMenuBar extends ConsumerWidget {
       appSettingsProvider.select((s) => s.monitoringDensity),
     );
     final monitoringGroupBy = ref.watch(
-      appSettingsProvider.select((s) => s.monitoringGroupBy),
+      monitoringViewProvider.select((s) => s.groupByGroup),
     );
     final visibleColumns = MonitoringTable.resolveVisible(monitoringColumns);
     final settingsNotifier = ref.read(appSettingsProvider.notifier);
@@ -379,7 +381,7 @@ class TopMenuBar extends ConsumerWidget {
                                 id,
                               );
                               if (next != null) {
-                                settingsNotifier.setMonitoringColumns(next);
+                                monitoringView.setColumns(next);
                               }
                             },
                           ),
@@ -388,10 +390,9 @@ class TopMenuBar extends ConsumerWidget {
                           context,
                           label: 'Show all columns',
                           width: _menuItemWidth,
-                          onPressed: () =>
-                              settingsNotifier.setMonitoringColumns(
-                                MonitoringTable.showAllColumns,
-                              ),
+                          onPressed: () => monitoringView.setColumns(
+                            MonitoringTable.showAllColumns,
+                          ),
                         ),
                       ],
                       child: const SizedBox(width: 252, child: Text('Columns')),
@@ -406,8 +407,8 @@ class TopMenuBar extends ConsumerWidget {
                             context,
                             label: entry.key,
                             width: 180,
-                            onPressed: () => settingsNotifier
-                                .setMonitoringColumns(entry.value),
+                            onPressed: () =>
+                                monitoringView.setColumns(entry.value),
                           ),
                       ],
                       child: const SizedBox(width: 252, child: Text('Presets')),
@@ -448,9 +449,8 @@ class TopMenuBar extends ConsumerWidget {
                       label: 'Merge into groups',
                       checked: monitoringGroupBy,
                       width: 252,
-                      onPressed: () => settingsNotifier.setMonitoringGroupBy(
-                        !monitoringGroupBy,
-                      ),
+                      onPressed: () =>
+                          monitoringView.setGroupByGroup(!monitoringGroupBy),
                     ),
                   ],
                   child: const Text('Monitoring Table'),

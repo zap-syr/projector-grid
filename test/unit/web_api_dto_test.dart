@@ -416,12 +416,11 @@ void main() {
     );
   });
 
-  test('the table renders the shared column catalogue in its order', () {
-    expect(MonitoringTable.allColumnIds, [
-      for (final c in kMonitoringColumns) c.id,
-    ]);
+  // The desktop table has its own two-line columns; every Web UI field
+  // stays available there as an optional column.
+  test('the desktop table offers every Web UI column', () {
     for (final c in kMonitoringColumns) {
-      expect(MonitoringTable.labelFor(c.id), c.label);
+      expect(MonitoringTable.allColumnIds, contains(c.id));
     }
   });
 }
