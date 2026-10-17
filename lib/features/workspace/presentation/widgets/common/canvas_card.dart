@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../core/theme/app_theme.dart';
-import '../common/dashed_border.dart';
-import '../common/dialog_parts.dart';
+import 'dialog_parts.dart';
 
-/// The left-hand card shared by every mode but Off: a header (title, pill,
-/// optional help icon, a Reset text button), the drawing, and a footer with
-/// the legend and a note. One shell, so the card is the same in every mode
-/// and while a mode loads.
-class GeometryCanvasCard extends StatelessWidget {
-  const GeometryCanvasCard({
+/// The left-hand card of the canvas dialogs (Geometry Correction, Edge
+/// Blending): a header (title, pill, optional help icon, a Reset text
+/// button), the drawing, and a footer with the legend and a note. One
+/// shell, so the card is the same in every mode and while a mode loads.
+class CanvasCard extends StatelessWidget {
+  const CanvasCard({
     super.key,
     required this.title,
     required this.resetLabel,
@@ -46,7 +45,6 @@ class GeometryCanvasCard extends StatelessWidget {
           .withValues(alpha: 0.6),
     );
     return DialogCard(
-      key: const ValueKey('geometry-canvas-card'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -103,15 +101,15 @@ class GeometryCanvasCard extends StatelessWidget {
   }
 }
 
-enum LegendMark { panel, image, outerLimit, defaultFrame, range }
+/// One line of legend entries, each a 16×10 swatch and a label. [trailing]
+/// sits at the right end (the `Approximate` note in a small window).
+class CanvasLegend extends StatelessWidget {
+  const CanvasLegend({super.key, required this.items, this.trailing});
 
-/// One line of legend entries. [trailing] sits at the right end (the
-/// `Approximate` note in a small window).
-class GeometryLegend extends StatelessWidget {
-  const GeometryLegend({super.key, required this.items, this.trailing});
-
-  final List<(LegendMark, String)> items;
+  final List<(Widget swatch, String label)> items;
   final Widget? trailing;
+
+  static const Size swatchSize = Size(16, 10);
 
   @override
   Widget build(BuildContext context) {
@@ -124,9 +122,9 @@ class GeometryLegend extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          for (final (i, (mark, label)) in items.indexed) ...[
+          for (final (i, (swatch, label)) in items.indexed) ...[
             if (i > 0) const SizedBox(width: 16),
-            _Swatch(mark),
+            SizedBox.fromSize(size: swatchSize, child: swatch),
             const SizedBox(width: 6),
             Text(label, maxLines: 1, style: t.caption),
           ],
@@ -142,57 +140,9 @@ class GeometryLegend extends StatelessWidget {
   }
 }
 
-class _Swatch extends StatelessWidget {
-  const _Swatch(this.mark);
-
-  final LegendMark mark;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    const size = Size(16, 10);
-    final radius = BorderRadius.circular(2);
-    return switch (mark) {
-      LegendMark.outerLimit => DashedBorder(
-        color: cs.outline,
-        radius: 2,
-        dash: 3,
-        gap: 2,
-        child: SizedBox.fromSize(size: size),
-      ),
-      LegendMark.panel || LegendMark.defaultFrame => Container(
-        width: size.width,
-        height: size.height,
-        decoration: BoxDecoration(
-          borderRadius: radius,
-          border: Border.all(color: cs.outline),
-        ),
-      ),
-      LegendMark.image => Container(
-        width: size.width,
-        height: size.height,
-        decoration: BoxDecoration(
-          color: cs.primary.withValues(alpha: 0.16),
-          borderRadius: radius,
-          border: Border.all(color: cs.primary, width: 2),
-        ),
-      ),
-      LegendMark.range => Container(
-        width: size.width,
-        height: size.height,
-        decoration: BoxDecoration(
-          color: cs.primary.withValues(alpha: 0.10),
-          borderRadius: radius,
-          border: Border.all(color: cs.primary.withValues(alpha: 0.4)),
-        ),
-      ),
-    };
-  }
-}
-
 /// An info icon and a line of text under the legend.
-class GeometryNote extends StatelessWidget {
-  const GeometryNote({super.key, required this.child});
+class CanvasNote extends StatelessWidget {
+  const CanvasNote({super.key, required this.child});
 
   final Widget child;
 

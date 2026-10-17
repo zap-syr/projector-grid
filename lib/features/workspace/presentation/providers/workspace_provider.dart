@@ -86,6 +86,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
             input: '-',
             signal: '-',
             testPattern: null,
+            lastSeen: null,
           ),
         )
         .toList();
@@ -128,6 +129,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
           input: live.input,
           signal: live.signal,
           testPattern: live.testPattern,
+          lastSeen: live.lastSeen,
         );
       }
       return saved;
@@ -274,6 +276,12 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
 
   final Set<String> _refreshingNodes = {};
   final Map<String, DateTime> _lastNodeRefresh = {};
+
+  // When each projector last answered a poll. Kept here, not on the node:
+  // stamped on every answer, it would change the node every cycle and defeat
+  // _applyPollResult's no-change skip. Copied into `lastSeen` only when the
+  // projector goes offline.
+  final Map<String, DateTime> _lastAnswer = {};
 
   /// Reserves [id] so the regular poll cycle (and refreshNode) skip it,
   /// for short-lived external NTCONTROL traffic against a specific
@@ -574,6 +582,8 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     );
 
     if (probe == ProbeResult.unauthorized) {
+      // It answered, just not to this login.
+      _lastAnswer[node.id] = DateTime.now();
       if (oldStatus != ConnectionStatus.unauthorized) {
         _logEvent(
           LogEvent(
@@ -590,6 +600,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
         (n) => n.copyWith(
           connectionStatus: ConnectionStatus.unauthorized,
           polled: true,
+          lastSeen: null,
         ),
       );
       return;
@@ -612,6 +623,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
         (n) => n.copyWith(
           connectionStatus: ConnectionStatus.offline,
           polled: true,
+          lastSeen: _lastAnswer[node.id],
         ),
       );
       return;
@@ -622,6 +634,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
         : ConnectionStatus.connected;
 
     if (telemetry != null) {
+      _lastAnswer[node.id] = DateTime.now();
       if (oldStatus == ConnectionStatus.offline ||
           oldStatus == ConnectionStatus.unauthorized) {
         _logEvent(
@@ -747,6 +760,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
               n.testPattern,
           connectionStatus: targetStatus,
           polled: true,
+          lastSeen: null,
         );
       });
 
@@ -786,6 +800,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
         (n) => n.copyWith(
           connectionStatus: ConnectionStatus.offline,
           polled: true,
+          lastSeen: _lastAnswer[node.id],
         ),
       );
     }
@@ -1293,10 +1308,13 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
           password: password,
           connectionStatus: ConnectionStatus.offline,
           polled: false,
+          lastSeen: null,
         );
       }
       return node;
     }).toList();
+    // A new address is a new projector as far as "last seen" goes.
+    _lastAnswer.remove(id);
     _notifyStateChanged();
     _checkAndSetNodeStatus(id, ip, port);
   }
@@ -1312,6 +1330,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     _lastWebSignalWrite.remove(id);
     _lastWebSignalBaseline.remove(id);
     _powerTransitionTimers.remove(id)?.cancel();
+    _lastAnswer.remove(id);
   }
 
   void deleteSelected() {

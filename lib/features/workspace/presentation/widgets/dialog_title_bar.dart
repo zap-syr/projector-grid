@@ -25,6 +25,7 @@ class DialogTitleBar extends StatelessWidget {
     required this.title,
     this.onClose,
     this.projectorId,
+    this.pairIds,
     this.subtitle,
     this.badges = const [],
   });
@@ -41,11 +42,18 @@ class DialogTitleBar extends StatelessWidget {
   /// live while the dialog is open.
   final String? projectorId;
 
+  /// The two projectors of a pair (Edge Blending): `Pair: RQ25K
+  /// (192.168.0.41), RQ25K (192.168.0.42)` under the title and their group
+  /// pill when both are in the same group, kept live. The status is the
+  /// dialog's to say (whether each one replies to it), so it goes in
+  /// [badges]. Ignored when [projectorId] is set.
+  final (String, String)? pairIds;
+
   /// Monospace line under the title for dialogs that span several projectors
-  /// (a pair, a grid); ignored when [projectorId] is set.
+  /// (a grid); ignored when [projectorId] or [pairIds] is set.
   final String? subtitle;
 
-  /// Read-only pills before ✕ for the same multi-projector case.
+  /// Read-only pills before ✕ for the multi-projector cases.
   final List<Widget> badges;
 
   @override
@@ -79,6 +87,8 @@ class DialogTitleBar extends StatelessWidget {
               Expanded(
                 child: projectorId != null
                     ? _ProjectorInfo(id: projectorId!, title: titleText)
+                    : pairIds != null
+                    ? _PairInfo(ids: pairIds!, title: titleText, badges: badges)
                     : Row(
                         children: [
                           Expanded(
@@ -187,6 +197,60 @@ class _ProjectorInfo extends ConsumerWidget {
         ],
         const SizedBox(width: 8),
         ConnectionStatusBadge(status: info.status),
+      ],
+    );
+  }
+}
+
+/// A pair's line and shared group, watched like [_ProjectorInfo].
+class _PairInfo extends ConsumerWidget {
+  const _PairInfo({
+    required this.ids,
+    required this.title,
+    required this.badges,
+  });
+
+  final (String, String) ids;
+  final Widget title;
+  final List<Widget> badges;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notifier = ref.read(workspaceProvider.notifier);
+    final info = ref.watch(
+      workspaceProvider.select((nodes) {
+        final a = nodes.where((n) => n.id == ids.$1).firstOrNull;
+        final b = nodes.where((n) => n.id == ids.$2).firstOrNull;
+        if (a == null || b == null) return null;
+        final group = a.groupId == b.groupId
+            ? notifier.groups.where((g) => g.id == a.groupId).firstOrNull
+            : null;
+        return (
+          a: projectorLabel(a.name, a.ipAddress),
+          b: projectorLabel(b.name, b.ipAddress),
+          groupName: group?.name,
+          groupColor: group?.color,
+        );
+      }),
+    );
+    return Row(
+      children: [
+        Expanded(
+          child: _TitleBlock(
+            title: title,
+            subtitle: info == null ? null : 'Pair: ${info.a}, ${info.b}',
+          ),
+        ),
+        if (info?.groupName != null) ...[
+          const SizedBox(width: 8),
+          Flexible(
+            child: GroupPill(
+              name: info!.groupName!,
+              color: Color(info.groupColor!),
+            ),
+          ),
+        ],
+        for (final b in badges) ...[const SizedBox(width: 8), b],
       ],
     );
   }

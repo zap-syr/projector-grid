@@ -4,7 +4,9 @@ import '../../../../../core/theme/app_theme.dart';
 import '../../../domain/geometry_preview.dart';
 import '../custom_tooltip.dart';
 import '../geometry_preview_painter.dart';
-import 'geometry_canvas_card.dart';
+import '../common/canvas_card.dart';
+import 'geometry_legend.dart';
+import 'geometry_parts.dart';
 
 const approximateNote =
     'The drawing is approximate, check the result on the screen.';
@@ -40,7 +42,8 @@ class GeometryPreviewCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = AppText.of(context);
     final shown = preview;
-    return GeometryCanvasCard(
+    return CanvasCard(
+      key: geometryCanvasCardKey,
       title: 'Preview',
       resetLabel: 'Reset',
       onReset: onReset,
@@ -62,7 +65,7 @@ class GeometryPreviewCard extends StatelessWidget {
               )
             : null,
       ),
-      note: compact ? null : const GeometryNote(child: Text(approximateNote)),
+      note: compact ? null : const CanvasNote(child: Text(approximateNote)),
     );
   }
 }

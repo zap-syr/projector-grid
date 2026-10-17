@@ -415,6 +415,91 @@ void main() {
       expect(logMessages(c).where((m) => m == 'Went offline'), hasLength(1));
     });
 
+    group('lastSeen', () {
+      test(
+        'set when a projector goes offline, cleared when it answers',
+        () async {
+          final c = makeContainer(fake);
+          final ws = c.read(workspaceProvider.notifier);
+          fake.pollResults['10.0.0.1'] = (ProbeResult.online, telemetry());
+          ws.setNodes([node('1')]);
+          final before = DateTime.now();
+          await ws.refreshAll();
+          final after = DateTime.now();
+          expect(c.read(workspaceProvider).single.lastSeen, isNull);
+
+          fake.pollResults.remove('10.0.0.1');
+          await ws.refreshAll();
+          final seen = c.read(workspaceProvider).single.lastSeen;
+          expect(seen, isNotNull);
+          expect(seen!.isBefore(before), isFalse);
+          expect(seen.isAfter(after), isFalse);
+
+          // Later offline polls keep the time it was last seen.
+          await ws.refreshAll();
+          expect(c.read(workspaceProvider).single.lastSeen, seen);
+
+          // An offline node is checked with checkConnection first.
+          fake.reachable['10.0.0.1'] = true;
+          fake.pollResults['10.0.0.1'] = (ProbeResult.online, telemetry());
+          await ws.refreshAll();
+          expect(
+            c.read(workspaceProvider).single.connectionStatus,
+            ConnectionStatus.connected,
+          );
+          expect(c.read(workspaceProvider).single.lastSeen, isNull);
+        },
+      );
+
+      test('an unchanged poll leaves the node list untouched', () async {
+        final c = makeContainer(fake);
+        final ws = c.read(workspaceProvider.notifier);
+        fake.pollResults['10.0.0.1'] = (ProbeResult.online, telemetry());
+        ws.setNodes([node('1')]);
+        await ws.refreshAll();
+        final list = c.read(workspaceProvider);
+        await ws.refreshAll();
+        expect(identical(c.read(workspaceProvider), list), isTrue);
+      });
+
+      test('never seen this session: null; a new address forgets it', () async {
+        final c = makeContainer(fake);
+        final ws = c.read(workspaceProvider.notifier);
+        ws.setNodes([node('1')]);
+        await ws.refreshAll();
+        expect(c.read(workspaceProvider).single.lastSeen, isNull);
+
+        fake.reachable['10.0.0.1'] = true;
+        fake.pollResults['10.0.0.1'] = (ProbeResult.online, telemetry());
+        await ws.refreshAll();
+        fake.pollResults.remove('10.0.0.1');
+        await ws.refreshAll();
+        expect(c.read(workspaceProvider).single.lastSeen, isNotNull);
+
+        ws.updateNode('1', '10.0.0.9', 1024, 'admin1', 'panasonic');
+        await ws.refreshAll();
+        expect(c.read(workspaceProvider).single.lastSeen, isNull);
+      });
+
+      test('an undo keeps the live value', () async {
+        final c = makeContainer(fake);
+        final ws = c.read(workspaceProvider.notifier);
+        fake.pollResults['10.0.0.1'] = (ProbeResult.online, telemetry());
+        ws.setNodes([node('1', x: 40)]);
+        await ws.refreshAll();
+        drag(c, '1', const Offset(100, 0));
+        fake.pollResults.remove('10.0.0.1');
+        await ws.refreshAll();
+        final seen = c.read(workspaceProvider).single.lastSeen;
+        expect(seen, isNotNull);
+
+        ws.undo();
+        final n = c.read(workspaceProvider).single;
+        expect(n.x, 40);
+        expect(n.lastSeen, seen);
+      });
+    });
+
     test('a loaded offline node counts as polled only after a check', () async {
       final c = makeContainer(fake);
       final ws = c.read(workspaceProvider.notifier);

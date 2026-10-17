@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../domain/geometry_corners.dart';
+import '../common/controls_card.dart';
 import '../common/projector_settings_client.dart';
 import '../common/segmented_tabs.dart';
 import '../custom_tooltip.dart';
@@ -59,10 +60,11 @@ class CornerControls extends StatelessWidget {
           );
         }
 
-        return GeometryControlsCard(
+        return ControlsCard(
+          key: geometryControlsCardKey,
           groups: [
-            GeometryGroup(
-              header: GeometryGroupHeader(
+            ControlsGroup(
+              header: ControlsGroupHeader(
                 title: 'Corners',
                 unit: 'panel pixels',
                 trailing: extended
@@ -71,7 +73,7 @@ class CornerControls extends StatelessWidget {
                         detail:
                             'Quad Pixel Drive doubles the inward range of '
                             'every corner on this model.',
-                        child: GeometryPill(
+                        child: CardPill(
                           compact ? 'Extended' : 'Extended inward range',
                         ),
                       )
@@ -121,8 +123,8 @@ class CornerControls extends StatelessWidget {
                 ),
               ],
             ),
-            GeometryGroup(
-              header: GeometryGroupHeader(
+            ControlsGroup(
+              header: ControlsGroupHeader(
                 title: compact
                     ? 'Linearity, pincushion'
                     : 'Linearity and pincushion',
@@ -140,12 +142,12 @@ class CornerControls extends StatelessWidget {
                 ),
               ),
               rows: [
-                const GeometrySubHeader(
+                const ControlsSubHeader(
                   title: 'Linearity',
                   range: '-127 to 127',
                 ),
                 for (final row in _linearity) shapeRow(row, 127),
-                const GeometrySubHeader(
+                const ControlsSubHeader(
                   title: 'Pincushion',
                   range: '-100 to 100',
                 ),

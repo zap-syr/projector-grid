@@ -767,7 +767,13 @@ above the edge cards, and in a pair the panel header "Switch on the canvas".
   **Edge Blending**, projector in the title bar (§1.1). A pair shows both:
   `Pair: RQ25K (192.168.0.41), RQ25K (192.168.0.42)`; the group pill when both are in the
   same group; the status badge reads *Online* while both reply, amber *B not replying*
-  otherwise.
+  otherwise. `DialogTitleBar(pairIds:, badges:)` draws the pair line and the shared group
+  (ready 2026-10-17); the dialog passes the badge, since "replying" is its own state.
+- The frame comes from Geometry, now shared (2026-10-17): `CanvasCard`, `CanvasLegend`,
+  `CanvasNote` (`common/canvas_card.dart`), `ControlsCard`, `ControlsGroup`,
+  `ControlsGroupHeader`, `ControlsSubHeader`, `SettingRow`, `CardPill`
+  (`common/controls_card.dart`), `ModeTileRow`, and the thin `LabeledSliderRow` with its
+  `limit` hatch.
 - **Mode tiles** (54 px, icon + label + one muted line): *Off* "No blending", *On* "Built-in
   blend curve", *User* "Curve stored on the projector". A pair with mixed modes selects none,
   as today.
@@ -1166,7 +1172,8 @@ four favourite slots and a dropdown with *Set*.
 - Groups become **cards** (radius 14) with a small icon and a sentence-case title instead
   of the uppercase headers with a rule. Content scrolls inside the panel as today.
 - No "target" card at the top (tried and dropped by the owner, 2026-10-14). With nothing
-  selected the controls are disabled as today.
+  selected the controls stay enabled and send nothing (owner, 2026-10-17; was "disabled
+  as today").
 
 ### 7h.2 General
 - **Power / Shutter / OSD** in one card, one row each: label on the left, two action
@@ -1279,9 +1286,15 @@ near-black; secondary text no darker than `#80838D`. The same applies to the too
   and actions in one row: *Preview*, *Web UI*, *Find on canvas* (labels never wrap).
 
 ### 7i.5 New data and open points
-- "Last seen" for offline projectors and "since" for warnings and errors: not stored
-  today, needed for the offline rows and the panel. They are telemetry, so they join the
-  fields `_stripTransient` / `_mergeWithTelemetry` handle (an undo must not roll them back).
+- "Last seen" for offline projectors: `ProjectorNode.lastSeen` (done 2026-10-17, before
+  wave C). Set when a projector goes offline from the last poll it answered this session,
+  null while it answers; telemetry, so `_stripTransient` / `_mergeWithTelemetry` keep an
+  undo from rolling it back. The answer time itself stays off the node, so an unchanged
+  poll still changes nothing. "Since" for warnings and errors is the alert's own `since`
+  (`alertsProvider`), no new field.
+- The signal pill is shared: `SignalPill` (`common/status_pill.dart`) over
+  `signalStateOf` (`domain/signal_state.dart`), for the table, the cards, the panel and
+  the quick status popover (§7j.6).
 - Temperature thresholds on the bars come from the alert rules (`AlertRule`).
 - *No signal* is red only while the projector is on; in Standby, warming up, cooling or
   offline it is grey, since no signal is expected then (owner, 2026-10-15). Same rule for
@@ -1484,7 +1497,8 @@ tests below, then a GUI check in both themes (`flutter-windows-gui-check`).
   detail, shortcut and warning variants render, the arrow follows the placement; control
   bar: Home position sends `kLensHomeCommand`, Lens setup starts collapsed and opens, each
   of the 12 cross buttons sends its axis / direction / speed, a custom command's ⋮ menu
-  edits and deletes (with confirm), controls disabled without a selection; Monitoring:
+  edits and deletes (with confirm), controls enabled without a selection and sending
+  nothing; Monitoring:
   group rows and *Group by: none*, the signal pill per state, the panel opens over the
   table without changing column widths, Compact / Extended switch, offline rows dimmed;
   projector card: header tint and icon colours per power / shutter state, the red

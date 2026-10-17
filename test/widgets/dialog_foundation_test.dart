@@ -111,6 +111,58 @@ void main() {
       expect(find.text('Wrong login'), findsOneWidget);
       expect(find.byType(GroupPill), findsNothing);
     });
+
+    group('a pair', () {
+      const leftWall = ProjectorGroup(
+        id: 'g',
+        name: 'Left wall',
+        color: 0xFF3B82F6,
+        oscAddress: '/group/left-wall',
+      );
+      const bar = DialogTitleBar(
+        icon: Icons.gradient,
+        title: 'Edge Blending',
+        pairIds: ('1', '2'),
+        badges: [Text('B not replying')],
+      );
+
+      testWidgets('both projectors, the shared group and the given badge', (
+        tester,
+      ) async {
+        await _pumpWithNodes(
+          tester,
+          bar,
+          [
+            node('1', ip: '192.168.0.41', groupId: 'g'),
+            node('2', ip: '192.168.0.42', groupId: 'g'),
+          ],
+          groups: const [leftWall],
+        );
+        expect(
+          find.text('Pair: Proj 1 (192.168.0.41), Proj 2 (192.168.0.42)'),
+          findsOneWidget,
+        );
+        expect(find.text('Left wall'), findsOneWidget);
+        expect(find.text('B not replying'), findsOneWidget);
+        // The pair's status is the dialog's, not a connection badge.
+        expect(find.byType(ConnectionStatusBadge), findsNothing);
+      });
+
+      testWidgets('no group pill when the two are in different groups', (
+        tester,
+      ) async {
+        await _pumpWithNodes(
+          tester,
+          bar,
+          [
+            node('1', ip: '192.168.0.41', groupId: 'g'),
+            node('2', ip: '192.168.0.42'),
+          ],
+          groups: const [leftWall],
+        );
+        expect(find.byType(GroupPill), findsNothing);
+      });
+    });
   });
 
   group('ConfirmDialog', () {

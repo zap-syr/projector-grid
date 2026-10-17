@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 
 import '../../../../../core/theme/app_theme.dart';
 import '../../../domain/geometry_corners.dart';
+import '../common/canvas_card.dart';
+import '../common/controls_card.dart';
 import '../common/key_caps.dart';
 import '../custom_tooltip.dart';
 import 'corner_canvas.dart';
-import 'geometry_canvas_card.dart';
+import 'geometry_legend.dart';
 import 'geometry_parts.dart';
 import 'geometry_settings.dart';
 
@@ -43,7 +45,8 @@ class CornerCanvasCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = AppText.of(context);
-    return GeometryCanvasCard(
+    return CanvasCard(
+      key: geometryCanvasCardKey,
       title: 'Corners',
       pill: loading == null
           ? ListenableBuilder(
@@ -52,7 +55,7 @@ class CornerCanvasCard extends StatelessWidget {
                 final label = cornerSelectionLabel(model.selected);
                 return label == null
                     ? const SizedBox.shrink()
-                    : GeometryPill(label, selected: true);
+                    : CardPill(label, selected: true);
               },
             )
           : null,
@@ -98,7 +101,7 @@ class CornerCanvasCard extends StatelessWidget {
           ),
         ],
       ),
-      note: compact ? null : const GeometryNote(child: _KeyHint()),
+      note: compact ? null : const CanvasNote(child: _KeyHint()),
     );
   }
 }

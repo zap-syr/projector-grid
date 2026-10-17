@@ -52,6 +52,12 @@ abstract class ProjectorNode with _$ProjectorNode {
     /// Active test pattern as its `OTS:xx` command (`OTS:00` = off); null
     /// until first polled.
     String? testPattern,
+
+    /// While offline: when the projector last answered a poll this session
+    /// (Monitoring's "last seen 16:41"); null while it answers, and when it
+    /// hasn't answered since the app started or it was re-addressed.
+    /// Telemetry, so an undo never rolls it back.
+    DateTime? lastSeen,
     String? groupId,
   }) = _ProjectorNode;
 }

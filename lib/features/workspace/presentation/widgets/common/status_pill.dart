@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../../core/theme/app_theme.dart';
 import '../../../domain/projector_node.dart';
+import '../../../domain/signal_state.dart';
 
 /// A small rounded pill: optional icon or dot, then a short label, tinted
 /// with [color] on a faint fill of the same colour.
@@ -56,6 +57,26 @@ class StatusPill extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// The signal pill shared by Monitoring and the projector card's quick
+/// status: green with the resolution, red *No signal* only while the
+/// projector is on, grey otherwise (`signalStateOf`).
+class SignalPill extends StatelessWidget {
+  const SignalPill({super.key, required this.node});
+
+  final ProjectorNode node;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = signalStateOf(node);
+    final color = switch (state.tone) {
+      SignalTone.good => AppStatusColors.of(context).success,
+      SignalTone.missing => Theme.of(context).colorScheme.error,
+      SignalTone.unknown => AppText.of(context).tertiary,
+    };
+    return StatusPill(label: state.label, color: color, dot: true);
   }
 }
 

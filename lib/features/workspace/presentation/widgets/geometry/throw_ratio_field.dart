@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../common/dialog_parts.dart';
-import 'geometry_parts.dart';
+import '../common/controls_card.dart';
 
 /// *Throw ratio* with its range and the 40 px field.
 class ThrowRatioRow extends StatelessWidget {
@@ -11,7 +11,7 @@ class ThrowRatioRow extends StatelessWidget {
   final ValueChanged<double> onCommit;
 
   @override
-  Widget build(BuildContext context) => GeometrySettingRow(
+  Widget build(BuildContext context) => SettingRow(
     title: 'Throw ratio',
     description: '0.7 to 16.5, match the lens in use',
     control: ThrowRatioField(value: value, onCommit: onCommit),

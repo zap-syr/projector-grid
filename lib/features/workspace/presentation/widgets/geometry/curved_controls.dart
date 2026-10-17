@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../common/controls_card.dart';
 import '../common/projector_settings_client.dart';
 import 'geometry_parts.dart';
 import 'geometry_settings.dart';
@@ -42,10 +43,11 @@ class CurvedControls extends StatelessWidget {
       onChangeEnd: (v) => client.writeInt(key, v.round()),
     );
 
-    return GeometryControlsCard(
+    return ControlsCard(
+      key: geometryControlsCardKey,
       groups: [
-        GeometryGroup(
-          header: const GeometryGroupHeader(title: 'Arc', range: '-40 to 40'),
+        ControlsGroup(
+          header: const ControlsGroupHeader(title: 'Arc', range: '-40 to 40'),
           rows: [
             intRow('Vertical', 'GMCI3', c.verticalArc, 40, (v) {
               c.verticalArc = v;
@@ -55,8 +57,8 @@ class CurvedControls extends StatelessWidget {
             }),
           ],
         ),
-        GeometryGroup(
-          header: const GeometryGroupHeader(
+        ControlsGroup(
+          header: const ControlsGroupHeader(
             title: 'Keystone',
             unit: 'degrees',
             range: 'V -40 to 40, H -15 to 15',
@@ -88,8 +90,8 @@ class CurvedControls extends StatelessWidget {
             ),
           ],
         ),
-        GeometryGroup(
-          header: const GeometryGroupHeader(
+        ControlsGroup(
+          header: const ControlsGroupHeader(
             title: 'Balance',
             range: 'V -60 to 60, H -30 to 30',
           ),
@@ -102,8 +104,8 @@ class CurvedControls extends StatelessWidget {
             }),
           ],
         ),
-        GeometryGroup(
-          header: const GeometryGroupHeader(title: 'Lens and image'),
+        ControlsGroup(
+          header: const ControlsGroupHeader(title: 'Lens and image'),
           rows: [
             ThrowRatioRow(
               value: c.throwRatio,
@@ -113,7 +115,7 @@ class CurvedControls extends StatelessWidget {
                 client.writeThrow('GMCS0', v);
               },
             ),
-            GeometrySettingRow(
+            SettingRow(
               title: 'Maintain aspect ratio',
               description: 'Keep the image proportions while it bends',
               control: Switch(

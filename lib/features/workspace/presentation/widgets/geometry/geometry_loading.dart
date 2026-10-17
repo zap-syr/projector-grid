@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../core/theme/app_theme.dart';
+import '../common/controls_card.dart';
 import '../common/skeleton.dart';
 import 'geometry_parts.dart';
 
@@ -62,7 +63,8 @@ class GeometryControlsSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GeometryControlsCard(
+    return ControlsCard(
+      key: geometryControlsCardKey,
       groups: [for (final rows in groups) _SkeletonGroup(rows: rows)],
     );
   }

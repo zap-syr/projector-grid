@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../common/controls_card.dart';
 import '../common/projector_settings_client.dart';
 import 'geometry_parts.dart';
 import 'geometry_settings.dart';
@@ -23,10 +24,11 @@ class KeystoneControls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final k = values;
-    return GeometryControlsCard(
+    return ControlsCard(
+      key: geometryControlsCardKey,
       groups: [
-        GeometryGroup(
-          header: const GeometryGroupHeader(
+        ControlsGroup(
+          header: const ControlsGroupHeader(
             title: 'Keystone',
             unit: 'degrees',
             range: 'V -40 to 40, H -15 to 15',
@@ -58,8 +60,8 @@ class KeystoneControls extends StatelessWidget {
             ),
           ],
         ),
-        GeometryGroup(
-          header: const GeometryGroupHeader(
+        ControlsGroup(
+          header: const ControlsGroupHeader(
             title: 'Balance',
             range: 'V -60 to 60, H -30 to 30',
           ),
@@ -88,8 +90,8 @@ class KeystoneControls extends StatelessWidget {
             ),
           ],
         ),
-        GeometryGroup(
-          header: const GeometryGroupHeader(title: 'Lens'),
+        ControlsGroup(
+          header: const ControlsGroupHeader(title: 'Lens'),
           rows: [
             ThrowRatioRow(
               value: k.throwRatio,
