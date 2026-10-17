@@ -9,6 +9,10 @@ projector card dark only; the tooltip also in light):
 https://claude.ai/artifact/AL2c8Kh9aoXrrv2eUmVdcJ (canvas *Projector Grid dialogs redesign*).
 Roadmap item: `ROADMAP_PLAN.md` §13 (U7).
 
+The mockups are examples for the redesign and are not updated after a part is built: for
+a part marked done, the app is the reference, and its note lists where it differs from the
+boards (owner, 2026-10-17).
+
 The redesign covers twelve dialogs in depth (Add Projectors, Edit Projector, Groups,
 Scheduled Tasks, Brightness Control, Color Correction, Geometry Correction, Edge Blending,
 Remote Preview, Custom Command, Keyboard Shortcuts, About), the main toolbar, the
@@ -551,7 +555,14 @@ Boards: *Brightness Control: Normal mode / User 2 mode / reading values*. Approv
 
 ---
 
-## 6. `[ ]` Color Correction
+## 6. `[x]` Color Correction
+
+Done 2026-10-17 (wave B). Differs from the text below: dialog **560×600** (the 7 colors
+tab had too little room at 580); the value fields are 72×32 (visual rules §4); the
+Method subtitle is "Match projectors side by side"; the Kelvin track is 6 px with a white
+outlined thumb (visual rules §6a, large slider); the R / G / B rows use the shared thin
+`LabeledSliderRow`; a typed value is sent after 400 ms, so holding a field's arrow doesn't
+open a connection per step; the Low snap to 0 within ±3 applies to a slider drag only.
 
 Boards: *Color Correction: matching off / matching, 3 colors / matching, 7 colors /
 temperature User 1 / temperature Custom / temperature fixed by matching*. Approved
@@ -626,11 +637,16 @@ White Balance High and Low as two separate cards, and a centred grey line for Of
 
 ---
 
-## 7. `[~]` Geometry Correction
+## 7. `[x]` Geometry Correction
 
-In progress 2026-10-16: the Keystone / Curved preview (`GEOMETRY_PREVIEW_PLAN.md`): the
-pure model and its tests are done, the painter draws into today's dialog. The dialog
-redesign below (frame, mode tiles, cards, loading, small windows) has not started.
+Done 2026-10-17 (wave B), with the Keystone / Curved preview of
+`GEOMETRY_PREVIEW_PLAN.md`. Differs from the text below: no *Schematic* pill (the note
+under the drawing says it is approximate; owner, 2026-10-17); Corner's four corners are one
+column of rows, not a 2×2 grid (two 72 px fields don't fit half the card); *Throw ratio*
+is a plain 40 px field without arrows; the corner selection pill (`Upper right`,
+`2 selected`) is blue, as it shows state; the Off card's mode tiles are 40 px. Fixed on the
+way: a race between loading a mode and switching again, duplicate corner writes, and the
+order of a multi-corner commit.
 
 Boards (dark only): *Geometry Correction: off / Keystone / Curved Correction / Corner, one
 corner, Auto / Corner, two corners, Manual / reading values*, and the row *Geometry
@@ -843,7 +859,15 @@ above the edge cards, and in a pair the panel header "Switch on the canvas".
 
 ---
 
-## 7b. `[ ]` Remote Preview
+## 7b. `[x]` Remote Preview
+
+Done 2026-10-17 (wave B). Differs from the text below: the `6 of 8 online` badge is green
+when all are online, amber when some, red when none; the "Preview not available" icon is
+40 px; while the feed connects the Pre-show subtitle reads "Connecting to the live feed";
+with some projectors on it reads "K on"; the tags over the plane are fully rounded and
+without letter spacing. The signal tag's frequency comes from
+`domain/preview_signal_tag.dart`; the Web API mocks, `openapi.yaml` and the goldens were
+updated with it.
 
 Boards (dark only): *Remote Preview: live, shutter open / Standby with Pre-show / not
 available / 8 projectors*. Approved 2026-10-14. Today (`remote_preview_dialog.dart`,
@@ -1023,7 +1047,15 @@ one-line description, "Author", `© 2025-2026` and *View Licenses*.
 
 ---
 
-## 7f. `[ ]` Main toolbar
+## 7f. `[x]` Main toolbar
+
+Done 2026-10-17 (wave B). Differs from the text below: the badges take the visual
+rules' neutral colour and 11.5 px figures (the mockup had a lighter grey and 10 px); the
+Alignment icon is `center_focus_strong`, as in the banner; the tool buttons have tooltips
+in both modes. `[later]`: a tooltip with `Ctrl+1` / `Ctrl+2` on the view switch (needs a
+parameter in `SegmentedTabs`); the toolbar background a tone lighter, as in the mockup,
+if the owner wants it after a look. Counts come from `toolbar_counts_provider.dart`, the
+next run from `domain/schedule_next_run.dart`.
 
 Boards (dark only): *Toolbar: wide window, 1600 / 1180 / Alignment on, a missed task /
 minimum window 800, compact*. Approved 2026-10-14. Today (`toolbar.dart`) the left side is
@@ -1099,7 +1131,24 @@ extra lines in italic.
 
 ---
 
-## 7h. `[ ]` Control bar
+## 7h. `[x]` Control bar
+
+Done 2026-10-17 (wave B, then the owner's review). Split into `widgets/control_bar/`.
+Differs from the text below:
+- Width **344** (was 320), so *Standby* fits beside its icon.
+- Every button and dropdown is **36 px** high, *Set* / *Show* included.
+- *Set*, *Show* and *Run* are **tonal** (`primaryContainer`), the On / Off pairs outlined.
+- The On / Off icons are coloured: green for Power On, Shutter Open and OSD On; red for
+  Standby, Close, OSD Off and Test pattern *Off* (`grid_off` icon). In the Power / Shutter
+  / OSD rows the icon sits 12 px from the left edge, so icons and labels line up.
+- **Without a selection the buttons stay enabled** and send nothing, so the bar doesn't
+  rebuild on every selection change (replaces "disabled as today", §7h.1).
+- No command count on the Custom tab, no "Favorites", "seconds" or "Calibration, lens
+  type" hints, no OSC hint under the custom commands (it is in the OSC reference).
+- Lens buttons 38 px in the cross, 36 px in Focus and Zoom, 20 px chevrons; Lens setup
+  opens and closes in 150 ms.
+- `[later]`: sentence-case test pattern and calibration names in the shared option maps
+  (the Web API uses them too).
 
 Boards (dark only): *Control bar: General / Lens setup open, scrolled / System / Custom*,
 each 320×970. Approved 2026-10-14. Today (`control_bar.dart`) it is the 320 px right-hand

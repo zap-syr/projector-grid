@@ -210,7 +210,12 @@ void main() {
 
     testWidgets('Pre-show subtitles follow power and the feed', (tester) async {
       await pumpDialog(tester, [_node(41, power: PowerStatus.standby)]);
-      // Standby but no feed yet.
+      // Standby, the feed still connecting.
+      expect(find.text('Connecting to the live feed'), findsOneWidget);
+      expect(tester.widget<Switch>(find.byType(Switch)).onChanged, isNull);
+
+      // Standby, no feed.
+      await emit(tester, '192.168.0.41', const RemotePreviewUnavailable());
       expect(find.text('Needs the live feed and Standby'), findsOneWidget);
       expect(tester.widget<Switch>(find.byType(Switch)).onChanged, isNull);
 

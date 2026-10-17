@@ -36,6 +36,10 @@ class _SleekStepperInputState extends State<SleekStepperInput> {
   late final TextEditingController _controller;
   late final FocusNode _focusNode;
   bool _hasFocus = false;
+
+  /// The text last reported, so the focus loss that follows Enter doesn't
+  /// report the same value a second time.
+  String? _committed;
   Timer? _stepDelayTimer;
   Timer? _stepRepeatTimer;
 
@@ -84,7 +88,7 @@ class _SleekStepperInputState extends State<SleekStepperInput> {
           );
         }
       });
-    } else {
+    } else if (_controller.text != _committed) {
       _commit();
     }
   }
@@ -93,7 +97,7 @@ class _SleekStepperInputState extends State<SleekStepperInput> {
     final raw = _controller.text.trim().replaceAll('+', '');
     final parsed = double.tryParse(raw);
     if (parsed == null) {
-      _controller.text = widget.initialValue;
+      _controller.text = _committed = widget.initialValue;
       widget.onValueChanged(widget.initialValue);
       return;
     }
@@ -101,7 +105,7 @@ class _SleekStepperInputState extends State<SleekStepperInput> {
       ((parsed / widget.step).round() * widget.step).toStringAsFixed(1),
     ).clamp(widget.min, widget.max);
     final formatted = _format(snapped);
-    _controller.text = formatted;
+    _controller.text = _committed = formatted;
     widget.onValueChanged(formatted);
   }
 

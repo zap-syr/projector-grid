@@ -3,10 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../../../core/theme/app_theme.dart';
 import '../common/dialog_parts.dart';
 import '../common/labeled_slider_row.dart';
-import '../common/slider_tracks.dart';
 
-/// A small pill in a card header. Neutral (`Schematic`, `Extended inward
-/// range`) unless it shows state: [selected] for the corner selection.
+/// A small pill in a card header. Neutral (`Extended inward range`) unless it shows state: [selected] for the corner selection.
 class GeometryPill extends StatelessWidget {
   const GeometryPill(this.label, {super.key, this.selected = false});
 
@@ -141,8 +139,7 @@ class GeometrySubHeader extends StatelessWidget {
 }
 
 /// One thin slider with its 32 px value field, label on the left. Every
-/// Geometry range is symmetric, so the fill starts at the centre zero tick
-/// (set once for the card by [GeometryControlsCard]).
+/// Geometry range is symmetric, so the fill starts at the centre zero tick.
 class GeometrySliderRow extends StatelessWidget {
   const GeometrySliderRow({
     super.key,
@@ -175,10 +172,10 @@ class GeometrySliderRow extends StatelessWidget {
     final t = AppText.of(context);
     final enabled = onChanged != null || onChangeEnd != null;
     return LabeledSliderRow(
-      layout: SliderLabelLayout.inline,
-      inlineLabelWidth: labelWidth,
+      labelWidth: labelWidth,
       labelStyle: t.body.copyWith(color: enabled ? t.secondary : t.disabled),
       label: label,
+      zeroFraction: 0.5,
       value: value,
       min: min,
       max: max,
@@ -256,28 +253,19 @@ class GeometryControlsCard extends StatelessWidget {
     );
     return DialogCard(
       key: const ValueKey('geometry-controls-card'),
-      child: SliderTheme(
-        // Inherited by every LabeledSliderRow below: they only set the thin
-        // track and thumb themselves. The padding makes a slider as tall as
-        // its value field (32) instead of the 48 px overlay.
-        data: SliderTheme.of(context).copyWith(
-          trackShape: const AppSliderTrackShape(zeroFraction: 0.5),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-        ),
-        child: DialogScrollBody(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (final (i, g) in groups.indexed) ...[
-                if (i > 0) divider,
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  child: g,
-                ),
-              ],
+      child: DialogScrollBody(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final (i, g) in groups.indexed) ...[
+              if (i > 0) divider,
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                child: g,
+              ),
             ],
-          ),
+          ],
         ),
       ),
     );

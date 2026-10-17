@@ -86,9 +86,8 @@ class _SystemTabState extends ConsumerState<SystemTab> {
 
   @override
   Widget build(BuildContext context) {
-    final enabled = watchHasSelection(ref);
-    VoidCallback? send(String cmd) =>
-        enabled ? () => sendToSelected(ref, cmd) : null;
+    VoidCallback send(String cmd) =>
+        () => sendToSelected(ref, cmd);
     const gap = SizedBox(height: ControlBarMetrics.settingGap);
     return ControlBarScroll(
       children: [
@@ -139,7 +138,6 @@ class _SystemTabState extends ConsumerState<SystemTab> {
         ControlBarCard(
           icon: Icons.visibility_off_outlined,
           title: 'Shutter fade',
-          trailing: const CardHeaderNote('seconds'),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [

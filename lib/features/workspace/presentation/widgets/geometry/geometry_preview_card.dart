@@ -5,14 +5,14 @@ import '../../../domain/geometry_preview.dart';
 import '../custom_tooltip.dart';
 import '../geometry_preview_painter.dart';
 import 'geometry_canvas_card.dart';
-import 'geometry_parts.dart';
 
 const approximateNote =
     'The drawing is approximate, check the result on the screen.';
 
 /// The Keystone / Curved preview card (§7.3, GEOMETRY_PREVIEW_PLAN §2.2):
-/// header *Preview* with the *Schematic* pill and **Reset**, the drawing,
-/// the *Panel* / *Image* legend and the approximate note.
+/// header *Preview* and **Reset**, the drawing, the *Panel* / *Image*
+/// legend and the approximate note (which is why there's no *Schematic*
+/// pill).
 class GeometryPreviewCard extends StatelessWidget {
   const GeometryPreviewCard({
     super.key,
@@ -42,7 +42,6 @@ class GeometryPreviewCard extends StatelessWidget {
     final shown = preview;
     return GeometryCanvasCard(
       title: 'Preview',
-      pill: const GeometryPill('Schematic'),
       resetLabel: 'Reset',
       onReset: onReset,
       body:

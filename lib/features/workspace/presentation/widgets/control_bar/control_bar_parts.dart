@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../../core/theme/app_theme.dart';
-import '../../providers/selection_provider.dart';
 import '../../providers/workspace_provider.dart';
 import '../common/app_dropdown.dart';
 import '../common/dialog_parts.dart';
@@ -11,7 +10,8 @@ import '../common/dialog_parts.dart';
 /// Spacing of the control bar, one set for every tab so the cards line up
 /// when switching.
 abstract final class ControlBarMetrics {
-  static const double width = 320;
+  /// Wide enough for `Standby` beside its icon in the Power row.
+  static const double width = 344;
 
   /// Around the tab strip and the cards.
   static const double gutter = 12;
@@ -25,17 +25,18 @@ abstract final class ControlBarMetrics {
 
   /// A row of the Power / Shutter / OSD card and the Quad Pixel Drive row.
   static const double commandRowHeight = 50;
+
+  /// Every button and dropdown of the bar (owner, 2026-10-17): one height,
+  /// so a Set next to a dropdown lines up with the Power buttons above.
   static const double commandButtonHeight = 36;
 
   /// Between two settings (label + dropdown) inside one card.
   static const double settingGap = 12;
 }
 
-/// Whether anything is selected: every command goes to the selected
-/// projectors, so without a selection the buttons are disabled.
-bool watchHasSelection(WidgetRef ref) =>
-    ref.watch(selectionProvider.select((ids) => ids.isNotEmpty));
-
+/// Every command goes to the selected projectors. The buttons stay enabled
+/// without a selection and then send nothing, so the bar doesn't rebuild on
+/// every selection change.
 void sendToSelected(WidgetRef ref, String cmd) =>
     ref.read(workspaceProvider.notifier).sendCommandToSelected(cmd);
 
@@ -98,20 +99,10 @@ class ControlBarCard extends StatelessWidget {
   }
 }
 
-/// Quiet text on the right of a card header (`seconds`, `Favorites`).
-class CardHeaderNote extends StatelessWidget {
-  const CardHeaderNote(this.text, {super.key});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) =>
-      Text(text, style: AppText.of(context).caption);
-}
-
 /// The outlined style of the control bar's command buttons (visual rules
 /// §6): many sit side by side, so none of them fills. Text in the primary
 /// text colour rather than the M3 blue, which only means state.
+/// [iconColor] marks what a button turns on or off (Power On green).
 ButtonStyle commandButtonStyle(
   BuildContext context, {
   double height = ControlBarMetrics.commandButtonHeight,
@@ -119,6 +110,7 @@ ButtonStyle commandButtonStyle(
   OutlinedBorder shape = const RoundedRectangleBorder(
     borderRadius: BorderRadius.all(Radius.circular(10)),
   ),
+  Color? iconColor,
 }) {
   final cs = Theme.of(context).colorScheme;
   final t = AppText.of(context);
@@ -127,12 +119,14 @@ ButtonStyle commandButtonStyle(
   return OutlinedButton.styleFrom(
     minimumSize: Size(0, height),
     maximumSize: Size(double.infinity, height),
+    // The theme's compact density takes 8 px off the minimum height.
+    visualDensity: VisualDensity.standard,
     padding: padding,
     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
     shape: shape,
     foregroundColor: t.primary,
     disabledForegroundColor: t.disabled,
-    iconColor: t.secondary,
+    iconColor: iconColor ?? t.secondary,
     disabledIconColor: t.disabled,
     iconSize: 18,
     textStyle: t.body.copyWith(fontWeight: FontWeight.w500),
@@ -147,23 +141,58 @@ ButtonStyle commandButtonStyle(
   );
 }
 
+/// The tonal style of the send buttons (*Set*, *Show*, *Run*, visual rules
+/// §6): they send what is picked next to them, so they stand out from the
+/// outlined On / Off pairs.
+ButtonStyle sendButtonStyle(
+  BuildContext context, {
+  double height = ControlBarMetrics.commandButtonHeight,
+}) {
+  final cs = Theme.of(context).colorScheme;
+  final t = AppText.of(context);
+  return FilledButton.styleFrom(
+    minimumSize: Size(0, height),
+    maximumSize: Size(double.infinity, height),
+    visualDensity: VisualDensity.standard,
+    padding: const EdgeInsets.symmetric(horizontal: 12),
+    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.all(Radius.circular(10)),
+    ),
+    backgroundColor: cs.primaryContainer,
+    foregroundColor: cs.onPrimaryContainer,
+    iconColor: cs.onPrimaryContainer,
+    iconSize: 18,
+    textStyle: t.body.copyWith(fontWeight: FontWeight.w600),
+  );
+}
+
 /// One command button: an optional 18 px icon and a label. [widestLabel]
 /// keeps the width of the longest label the button family shows (Set and
-/// Show share one width, so the dropdowns beside them line up).
+/// Show share one width, so the dropdowns beside them line up). [tonal]
+/// for a send button, [iconColor] for an On / Off pair. [alignStart] puts
+/// the icon at a fixed inset from the left edge, so in a column of buttons
+/// (Power, Shutter, OSD) the icons and the labels each line up.
 class CommandButton extends StatelessWidget {
   const CommandButton({
     super.key,
     required this.label,
     required this.onPressed,
     this.icon,
+    this.iconColor,
     this.widestLabel,
+    this.tonal = false,
+    this.alignStart = false,
     this.height = ControlBarMetrics.commandButtonHeight,
   });
 
   final String label;
   final IconData? icon;
+  final Color? iconColor;
   final VoidCallback? onPressed;
   final String? widestLabel;
+  final bool tonal;
+  final bool alignStart;
   final double height;
 
   @override
@@ -174,34 +203,50 @@ class CommandButton extends StatelessWidget {
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
     );
-    return OutlinedButton(
-      style: commandButtonStyle(context, height: height),
-      onPressed: onPressed,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          if (icon != null) ...[Icon(icon), const SizedBox(width: 6)],
-          Flexible(
-            child: widest == null
-                ? text
-                : Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      Visibility(
-                        visible: false,
-                        maintainSize: true,
-                        maintainAnimation: true,
-                        maintainState: true,
-                        child: Text(widest, maxLines: 1),
-                      ),
-                      text,
-                    ],
-                  ),
-          ),
-        ],
-      ),
+    final content = Row(
+      mainAxisSize: alignStart ? MainAxisSize.max : MainAxisSize.min,
+      mainAxisAlignment: alignStart
+          ? MainAxisAlignment.start
+          : MainAxisAlignment.center,
+      children: [
+        if (icon != null) ...[Icon(icon), SizedBox(width: alignStart ? 10 : 6)],
+        Flexible(
+          child: widest == null
+              ? text
+              : Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Visibility(
+                      visible: false,
+                      maintainSize: true,
+                      maintainAnimation: true,
+                      maintainState: true,
+                      child: Text(widest, maxLines: 1),
+                    ),
+                    text,
+                  ],
+                ),
+        ),
+      ],
     );
+    return tonal
+        ? FilledButton(
+            style: sendButtonStyle(context, height: height),
+            onPressed: onPressed,
+            child: content,
+          )
+        : OutlinedButton(
+            style: commandButtonStyle(
+              context,
+              height: height,
+              padding: alignStart
+                  ? const EdgeInsets.only(left: 12, right: 10)
+                  : const EdgeInsets.symmetric(horizontal: 10),
+              iconColor: iconColor,
+            ),
+            onPressed: onPressed,
+            child: content,
+          );
   }
 }
 
@@ -258,8 +303,7 @@ class CardRowDivider extends StatelessWidget {
 }
 
 /// A dropdown and its send button (`Set`, or `Show` for test patterns),
-/// with an optional label above. The dropdown stays usable without a
-/// selection, as before; only the button needs one.
+/// with an optional label above.
 class DropdownSendRow<T> extends StatelessWidget {
   const DropdownSendRow({
     super.key,
@@ -277,8 +321,7 @@ class DropdownSendRow<T> extends StatelessWidget {
   final T value;
   final ValueChanged<T> onChanged;
 
-  /// Null disables the button.
-  final VoidCallback? onSend;
+  final VoidCallback onSend;
   final String sendLabel;
   final double menuHeight;
 
@@ -295,13 +338,14 @@ class DropdownSendRow<T> extends StatelessWidget {
             value: value,
             onChanged: onChanged,
             menuHeight: menuHeight,
+            height: ControlBarMetrics.commandButtonHeight,
           ),
         ),
         const SizedBox(width: 8),
         CommandButton(
           label: sendLabel,
           widestLabel: widestSendLabel,
-          height: dialogFieldHeight,
+          tonal: true,
           onPressed: onSend,
         ),
       ],
@@ -331,7 +375,7 @@ class LensStepButton extends StatelessWidget {
     super.key,
     required this.asset,
     required this.onPressed,
-    this.size = 34,
+    this.size = 38,
   });
 
   final String asset;
@@ -353,8 +397,8 @@ class LensStepButton extends StatelessWidget {
         onPressed: onPressed,
         child: SvgPicture.asset(
           asset,
-          width: 18,
-          height: 18,
+          width: 20,
+          height: 20,
           colorFilter: ColorFilter.mode(
             onPressed == null ? t.disabled : t.primary,
             BlendMode.srcIn,

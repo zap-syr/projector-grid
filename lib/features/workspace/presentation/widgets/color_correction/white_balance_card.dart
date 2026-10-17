@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../../../core/theme/app_theme.dart';
 import '../../../domain/color_correction.dart';
 import 'card_heading.dart';
-import 'channel_slider.dart';
+import '../common/labeled_slider_row.dart';
+import 'channel_tile.dart';
 import 'color_swatches.dart';
 
 /// White balance of User 1 / User 2 (and while Color Matching is on): rows
@@ -75,35 +76,36 @@ class WhiteBalanceCard extends StatelessWidget {
             ],
           ),
           for (final (i, (letter, color)) in rgbChannels.indexed) ...[
-            const SizedBox(height: 8),
+            // 4 + the slider row's own 2 px above and below.
+            const SizedBox(height: 4),
             Row(
               children: [
                 ChannelTile(letter: letter, color: color),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: ChannelSlider(
+                  child: LabeledSliderRow(
                     key: ValueKey('wb-high-$i'),
-                    value: high[i],
+                    value: high[i].toDouble(),
                     min: 0,
-                    max: whiteBalanceHighMax,
+                    max: whiteBalanceHighMax.toDouble(),
                     color: color,
-                    onChanged: (v) => onChanged(true, i, v),
-                    onCommit: (v) => onCommit(true, i, v),
-                    onTyped: (v) => onTyped(true, i, v),
+                    onChanged: (v) => onChanged(true, i, v.round()),
+                    onChangeEnd: (v) => onCommit(true, i, v.round()),
+                    onTyped: (v) => onTyped(true, i, v.round()),
                   ),
                 ),
                 const SizedBox(width: _columnGap),
                 Expanded(
-                  child: ChannelSlider(
+                  child: LabeledSliderRow(
                     key: ValueKey('wb-low-$i'),
-                    value: low[i],
-                    min: -whiteBalanceLowMax,
-                    max: whiteBalanceLowMax,
+                    value: low[i].toDouble(),
+                    min: -whiteBalanceLowMax.toDouble(),
+                    max: whiteBalanceLowMax.toDouble(),
                     zeroFraction: 0.5,
                     color: color,
-                    onChanged: (v) => onChanged(false, i, v),
-                    onCommit: (v) => onCommit(false, i, v),
-                    onTyped: (v) => onTyped(false, i, v),
+                    onChanged: (v) => onChanged(false, i, v.round()),
+                    onChangeEnd: (v) => onCommit(false, i, v.round()),
+                    onTyped: (v) => onTyped(false, i, v.round()),
                   ),
                 ),
               ],

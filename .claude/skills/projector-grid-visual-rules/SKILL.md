@@ -157,8 +157,18 @@ Matching) is a neutral pill on `DialogSurfaces.soft` with a lock icon, never amb
 - **Tonal**: a secondary action in place (`Scan again` in Discover).
 - **Text**: Cancel and dismiss.
 - **Outlined**: the command buttons of the control bar (*On* / *Standby*, *Open* /
-  *Close*, *Set*, *Show*, *Run*): many of them side by side, so they don't fill (owner,
-  2026-10-16). Not used in dialogs.
+  *Close*, lens steps): many of them side by side, so they don't fill (owner,
+  2026-10-16). Not used in dialogs. An On / Off pair colours only its icon: `success`
+  for what turns the picture on (Power On, Shutter Open, OSD On), `error` for what
+  turns it off (Standby, Close, OSD Off, Test pattern Off with `grid_off`) (owner,
+  2026-10-17).
+- **Control bar send buttons** (*Set*, *Show*, *Run*): tonal in `primaryContainer` /
+  `onPrimaryContainer`, so the button that sends the pick stands out (owner, 2026-10-17).
+- **Control bar height**: every button and dropdown of the bar is 36, not the 40 of
+  §4 (owner, 2026-10-17). Set your own `visualDensity: VisualDensity.standard` on such
+  a button: the theme's compact density takes 8 px off the minimum height.
+- **Control bar without a selection**: the buttons stay enabled and send nothing,
+  so the bar doesn't rebuild on every selection change (owner, 2026-10-17).
 - **Destructive**: filled in `error`, only in confirm dialogs (`ConfirmDialog`). A delete
   inside a dialog is an error icon or text button that opens that confirm.
 - **Dashed**: adds a row inside a list (New task).
@@ -174,8 +184,9 @@ Two styles (owner, 2026-10-16), each always built from `AppSliderTrackShape`
   output, Color Temperature's Kelvin): track 6 px, thumb radius 9, overlay radius 16,
   − / + `StepButton`s on both sides, a scale row under the track.
 - **Thin**, for dense lists of sliders (Geometry, R / G / B, white balance, Edge
-  Blending): track 2 px, thumb radius 6, as `LabeledSliderRow`, with the 32 px value
-  field (§4) on the right.
+  Blending): track 2 px, thumb radius 6, with the 32 px value field (§4) on the right,
+  a 36 px row. Always the shared `LabeledSliderRow` (its `zeroFraction`, `limit`,
+  `onTyped`), never a local copy.
 - A symmetric range fills from a centre zero tick (`zeroFraction`), a cap hatches the
   track past it (`limitFraction`).
 - Anything placed under or over a thumb position (a tick, a scale label such as

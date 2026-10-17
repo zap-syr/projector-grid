@@ -10,7 +10,6 @@ import '../../../../../core/services/app_config_dir.dart';
 import '../../../../../core/theme/app_theme.dart';
 import '../../../domain/test_patterns.dart';
 import '../common/dashed_border.dart';
-import '../common/dialog_parts.dart';
 import '../custom_tooltip.dart';
 import 'control_bar_parts.dart';
 
@@ -30,13 +29,11 @@ Widget testPatternThumbnail(String code, {double size = 18}) {
 /// pattern picked in the dropdown (unless it's already a favourite), a
 /// filled slot shows its pattern, Ctrl+click clears it.
 class TestPatternCard extends ConsumerStatefulWidget {
-  const TestPatternCard({super.key, required this.enabled});
-
-  final bool enabled;
+  const TestPatternCard({super.key});
 
   static const int slotCount = 4;
   static const double slotWidth = 44;
-  static const double rowHeight = dialogFieldHeight;
+  static const double rowHeight = ControlBarMetrics.commandButtonHeight;
 
   @override
   ConsumerState<TestPatternCard> createState() => _TestPatternCardState();
@@ -96,12 +93,10 @@ class _TestPatternCardState extends ConsumerState<TestPatternCard> {
 
   @override
   Widget build(BuildContext context) {
-    final enabled = widget.enabled;
     final canAddSelected = !_favorites.contains(_selected);
     return ControlBarCard(
       icon: Icons.grid_on,
       title: 'Test pattern',
-      trailing: const CardHeaderNote('Favorites'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -114,10 +109,10 @@ class _TestPatternCardState extends ConsumerState<TestPatternCard> {
                   child: CommandButton(
                     key: const ValueKey('test-pattern-off'),
                     label: 'Off',
+                    icon: Icons.grid_off,
+                    iconColor: Theme.of(context).colorScheme.error,
                     height: TestPatternCard.rowHeight,
-                    onPressed: enabled
-                        ? () => sendToSelected(ref, kTestPatternOff)
-                        : null,
+                    onPressed: () => sendToSelected(ref, kTestPatternOff),
                   ),
                 ),
                 for (int i = 0; i < _favorites.length; i++) ...[
@@ -128,9 +123,7 @@ class _TestPatternCardState extends ConsumerState<TestPatternCard> {
                     child: _FavoriteSlot(
                       code: _favorites[i],
                       selectedLabel: kTestPatternLabels[_selected],
-                      onShow: _favorites[i] != null && enabled
-                          ? () => sendToSelected(ref, _favorites[i]!)
-                          : null,
+                      onShow: () => sendToSelected(ref, _favorites[i]!),
                       onAdd: _favorites[i] == null && canAddSelected
                           ? () => _addFavorite(i)
                           : null,
@@ -148,7 +141,7 @@ class _TestPatternCardState extends ConsumerState<TestPatternCard> {
             sendLabel: 'Show',
             menuHeight: 300,
             onChanged: (v) => setState(() => _selected = v),
-            onSend: enabled ? () => sendToSelected(ref, _selected) : null,
+            onSend: () => sendToSelected(ref, _selected),
           ),
         ],
       ),
@@ -170,7 +163,7 @@ class _FavoriteSlot extends StatelessWidget {
 
   final String? code;
   final String? selectedLabel;
-  final VoidCallback? onShow;
+  final VoidCallback onShow;
   final VoidCallback? onAdd;
   final VoidCallback onClear;
 
@@ -216,19 +209,14 @@ class _FavoriteSlot extends StatelessWidget {
           height: TestPatternCard.rowHeight,
           padding: EdgeInsets.zero,
         ),
-        // Ctrl+click must work without a selection too: clearing a slot
-        // sends nothing.
         onPressed: () {
           if (HardwareKeyboard.instance.isControlPressed) {
             onClear();
           } else {
-            onShow?.call();
+            onShow();
           }
         },
-        child: Opacity(
-          opacity: onShow == null ? 0.38 : 1,
-          child: testPatternThumbnail(code, size: 20),
-        ),
+        child: testPatternThumbnail(code, size: 20),
       ),
     );
   }

@@ -281,7 +281,7 @@ class _PreviewViewportState extends ConsumerState<PreviewViewport> {
         : [
             const Icon(
               Icons.desktop_access_disabled_outlined,
-              size: 30,
+              size: 40,
               color: Colors.white54,
             ),
             Text(

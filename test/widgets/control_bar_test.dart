@@ -13,6 +13,7 @@ import 'package:projector_grid/features/workspace/presentation/providers/custom_
 import 'package:projector_grid/features/workspace/presentation/providers/protocol_service_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/selection_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/workspace_provider.dart';
+import 'package:projector_grid/features/workspace/presentation/widgets/common/app_dropdown.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/common/confirm_dialog.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/control_bar.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/control_bar/control_bar_parts.dart';
@@ -70,8 +71,9 @@ void main() {
       tester.element(find.byType(ControlBar)),
     );
     // Kept alive as the canvas does in the app; nothing in the bar watches
-    // the node list.
+    // the node list or the selection.
     container.listen(workspaceProvider, (_, _) {});
+    container.listen(selectionProvider, (_, _) {});
     for (final (name, command) in commands) {
       container.read(customCommandsProvider.notifier).add(name, command);
     }
@@ -99,9 +101,9 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('the bar is 320 px wide', (tester) async {
+  testWidgets('the bar is 344 px wide', (tester) async {
     await pumpBar(tester);
-    expect(tester.getSize(find.byType(ControlBar)).width, 320);
+    expect(tester.getSize(find.byType(ControlBar)).width, 344);
   });
 
   testWidgets('Home position in the Lens shift header sends the home '
@@ -140,6 +142,25 @@ void main() {
       fake.sentCommands.clear();
       await tapAndSettle(tester, find.byKey(key));
       expect(sent(), [value], reason: key.value);
+    }
+  });
+
+  testWidgets('lens buttons are round: 38 px in the cross, 36 in Focus and '
+      'Zoom', (tester) async {
+    await pumpBar(tester);
+    for (final speed in LensSpeed.values) {
+      expect(
+        tester.getSize(
+          find.byKey(lensButtonKey('lens', LensDirection.left, speed)),
+        ),
+        const Size.square(38),
+      );
+      expect(
+        tester.getSize(
+          find.byKey(lensButtonKey('zoom', LensDirection.right, speed)),
+        ),
+        const Size.square(36),
+      );
     }
   });
 
@@ -194,8 +215,8 @@ void main() {
     expect(sent(), ['VXX:LNSI0=+00001']);
   });
 
-  testWidgets('without a selection the controls are disabled and nothing '
-      'moves', (tester) async {
+  testWidgets('without a selection the controls stay enabled, send nothing '
+      'and nothing moves', (tester) async {
     await pumpBar(tester);
     final probes = [
       button('Standby'),
@@ -218,7 +239,39 @@ void main() {
     await tester.tap(button('Show'));
     await tester.pumpAndSettle();
     expect(sent(), isEmpty);
-    expect(tester.widget<CommandButton>(button('Standby')).onPressed, isNull);
+    expect(
+      tester.widget<CommandButton>(button('Standby')).onPressed,
+      isNotNull,
+    );
+  });
+
+  testWidgets('Power, Shutter and OSD icons line up in each column', (
+    tester,
+  ) async {
+    await pumpBar(tester);
+    double left(IconData icon) => tester.getTopLeft(find.byIcon(icon)).dx;
+    final first = left(Icons.power_settings_new);
+    expect(left(Icons.visibility_outlined), first);
+    expect(left(Icons.subtitles_outlined), first);
+    final second = left(Icons.bedtime_outlined);
+    expect(left(Icons.visibility_off_outlined), second);
+    expect(left(Icons.subtitles_off_outlined), second);
+  });
+
+  testWidgets('every button and dropdown of the bar is 36 px high', (
+    tester,
+  ) async {
+    await pumpBar(tester);
+    for (final f in [
+      button('On').first,
+      button('Standby'),
+      button('Set'),
+      button('Show'),
+      find.byKey(const ValueKey('test-pattern-off')),
+      find.byType(AppDropdown<String>).first,
+    ]) {
+      expect(tester.getSize(f).height, 36, reason: '$f');
+    }
   });
 
   testWidgets('the tab strip stays put across tabs', (tester) async {
@@ -231,8 +284,8 @@ void main() {
       expect(tester.getRect(tabs), rect, reason: label);
       expect(tester.getRect(find.text('General')), generalTab, reason: label);
     }
-    // The Custom tab carries the command count.
-    expect(find.text('1'), findsOneWidget);
+    // No command count on the Custom tab: it cut the label short.
+    expect(find.text('1'), findsNothing);
   });
 
   testWidgets('Off and Show send test patterns; Show replaced Set', (

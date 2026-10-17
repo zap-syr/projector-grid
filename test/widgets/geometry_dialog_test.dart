@@ -508,9 +508,11 @@ void main() {
       expect(find.byIcon(Icons.keyboard_outlined), findsOneWidget);
     });
 
-    testWidgets('full size: legend, note and Schematic pill', (tester) async {
+    testWidgets('full size: legend and note, no Schematic pill', (
+      tester,
+    ) async {
       await pumpDialog(tester, mode: '+00001');
-      expect(find.text('Schematic'), findsOneWidget);
+      expect(find.text('Schematic'), findsNothing);
       expect(find.text('Panel'), findsOneWidget);
       expect(find.text('Image'), findsOneWidget);
       expect(

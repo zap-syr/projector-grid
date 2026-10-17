@@ -377,11 +377,17 @@ class SentRightAwayNote extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
+        // The spinner sits in the icon's 16 px box, so the text doesn't
+        // shift when loading ends.
         if (loading)
-          const SizedBox(
-            width: 14,
-            height: 14,
-            child: CircularProgressIndicator(strokeWidth: 2),
+          const SizedBox.square(
+            dimension: 16,
+            child: Center(
+              child: SizedBox.square(
+                dimension: 14,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
           )
         else
           Icon(

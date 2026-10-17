@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../providers/custom_commands_provider.dart';
 import 'common/dialog_parts.dart';
 import 'common/segmented_tabs.dart';
 import 'control_bar/control_bar_parts.dart';
@@ -11,24 +9,21 @@ import 'control_bar/system_tab.dart';
 
 enum ControlBarTab { general, system, custom }
 
-/// The 320 px panel right of the canvas: General / System / Custom tabs
+/// The 344 px panel right of the canvas: General / System / Custom tabs
 /// whose commands go to the selected projectors. The cards live in
 /// `control_bar/`, one file each.
-class ControlBar extends ConsumerStatefulWidget {
+class ControlBar extends StatefulWidget {
   const ControlBar({super.key});
 
   @override
-  ConsumerState<ControlBar> createState() => _ControlBarState();
+  State<ControlBar> createState() => _ControlBarState();
 }
 
-class _ControlBarState extends ConsumerState<ControlBar> {
+class _ControlBarState extends State<ControlBar> {
   ControlBarTab _tab = ControlBarTab.general;
 
   @override
   Widget build(BuildContext context) {
-    final commandCount = ref.watch(
-      customCommandsProvider.select((list) => list.length),
-    );
     return Container(
       width: ControlBarMetrics.width,
       decoration: BoxDecoration(
@@ -60,11 +55,9 @@ class _ControlBarState extends ConsumerState<ControlBar> {
                   value: ControlBarTab.system,
                   label: 'System',
                 ),
-                SegmentedTab(
+                const SegmentedTab(
                   value: ControlBarTab.custom,
                   label: 'Custom',
-                  pill: '$commandCount',
-                  neutralPill: true,
                 ),
               ],
             ),

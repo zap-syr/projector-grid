@@ -115,9 +115,7 @@ class BlackLevelPanel extends StatelessWidget {
       min: 0,
       max: edgeBlendSpan(raster, edge).toDouble(),
       limit: limit.toDouble(),
-      layout: SliderLabelLayout.inline,
-      inlineLabelWidth: 44,
-      color: Theme.of(context).colorScheme.primary,
+      labelWidth: 44,
       onChanged: (v) => onBorderWidthChanged(edge, min(v.round(), limit)),
       onChangeEnd: (_) => onBorderWidthCommitted(edge),
     );
@@ -182,7 +180,6 @@ class RgbwLevelCard extends StatelessWidget {
               value: level.channel(c).toDouble(),
               min: 0,
               max: 255,
-              layout: SliderLabelLayout.inline,
               color: _channelColor(c),
               onChanged: (v) => onChanged(c, v.round()),
               onChangeEnd: (_) => onCommitted(),

@@ -12,13 +12,13 @@ import 'control_bar_parts.dart';
 import 'control_bar_scroll.dart';
 
 /// The user's commands in one card (drag to reorder, Run, ⋮ with Edit and
-/// Delete), a dashed Add command button and the OSC hint.
+/// Delete) and a dashed Add command button. Their OSC addresses are in the
+/// OSC reference.
 class CustomTab extends ConsumerWidget {
   const CustomTab({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final enabled = watchHasSelection(ref);
     final commands = ref.watch(customCommandsProvider);
     final notifier = ref.read(customCommandsProvider.notifier);
     final t = AppText.of(context);
@@ -49,9 +49,7 @@ class CustomTab extends ConsumerWidget {
                       index: index,
                       command: cmd,
                       showDivider: index > 0,
-                      onRun: enabled
-                          ? () => sendToSelected(ref, cmd.command)
-                          : null,
+                      onRun: () => sendToSelected(ref, cmd.command),
                       onEdit: () => showDialog<void>(
                         context: context,
                         builder: (_) => CustomCommandDialog(existing: cmd),
@@ -78,19 +76,6 @@ class CustomTab extends ConsumerWidget {
                 ),
         ),
         const _AddCommandButton(),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Text.rich(
-            TextSpan(
-              children: [
-                const TextSpan(text: 'Each command also answers on OSC at '),
-                TextSpan(text: '/pgrid/all/custom/<name>', style: t.monoSmall),
-                const TextSpan(text: '. Edit or delete it from its ⋮ menu.'),
-              ],
-            ),
-            style: t.description,
-          ),
-        ),
       ],
     );
   }
@@ -152,7 +137,7 @@ class _CommandRow extends StatelessWidget {
   final int index;
   final CustomCommand command;
   final bool showDivider;
-  final VoidCallback? onRun;
+  final VoidCallback onRun;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
@@ -211,6 +196,7 @@ class _CommandRow extends StatelessWidget {
             key: ValueKey('run-${command.id}'),
             label: 'Run',
             icon: Icons.play_arrow,
+            tonal: true,
             onPressed: onRun,
           ),
           const SizedBox(width: 2),

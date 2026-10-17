@@ -186,11 +186,15 @@ void main() {
   ) async {
     script(method: 1, qte: 'ER401', red3: '2048,0096,0000');
     await pumpDialog(tester);
+    final firstRow = find.byKey(const ValueKey('color-channel-0'));
+    final rowBefore = tester.getTopLeft(firstRow);
     await tester.tap(find.byKey(const ValueKey('color-reset')));
     await tester.pump();
     expect(writes(), ['VMR:2048,0000,0000']);
     expect(changedDot('red'), findsNothing);
     expect(find.text('Changed'), findsNothing);
+    // The note hangs under the name, so losing it moves nothing.
+    expect(tester.getTopLeft(firstRow), rowBefore);
     final reset = tester.widget<ButtonStyleButton>(
       find.byKey(const ValueKey('color-reset')),
     );

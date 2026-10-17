@@ -422,7 +422,7 @@ class _ColorCorrectionDialogState extends ConsumerState<ColorCorrectionDialog> {
       // has one size for both tabs, every method and mode, and loading
       // (SizedBox.expand), so nothing moves on a switch.
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 560, maxHeight: 580),
+        constraints: const BoxConstraints(maxWidth: 560, maxHeight: 600),
         child: SizedBox.expand(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,

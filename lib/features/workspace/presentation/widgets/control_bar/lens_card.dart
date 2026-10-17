@@ -25,9 +25,7 @@ String _asset(LensDirection direction, LensSpeed speed) =>
 /// (calibration, lens type). Home position sits in the header, away from
 /// the arrows, so it isn't hit by mistake.
 class LensCard extends ConsumerStatefulWidget {
-  const LensCard({super.key, required this.enabled});
-
-  final bool enabled;
+  const LensCard({super.key});
 
   @override
   ConsumerState<LensCard> createState() => _LensCardState();
@@ -37,10 +35,11 @@ class _LensCardState extends ConsumerState<LensCard> {
   static final _calibrationItems = dropdownItems(kLensCalibrationOptions);
   static final _lensTypeItems = dropdownItems(kLensTypeOptions);
 
-  static const double _crossButton = 34;
+  // Seven 38 px buttons and six gaps fill 284 of the card's 296 px.
+  static const double _crossButton = 38;
   static const double _crossRowGap = 5;
   static const double _crossColumnGap = 3;
-  static const double _linearButton = 32;
+  static const double _linearButton = 36;
 
   bool _isSending = false;
   bool _setupOpen = false;
@@ -70,9 +69,8 @@ class _LensCardState extends ConsumerState<LensCard> {
     key: lensButtonKey(keyPrefix, direction, speed),
     asset: _asset(direction, speed),
     size: size,
-    onPressed: widget.enabled
-        ? () => _throttledSend(lensStepCommand(axis, plus: plus, speed: speed))
-        : null,
+    onPressed: () =>
+        _throttledSend(lensStepCommand(axis, plus: plus, speed: speed)),
   );
 
   Widget _cross() {
@@ -172,9 +170,7 @@ class _LensCardState extends ConsumerState<LensCard> {
             padding: EdgeInsets.zero,
             shape: const CircleBorder(),
           ),
-          onPressed: widget.enabled
-              ? () => sendToSelected(ref, kLensHomeCommand)
-              : null,
+          onPressed: () => sendToSelected(ref, kLensHomeCommand),
           child: const Icon(Icons.home_outlined, size: 16),
         ),
       ),
@@ -196,17 +192,10 @@ class _LensCardState extends ConsumerState<LensCard> {
             children: [
               Icon(Icons.tune, size: 16, color: t.secondary),
               const SizedBox(width: 8),
-              Text(
-                'Lens setup',
-                style: t.body.copyWith(fontWeight: FontWeight.w500),
-              ),
-              const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Calibration, lens type',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: t.description,
+                  'Lens setup',
+                  style: t.body.copyWith(fontWeight: FontWeight.w500),
                 ),
               ),
               AnimatedRotation(
@@ -222,7 +211,6 @@ class _LensCardState extends ConsumerState<LensCard> {
   }
 
   Widget _setup() {
-    final enabled = widget.enabled;
     return Padding(
       padding: const EdgeInsets.only(top: 4),
       child: Column(
@@ -233,7 +221,7 @@ class _LensCardState extends ConsumerState<LensCard> {
             items: _calibrationItems,
             value: _calibration,
             onChanged: (v) => setState(() => _calibration = v),
-            onSend: enabled ? () => sendToSelected(ref, _calibration) : null,
+            onSend: () => sendToSelected(ref, _calibration),
           ),
           const SizedBox(height: ControlBarMetrics.settingGap),
           DropdownSendRow<String>(
@@ -241,7 +229,7 @@ class _LensCardState extends ConsumerState<LensCard> {
             items: _lensTypeItems,
             value: _lensType,
             onChanged: (v) => setState(() => _lensType = v),
-            onSend: enabled ? () => sendToSelected(ref, _lensType) : null,
+            onSend: () => sendToSelected(ref, _lensType),
           ),
         ],
       ),
@@ -266,7 +254,14 @@ class _LensCardState extends ConsumerState<LensCard> {
           _linear('Zoom', LensAxis.zoom),
           const CardRowDivider(),
           _setupToggle(),
-          if (_setupOpen) _setup(),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeOut,
+            alignment: Alignment.topCenter,
+            child: _setupOpen
+                ? _setup()
+                : const SizedBox(width: double.infinity),
+          ),
         ],
       ),
     );

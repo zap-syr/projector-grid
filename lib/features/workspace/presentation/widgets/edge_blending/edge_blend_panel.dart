@@ -214,11 +214,7 @@ class _EdgeCard extends StatelessWidget {
       min: 0,
       max: span.toDouble(),
       limit: limit.toDouble(),
-      layout: SliderLabelLayout.inline,
-      inlineLabelWidth: 44,
-      // Without an accent the inactive track takes the theme's colour, which
-      // disappears on the card background.
-      color: Theme.of(context).colorScheme.primary,
+      labelWidth: 44,
       onChanged: enabled
           ? (v) => onValueChanged(part, min(v.round(), limit))
           : null,

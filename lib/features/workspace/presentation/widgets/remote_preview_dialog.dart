@@ -303,6 +303,9 @@ class _RemotePreviewDialogState extends ConsumerState<RemotePreviewDialog> {
           : live
           ? 'Keeps the input alive for preview, the projector stays off. '
                 'Stays on after you close this window.'
+          : ref.watch(remotePreviewProvider(n.ipAddress))
+                is RemotePreviewConnecting
+          ? 'Connecting to the live feed'
           : 'Needs the live feed and Standby';
       onChanged = (on) => _setPreShow([n], on);
     }

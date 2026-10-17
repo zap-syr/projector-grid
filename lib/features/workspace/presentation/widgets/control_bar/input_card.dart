@@ -5,9 +5,7 @@ import '../../../domain/control_options.dart';
 import 'control_bar_parts.dart';
 
 class InputCard extends ConsumerStatefulWidget {
-  const InputCard({super.key, required this.enabled});
-
-  final bool enabled;
+  const InputCard({super.key});
 
   @override
   ConsumerState<InputCard> createState() => _InputCardState();
@@ -26,7 +24,7 @@ class _InputCardState extends ConsumerState<InputCard> {
         items: _items,
         value: _input,
         onChanged: (v) => setState(() => _input = v),
-        onSend: widget.enabled ? () => sendToSelected(ref, _input) : null,
+        onSend: () => sendToSelected(ref, _input),
       ),
     );
   }
