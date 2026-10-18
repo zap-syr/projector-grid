@@ -240,6 +240,17 @@ void main() {
         findsOneWidget,
       );
       expect(tester.widget<Switch>(find.byType(Switch)).onChanged, isNull);
+      // A one-line subtitle: the text is centred on the icon tile.
+      final text = tester.getCenter(
+        find.byKey(const ValueKey('pre-show-text')),
+      );
+      final icon = tester.getCenter(
+        find.descendant(
+          of: preShowCard(),
+          matching: find.byIcon(Icons.visibility_outlined),
+        ),
+      );
+      expect(text.dy, closeTo(icon.dy, 0.5));
     });
 
     testWidgets('pre-show on: PRE-SHOW tag, switch on, snackbar on close', (

@@ -60,14 +60,12 @@ class ProjectorInfoCard extends ConsumerWidget {
               ],
             ),
           ),
+          // Not Flexible: next to the Expanded text it would take half the
+          // row and leave the pills short of the right edge. The pill caps
+          // its own width.
           if (live?.groupName != null) ...[
             const SizedBox(width: 8),
-            Flexible(
-              child: GroupPill(
-                name: live!.groupName!,
-                color: Color(live.groupColor!),
-              ),
-            ),
+            GroupPill(name: live!.groupName!, color: Color(live.groupColor!)),
           ],
           const SizedBox(width: 8),
           ConnectionStatusBadge(status: status),

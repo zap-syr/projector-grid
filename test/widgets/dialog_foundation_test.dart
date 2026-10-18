@@ -97,6 +97,32 @@ void main() {
       expect(find.text('Online'), findsNothing);
     });
 
+    testWidgets('the pills sit against ✕, not mid-bar', (tester) async {
+      await _pumpWithNodes(
+        tester,
+        const DialogTitleBar(
+          icon: Icons.palette_outlined,
+          title: 'Color Correction',
+          projectorId: '1',
+        ),
+        [node('1', ip: '192.168.0.41', groupId: 'g')],
+        groups: const [
+          ProjectorGroup(
+            id: 'g',
+            name: 'Left wall',
+            color: 0xFF3B82F6,
+            oscAddress: '/group/left-wall',
+          ),
+        ],
+      );
+      final badge = tester.getRect(find.byType(ConnectionStatusBadge));
+      final close = tester.getRect(find.byIcon(Icons.close));
+      final pill = tester.getRect(find.byType(GroupPill));
+      // Badge, then 4 px and the 40 px ✕ button around its 20 px icon.
+      expect(close.left - badge.right, lessThanOrEqualTo(4 + 10 + 0.5));
+      expect(badge.left - pill.right, 8);
+    });
+
     testWidgets('no group pill for an ungrouped projector', (tester) async {
       await _pumpWithNodes(
         tester,

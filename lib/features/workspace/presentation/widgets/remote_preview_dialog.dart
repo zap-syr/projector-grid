@@ -347,21 +347,31 @@ class _PreShowCard extends StatelessWidget {
         children: [
           const DialogIconTile(Icons.visibility_outlined),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
+            // The height of a two-line subtitle is held for every subtitle,
+            // so the card keeps its height as the state changes, and the
+            // text is centred in it, so a one-line subtitle lines up with
+            // the icon.
+            child: Stack(
+              alignment: AlignmentDirectional.centerStart,
               children: [
-                Text(
-                  'Pre-show mode',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: t.cardTitle,
-                ),
-                // Two lines held for every subtitle, so the card keeps its
-                // height as the state changes.
-                Stack(
+                Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
+                    Text('', style: t.cardTitle),
                     Text('\n', maxLines: 2, style: t.description),
+                  ],
+                ),
+                Column(
+                  key: const ValueKey('pre-show-text'),
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Pre-show mode',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: t.cardTitle,
+                    ),
                     Text(
                       subtitle,
                       maxLines: 2,

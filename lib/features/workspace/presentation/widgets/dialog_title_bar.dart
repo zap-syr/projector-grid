@@ -186,14 +186,11 @@ class _ProjectorInfo extends ConsumerWidget {
             subtitle: projectorLabel(info.model, info.ip),
           ),
         ),
+        // Not Flexible: next to the Expanded title it would take half the
+        // bar and leave the pills short of ✕. The pill caps its own width.
         if (info.groupName != null) ...[
           const SizedBox(width: 8),
-          Flexible(
-            child: GroupPill(
-              name: info.groupName!,
-              color: Color(info.groupColor!),
-            ),
-          ),
+          GroupPill(name: info.groupName!, color: Color(info.groupColor!)),
         ],
         const SizedBox(width: 8),
         ConnectionStatusBadge(status: info.status),
@@ -243,12 +240,7 @@ class _PairInfo extends ConsumerWidget {
         ),
         if (info?.groupName != null) ...[
           const SizedBox(width: 8),
-          Flexible(
-            child: GroupPill(
-              name: info!.groupName!,
-              color: Color(info.groupColor!),
-            ),
-          ),
+          GroupPill(name: info!.groupName!, color: Color(info.groupColor!)),
         ],
         for (final b in badges) ...[const SizedBox(width: 8), b],
       ],
