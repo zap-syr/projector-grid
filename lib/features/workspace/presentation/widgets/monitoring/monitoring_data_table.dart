@@ -7,6 +7,7 @@ import '../../../domain/monitoring_status.dart';
 import '../../../domain/monitoring_table_columns.dart';
 import '../../../domain/projector_group.dart';
 import '../../providers/app_settings_provider.dart';
+import '../../providers/monitoring_filter_provider.dart';
 import '../../providers/monitoring_panel_provider.dart';
 import '../../providers/monitoring_status_provider.dart';
 import '../../providers/monitoring_view_provider.dart';
@@ -15,6 +16,7 @@ import 'monitoring_actions.dart';
 import 'monitoring_cells.dart';
 import 'monitoring_group_header.dart';
 import 'monitoring_layout_watch.dart';
+import 'monitoring_no_matches.dart';
 import 'monitoring_parts.dart';
 
 /// Row, header and group row height and the cell padding for each row
@@ -27,6 +29,10 @@ import 'monitoring_parts.dart';
   MonitoringDensity.standard => (row: 52, header: 40, group: 40, hpad: 12),
   MonitoringDensity.comfortable => (row: 60, header: 44, group: 44, hpad: 16),
 };
+
+/// The group row's height, which the cards' group rows share so both views
+/// band their groups alike.
+double monitoringGroupRowHeight(MonitoringDensity d) => _metrics(d).group;
 
 /// The Monitoring table (§7i.2): group rows (or a flat list with a Group
 /// column), two-line columns from the column chooser, sort on a header
@@ -174,6 +180,9 @@ class _MonitoringDataTableState extends ConsumerState<MonitoringDataTable> {
     final byGroup = ref.watch(
       monitoringViewProvider.select((s) => s.groupByGroup),
     );
+    final filtering = ref.watch(
+      monitoringFilterProvider.select((f) => f.active),
+    );
     final fitToWidth = ref.watch(
       appSettingsProvider.select((s) => s.monitoringFitToWidth),
     );
@@ -223,14 +232,13 @@ class _MonitoringDataTableState extends ConsumerState<MonitoringDataTable> {
 
         Widget headerCell(int i) {
           final c = cols[i];
-          final sorted = c.sortable && c.id == sortId;
+          final sorted = c.id == sortId;
           final content = MouseRegion(
-            cursor: c.sortable ? SystemMouseCursors.click : MouseCursor.defer,
+            cursor: SystemMouseCursors.click,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: c.sortable
-                  ? () => ref.read(monitoringViewProvider.notifier).sortBy(c.id)
-                  : null,
+              onTap: () =>
+                  ref.read(monitoringViewProvider.notifier).sortBy(c.id),
               child: Container(
                 width: widths[i],
                 height: m.header,
@@ -339,47 +347,52 @@ class _MonitoringDataTableState extends ConsumerState<MonitoringDataTable> {
             ),
             Divider(height: 1, color: cs.outlineVariant),
             Expanded(
-              child: Scrollbar(
-                controller: _vertical,
-                thumbVisibility: true,
-                notificationPredicate: (n) => n.depth == 1,
-                child: Scrollbar(
-                  controller: _horizontal,
-                  thumbVisibility: true,
-                  child: SingleChildScrollView(
-                    controller: _horizontal,
-                    scrollDirection: Axis.horizontal,
-                    child: SizedBox(
-                      width: tableWidth,
-                      child: ListView.builder(
-                        controller: _vertical,
-                        itemCount: entries.length,
-                        itemExtentBuilder: (i, _) => i >= entries.length
-                            ? null
-                            : entries[i] is _HeaderEntry
-                            ? m.group
-                            : m.row,
-                        itemBuilder: (context, i) => switch (entries[i]) {
-                          _HeaderEntry(:final section, :final collapsed) =>
-                            MonitoringGroupHeader(
-                              key: ValueKey('group-${section.key}'),
-                              section: section,
-                              collapsed: collapsed,
+              child: entries.isEmpty && filtering
+                  ? const MonitoringNoMatches()
+                  : Scrollbar(
+                      controller: _vertical,
+                      thumbVisibility: true,
+                      notificationPredicate: (n) => n.depth == 1,
+                      child: Scrollbar(
+                        controller: _horizontal,
+                        thumbVisibility: true,
+                        child: SingleChildScrollView(
+                          controller: _horizontal,
+                          scrollDirection: Axis.horizontal,
+                          child: SizedBox(
+                            width: tableWidth,
+                            child: ListView.builder(
+                              controller: _vertical,
+                              itemCount: entries.length,
+                              itemExtentBuilder: (i, _) => i >= entries.length
+                                  ? null
+                                  : entries[i] is _HeaderEntry
+                                  ? m.group
+                                  : m.row,
+                              itemBuilder: (context, i) => switch (entries[i]) {
+                                _HeaderEntry(
+                                  :final section,
+                                  :final collapsed,
+                                ) =>
+                                  MonitoringGroupHeader(
+                                    key: ValueKey('group-${section.key}'),
+                                    section: section,
+                                    collapsed: collapsed,
+                                  ),
+                                _NodeEntry(:final nodeId) => _TableRow(
+                                  key: ValueKey(nodeId),
+                                  nodeId: nodeId,
+                                  columns: [for (final c in cols) c.id],
+                                  widths: widths,
+                                  groups: groups,
+                                  hpad: hpad,
+                                ),
+                              },
                             ),
-                          _NodeEntry(:final nodeId) => _TableRow(
-                            key: ValueKey(nodeId),
-                            nodeId: nodeId,
-                            columns: [for (final c in cols) c.id],
-                            widths: widths,
-                            groups: groups,
-                            hpad: hpad,
                           ),
-                        },
+                        ),
                       ),
                     ),
-                  ),
-                ),
-              ),
             ),
           ],
         );

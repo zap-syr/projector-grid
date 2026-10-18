@@ -1,18 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../../core/theme/app_theme.dart';
 import '../../../domain/alert_rule.dart';
 import '../../../domain/monitoring_format.dart';
 import '../../../domain/monitoring_status.dart';
-import '../../../domain/projector_errors.dart';
 import '../../../domain/projector_group.dart';
 import '../../../domain/projector_node.dart';
 import '../../../domain/test_patterns.dart';
 import '../common/status_pill.dart';
-import '../custom_tooltip.dart';
-import '../monitoring_errors_cell.dart';
-import '../remote_preview_dialog.dart';
 import 'monitoring_parts.dart';
 
 /// What a table cell needs besides its column: the projector, how
@@ -32,7 +27,7 @@ Widget monitoringCell(BuildContext context, String id, MonitoringCellData d) {
     'projector' => _ProjectorCell(node: n),
     'group' => _GroupCell(group: d.groups[n.groupId]),
     'power' => PowerState(power: n.powerStatus),
-    'shutter' => ShutterState(shutter: n.shutterStatus),
+    'shutter' => ShutterState(node: n),
     'inputSignal' => _TwoLines(
       first: TruncatedText(n.input),
       second: FitPill(child: SignalPill(node: n)),
@@ -64,43 +59,15 @@ Widget monitoringCell(BuildContext context, String id, MonitoringCellData d) {
       ),
     ),
     'voltage' => TruncatedText(withUnit(n.acVoltage)),
-    'errors' => ProblemBadge(problems: d.status.problems),
+    // An offline projector's codes are the last ones it sent: not None.
+    'errors' when d.status.level == ProblemLevel.offline => Text(
+      'Unknown',
+      style: t.body.copyWith(color: t.tertiary),
+    ),
+    'errors' => ProblemBadge(problems: projectorErrorsOf(d.status)),
     'connection' => ConnectionStatusBadge(status: n.connectionStatus),
-    'model' => TruncatedText(n.name),
     'serial' => TruncatedText(n.serialNumber),
-    'ip' => TruncatedText(n.ipAddress, style: t.mono),
-    'input' => TruncatedText(n.input),
-    'signal' => FitPill(child: SignalPill(node: n)),
-    'testPattern' => _TestPatternCell(node: n),
-    'runtime' => TruncatedText(withUnit(n.runtime)),
-    'lightRuntime' => TruncatedText(withUnit(n.lightRuntime)),
-    'intake' => TruncatedText(
-      withUnit(n.intakeTemp),
-      style: t.body.copyWith(color: temperatureColor(context, d.status.intake)),
-    ),
-    'exhaust' => TruncatedText(
-      withUnit(n.exhaustTemp),
-      style: t.body.copyWith(
-        color: temperatureColor(context, d.status.exhaust),
-      ),
-    ),
-    'errorCodes' =>
-      decodeProjectorErrors(n.errors).isEmpty
-          ? Text('None', style: t.body.copyWith(color: t.tertiary))
-          : MonitoringErrorsCell(node: n),
-    'preview' => CustomTooltip(
-      message: 'Remote Preview',
-      child: IconButton(
-        icon: const Icon(Icons.cast, size: 18),
-        padding: EdgeInsets.zero,
-        constraints: const BoxConstraints.tightFor(width: 32, height: 32),
-        style: const ButtonStyle(
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        ),
-        onPressed: () =>
-            showRemotePreviewDialog(context, [n], groups: d.groups),
-      ),
-    ),
+    'testPattern' => TestPatternName(node: n),
     _ => const SizedBox.shrink(),
   };
 }
@@ -118,21 +85,12 @@ List<String> monitoringCellTexts(String id, MonitoringCellData d) {
     'temperature' => ['Ex 100 °C'],
     'runtimes' => [withUnit(n.runtime), 'Light ${withUnit(n.lightRuntime)}'],
     'voltage' => [withUnit(n.acVoltage)],
-    'errors' => [d.status.problems.firstOrNull?.badge ?? 'None'],
+    'errors' => [projectorErrorsOf(d.status).firstOrNull?.badge ?? 'Unknown'],
     'connection' => ['Wrong login'],
-    'model' => [n.name],
     'serial' => [n.serialNumber],
-    'ip' => [n.ipAddress],
-    'input' => [n.input],
-    'signal' => [n.signal],
     'testPattern' => [
       n.testPattern == null ? '-' : testPatternLabel(n.testPattern!),
     ],
-    'runtime' => [withUnit(n.runtime)],
-    'lightRuntime' => [withUnit(n.lightRuntime)],
-    'intake' => [withUnit(n.intakeTemp)],
-    'exhaust' => [withUnit(n.exhaustTemp)],
-    'errorCodes' => [n.errors],
     _ => const [],
   };
 }
@@ -142,12 +100,11 @@ double monitoringCellIconPad(String id) => switch (id) {
   'projector' => 16,
   'group' => 18,
   'power' || 'shutter' => 22,
-  'inputSignal' || 'signal' => 36,
+  'inputSignal' => 36,
   'temperature' => 60,
   'errors' => 60,
   'connection' => 40,
-  'testPattern' => 24,
-  'preview' => 32,
+  'testPattern' => 26,
   _ => 0,
 };
 
@@ -225,39 +182,6 @@ class _GroupCell extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         Expanded(child: TruncatedText(g.name)),
-      ],
-    );
-  }
-}
-
-/// The pattern's name with the same thumbnail as the control bar; Off and
-/// not yet polled show the text alone.
-class _TestPatternCell extends StatelessWidget {
-  const _TestPatternCell({required this.node});
-
-  final ProjectorNode node;
-
-  @override
-  Widget build(BuildContext context) {
-    final code = node.testPattern;
-    final label = code == null ? '-' : testPatternLabel(code);
-    if (!isTestPatternActive(code)) return TruncatedText(label);
-    final cs = Theme.of(context).colorScheme;
-    final icon = kTestPatternIcons[code];
-    return Row(
-      children: [
-        Container(
-          width: 18,
-          height: 12,
-          decoration: BoxDecoration(
-            border: Border.all(color: cs.outlineVariant, width: 0.5),
-          ),
-          child: icon != null
-              ? SvgPicture.asset(icon, fit: BoxFit.cover)
-              : Icon(Icons.grid_on, size: 10, color: cs.onSurfaceVariant),
-        ),
-        const SizedBox(width: 6),
-        Expanded(child: TruncatedText(label)),
       ],
     );
   }

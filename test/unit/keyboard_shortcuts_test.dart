@@ -9,14 +9,14 @@ void main() {
       for (final h in s.hits) h.entry.description,
   ];
 
-  test('the list has 34 shortcuts in 8 sections', () {
-    expect(sections, hasLength(8));
-    expect(shortcutCount(sections), 34);
+  test('the list has 40 shortcuts in 9 sections', () {
+    expect(sections, hasLength(9));
+    expect(shortcutCount(sections), 40);
   });
 
   test('an empty query keeps every section', () {
     final hits = filterShortcuts(sections, '  ');
-    expect(hits, hasLength(8));
+    expect(hits, hasLength(9));
     expect(hits.every((s) => s.hits.every((h) => h.highlights.isEmpty)), true);
   });
 
@@ -38,7 +38,11 @@ void main() {
     expect(descriptions('Ctrl+G'), [
       'Select the whole group of the selected projector',
     ]);
-    expect(descriptions('esc'), ['Exit Alignment mode']);
+    expect(descriptions('esc'), [
+      'Close the projector panel in Monitoring',
+      'Exit Alignment mode',
+      'Clear the selection',
+    ]);
     expect(descriptions('middle drag'), ['Pan the canvas']);
     expect(descriptions('cmd z'), ['Undo']);
   });

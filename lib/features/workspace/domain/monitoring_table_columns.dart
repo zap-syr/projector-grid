@@ -1,6 +1,8 @@
 /// The desktop Monitoring table's column catalogue (§7i.2 of the redesign
-/// plan): the two-line columns shown by default, then the single fields of
-/// the old table, still available from the column chooser.
+/// plan): the two-line columns shown by default, then the fields none of
+/// them shows. The old single columns a two-line one replaces (Model, IP,
+/// Input, Signal, the runtimes, the temperatures, Error codes) are gone, and
+/// so is Preview, which the row's own Remote Preview button replaces.
 ///
 /// Separate from `monitoring_columns.dart`, which is the Web UI's catalogue
 /// (sent in `/api/config`): the two-line columns exist on the desktop only,
@@ -12,19 +14,11 @@ class MonitoringTableColumn {
   final String label;
   final double defaultWidth;
 
-  /// False for button-only columns: the header ignores clicks.
-  final bool sortable;
-
-  const MonitoringTableColumn(
-    this.id,
-    this.label,
-    this.defaultWidth, {
-    this.sortable = true,
-  });
+  const MonitoringTableColumn(this.id, this.label, this.defaultWidth);
 }
 
-/// Every column, in canonical order: the redesigned columns first, the old
-/// single fields after them.
+/// Every column, in canonical order: the default ones first, the extra
+/// fields after them.
 const List<MonitoringTableColumn> kMonitoringTableColumns = [
   MonitoringTableColumn('projector', 'Projector', 190),
   MonitoringTableColumn('group', 'Group', 150),
@@ -36,18 +30,8 @@ const List<MonitoringTableColumn> kMonitoringTableColumns = [
   MonitoringTableColumn('voltage', 'AC', 80),
   MonitoringTableColumn('errors', 'Errors', 160),
   MonitoringTableColumn('connection', 'Connection', 130),
-  MonitoringTableColumn('model', 'Model', 140),
   MonitoringTableColumn('serial', 'Serial number', 150),
-  MonitoringTableColumn('ip', 'IP address', 130),
-  MonitoringTableColumn('input', 'Input', 110),
-  MonitoringTableColumn('signal', 'Signal', 150),
   MonitoringTableColumn('testPattern', 'Test pattern', 160),
-  MonitoringTableColumn('runtime', 'Projector runtime', 150),
-  MonitoringTableColumn('lightRuntime', 'Light runtime', 130),
-  MonitoringTableColumn('intake', 'Intake', 100),
-  MonitoringTableColumn('exhaust', 'Exhaust', 100),
-  MonitoringTableColumn('errorCodes', 'Error codes', 140),
-  MonitoringTableColumn('preview', 'Preview', 92, sortable: false),
 ];
 
 /// The nine columns of the redesign. Group shows only with *Group by: none*;

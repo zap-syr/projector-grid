@@ -22,7 +22,7 @@ void main() {
   testWidgets('lays out in the minimum window and a large one', (tester) async {
     for (final size in const [Size(800, 600), Size(1600, 1000)]) {
       await pumpDialog(tester, size);
-      expect(find.text('34 shortcuts'), findsOneWidget);
+      expect(find.text('40 shortcuts'), findsOneWidget);
       expect(find.text('Project'), findsOneWidget);
       expect(find.text('Selection'), findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -73,10 +73,11 @@ void main() {
     final taller = bottom(left) > bottom(right) ? left : right;
     final lastOfTaller = taller.reduce((a, b) => a.bottom > b.bottom ? a : b);
     // Each card went to the shorter column, so the gap between the bottoms
-    // is never more than the last card that tipped it.
+    // is never more than the last card that tipped it, with the 10 px gap
+    // above that card.
     expect(
       (bottom(left) - bottom(right)).abs(),
-      lessThanOrEqualTo(lastOfTaller.height),
+      lessThanOrEqualTo(lastOfTaller.height + 10),
     );
   });
 
@@ -93,17 +94,20 @@ void main() {
     expect(find.text('Alignment'), findsNothing);
     expect(find.text('6 of 7'), findsOneWidget);
     expect(find.text('2 of 5'), findsOneWidget);
-    expect(find.text('8 of 34'), findsOneWidget);
+    // Edge Blending: the two "selected handle" rows and "Clear the
+    // selection".
+    expect(find.text('3 of 4'), findsOneWidget);
+    expect(find.text('11 of 40'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField), 'ctrl g');
     await tester.pump();
-    expect(find.text('1 of 34'), findsOneWidget);
+    expect(find.text('1 of 40'), findsOneWidget);
     expect(find.text('Selection'), findsOneWidget);
     expect(find.text('Canvas navigation'), findsNothing);
 
     await tester.tap(find.byTooltip('Clear search'));
     await tester.pump();
-    expect(find.text('34 shortcuts'), findsOneWidget);
+    expect(find.text('40 shortcuts'), findsOneWidget);
     expect(find.text('Project'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

@@ -152,6 +152,41 @@ void main() {
       expect(s.level, ProblemLevel.error);
       expect(s.problems.single.badge, 'Error F305');
       expect(s.problems.single.flag, 'F305');
+      expect(s.problems.single.kind, ProblemKind.projectorError);
+    });
+
+    test('an amber code is a Warning, not an Error', () {
+      final s = monitoringStatusOf(_n('1', errors: 'H001'), const [], settings);
+      expect(s.level, ProblemLevel.warning);
+      expect(s.problems.single.badge, 'Warning H001');
+    });
+
+    test('Signal lost and a hot reading are not projector errors', () {
+      final s = monitoringStatusOf(_n('1', errors: 'F305'), [
+        ActiveAlert(
+          nodeId: '1',
+          rule: AlertRule.signalLost,
+          severity: AlertSeverity.critical,
+          value: 'No signal on HDMI 1',
+          since: DateTime(2026),
+        ),
+        ActiveAlert(
+          nodeId: '1',
+          rule: AlertRule.intakeTemp,
+          severity: AlertSeverity.critical,
+          value: '52 °C',
+          since: DateTime(2026),
+        ),
+      ], settings);
+      expect(
+        s.problems.map((p) => p.kind),
+        unorderedEquals([
+          ProblemKind.projectorError,
+          ProblemKind.temperature,
+          ProblemKind.signal,
+        ]),
+      );
+      expect(projectorErrorsOf(s).map((p) => p.badge), ['Error F305']);
     });
 
     test('a hot exhaust needs attention, with value and threshold', () {

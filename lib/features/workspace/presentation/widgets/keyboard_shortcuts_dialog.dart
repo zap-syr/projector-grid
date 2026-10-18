@@ -271,6 +271,7 @@ class _SectionCard extends StatelessWidget {
     ShortcutSectionId.projectorControl => Icons.videocam_outlined,
     ShortcutSectionId.alignment => Icons.center_focus_strong,
     ShortcutSectionId.lensShift => Icons.control_camera,
+    ShortcutSectionId.edgeBlending => Icons.blur_linear,
   };
 
   @override

@@ -7,9 +7,12 @@ import '../../../domain/monitoring_format.dart';
 import '../../../domain/monitoring_status.dart';
 import '../../../domain/projector_group.dart';
 import '../../../domain/projector_node.dart';
+import '../../../domain/test_patterns.dart';
 import '../common/dialog_parts.dart';
 import '../common/status_pill.dart';
+import '../common/test_pattern_thumb.dart';
 import '../custom_tooltip.dart';
+import '../projector_status_style.dart';
 
 /// The pieces the Monitoring table, cards and projector panel share, so a
 /// value reads the same in all three.
@@ -50,45 +53,35 @@ Color? problemColor(BuildContext context, ProblemLevel level) =>
       ProblemLevel.offline => Theme.of(context).colorScheme.outline,
     };
 
-/// Power as icon + word: green when on, amber while warming up or cooling,
-/// grey in standby (not a fault, so not red here).
+/// Power as icon + word, in the canvas card's colours: green on, amber
+/// while warming up or cooling, red in standby.
 class PowerState extends StatelessWidget {
   const PowerState({super.key, required this.power});
 
   final PowerStatus power;
 
   @override
-  Widget build(BuildContext context) {
-    final sc = AppStatusColors.of(context);
-    final t = AppText.of(context);
-    final color = switch (power) {
-      PowerStatus.on => sc.success,
-      PowerStatus.turningOn || PowerStatus.cooling => sc.warning,
-      PowerStatus.standby => t.secondary,
-    };
-    return _IconWord(
-      icon: Icons.power_settings_new,
-      color: color,
-      label: powerLabel(power),
-    );
-  }
+  Widget build(BuildContext context) => _IconWord(
+    icon: Icons.power_settings_new,
+    color: ProjectorStatusStyle.of(context).powerColor(power),
+    label: powerLabel(power),
+  );
 }
 
-/// Shutter as icon + word: green open, grey closed.
+/// Shutter as icon + word, in the canvas card's colours: green open, red
+/// closed, grey in standby, where it shows nothing either way.
 class ShutterState extends StatelessWidget {
-  const ShutterState({super.key, required this.shutter});
+  const ShutterState({super.key, required this.node});
 
-  final ShutterStatus shutter;
+  final ProjectorNode node;
 
   @override
   Widget build(BuildContext context) {
-    final open = shutter == ShutterStatus.open;
+    final open = node.shutterStatus == ShutterStatus.open;
     return _IconWord(
       icon: open ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-      color: open
-          ? AppStatusColors.of(context).success
-          : AppText.of(context).secondary,
-      label: shutterLabel(shutter),
+      color: ProjectorStatusStyle.of(context).shutterColor(node),
+      label: shutterLabel(node.shutterStatus),
     );
   }
 }
@@ -398,6 +391,35 @@ class FitPill extends StatelessWidget {
     alignment: Alignment.centerLeft,
     child: child,
   );
+}
+
+/// The test pattern by name, after its thumbnail while one is showing; Off
+/// and not polled yet (`-`) are the text alone. The table's cell and the
+/// panel's row.
+class TestPatternName extends StatelessWidget {
+  const TestPatternName({super.key, required this.node, this.style});
+
+  final ProjectorNode node;
+  final TextStyle? style;
+
+  @override
+  Widget build(BuildContext context) {
+    final code = node.testPattern;
+    final label = TruncatedText(
+      code == null ? '-' : testPatternLabel(code),
+      style: style,
+    );
+    if (!isTestPatternActive(code)) return label;
+    return Row(
+      key: const ValueKey('test-pattern-name'),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        TestPatternThumb(code: code!),
+        const SizedBox(width: 6),
+        Flexible(child: label),
+      ],
+    );
+  }
 }
 
 /// A neutral rounded chip with a coloured icon: the cards' Power and

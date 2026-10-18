@@ -11,11 +11,9 @@ import 'package:projector_grid/features/workspace/domain/alert_rule.dart';
 import 'package:projector_grid/features/workspace/domain/alerts.dart';
 import 'package:projector_grid/features/workspace/domain/alignment.dart';
 import 'package:projector_grid/features/workspace/domain/dispatch_result.dart';
-import 'package:projector_grid/features/workspace/domain/monitoring_columns.dart';
 import 'package:projector_grid/features/workspace/domain/projector_group.dart';
 import 'package:projector_grid/features/workspace/domain/projector_node.dart';
 import 'package:projector_grid/features/workspace/domain/web_api_dto.dart';
-import 'package:projector_grid/features/workspace/presentation/widgets/monitoring_table.dart';
 
 /// Compares [json] with `test/fixtures/api/<name>.json`, which the web tests
 /// validate against `web_ui/api/openapi.yaml`. Regenerate with
@@ -414,13 +412,5 @@ void main() {
       )['color'],
       '#00000A',
     );
-  });
-
-  // The desktop table has its own two-line columns; every Web UI field
-  // stays available there as an optional column.
-  test('the desktop table offers every Web UI column', () {
-    for (final c in kMonitoringColumns) {
-      expect(MonitoringTable.allColumnIds, contains(c.id));
-    }
   });
 }

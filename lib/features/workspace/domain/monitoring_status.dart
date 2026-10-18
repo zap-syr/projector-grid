@@ -14,10 +14,17 @@ import 'projector_node.dart';
 /// [offline].
 enum ProblemLevel { none, warning, error, offline }
 
+/// Where a problem comes from. Only [projectorError] is the projector's own
+/// fault; the table's Errors column shows those alone, the others have a
+/// column of their own (Signal, Temperature, Connection, Projector).
+enum ProblemKind { offline, login, projectorError, temperature, signal }
+
 class MonitoringProblem {
   final ProblemLevel level;
+  final ProblemKind kind;
 
-  /// Short, for the Errors badge: `Exhaust hot`, `Error F305`, `Offline`.
+  /// Short, for a badge: `Exhaust hot`, `Error F305`, `Warning H001`,
+  /// `Offline`.
   final String badge;
 
   /// The panel's row label: `Exhaust temperature`, `Fan error`.
@@ -34,6 +41,7 @@ class MonitoringProblem {
 
   const MonitoringProblem({
     required this.level,
+    required this.kind,
     required this.badge,
     required this.title,
     required this.value,
@@ -45,6 +53,7 @@ class MonitoringProblem {
   bool operator ==(Object other) =>
       other is MonitoringProblem &&
       other.level == level &&
+      other.kind == kind &&
       other.badge == badge &&
       other.title == title &&
       other.value == value &&
@@ -52,7 +61,8 @@ class MonitoringProblem {
       other.since == since;
 
   @override
-  int get hashCode => Object.hash(level, badge, title, value, flag, since);
+  int get hashCode =>
+      Object.hash(level, kind, badge, title, value, flag, since);
 }
 
 /// One projector as Monitoring reads it. Value equality, so a widget
@@ -131,6 +141,7 @@ MonitoringStatus monitoringStatusOf(
       problems: [
         MonitoringProblem(
           level: ProblemLevel.offline,
+          kind: ProblemKind.offline,
           badge: 'Offline',
           title: 'Offline',
           value: 'No answer',
@@ -148,6 +159,7 @@ MonitoringStatus monitoringStatusOf(
     problems.add(
       const MonitoringProblem(
         level: ProblemLevel.warning,
+        kind: ProblemKind.login,
         badge: 'Wrong login',
         title: 'Wrong login',
         value: 'Check the login',
@@ -164,7 +176,11 @@ MonitoringStatus monitoringStatusOf(
     problems.add(
       MonitoringProblem(
         level: _levelOf(e.severity),
-        badge: 'Error ${e.id}',
+        kind: ProblemKind.projectorError,
+        // An amber code is the projector's warning, not a fault.
+        badge: e.severity == AlertSeverity.critical
+            ? 'Error ${e.id}'
+            : 'Warning ${e.id}',
         title: e.name ?? 'Projector error',
         value: e.id,
         flag: e.id,
@@ -188,6 +204,7 @@ MonitoringStatus monitoringStatusOf(
         problems.add(
           MonitoringProblem(
             level: _levelOf(a.severity),
+            kind: ProblemKind.temperature,
             badge: isIntake ? 'Intake hot' : 'Exhaust hot',
             title: a.rule.label,
             value: '${a.value}, above ${formatCelsius(limit)}',
@@ -199,6 +216,7 @@ MonitoringStatus monitoringStatusOf(
         problems.add(
           MonitoringProblem(
             level: _levelOf(a.severity),
+            kind: ProblemKind.signal,
             badge: 'Signal lost',
             title: 'Signal lost',
             value: a.value,
@@ -225,6 +243,13 @@ MonitoringStatus monitoringStatusOf(
     exhaust: exhaust,
   );
 }
+
+/// The table's Errors column: the projector's own error codes. Signal lost,
+/// a hot reading and a wrong login show in their own columns.
+List<MonitoringProblem> projectorErrorsOf(MonitoringStatus status) => [
+  for (final p in status.problems)
+    if (p.kind == ProblemKind.projectorError) p,
+];
 
 ProblemLevel _levelOf(AlertSeverity s) =>
     s == AlertSeverity.critical ? ProblemLevel.error : ProblemLevel.warning;

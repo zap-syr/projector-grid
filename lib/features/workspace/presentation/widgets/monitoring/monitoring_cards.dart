@@ -9,6 +9,7 @@ import '../../../domain/monitoring_view_settings.dart';
 import '../../../domain/projector_group.dart';
 import '../../../domain/projector_node.dart';
 import '../../providers/app_settings_provider.dart';
+import '../../providers/monitoring_filter_provider.dart';
 import '../../providers/monitoring_panel_provider.dart';
 import '../../providers/monitoring_status_provider.dart';
 import '../../providers/monitoring_view_provider.dart';
@@ -16,13 +17,16 @@ import '../../providers/workspace_provider.dart';
 import '../common/dashed_border.dart';
 import '../common/dialog_parts.dart';
 import '../common/status_pill.dart';
+import '../projector_status_style.dart';
+import 'monitoring_data_table.dart';
 import 'monitoring_group_header.dart';
 import 'monitoring_layout_watch.dart';
+import 'monitoring_no_matches.dart';
 import 'monitoring_parts.dart';
 
 /// Extended cards keep one height so a row of cards never jumps when a
 /// problem badge comes or goes.
-const double kExtendedCardHeight = 288;
+const double kExtendedCardHeight = 302;
 const double _kExtendedCardMinWidth = 260;
 const Size kCompactTileSize = Size(176, 96);
 const double _kGap = 12;
@@ -54,8 +58,17 @@ class _MonitoringCardsState extends ConsumerState<MonitoringCards> {
     final collapsed = ref.watch(
       monitoringViewProvider.select((s) => s.collapsed),
     );
+    final groupHeight = monitoringGroupRowHeight(
+      ref.watch(appSettingsProvider.select((s) => s.monitoringDensity)),
+    );
+    final filtering = ref.watch(
+      monitoringFilterProvider.select((f) => f.active),
+    );
     final groups = layout.groupsById;
     final compact = density == MonitoringCardDensity.compact;
+    if (filtering && layout.sections.every((s) => s.nodeIds.isEmpty)) {
+      return const MonitoringNoMatches();
+    }
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -99,23 +112,21 @@ class _MonitoringCardsState extends ConsumerState<MonitoringCards> {
             controller: _scroll,
             slivers: [
               for (final s in layout.sections) ...[
+                // Edge to edge and filled, like the table's group rows.
                 if (!s.flat)
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(4, 8, 16, 4),
-                    sliver: SliverToBoxAdapter(
-                      child: SizedBox(
-                        height: 36,
-                        child: MonitoringGroupHeader(
-                          section: s,
-                          collapsed: collapsed.contains(s.key),
-                          filled: false,
-                        ),
+                  SliverToBoxAdapter(
+                    child: SizedBox(
+                      height: groupHeight,
+                      child: MonitoringGroupHeader(
+                        key: ValueKey('group-${s.key}'),
+                        section: s,
+                        collapsed: collapsed.contains(s.key),
                       ),
                     ),
                   ),
                 if (s.flat || !collapsed.contains(s.key))
                   SliverPadding(
-                    padding: EdgeInsets.fromLTRB(16, s.flat ? 16 : 4, 16, 12),
+                    padding: EdgeInsets.fromLTRB(16, s.flat ? 16 : 12, 16, 16),
                     sliver: body(s),
                   ),
               ],
@@ -178,26 +189,37 @@ class _ExtendedCard extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              MonitoringStatusDot(status: node.connectionStatus),
-              const SizedBox(width: 8),
-              Expanded(
-                child: TruncatedText(
-                  node.ipAddress,
-                  style: t.mono.copyWith(fontWeight: FontWeight.w600),
-                ),
-              ),
-              if (group != null)
-                Container(
-                  width: 9,
-                  height: 9,
-                  decoration: BoxDecoration(
-                    color: Color(group.color),
-                    shape: BoxShape.circle,
+          // The group pill's height whether or not there is one, so grouped
+          // and ungrouped cards line up.
+          SizedBox(
+            height: 22,
+            child: Row(
+              children: [
+                MonitoringStatusDot(status: node.connectionStatus),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TruncatedText(
+                    node.ipAddress,
+                    style: t.mono.copyWith(fontWeight: FontWeight.w600),
                   ),
                 ),
-            ],
+                // A named pill, not a bare dot: a coloured dot in the corner
+                // read as a status needing attention. Capped rather than
+                // Flexible, so it sits at the right edge and leaves the IP
+                // its room in the narrowest card.
+                if (group != null) ...[
+                  const SizedBox(width: 8),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 100),
+                    child: GroupPill(
+                      key: const ValueKey('card-group-pill'),
+                      name: group.name,
+                      color: Color(group.color),
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
           const SizedBox(height: 2),
           Padding(
@@ -212,7 +234,7 @@ class _ExtendedCard extends ConsumerWidget {
             spacing: 6,
             children: [
               StateChip(child: PowerState(power: node.powerStatus)),
-              StateChip(child: ShutterState(shutter: node.shutterStatus)),
+              StateChip(child: ShutterState(node: node)),
             ],
           ),
           const SizedBox(height: 10),
@@ -252,6 +274,7 @@ class _ExtendedCard extends ConsumerWidget {
                     child: ProblemBadge(problems: status.problems),
                   ),
           ),
+          const SizedBox(height: 10),
           const Spacer(),
           Divider(
             height: 1,
@@ -299,11 +322,10 @@ class _ExtendedCard extends ConsumerWidget {
               Expanded(
                 child: _Metric(label: 'Runtime', value: withUnit(node.runtime)),
               ),
+              // AC rather than light hours, which the panel and the table
+              // still show: a sagging supply matters more at a glance.
               Expanded(
-                child: _Metric(
-                  label: 'Light',
-                  value: withUnit(node.lightRuntime),
-                ),
+                child: _Metric(label: 'AC', value: withUnit(node.acVoltage)),
               ),
             ],
           ),
@@ -361,8 +383,8 @@ class _Metric extends StatelessWidget {
   }
 }
 
-/// A 176×96 tile for big rigs: the full IP, the power icon, the input and
-/// the signal. Warnings tint it amber with the reason in the corner, errors
+/// A 176×96 tile for big rigs: the full IP, the power and shutter icons,
+/// the input and the signal. Warnings tint it amber with the reason in the corner, errors
 /// red with the code; offline tiles are dashed.
 class _CompactTile extends ConsumerWidget {
   const _CompactTile({super.key, required this.nodeId});
@@ -382,12 +404,7 @@ class _CompactTile extends ConsumerWidget {
       ProblemLevel.error => problemColor(context, level),
       _ => null,
     };
-    final power = switch (node.powerStatus) {
-      PowerStatus.on => AppStatusColors.of(context).success,
-      PowerStatus.turningOn ||
-      PowerStatus.cooling => AppStatusColors.of(context).warning,
-      PowerStatus.standby => t.secondary,
-    };
+    final style = ProjectorStatusStyle.of(context);
     final radius = BorderRadius.circular(12);
 
     final content = Padding(
@@ -418,8 +435,24 @@ class _CompactTile extends ConsumerWidget {
                 ),
                 const SizedBox(width: 4),
               ],
-              if (!offline)
-                Icon(Icons.power_settings_new, size: 14, color: power),
+              // In the table's and the canvas card's colours.
+              if (!offline) ...[
+                Icon(
+                  Icons.power_settings_new,
+                  key: const ValueKey('compact-power'),
+                  size: 14,
+                  color: style.powerColor(node.powerStatus),
+                ),
+                const SizedBox(width: 4),
+                Icon(
+                  node.shutterStatus == ShutterStatus.open
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
+                  key: const ValueKey('compact-shutter'),
+                  size: 14,
+                  color: style.shutterColor(node),
+                ),
+              ],
             ],
           ),
           const SizedBox(height: 6),

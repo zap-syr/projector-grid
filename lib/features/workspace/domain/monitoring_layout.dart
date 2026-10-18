@@ -24,7 +24,7 @@ Comparable monitoringSortKey(
   ProjectorNode n,
   Map<String, ProjectorGroup> groups,
 ) => switch (columnId) {
-  'projector' || 'ip' => ipSortKey(n.ipAddress),
+  'projector' => ipSortKey(n.ipAddress),
   // Ungrouped sorts last (ascending).
   'group' => (groups[n.groupId]?.name ?? '￿').toLowerCase(),
   'power' => switch (n.powerStatus) {
@@ -34,19 +34,15 @@ Comparable monitoringSortKey(
     PowerStatus.standby => 3,
   },
   'shutter' => n.shutterStatus == ShutterStatus.open ? 0 : 1,
-  'inputSignal' || 'input' => n.input.toLowerCase(),
-  'signal' => n.signal.toLowerCase(),
+  'inputSignal' => n.input.toLowerCase(),
   'temperature' =>
     leadingNumber(n.exhaustTemp) > leadingNumber(n.intakeTemp)
         ? leadingNumber(n.exhaustTemp)
         : leadingNumber(n.intakeTemp),
-  'runtimes' || 'runtime' => leadingNumber(n.runtime),
-  'lightRuntime' => leadingNumber(n.lightRuntime),
+  'runtimes' => leadingNumber(n.runtime),
   'voltage' => leadingNumber(n.acVoltage),
-  'intake' => leadingNumber(n.intakeTemp),
-  'exhaust' => leadingNumber(n.exhaustTemp),
   // Faulted first (ascending); not polled yet sorts with the healthy ones.
-  'errors' || 'errorCodes' =>
+  'errors' =>
     n.errors == '-' || n.errors == 'NO ERRORS' || n.errors.isEmpty
         ? '1'
         : '0${n.errors}',
@@ -56,7 +52,6 @@ Comparable monitoringSortKey(
     ConnectionStatus.unauthorized => 2,
     ConnectionStatus.offline => 3,
   },
-  'model' => n.name.toLowerCase(),
   'serial' => n.serialNumber.toLowerCase(),
   'testPattern' =>
     (n.testPattern == null ? '-' : testPatternLabel(n.testPattern!))

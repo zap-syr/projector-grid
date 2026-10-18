@@ -8,22 +8,19 @@ import '../../providers/monitoring_status_provider.dart';
 import '../../providers/monitoring_view_provider.dart';
 import 'monitoring_parts.dart';
 
-/// A group's row above its projectors, in the table and the cards: the
-/// collapse chevron, the group's colour, its name and a summary
-/// (`8 projectors, 7 online, 1 needs attention`). Click to collapse.
+/// A group's row above its projectors, a filled band in the table and the
+/// cards alike: the collapse chevron, the group's colour, its name and a
+/// summary (`8 projectors, 7 online, 1 needs attention`). Click to
+/// collapse.
 class MonitoringGroupHeader extends ConsumerWidget {
   const MonitoringGroupHeader({
     super.key,
     required this.section,
     required this.collapsed,
-    this.filled = true,
   });
 
   final MonitoringSection section;
   final bool collapsed;
-
-  /// The table's band fill; the cards' header sits on the page.
-  final bool filled;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -38,7 +35,7 @@ class MonitoringGroupHeader extends ConsumerWidget {
       ),
     );
     return Material(
-      color: filled ? cs.surfaceContainer : Colors.transparent,
+      color: cs.surfaceContainer,
       child: InkWell(
         onTap: () => ref
             .read(monitoringViewProvider.notifier)

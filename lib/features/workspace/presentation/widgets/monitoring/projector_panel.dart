@@ -7,15 +7,14 @@ import '../../../domain/alert_rule.dart';
 import '../../../domain/alerts.dart';
 import '../../../domain/monitoring_format.dart';
 import '../../../domain/monitoring_status.dart';
-import '../../../domain/projector_errors.dart';
 import '../../../domain/projector_node.dart';
-import '../../../domain/test_patterns.dart';
 import '../../providers/app_settings_provider.dart';
 import '../../providers/monitoring_panel_provider.dart';
 import '../../providers/monitoring_status_provider.dart';
 import '../../providers/workspace_provider.dart';
 import '../common/dialog_parts.dart';
 import '../common/status_pill.dart';
+import '../custom_tooltip.dart';
 import 'monitoring_actions.dart';
 import 'monitoring_parts.dart';
 
@@ -25,7 +24,7 @@ const double kProjectorPanelWidth = 380;
 
 /// One projector in detail (§7i.4): the header, what needs attention and
 /// since when, Status, Temperature with the threshold mark, Runtime and
-/// power, and Preview / Web UI / Find on canvas.
+/// power, and Preview / Web UI / Locate (find on canvas).
 class ProjectorPanel extends ConsumerWidget {
   const ProjectorPanel({super.key, required this.nodeId});
 
@@ -126,18 +125,15 @@ class ProjectorPanel extends ConsumerWidget {
                       title: 'Status',
                       children: [
                         _Row('Power', PowerState(power: node.powerStatus)),
-                        _Row(
-                          'Shutter',
-                          ShutterState(shutter: node.shutterStatus),
-                        ),
+                        _Row('Shutter', ShutterState(node: node)),
                         _Row.text(context, 'Input', node.input),
                         _Row('Signal', FitPill(child: SignalPill(node: node))),
-                        _Row.text(
-                          context,
+                        _Row(
                           'Test pattern',
-                          node.testPattern == null
-                              ? '-'
-                              : testPatternLabel(node.testPattern!),
+                          TestPatternName(
+                            node: node,
+                            style: t.body.copyWith(fontWeight: FontWeight.w500),
+                          ),
                         ),
                       ],
                     ),
@@ -167,18 +163,11 @@ class ProjectorPanel extends ConsumerWidget {
                           'Light source',
                           withUnit(node.lightRuntime),
                         ),
+                        // No Errors row: the codes are in the section above.
                         _Row.text(
                           context,
                           'AC voltage',
                           withUnit(node.acVoltage),
-                        ),
-                        _Row.text(
-                          context,
-                          'Errors',
-                          switch (decodeProjectorErrors(node.errors)) {
-                            [] => 'None',
-                            final list => list.map((e) => e.id).join(', '),
-                          },
                         ),
                       ],
                     ),
@@ -202,10 +191,15 @@ class ProjectorPanel extends ConsumerWidget {
                     label: 'Web UI',
                     onPressed: () => openProjectorWebUi(node),
                   ),
+                  // Short, so the three labels fit the 380 px panel.
                   _Action(
                     icon: Icons.my_location,
-                    label: 'Find on canvas',
-                    onPressed: () => findOnCanvas(ref, node.id),
+                    label: 'Locate',
+                    tooltip: 'Find on canvas',
+                    onPressed: () => findOnCanvas(
+                      ProviderScope.containerOf(context, listen: false),
+                      node.id,
+                    ),
                   ),
                 ],
               ),
@@ -224,15 +218,17 @@ class _Action extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onPressed,
+    this.tooltip,
   });
 
   final IconData icon;
   final String label;
+  final String? tooltip;
   final VoidCallback onPressed;
 
   @override
-  Widget build(BuildContext context) => Flexible(
-    child: FilledButton.tonalIcon(
+  Widget build(BuildContext context) {
+    final button = FilledButton.tonalIcon(
       style: const ButtonStyle(
         visualDensity: VisualDensity.compact,
         padding: WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 10)),
@@ -245,8 +241,13 @@ class _Action extends StatelessWidget {
         softWrap: false,
         overflow: TextOverflow.ellipsis,
       ),
-    ),
-  );
+    );
+    return Flexible(
+      child: tooltip == null
+          ? button
+          : CustomTooltip(message: tooltip!, child: button),
+    );
+  }
 }
 
 class _Section extends StatelessWidget {
@@ -330,8 +331,10 @@ class _AttentionSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = problemColor(context, status.level)!;
+    // Not "Error": a hot reading or a lost signal is an alert, not a fault
+    // of the projector. Each row says what it is.
     final title = switch (status.level) {
-      ProblemLevel.error => 'Error',
+      ProblemLevel.error => 'Alert',
       ProblemLevel.offline => 'Offline',
       _ => 'Needs attention',
     };

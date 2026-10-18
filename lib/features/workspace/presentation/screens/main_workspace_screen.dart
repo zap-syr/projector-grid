@@ -17,6 +17,7 @@ import '../widgets/alignment_banner.dart';
 import '../widgets/control_bar.dart';
 import '../widgets/event_log_panel.dart';
 import '../widgets/mac_menu_bar.dart';
+import '../widgets/monitoring/monitoring_shortcuts.dart';
 import '../widgets/projector_workspace.dart';
 import '../widgets/monitoring_table.dart';
 import '../widgets/status_bar.dart';
@@ -163,9 +164,11 @@ class _WorkspaceBodyState extends ConsumerState<_WorkspaceBody> {
                       ],
                     ),
                   ),
-                  FocusScope(
-                    node: _monitoringScopeNode,
-                    child: const RepaintBoundary(child: MonitoringTable()),
+                  MonitoringShortcuts(
+                    child: FocusScope(
+                      node: _monitoringScopeNode,
+                      child: const RepaintBoundary(child: MonitoringTable()),
+                    ),
                   ),
                 ],
               ),

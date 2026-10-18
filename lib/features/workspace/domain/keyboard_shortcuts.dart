@@ -29,6 +29,7 @@ enum ShortcutSectionId {
   projectorControl,
   alignment,
   lensShift,
+  edgeBlending,
 }
 
 class ShortcutSection {
@@ -74,6 +75,8 @@ List<ShortcutSection> shortcutSections({required bool macOS}) {
     ShortcutSection(ShortcutSectionId.view, 'View', [
       ShortcutEntry([ctrl, _k('1')], 'Switch to Controls view'),
       ShortcutEntry([ctrl, _k('2')], 'Switch to Monitoring view'),
+      ShortcutEntry([ctrl, _k('F')], 'Search projectors in Monitoring'),
+      ShortcutEntry([_k('Esc')], 'Close the projector panel in Monitoring'),
     ]),
     ShortcutSection(ShortcutSectionId.selection, 'Selection', [
       ShortcutEntry([_m('Click')], 'Select a projector, deselect the others'),
@@ -107,6 +110,13 @@ List<ShortcutSection> shortcutSections({required bool macOS}) {
       ShortcutEntry([shift, ...arrows], 'Lens shift, fast speed'),
       ShortcutEntry([ctrl, ...arrows], 'Lens shift, slow speed'),
     ]),
+    // The canvas card's note keeps to one line, so the details live here.
+    ShortcutSection(ShortcutSectionId.edgeBlending, 'Edge Blending', [
+      ShortcutEntry(arrows, 'Move the selected handle 1 step'),
+      ShortcutEntry([shift, ...arrows], 'Move the selected handle 10 steps'),
+      ShortcutEntry([_m('Double click')], 'Reset an edge'),
+      ShortcutEntry([_k('Esc')], 'Clear the selection'),
+    ], note: 'on the canvas'),
   ];
 }
 

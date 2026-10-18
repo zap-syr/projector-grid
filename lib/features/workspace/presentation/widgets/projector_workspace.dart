@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/alignment_provider.dart';
 import '../providers/app_settings_provider.dart';
+import '../providers/canvas_reveal_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../providers/selection_provider.dart';
 import '../../domain/card_layout.dart';
@@ -463,6 +464,37 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
     });
   }
 
+  /// Centres the card of [id] in the viewport at the current zoom, unless it
+  /// is already wholly in view.
+  void _revealNode(String id) {
+    if (!mounted) return;
+    if (!_horizontalController.hasClients || !_verticalController.hasClients) {
+      return;
+    }
+    final node = ref
+        .read(workspaceProvider)
+        .where((n) => n.id == id)
+        .firstOrNull;
+    if (node == null) return;
+    final h = _horizontalController.position;
+    final v = _verticalController.position;
+    final card =
+        Offset(node.x, node.y) * _currentZoom &
+        const Size(_cardWidth, _cardHeight) * _currentZoom;
+    final view =
+        Offset(h.pixels, v.pixels) &
+        Size(h.viewportDimension, v.viewportDimension);
+    if (view.contains(card.topLeft) && view.contains(card.bottomRight)) {
+      return;
+    }
+    _horizontalController.jumpTo(
+      (card.center.dx - h.viewportDimension / 2).clamp(0.0, h.maxScrollExtent),
+    );
+    _verticalController.jumpTo(
+      (card.center.dy - v.viewportDimension / 2).clamp(0.0, v.maxScrollExtent),
+    );
+  }
+
   List<Widget> _buildGroupMenuItems(
     ProjectorNode node,
     WorkspaceNotifier notifier,
@@ -538,6 +570,14 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
       monitoring,
     ) {
       if (monitoring) _closeQuickStatus();
+    });
+    ref.listen(canvasRevealProvider, (_, request) {
+      // After the frame that switches the view back to Controls.
+      if (request != null) {
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _revealNode(request.nodeId),
+        );
+      }
     });
 
     return LayoutBuilder(

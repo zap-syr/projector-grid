@@ -1,13 +1,18 @@
 import 'package:flutter/gestures.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:projector_grid/core/services/remote_preview_service.dart';
 import 'package:projector_grid/core/theme/app_theme.dart';
+import 'package:projector_grid/features/workspace/domain/monitoring_filter.dart';
+import 'package:projector_grid/features/workspace/domain/monitoring_status.dart';
 import 'package:projector_grid/features/workspace/domain/monitoring_view_settings.dart';
 import 'package:projector_grid/features/workspace/domain/projector_group.dart';
 import 'package:projector_grid/features/workspace/domain/projector_node.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/app_settings_provider.dart';
+import 'package:projector_grid/features/workspace/presentation/providers/canvas_reveal_provider.dart';
+import 'package:projector_grid/features/workspace/presentation/providers/monitoring_filter_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/monitoring_panel_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/monitoring_view_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/protocol_service_provider.dart';
@@ -17,6 +22,8 @@ import 'package:projector_grid/features/workspace/presentation/providers/remote_
 import 'package:projector_grid/features/workspace/presentation/providers/selection_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/workspace_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/common/status_pill.dart';
+import 'package:projector_grid/features/workspace/presentation/widgets/common/test_pattern_thumb.dart';
+import 'package:projector_grid/features/workspace/presentation/widgets/monitoring/monitoring_bar.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/monitoring/projector_panel.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/remote_preview_dialog.dart';
 
@@ -157,27 +164,63 @@ void main() {
     expect(tester.getTopLeft(find.text('Errors').first), errors);
     expect(find.text('Preview'), findsOneWidget);
     expect(find.text('Web UI'), findsOneWidget);
-    expect(find.text('Find on canvas'), findsOneWidget);
+    expect(find.text('Locate'), findsOneWidget);
 
     await tester.tap(find.byIcon(Icons.close));
     await tester.pumpAndSettle();
     expect(find.byType(ProjectorPanel), findsNothing);
   });
 
-  testWidgets('Find on canvas switches to Controls with the node selected', (
+  testWidgets('Locate switches to Controls with the node selected', (
     tester,
   ) async {
     await showMonitoring(tester, rig);
     final c = appContainer(tester);
     c.read(monitoringPanelProvider.notifier).open('2');
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Find on canvas'));
+    await tester.tap(find.text('Locate'));
     await tester.pumpAndSettle();
     expect(c.read(appSettingsProvider).isMonitoringView, isFalse);
     expect(c.read(selectionProvider), {'2'});
+    expect(c.read(canvasRevealProvider)?.nodeId, '2');
   });
 
-  testWidgets('offline rows: dimmed, accent, last seen, Offline badge', (
+  group('the row menu', () {
+    // Opens the ⋮ menu of [ip]'s row and picks [item]; the pointer then
+    // leaves the row for the menu, which unmounts the row's actions.
+    Future<void> pick(WidgetTester tester, String ip, String item) async {
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: Offset.zero);
+      addTearDown(mouse.removePointer);
+      await mouse.moveTo(tester.getCenter(find.text(ip)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.more_vert));
+      await tester.pumpAndSettle();
+      final target = find.widgetWithText(MenuItemButton, item);
+      await mouse.moveTo(tester.getCenter(target));
+      await tester.pumpAndSettle();
+      await tester.tap(target);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('Show details opens the panel', (tester) async {
+      await showMonitoring(tester, rig);
+      await pick(tester, '10.0.0.3', 'Show details');
+      expect(appContainer(tester).read(monitoringPanelProvider), '3');
+      expect(find.byType(ProjectorPanel), findsOneWidget);
+    });
+
+    testWidgets('Find on canvas switches to Controls', (tester) async {
+      await showMonitoring(tester, rig);
+      await pick(tester, '10.0.0.3', 'Find on canvas');
+      final c = appContainer(tester);
+      expect(c.read(appSettingsProvider).isMonitoringView, isFalse);
+      expect(c.read(selectionProvider), {'3'});
+      expect(c.read(canvasRevealProvider)?.nodeId, '3');
+    });
+  });
+
+  testWidgets('offline rows: dimmed, accent, last seen, errors Unknown', (
     tester,
   ) async {
     final seen = DateTime.now().copyWith(hour: 16, minute: 41);
@@ -186,7 +229,10 @@ void main() {
       _node('7', status: ConnectionStatus.offline, lastSeen: seen),
     ]);
     expect(find.text('RZ34K, last seen 16:41'), findsOneWidget);
-    expect(find.text('Offline'), findsOneWidget);
+    // Its codes and signal are the last ones it sent: the Signal pill and
+    // the Errors cell say Unknown, not None.
+    expect(find.text('Unknown'), findsNWidgets(2));
+    expect(find.text('None'), findsOneWidget);
     expect(find.byKey(const ValueKey('problem-accent')), findsOneWidget);
     // The Power cell of the offline row sits under a dimming Opacity.
     final dimmed = find.ancestor(
@@ -215,6 +261,8 @@ void main() {
     expect(tester.getTopLeft(find.text('Group by: group')), groupBy);
     expect(find.text('Intake'), findsNWidgets(3));
     expect(find.byKey(const ValueKey('compact-tile')), findsNothing);
+    // The two Main stage cards name their group; the ungrouped one doesn't.
+    expect(find.byKey(const ValueKey('card-group-pill')), findsNWidgets(2));
 
     await tester.tap(find.text('Compact'));
     await tester.pumpAndSettle();
@@ -250,6 +298,240 @@ void main() {
       find.byType(RemotePreviewDialog),
     );
     expect(dialog.nodes.map((n) => n.id), ['3']);
+  });
+
+  group('search and quick filters', () {
+    // Wide enough for the filters' names in the test font, which is far
+    // wider than the app's.
+    Future<void> showWide(
+      WidgetTester tester,
+      List<ProjectorNode> nodes,
+    ) async {
+      await showMonitoring(tester, nodes);
+      tester.view.physicalSize = const Size(3000, 1080);
+      await tester.pumpAndSettle();
+    }
+
+    Finder filterTab(String label) => find.descendant(
+      of: find.byKey(const ValueKey('monitoring-quick-filters')),
+      matching: find.text(label),
+    );
+
+    testWidgets('a quick filter shows its projectors and the count', (
+      tester,
+    ) async {
+      // No offline node here: its alert would fire a desktop notice while
+      // the test waits. The Offline filter's match is tested below.
+      await showWide(tester, rig);
+      expect(
+        find.byKey(const ValueKey('monitoring-shown-count')),
+        findsNothing,
+      );
+      await tester.tap(filterTab('Standby'));
+      await tester.pumpAndSettle();
+      expect(find.text('10.0.0.2'), findsOneWidget);
+      expect(find.text('10.0.0.1'), findsNothing);
+      expect(find.text('1 of 3'), findsOneWidget);
+
+      await tester.tap(filterTab('All'));
+      await tester.pumpAndSettle();
+      expect(find.text('10.0.0.1'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('monitoring-shown-count')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('an empty filter is dimmed, stays in place, does nothing', (
+      tester,
+    ) async {
+      await showWide(tester, rig);
+      final groupBy = tester.getTopLeft(find.text('Group by: group'));
+      final standby = tester.getTopLeft(filterTab('Standby'));
+      // No warnings, errors or offline projectors in the rig.
+      for (final empty in ['Attention', 'Offline']) {
+        await tester.tap(filterTab(empty));
+        await tester.pumpAndSettle();
+        expect(
+          appContainer(tester).read(monitoringFilterProvider).quick,
+          MonitoringQuickFilter.all,
+        );
+      }
+      await tester.tap(filterTab('Online'));
+      await tester.pumpAndSettle();
+      expect(tester.getTopLeft(filterTab('Standby')), standby);
+      expect(tester.getTopLeft(find.text('Group by: group')), groupBy);
+    });
+
+    testWidgets('Group by sits with the filters, left of the view switch', (
+      tester,
+    ) async {
+      await showWide(tester, rig);
+      final filters = tester.getRect(
+        find.byKey(const ValueKey('monitoring-quick-filters')),
+      );
+      final groupBy = tester.getRect(find.text('Group by: group'));
+      final search = tester.getRect(
+        find.byKey(const ValueKey('monitoring-search')),
+      );
+      expect(search.left, lessThan(filters.left));
+      expect(groupBy.left, greaterThan(filters.right));
+      expect(groupBy.left - filters.right, lessThan(30));
+    });
+
+    testWidgets('search by IP; Esc clears it, then closes the panel', (
+      tester,
+    ) async {
+      await showMonitoring(tester, rig);
+      final c = appContainer(tester);
+      c.read(monitoringPanelProvider.notifier).open('1');
+      await tester.enterText(
+        find.byKey(const ValueKey('monitoring-search')),
+        '0.0.3',
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('10.0.0.3'), findsOneWidget);
+      expect(find.text('10.0.0.2'), findsNothing);
+      expect(find.text('1 of 3'), findsOneWidget);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(c.read(monitoringFilterProvider).query, '');
+      expect(find.text('10.0.0.2'), findsOneWidget);
+      expect(c.read(monitoringPanelProvider), '1');
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(c.read(monitoringPanelProvider), isNull);
+    });
+
+    testWidgets('nothing matches: a note and Show all, in Table and Cards', (
+      tester,
+    ) async {
+      await showMonitoring(tester, rig);
+      await tester.enterText(
+        find.byKey(const ValueKey('monitoring-search')),
+        'zzz',
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('No projectors match'), findsOneWidget);
+      appContainer(tester)
+          .read(monitoringViewProvider.notifier)
+          .setMode(MonitoringViewMode.cards);
+      await tester.pumpAndSettle();
+      expect(find.text('No projectors match'), findsOneWidget);
+
+      await tester.tap(find.text('Show all'));
+      await tester.pumpAndSettle();
+      expect(find.text('No projectors match'), findsNothing);
+      expect(find.text('10.0.0.1'), findsOneWidget);
+      final field = tester.widget<TextField>(
+        find.byKey(const ValueKey('monitoring-search')),
+      );
+      expect(field.controller!.text, isEmpty);
+    });
+
+    testWidgets('Ctrl+F focuses the search field', (tester) async {
+      await showMonitoring(tester, rig);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pumpAndSettle();
+      final field = tester.widget<TextField>(
+        find.byKey(const ValueKey('monitoring-search')),
+      );
+      expect(field.focusNode!.hasFocus, isTrue);
+    });
+
+    test('quick filter counts and matches', () {
+      const online = MonitoringStatus(online: true);
+      const standby = MonitoringStatus(online: true, standby: true);
+      const offline = MonitoringStatus(level: ProblemLevel.offline);
+      const warning = MonitoringStatus(
+        online: true,
+        standby: true,
+        level: ProblemLevel.warning,
+      );
+      final counts = quickFilterCounts([online, standby, offline, warning]);
+      expect(counts[MonitoringQuickFilter.all], 4);
+      expect(counts[MonitoringQuickFilter.online], 3);
+      expect(counts[MonitoringQuickFilter.attention], 1);
+      expect(counts[MonitoringQuickFilter.offline], 1);
+      expect(counts[MonitoringQuickFilter.standby], 2);
+
+      final n = _node('12').copyWith(serialNumber: 'SH1234');
+      expect(matchesSearch(n, 'rz 10.0.0.12'), isTrue);
+      expect(matchesSearch(n, 'sh12'), isTrue);
+      expect(matchesSearch(n, 'rz 10.0.0.13'), isFalse);
+      expect(matchesSearch(n, '   '), isTrue);
+    });
+  });
+
+  testWidgets('Cards: group rows are filled bands across the view', (
+    tester,
+  ) async {
+    await showMonitoring(tester, rig);
+    appContainer(tester)
+        .read(monitoringViewProvider.notifier)
+        .setMode(MonitoringViewMode.cards);
+    await tester.pumpAndSettle();
+    final band = find.byKey(const ValueKey('group-g1'));
+    final view = tester.getRect(find.byType(MonitoringTable));
+    expect(tester.getRect(band).left, view.left);
+    // Short of the scrollbar's lane at most.
+    expect(view.right - tester.getRect(band).right, lessThan(20));
+    final material = tester.widget<Material>(
+      find.descendant(of: band, matching: find.byType(Material)).first,
+    );
+    expect(material.color, isNot(Colors.transparent));
+  });
+
+  testWidgets('Cards: Extended shows AC; Compact power red in standby, '
+      'with the shutter', (tester) async {
+    await showMonitoring(tester, rig);
+    final view = appContainer(tester).read(monitoringViewProvider.notifier);
+    view.setMode(MonitoringViewMode.cards);
+    await tester.pumpAndSettle();
+    expect(find.text('AC'), findsNWidgets(3));
+    expect(find.text('Light'), findsNothing);
+
+    view.setCardDensity(MonitoringCardDensity.compact);
+    await tester.pumpAndSettle();
+    final context = tester.element(find.byType(MonitoringTable));
+    final error = Theme.of(context).colorScheme.error;
+    Icon icon(String ip, String key) => tester.widget<Icon>(
+      find.descendant(
+        of: find.ancestor(
+          of: find.text(ip),
+          matching: find.byKey(const ValueKey('compact-tile')),
+        ),
+        matching: find.byKey(ValueKey(key)),
+      ),
+    );
+    expect(icon('10.0.0.2', 'compact-power').color, error);
+    expect(icon('10.0.0.1', 'compact-power').color, isNot(error));
+    // The rig's shutters are closed: red while on, grey in standby.
+    final shutter = icon('10.0.0.1', 'compact-shutter');
+    expect(shutter.icon, Icons.visibility_off_outlined);
+    expect(shutter.color, error);
+    expect(icon('10.0.0.2', 'compact-shutter').color, isNot(error));
+  });
+
+  testWidgets('the panel shows the test pattern with its thumbnail', (
+    tester,
+  ) async {
+    await showMonitoring(tester, [_node('1').copyWith(testPattern: 'OTS:07')]);
+    appContainer(tester).read(monitoringPanelProvider.notifier).open('1');
+    await tester.pumpAndSettle();
+    final panel = find.byType(ProjectorPanel);
+    expect(
+      find.descendant(of: panel, matching: find.byType(TestPatternThumb)),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: panel, matching: find.text('Cross Hatch')),
+      findsOneWidget,
+    );
   });
 
   // The view alone, at what an 800x600 window leaves it under the menu,
@@ -291,5 +573,67 @@ void main() {
     view.setCardDensity(MonitoringCardDensity.compact);
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
+  });
+
+  // The bar steps down (filter names, then the rest to icons) rather than
+  // overflow, and the search keeps some room at every width.
+  testWidgets('the bar fits every window width', (tester) async {
+    addTearDown(tester.view.reset);
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(800, 470);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          protocolServiceProvider.overrideWithValue(FakeProtocolService()),
+          remotePreviewProvider.overrideWith2((_) => _IdlePreview()),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.darkTheme,
+          home: const Scaffold(body: MonitoringTable()),
+        ),
+      ),
+    );
+    final c = ProviderScope.containerOf(
+      tester.element(find.byType(MonitoringTable)),
+    );
+    c.read(workspaceProvider.notifier).setNodes([
+      for (var i = 1; i <= 120; i++) _node('$i'),
+    ]);
+    for (final mode in MonitoringViewMode.values) {
+      c.read(monitoringViewProvider.notifier).setMode(mode);
+      for (var w = 800.0; w <= 2000; w += 60) {
+        tester.view.physicalSize = Size(w, 470);
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull, reason: '$mode at $w');
+        final search = tester.getSize(
+          find.byKey(const ValueKey('monitoring-search')),
+        );
+        // The test font is much wider than the app's, so the real field
+        // has more room than this.
+        expect(search.width, greaterThan(80), reason: '$mode at $w');
+        // No label of the bar is cut off (the field's own hint may be).
+        final field = find.byKey(const ValueKey('monitoring-search'));
+        for (final e
+            in find
+                .descendant(
+                  of: find.byType(MonitoringBar),
+                  matching: find.byType(RichText),
+                )
+                .evaluate()) {
+          if (find
+              .descendant(of: field, matching: find.byWidget(e.widget))
+              .evaluate()
+              .isNotEmpty) {
+            continue;
+          }
+          final p = e.renderObject! as RenderParagraph;
+          expect(
+            p.didExceedMaxLines,
+            isFalse,
+            reason: '"${p.text.toPlainText()}" cut, $mode at $w',
+          );
+        }
+      }
+    }
   });
 }
