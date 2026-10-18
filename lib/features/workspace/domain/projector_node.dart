@@ -8,6 +8,18 @@ enum ShutterStatus { open, closed }
 
 enum ConnectionStatus { connected, offline, unauthorized, unprotected }
 
+/// The worst of [statuses], for a badge that speaks for several projectors:
+/// Offline, then Wrong login, then No login, then Online.
+ConnectionStatus worstConnection(Iterable<ConnectionStatus> statuses) {
+  int rank(ConnectionStatus s) => switch (s) {
+    ConnectionStatus.connected => 0,
+    ConnectionStatus.unprotected => 1,
+    ConnectionStatus.unauthorized => 2,
+    ConnectionStatus.offline => 3,
+  };
+  return statuses.reduce((a, b) => rank(b) > rank(a) ? b : a);
+}
+
 /// True when [raw] — either NTCONTROL's raw signal register or one of the
 /// app's own formatted display fields — represents "no usable signal" rather
 /// than a real reading. Shared by the poll cycle (deciding whether to fall

@@ -6,6 +6,7 @@ import 'package:projector_grid/features/workspace/domain/projector_node.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/protocol_service_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/common/labeled_slider_row.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/edge_blending/black_level_state.dart';
+import 'package:projector_grid/features/workspace/presentation/widgets/edge_blending/edge_blend_canvas.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/edge_blending/edge_blend_parts.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/edge_blending/edge_blend_state.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/edge_blending/edge_blending_dialog.dart';
@@ -20,6 +21,7 @@ const _a = ProjectorNode(
   ipAddress: '10.0.0.1',
   x: 0,
   y: 0,
+  connectionStatus: ConnectionStatus.connected,
 );
 const _b = ProjectorNode(
   id: 'b',
@@ -27,6 +29,7 @@ const _b = ProjectorNode(
   ipAddress: '10.0.0.2',
   x: 200,
   y: 0,
+  connectionStatus: ConnectionStatus.connected,
 );
 
 const _full = Size(1920, 1080);
@@ -133,6 +136,55 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Online'), findsOneWidget);
+    });
+
+    testWidgets('the A / B switch is the dialogs\' tab strip', (tester) async {
+      await pump(tester, pair: true);
+      double tabHeight(Key strip) => tester
+          .getSize(
+            find
+                .descendant(
+                  of: find.byKey(strip),
+                  matching: find.byType(AnimatedContainer),
+                )
+                .first,
+          )
+          .height;
+      // The raised tab fills the track, as on the Edge Blending tabs.
+      expect(
+        tabHeight(const ValueKey('edge-blend-projector-switch')),
+        tabHeight(edgeBlendTabsKey),
+      );
+      await tester.tap(find.bySemanticsLabel('B 10.0.0.2'));
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('Edges of B', findRichText: true),
+        findsOneWidget,
+      );
+    });
+
+    test('the pair badge speaks for the one worse off', () {
+      expect(
+        worstConnection([
+          ConnectionStatus.connected,
+          ConnectionStatus.unprotected,
+        ]),
+        ConnectionStatus.unprotected,
+      );
+      expect(
+        worstConnection([
+          ConnectionStatus.unauthorized,
+          ConnectionStatus.unprotected,
+        ]),
+        ConnectionStatus.unauthorized,
+      );
+      expect(
+        worstConnection([
+          ConnectionStatus.offline,
+          ConnectionStatus.unauthorized,
+        ]),
+        ConnectionStatus.offline,
+      );
     });
 
     testWidgets('the linked overlapped row shows the link icon', (
@@ -332,14 +384,48 @@ void main() {
     }
   });
 
-  testWidgets('the Black Level tab pill names the mode once read', (
+  testWidgets('the Black Level tab pill is there before the tab opens', (
     tester,
   ) async {
+    fake.rawResponses['QVX:EBMI1'] = 'EBMI1=+00001';
     await pump(tester);
-    expect(find.text(BlackLevelMode.softEdgeAndBlack.pill), findsNothing);
     expect(find.text('2 edges'), findsOneWidget);
+    // Read with the first load, so the tab's label doesn't shift later.
+    final pill = find.descendant(
+      of: find.byKey(edgeBlendTabsKey),
+      matching: find.text(BlackLevelMode.blackOnly.pill),
+    );
+    expect(pill, findsOneWidget);
+    final before = tester.getRect(pill);
     await tapTab(tester, 'Black Level');
-    expect(find.text(BlackLevelMode.softEdgeAndBlack.pill), findsOneWidget);
+    expect(tester.getRect(pill), before);
     expect(EdgeBlendMode.on.detail, 'Built-in blend curve');
+  });
+
+  for (final pair in [false, true]) {
+    testWidgets('the canvas stays put between the tabs, pair: $pair', (
+      tester,
+    ) async {
+      await pump(tester, pair: pair);
+      final canvas = find.byType(EdgeBlendCanvas);
+      final blend = tester.getRect(canvas);
+      final note = tester.getSize(
+        find.byKey(const ValueKey('edge-blend-note')),
+      );
+      await tapTab(tester, 'Black Level');
+      expect(tester.getRect(canvas), blend);
+      // One line on both tabs.
+      expect(
+        tester.getSize(find.byKey(const ValueKey('edge-blend-note'))).height,
+        note.height,
+      );
+    });
+  }
+
+  testWidgets('no Black Level pill while its mode is unknown', (tester) async {
+    await pump(tester);
+    for (final m in BlackLevelMode.values) {
+      expect(find.text(m.pill), findsNothing);
+    }
   });
 }

@@ -43,19 +43,29 @@ class EdgeBlendSide extends ChangeNotifier {
   /// Null until the Black Level tab has loaded.
   BlackLevelState? get black => _values?.black;
 
+  /// The Black Level mode for the tab's pill: read with the first load, so
+  /// the pill is there before the tab is ever opened and its label doesn't
+  /// shift when the tab loads.
+  BlackLevelMode? get blackMode => black?.mode ?? _firstBlackMode;
+  BlackLevelMode? _firstBlackMode;
+
   bool _disposed = false;
 
   Future<void> load() async {
     loading = true;
     unreachable = false;
     notifyListeners();
-    final replies = await client.queryAll(edgeBlendQueries());
+    final queries = edgeBlendQueries();
+    final replies = await client.queryAll([...queries, _blackModeField.query]);
     if (_disposed) return;
     loading = false;
     if (replies.every((r) => r == null)) {
       unreachable = true;
     } else {
-      final (state, raster) = parseEdgeBlendState(replies);
+      final (state, raster) = parseEdgeBlendState(
+        replies.sublist(0, queries.length),
+      );
+      _firstBlackMode = _blackModeField.parse(replies.last);
       _values = _Values(state, null);
       _target = _values;
       this.raster = raster;

@@ -133,20 +133,34 @@ class CanvasLegend extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = AppText.of(context);
     // One line always: the entries fit at their size, and a font wider than
-    // planned shrinks them rather than wrapping or cutting them off.
-    final entries = FittedBox(
-      fit: BoxFit.scaleDown,
-      alignment: Alignment.centerLeft,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (final (i, (swatch, label)) in items.indexed) ...[
-            if (i > 0) const SizedBox(width: 16),
-            SizedBox.fromSize(size: swatchSize, child: swatch),
-            const SizedBox(width: 6),
-            Text(label, maxLines: 1, style: t.caption),
+    // planned shrinks them rather than wrapping or cutting them off. The
+    // line keeps its full height when they shrink, so a longer legend (Edge
+    // Blending's Black Level tab) doesn't make the footer shorter and move
+    // the drawing above it.
+    final painter = TextPainter(
+      text: TextSpan(text: 'Ag', style: t.caption),
+      textDirection: TextDirection.ltr,
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout();
+    final lineHeight = painter.height;
+    painter.dispose();
+    final entries = SizedBox(
+      height: lineHeight,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final (i, (swatch, label)) in items.indexed) ...[
+              if (i > 0) const SizedBox(width: 16),
+              SizedBox.fromSize(size: swatchSize, child: swatch),
+              const SizedBox(width: 6),
+              Text(label, maxLines: 1, style: t.caption),
+            ],
           ],
-        ],
+        ),
       ),
     );
     return Row(

@@ -4,7 +4,6 @@ import '../../../../../core/theme/app_theme.dart';
 import '../common/canvas_card.dart';
 import '../common/dashed_border.dart';
 import '../common/dialog_parts.dart';
-import '../common/key_caps.dart';
 import '../custom_tooltip.dart';
 import 'edge_blend_parts.dart';
 
@@ -58,17 +57,20 @@ class EdgeBlendCanvasCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = AppText.of(context);
     final keyHint = hint != EdgeBlendHint.black && notice == null;
-    final Widget? note = notice != null
-        ? Text(notice!)
-        : switch (hint) {
-            EdgeBlendHint.black => const Text(
-              'Each area shows its own level. Drag the border line to set '
-              'its width.',
-            ),
-            _ when compact => null,
-            EdgeBlendHint.single => const _KeyHint(),
-            EdgeBlendHint.pair => const _KeyHint(pair: true),
-          };
+    // One line on every tab and in every state, so the footer keeps its
+    // height and the raster stays put when the tab changes. The keys are
+    // in Keyboard Shortcuts and, in a narrow card, the keyboard icon.
+    final note =
+        notice ??
+        switch (hint) {
+          EdgeBlendHint.single =>
+            'Drag a handle or use the arrow keys. Double click resets an edge.',
+          EdgeBlendHint.pair =>
+            'Click a raster to edit it. Drag a handle or use the arrow keys.',
+          EdgeBlendHint.black =>
+            'Each area shows its own level. Drag the border line to set its '
+                'width.',
+        };
     return CanvasCard(
       key: edgeBlendCanvasCardKey,
       leading: leading,
@@ -102,12 +104,17 @@ class EdgeBlendCanvasCard extends StatelessWidget {
         opacity: off ? 0.38 : 1,
         child: _Legend(hint: hint),
       ),
-      note: note == null
-          ? null
-          : Opacity(
-              opacity: off ? 0.38 : 1,
-              child: CanvasNote(child: note),
-            ),
+      note: Opacity(
+        opacity: off ? 0.38 : 1,
+        child: CanvasNote(
+          child: Text(
+            note,
+            key: const ValueKey('edge-blend-note'),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -277,52 +284,4 @@ class _HatchPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_HatchPainter old) => old.fill != fill || old.line != line;
-}
-
-/// "Drag a handle, or move it 1 step with ← → ↑ ↓, 10 with Shift. Double
-/// click resets an edge, Esc clears the selection." with the keys as caps;
-/// a pair starts with how to switch projectors.
-class _KeyHint extends StatelessWidget {
-  const _KeyHint({this.pair = false});
-
-  final bool pair;
-
-  @override
-  Widget build(BuildContext context) {
-    InlineSpan cap(String key) => WidgetSpan(
-      alignment: PlaceholderAlignment.middle,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 1),
-        child: KeyCap(key, small: true),
-      ),
-    );
-    const space = TextSpan(text: ' ');
-    return Text.rich(
-      TextSpan(
-        children: [
-          if (pair)
-            const TextSpan(
-              text: 'Click a raster or its pill to edit that projector. ',
-            ),
-          const TextSpan(text: 'Drag a handle, or move it 1 step with '),
-          cap('←'),
-          space,
-          cap('→'),
-          space,
-          cap('↑'),
-          space,
-          cap('↓'),
-          const TextSpan(text: ', 10 with '),
-          cap('Shift'),
-          if (pair)
-            const TextSpan(text: '.')
-          else ...[
-            const TextSpan(text: '. Double click resets an edge, '),
-            cap('Esc'),
-            const TextSpan(text: ' clears the selection.'),
-          ],
-        ],
-      ),
-    );
-  }
 }

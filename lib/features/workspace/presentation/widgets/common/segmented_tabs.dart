@@ -8,15 +8,23 @@ class SegmentedTab<T> {
     required this.label,
     this.icon,
     this.pill,
+    this.content,
   });
 
   final T value;
+
+  /// Shown, or with [content] read out by a screen reader.
   final String label;
   final IconData? icon;
 
   /// A short state shown in a pill after the label (`3 colors`, `Off`), so
   /// each tab's state is visible without switching to it.
   final String? pill;
+
+  /// What the tab shows in place of icon, label and pill, given whether it
+  /// is the selected one (Edge Blending's A / B tabs: letter, IP in mono,
+  /// status dot). The track, raised tab and its animation stay the strip's.
+  final Widget Function(BuildContext context, bool selected)? content;
 }
 
 /// The pill tab strip shared by the dialogs and the control bar: a rounded
@@ -72,9 +80,11 @@ class SegmentedTabs<T> extends StatelessWidget {
             cs.onSurface.withValues(alpha: 0.10),
             cs.surfaceContainerHighest,
           );
+    final content = t.content;
     return Semantics(
       selected: isSelected,
       button: true,
+      label: content == null ? null : t.label,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -99,52 +109,54 @@ class SegmentedTabs<T> extends StatelessWidget {
                     : cs.outlineVariant.withValues(alpha: 0),
               ),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (t.icon != null) ...[
-                  Icon(t.icon, size: 16, color: fg),
-                  const SizedBox(width: 6),
-                ],
-                Flexible(
-                  child: Text(
-                    t.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: text.body.copyWith(
-                      color: fg,
-                      fontWeight: isSelected
-                          ? FontWeight.w600
-                          : FontWeight.w500,
-                    ),
-                  ),
-                ),
-                if (t.pill != null) ...[
-                  const SizedBox(width: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 1,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? cs.primaryContainer
-                          : cs.surfaceContainerHigh,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      t.pill!,
-                      style: text.caption.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: isSelected
-                            ? cs.onPrimaryContainer
-                            : cs.onSurfaceVariant,
+            child: content != null
+                ? ExcludeSemantics(child: content(context, isSelected))
+                : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (t.icon != null) ...[
+                        Icon(t.icon, size: 16, color: fg),
+                        const SizedBox(width: 6),
+                      ],
+                      Flexible(
+                        child: Text(
+                          t.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.body.copyWith(
+                            color: fg,
+                            fontWeight: isSelected
+                                ? FontWeight.w600
+                                : FontWeight.w500,
+                          ),
+                        ),
                       ),
-                    ),
+                      if (t.pill != null) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 1,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? cs.primaryContainer
+                                : cs.surfaceContainerHigh,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            t.pill!,
+                            style: text.caption.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: isSelected
+                                  ? cs.onPrimaryContainer
+                                  : cs.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                ],
-              ],
-            ),
           ),
         ),
       ),

@@ -8,6 +8,7 @@ import '../../../domain/edge_blend_labels.dart';
 import '../../../domain/edge_blend_pair.dart';
 import '../../../domain/projector_node.dart';
 import '../../providers/protocol_service_provider.dart';
+import '../../providers/workspace_provider.dart';
 import '../command_failure_notice.dart';
 import '../common/controls_card.dart';
 import '../common/dialog_parts.dart';
@@ -353,20 +354,44 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
     );
     final t = AppText.of(context);
     final status = AppStatusColors.of(context);
+    // Both replying: the connection badge a single projector's dialog shows
+    // (No login, Wrong login), for the one of the two that is worse off.
+    final worst = ref.watch(
+      workspaceProvider.select(
+        (nodes) => worstConnection([
+          for (final s in _sides)
+            nodes
+                    .where((n) => n.id == s.node.id)
+                    .firstOrNull
+                    ?.connectionStatus ??
+                s.node.connectionStatus,
+        ]),
+      ),
+    );
     return DialogTitleBar(
       icon: Icons.gradient,
       title: 'Edge Blending',
       pairIds: (_sides[0].node.id, _sides[1].node.id),
       badges: [
-        StatusPill(
+        KeyedSubtree(
           key: const ValueKey('edge-blend-pair-status'),
-          label: pairReplyLabel(reply),
-          dot: true,
-          color: switch (reply) {
-            PairReply.reading => t.tertiary,
-            PairReply.online => status.success,
-            PairReply.aSilent || PairReply.bSilent => status.warning,
-            PairReply.bothSilent => Theme.of(context).colorScheme.error,
+          child: switch (reply) {
+            PairReply.online => ConnectionStatusBadge(status: worst),
+            PairReply.reading => StatusPill(
+              label: pairReplyLabel(reply),
+              dot: true,
+              color: t.tertiary,
+            ),
+            PairReply.aSilent || PairReply.bSilent => StatusPill(
+              label: pairReplyLabel(reply),
+              dot: true,
+              color: status.warning,
+            ),
+            PairReply.bothSilent => StatusPill(
+              label: pairReplyLabel(reply),
+              dot: true,
+              color: Theme.of(context).colorScheme.error,
+            ),
           },
         ),
       ],
@@ -375,7 +400,7 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
 
   static IconData _modeIcon(EdgeBlendMode m) => switch (m) {
     EdgeBlendMode.off => Icons.block,
-    EdgeBlendMode.on => Icons.auto_awesome_motion,
+    EdgeBlendMode.on => Icons.blur_linear,
     EdgeBlendMode.user => Icons.show_chart,
   };
 
@@ -418,7 +443,7 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
         SegmentedTab(
           value: 0,
           label: 'Edge Blending',
-          icon: Icons.auto_awesome_motion,
+          icon: Icons.blur_linear,
           pill: ready
               ? blendTabPill(
                   loaded: true,
@@ -434,7 +459,7 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
           value: 1,
           label: 'Black Level',
           icon: Icons.contrast,
-          pill: side.black?.mode.pill,
+          pill: side.blackMode?.pill,
         ),
       ],
     );
@@ -544,7 +569,7 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
       notice: silent == null
           ? null
           : '${sideLetter(silent)} is not replying: Markers and Auto test '
-                'pattern go to ${sideLetter(1 - silent)} only until it does.',
+                'pattern go to ${sideLetter(1 - silent)} only.',
       leading: _pair ? _arrangementControls(compact) : null,
       actions: actions,
       body: Padding(
@@ -659,26 +684,33 @@ class _EdgeBlendingDialogState extends ConsumerState<EdgeBlendingDialog> {
     );
   }
 
-  /// The A / B switch at the top of a pair's controls card, on both tabs.
+  /// The A / B switch at the top of a pair's controls card, on both tabs:
+  /// the dialogs' tab strip, each tab with the letter, the IP in mono and
+  /// whether that projector replies.
   Widget? _projectorSwitch() {
     if (!_pair) return null;
     final t = AppText.of(context);
     final status = AppStatusColors.of(context);
     final error = Theme.of(context).colorScheme.error;
-    return ProjectorSwitch(
+    return SegmentedTabs<int>(
       key: const ValueKey('edge-blend-projector-switch'),
       selected: _active,
       onChanged: _setActive,
-      items: [
+      tabs: [
         for (final (i, s) in _sides.indexed)
-          (
-            letter: sideLetter(i),
-            ip: s.node.ipAddress,
-            dot: s.unreachable
-                ? error
-                : s.loading
-                ? t.tertiary
-                : status.success,
+          SegmentedTab(
+            value: i,
+            label: '${sideLetter(i)} ${s.node.ipAddress}',
+            content: (context, selected) => ProjectorTabContent(
+              letter: sideLetter(i),
+              ip: s.node.ipAddress,
+              selected: selected,
+              dot: s.unreachable
+                  ? error
+                  : s.loading
+                  ? t.tertiary
+                  : status.success,
+            ),
           ),
       ],
     );

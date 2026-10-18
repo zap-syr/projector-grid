@@ -208,108 +208,48 @@ class LinkChip extends StatelessWidget {
   }
 }
 
-/// One side of the A / B switch: letter, IP and whether it replies.
-typedef ProjectorSwitchItem = ({String letter, String ip, Color dot});
-
-/// The A / B switch at the top of a pair's controls card (§7a.3): the
-/// track and raised tab of the dialogs' tab strip, with the letter, the IP
-/// in mono and a status dot, which the shared tab strip has no room for.
-class ProjectorSwitch extends StatelessWidget {
-  const ProjectorSwitch({
+/// One tab of the A / B switch at the top of a pair's controls card
+/// (§7a.3), inside the dialogs' tab strip: the letter, the IP in mono and
+/// whether that projector replies.
+class ProjectorTabContent extends StatelessWidget {
+  const ProjectorTabContent({
     super.key,
-    required this.items,
+    required this.letter,
+    required this.ip,
+    required this.dot,
     required this.selected,
-    required this.onChanged,
   });
 
-  final List<ProjectorSwitchItem> items;
-  final int selected;
-  final ValueChanged<int> onChanged;
-
-  static const double height = 40;
+  final String letter;
+  final String ip;
+  final Color dot;
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
     final t = AppText.of(context);
-    // The raised tab of SegmentedTabs: white in light, a lighter step in
-    // dark.
-    final raised = theme.brightness == Brightness.light
-        ? cs.surfaceContainerLowest
-        : Color.alphaBlend(
-            cs.onSurface.withValues(alpha: 0.10),
-            cs.surfaceContainerHighest,
-          );
-    return Container(
-      height: height,
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.6)),
-      ),
-      child: Row(
-        children: [
-          for (final (i, item) in items.indexed)
-            Expanded(
-              child: Semantics(
-                button: true,
-                selected: i == selected,
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(9),
-                    onTap: i == selected ? null : () => onChanged(i),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      decoration: BoxDecoration(
-                        color: i == selected
-                            ? raised
-                            : raised.withValues(alpha: 0),
-                        borderRadius: BorderRadius.circular(9),
-                        border: Border.all(
-                          color: i == selected
-                              ? cs.outlineVariant
-                              : cs.outlineVariant.withValues(alpha: 0),
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          SideLetterTile(
-                            letter: item.letter,
-                            active: i == selected,
-                          ),
-                          const SizedBox(width: 7),
-                          Flexible(
-                            child: Text(
-                              item.ip,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: t.monoSmall.copyWith(
-                                color: i == selected ? t.primary : t.secondary,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 7),
-                          Container(
-                            width: 7,
-                            height: 7,
-                            decoration: BoxDecoration(
-                              color: item.dot,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SideLetterTile(letter: letter, active: selected),
+        const SizedBox(width: 7),
+        Flexible(
+          child: Text(
+            ip,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: t.monoSmall.copyWith(
+              color: selected ? t.primary : t.secondary,
             ),
-        ],
-      ),
+          ),
+        ),
+        const SizedBox(width: 7),
+        Container(
+          width: 7,
+          height: 7,
+          decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
+        ),
+      ],
     );
   }
 }
