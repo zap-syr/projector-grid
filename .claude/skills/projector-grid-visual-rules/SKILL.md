@@ -258,7 +258,30 @@ mode or a state.
   `SegmentedTabs`, `ModeTileRow`, `StatusPill` / `ConnectionStatusBadge`, `GroupPill`,
   `IpChips`, `StepButton`, `DialogFooter`, `SentRightAwayNote`. When a shared piece is
   missing something, extend it (a parameter) instead of hand-rolling a near copy in the
-  dialog.
+  dialog. `SegmentedTab.content` takes custom tab content (Edge Blending's A / B tabs:
+  letter, IP, status dot) inside the shared track and raised tab.
+- **`SegmentedTabs` switches views and tabs; it is not a filter.** Quick filters are
+  separate outlined, rounded chips (the Monitoring bar, as in the mockup), the selected
+  one filled with the primary container.
+- **Never measure text without the ambient style.** A `TextPainter` estimate must use
+  `DefaultTextStyle.of(context).style.merge(style)`: `AppText` styles carry no font
+  family, so without the merge it measures the fallback font, comes out narrow and
+  labels get cut. Widget tests run one test font for everything and can't catch this;
+  let widgets size themselves and measure only to choose a layout.
+- **Filters never come and go.** A quick filter with nothing behind it stays in its place,
+  dimmed and not clickable; a selected filter that empties stays selected and the view
+  says "No projectors match" with *Show all*. Nothing resets itself under the operator.
+  A bar that runs out of room steps down (names to icon + count, with the name in a
+  tooltip) rather than dropping controls.
+- **The test pattern is its thumbnail and name**, `TestPatternThumb` (20×12, hairline
+  frame) wherever the active pattern is named: canvas card, Monitoring table, panel.
+- **Pills at the right edge sit flush against it.** Next to an `Expanded` title, a pill
+  goes in without `Flexible`: an `Expanded` and a `Flexible` split the row in half and
+  strand the pills mid-row. `GroupPill` caps its own width; a tighter cap is a
+  `ConstrainedBox`.
+- **A status reads in the same colour everywhere.** Power and shutter in Monitoring
+  (table, cards, panel) use `ProjectorStatusStyle`, as the canvas card does: standby and
+  a closed shutter are red, the shutter is grey in standby.
 - **Same sizes for the same job:** every field and dropdown is 40 px high. Mode tiles of
   one dialog share one height. Footer buttons have the same height, and the primary one
   is on the right.
@@ -286,6 +309,10 @@ mode or a state.
 - Projectors are named by IP or model + IP (`RZ34K (192.168.0.41)`), never the model
   alone.
 - NTCONTROL command codes are not shown to the user.
+- "Error" names only the projector's own fault (its error codes). An app alert (a hot
+  reading, a lost signal) is an "Alert" or "Needs attention", and an amber error code
+  is a "Warning" (`Warning H001`). The Monitoring table's Errors column shows the
+  projector's codes only; the others show in their own column.
 
 ## 10. Checklist before you finish
 
