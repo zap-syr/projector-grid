@@ -192,8 +192,8 @@ void main() {
     expect(find.text('Offline'), findsOneWidget);
     expect(find.byKey(const ValueKey('card-power')), findsNothing);
     expect(find.byKey(const ValueKey('card-shutter')), findsNothing);
-    expect(cardBorder(tester).top.color, cs.error);
-    expect(cardBorder(tester).top.width, 1.5);
+    expect(cardBorder(tester).top.color, cs.error.withValues(alpha: 0.6));
+    expect(cardBorder(tester).top.width, 1);
   });
 
   for (final node in [
@@ -301,6 +301,24 @@ void main() {
     final card = tester.getRect(find.byKey(const ValueKey('card-border')));
     expect(ring.left, card.left - 5.5);
     expect(ring.bottom, card.bottom + 5.5);
+  });
+
+  testWidgets('hover outlines an unselected card, not a selected one', (
+    tester,
+  ) async {
+    final c = await pump(tester, _node());
+    final cs = Theme.of(cardContext(tester)).colorScheme;
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(
+      location: tester.getCenter(find.byKey(const ValueKey('card-border'))),
+    );
+    await tester.pump();
+    expect(cardBorder(tester).top.color, cs.primary.withValues(alpha: 0.7));
+
+    // The ring is the selection's one outline: no second line inside it.
+    c.read(selectionProvider.notifier).selectOnly('1');
+    await tester.pump();
+    expect(cardBorder(tester).top.color, cs.outlineVariant);
   });
 
   testWidgets('an alert appearing does not move the power icon', (

@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../core/services/external_links.dart';
 import '../../../../core/theme/app_theme.dart';
@@ -14,6 +13,7 @@ import '../../domain/test_patterns.dart';
 import '../providers/alignment_provider.dart';
 import '../providers/selection_provider.dart';
 import 'alert_badge.dart';
+import 'common/test_pattern_thumb.dart';
 import 'projector_status_style.dart';
 
 /// Height of the state-tinted header band at the top of a card.
@@ -216,10 +216,12 @@ class _ProjectorCardState extends ConsumerState<ProjectorCard> {
 
     // Offline is the only state that touches the outline, so a red outline
     // always means "doesn't answer" and standby never reads as a fault.
+    // A selected card already has its ring; a hover outline inside it would
+    // read as a second ring.
     final border = offline
-        ? Border.all(color: colorScheme.error, width: 1.5)
+        ? Border.all(color: colorScheme.error.withValues(alpha: 0.6))
         : Border.all(
-            color: _isHovered
+            color: _isHovered && !showSelection
                 ? colorScheme.primary.withValues(alpha: 0.7)
                 : colorScheme.outlineVariant,
           );
@@ -281,7 +283,7 @@ class _ProjectorCardState extends ConsumerState<ProjectorCard> {
             ),
           ),
           // Drawn over the content's edge rather than around it, so the
-          // 1.5 px offline outline doesn't shift the content by half a pixel.
+          // outline never shifts the content.
           Positioned.fill(
             child: IgnorePointer(
               child: DecoratedBox(
@@ -646,7 +648,7 @@ class _CardBody extends StatelessWidget {
                 // projector and appears as soon as the shutter opens.
                 if (isTestPatternActive(node.testPattern)) ...[
                   const SizedBox(width: 6),
-                  _TestPatternThumb(code: node.testPattern!),
+                  TestPatternThumb(code: node.testPattern!),
                 ],
               ],
             ),
@@ -695,31 +697,6 @@ class _GroupBand extends StatelessWidget {
               : null,
         ),
       ),
-    );
-  }
-}
-
-/// 20×12 preview of the active test pattern, bottom right of the card.
-class _TestPatternThumb extends StatelessWidget {
-  const _TestPatternThumb({required this.code});
-
-  final String code;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final icon = kTestPatternIcons[code];
-    return Container(
-      width: 20,
-      height: 12,
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(2),
-        border: Border.all(color: colorScheme.outline, width: 0.5),
-      ),
-      child: icon != null
-          ? SvgPicture.asset(icon, fit: BoxFit.cover)
-          : Icon(Icons.grid_on, size: 10, color: colorScheme.onSurfaceVariant),
     );
   }
 }
