@@ -350,7 +350,7 @@ class QuickStatusContent extends ConsumerWidget {
             alignment: Alignment.centerRight,
             child: FilledButton.tonalIcon(
               onPressed: onRemotePreview,
-              icon: const Icon(Icons.cast, size: 18),
+              icon: const Icon(Icons.monitor_outlined, size: 18),
               label: const Text('Remote Preview'),
             ),
           ),

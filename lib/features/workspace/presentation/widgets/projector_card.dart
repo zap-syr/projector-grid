@@ -120,17 +120,17 @@ class _ProjectorCardState extends ConsumerState<ProjectorCard> {
       const _MenuDivider(),
       MenuItemButton(
         onPressed: () => _closeAndRun(widget.onBrightnessControl),
-        leadingIcon: const Icon(Icons.brightness_6),
+        leadingIcon: const Icon(Icons.brightness_6_outlined),
         child: const Text('Brightness Control'),
       ),
       MenuItemButton(
         onPressed: () => _closeAndRun(widget.onColorCorrection),
-        leadingIcon: const Icon(Icons.tune),
+        leadingIcon: const Icon(Icons.palette_outlined),
         child: const Text('Color Correction'),
       ),
       MenuItemButton(
         onPressed: () => _closeAndRun(widget.onGeometryCorrection),
-        leadingIcon: const Icon(Icons.grid_4x4_outlined),
+        leadingIcon: const Icon(Icons.crop_free),
         child: const Text('Geometry Correction'),
       ),
       MenuItemButton(
@@ -141,7 +141,7 @@ class _ProjectorCardState extends ConsumerState<ProjectorCard> {
       const _MenuDivider(),
       MenuItemButton(
         onPressed: () => _closeAndRun(widget.onRemotePreview),
-        leadingIcon: const Icon(Icons.cast),
+        leadingIcon: const Icon(Icons.monitor_outlined),
         child: const Text('Remote Preview'),
       ),
       MenuItemButton(

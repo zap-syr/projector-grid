@@ -13,6 +13,7 @@ import '../providers/workspace_provider.dart';
 import 'brightness_control_dialog.dart';
 import 'color_correction_dialog.dart';
 import 'common/menu_check_gutter.dart';
+import 'edge_blending/edge_blending_dialog.dart';
 import 'geometry_correction_dialog.dart';
 
 /// Toolbar / menu / Ctrl+L entry point. Alignment works on the canvas, so
@@ -440,19 +441,24 @@ class _AdjustMenuState extends State<_AdjustMenu> {
       controller: _controller,
       menuChildren: [
         _item(
-          Icons.grid_4x4_outlined,
-          'Geometry',
-          () => _open((n) => GeometryCorrectionDialog(node: n)),
-        ),
-        _item(
-          Icons.brightness_6,
+          Icons.brightness_6_outlined,
           'Brightness',
           () => _open((n) => BrightnessControlDialog(node: n)),
         ),
         _item(
-          Icons.tune,
+          Icons.palette_outlined,
           'Color Correction',
           () => _open((n) => ColorCorrectionDialog(node: n)),
+        ),
+        _item(
+          Icons.crop_free,
+          'Geometry',
+          () => _open((n) => GeometryCorrectionDialog(node: n)),
+        ),
+        _item(
+          Icons.gradient,
+          'Edge Blending',
+          () => _open((n) => EdgeBlendingDialog(nodes: [n])),
         ),
       ],
       child: _MenuButton(

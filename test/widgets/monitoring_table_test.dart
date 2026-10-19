@@ -292,7 +292,7 @@ void main() {
     addTearDown(mouse.removePointer);
     await mouse.moveTo(tester.getCenter(find.text('10.0.0.3')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byIcon(Icons.cast));
+    await tester.tap(find.byIcon(Icons.monitor_outlined));
     await tester.pumpAndSettle();
     final dialog = tester.widget<RemotePreviewDialog>(
       find.byType(RemotePreviewDialog),

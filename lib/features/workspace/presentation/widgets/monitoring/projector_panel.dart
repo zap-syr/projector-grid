@@ -182,7 +182,7 @@ class ProjectorPanel extends ConsumerWidget {
                 spacing: 6,
                 children: [
                   _Action(
-                    icon: Icons.cast,
+                    icon: Icons.monitor_outlined,
                     label: 'Preview',
                     onPressed: () => openMonitoringPreview(context, ref, node),
                   ),

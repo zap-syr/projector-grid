@@ -73,7 +73,7 @@ class MonitoringRowActions extends ConsumerWidget {
         CustomTooltip(
           message: 'Remote Preview',
           child: IconButton(
-            icon: const Icon(Icons.cast, size: 18),
+            icon: const Icon(Icons.monitor_outlined, size: 18),
             color: cs.onSurfaceVariant,
             padding: EdgeInsets.zero,
             constraints: constraints,
