@@ -372,10 +372,46 @@ generalises it to "remove the id, pause only when no group is left".
 
 ---
 
-## 4. `[ ]` Scheduled Tasks
+## 4. `[x]` Scheduled Tasks
+
+Done 2026-10-19 (agent, then fixes after the owner's check). Differs from the text below
+and the decisions under it:
+- **No Active switch in the editor** (owner): it repeated the card's. A task is switched
+  on and off on its list card only; the editor header keeps the status pill.
+- **New task is filled**, as Manage Groups' *New group*, and disabled while the editor's
+  own filled button (*Create task*, *Save changes* with edits, *Schedule again* with a
+  valid date) can be pressed. The empty state has no button of its own.
+- **Picker tiles for Power and Shutter** read as on the control bar: its icon in the
+  status colour and one word (*On*, *Standby*, *Open*, *Close*); the full name stays
+  everywhere else.
+- Section numbers on a neutral tile, the editor footer is its own compact one inside
+  the card (*Delete* steps down to an icon when narrow), *Duplicate* opens an unsaved
+  new task.
 
 Boards: *Scheduled Tasks: weekly task / new task, validation / command picker / many tasks,
 10 groups / completed tasks*. Dialog 980×660.
+
+Decided with the owner 2026-10-19, before implementation:
+- **Active switch**: the card's switch applies at once (no Save), as today; the editor
+  header's switch is part of the edit and applies with *Save changes*.
+- **List order**: active tasks by next run, paused ones after them, then the collapsed
+  *Completed* section.
+- **On open nothing is selected.** With tasks, the editor shows a summary: clock icon,
+  "3 active, 1 paused", "Next run Tue 13 Oct, 08:00" (left out while none is active), and
+  "Select a task to edit it." With no tasks: clock icon, **No scheduled tasks**, "Send a
+  command to all projectors or to groups at a set time: once, daily or weekly." and a
+  *New task* button; the list shows "No tasks yet".
+- **Narrow window** (§1.4, down to 800): the list narrows to 280 px and the day presets
+  wrap under the day toggles when the row doesn't fit.
+- **Commands**: only the mockup's set (Power, Shutter, Input, Custom); more categories
+  later.
+- **Command string** (*Enter a command string…*) stays in the task only, not added to
+  Custom Commands.
+- **Overdue one-time tasks never run** (owner, replaces today's late run; §4.8 stays
+  deferred for the rest): a one-time task fires only within a 2-minute grace of its time.
+  Later than that it goes to *Completed* with a grey "Not run, Thu 8 Oct, 18:00" line (no
+  green check), derived from the date, no new field or state file. It offers *Schedule
+  again*, *Duplicate* and *Delete* like a completed one.
 
 ### 4.1 One master-detail dialog
 Today the list and the editor are two dialogs (`ScheduledTasksDialog` opens
