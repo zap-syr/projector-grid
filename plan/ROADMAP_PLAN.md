@@ -33,7 +33,7 @@ accepted item so each can be picked up independently. Edge Blending has its own 
 | U4 | Side panel instead of modal dialogs | `[dropped]` | Doesn't fit the current layout; dialogs are open → adjust → close, rarely revisited |
 | U5 | Command palette (Ctrl+K) | **Accepted** → §11 | Owner asked for UX + code design |
 | U6 | Monitoring table keyboard/filter/export | `[later]` | Already tracked in `MONITORING_UI_PLAN.md` §5/§7/§9 |
-| U7 | Dialog redesign (Add / Edit Projector, Groups, Scheduled Tasks, Brightness Control, Color Correction, Geometry Correction, Edge Blending, Remote Preview, Custom Command, Keyboard Shortcuts, About; main toolbar; tooltip; control bar; Monitoring view; projector card; icon title bar for all dialogs) | **Accepted** → §13 | Design approved 2026-10-13 from the mockups; full plan in `DIALOG_REDESIGN_PLAN.md` |
+| U7 | Dialog redesign (Add / Edit Projector, Groups, Scheduled Tasks, Brightness Control, Color Correction, Geometry Correction, Edge Blending, Remote Preview, Custom Command, Keyboard Shortcuts, About; main toolbar; tooltip; control bar; Monitoring view; projector card; event log panel; icon title bar for all dialogs) | **Accepted** → §13 | Design approved 2026-10-13 from the mockups; full plan in `DIALOG_REDESIGN_PLAN.md` |
 
 Suggested order (value ÷ effort, and what unblocks what):
 **U1 → U2 → (Edge Blending) → F1 → F4 → U3 → F5 → F3 → U5 → F7/§5 → R6 in parallel throughout.**
@@ -1629,8 +1629,14 @@ because the work is large. In short:
   on, amber transition, red standby, red closed shutter); offline as a red card instead of
   a dot; the group as a band inside the card instead of a tint and a pill; selection as a
   blue ring; context menu headed by model + IP; a new quick status popover on hover.
+- **Event log panel:** a 56 px header with outlined filter chips (Alerts takes errors and warnings, Web added), a
+  40 px search field and Follow / Copy / Clear / Close; 34 px rows with column headers,
+  severity icons, the source as icon and word; repeats folded with a count; hover actions
+  (Locate, Open alerts, Copy row); a command sent to several projectors as one
+  row with sent / failed / skipped pills that opens to the projector lines, with Retry
+  failed; Clear behind a confirm; the panel can grow past 240 px and keeps its height.
 
 Order: foundation (with the tooltip) → Groups → Add / Edit Projector → Brightness Control →
 Color Correction → Geometry Correction → Edge Blending → Remote Preview → Custom Command →
 Keyboard Shortcuts and About → main toolbar → control bar → projector card → Monitoring
-view → Scheduled Tasks (plan §8).
+view → Scheduled Tasks → event log panel (plan §8).

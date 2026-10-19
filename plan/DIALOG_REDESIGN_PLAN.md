@@ -4,8 +4,8 @@ Status: `[ ]` pending · `[~]` in progress · `[x]` done · `[dropped]` not doin
 
 Design approved by the owner on 2026-10-13. Mockups (light and dark for every board,
 Geometry Correction, Edge Blending, Remote Preview, Custom Command, Keyboard Shortcuts,
-About, the main toolbar, the tooltip, the control bar, the Monitoring view and the
-projector card dark only; the tooltip also in light):
+About, the main toolbar, the tooltip, the control bar, the Monitoring view, the
+projector card and the event log dark only; the tooltip also in light):
 https://claude.ai/artifact/AL2c8Kh9aoXrrv2eUmVdcJ (canvas *Projector Grid dialogs redesign*).
 Roadmap item: `ROADMAP_PLAN.md` §13 (U7).
 
@@ -16,8 +16,8 @@ boards (owner, 2026-10-17).
 The redesign covers twelve dialogs in depth (Add Projectors, Edit Projector, Groups,
 Scheduled Tasks, Brightness Control, Color Correction, Geometry Correction, Edge Blending,
 Remote Preview, Custom Command, Keyboard Shortcuts, About), the main toolbar, the
-tooltip, the control bar, the Monitoring view and the projector card on the Controls
-canvas (§7f, §7g, §7h, §7i, §7j), and one
+tooltip, the control bar, the Monitoring view, the projector card on the Controls
+canvas and the event log panel (§7f, §7g, §7h, §7i, §7j, §7k), and one
 change that reaches **every** dialog: the shared title bar gets an icon tile, so all dialogs
 take the new look, not just the redesigned ones.
 
@@ -1475,6 +1475,141 @@ Temperatures, signal details and errors stay in Monitoring (§7i).
 
 ---
 
+## 7k. `[ ]` Event log panel
+
+Boards (dark only): *Event log: the panel in the window, a row hovered / Problems filter
+and search / empty, no match, minimum height, 800 px window, clear / a command sent to
+several projectors, collapsed and opened*. Approved 2026-10-19. Today
+(`event_log_panel.dart`): a 34 px bar with a blue *EVENT LOG*, text filter tabs with
+counts, a 22 px search field, three 14 px icon buttons; 26 px rows in 11 px text with a
+6 px severity dot; a command to several projectors writes one line per projector and a
+separate summary line naming models.
+
+The panel stays a docked strip under the canvas, resizable by its grip. It gets the
+dialogs' type, fields, chips and icons (`projector-grid-visual-rules`).
+
+### 7k.1 Header
+- **56 px**, the toolbar colour. Left: a 30 px `DialogIconTile` with the list icon and
+  *Event log* in `cardTitle`, sentence case (the blue capitals go).
+- **Filter chips**: outlined, rounded, the count after the name, the selected one in
+  `primaryContainer`, as the Monitoring bar (§7i.1), not `SegmentedTabs`. *All*,
+  *Alerts* (with a red dot), *Commands*, *Connection*, *OSC* and the new *Web*. *Alerts*
+  takes every error and warning of any source (the old *Errors* folds into it, the
+  board's *Problems* chip is dropped, decided 2026-10-19) and every alert event, the
+  info ones too (acknowledged, cleared), so an alert's history reads in one place.
+  Projector events (`hardware`, the error codes) show under *All* and *Alerts*. A chip
+  with no events stays in place, dimmed (§8 of the visual rules); a selected one that
+  empties stays selected.
+- **Search log**: a 40 px `dialogFieldDecoration` field with the search icon, the ✕ in
+  `Visibility(maintainSize: true)`. It searches IP, model and message; matches are
+  highlighted in the row.
+- **Buttons**, 36 px icon buttons with `CustomTooltip`s, after a thin divider: *Follow
+  new events*, *Copy*, *Clear*, *Close*.
+- **Narrow** (the 800 px window, or the panel at half width): the title text goes, the
+  chips step down to icon + count with the name in a tooltip, the search field narrows.
+  Nothing is dropped.
+
+### 7k.2 Columns and rows
+- A **column header** under the bar: *Time*, *Projector*, *Source*, *Event* (`label`).
+- **Rows 34 px** (was 26), text `body` 14. Time and IP in `mono`, the model after the IP in
+  `description`; an event with no projector shows *App* or the group in its place.
+- **Severity is an icon**, not a dot: red error, amber warning, green success, grey info.
+  Error and warning rows get a faint tint of their colour and a 3 px left edge; the
+  message stays in the primary text colour, only the icon and the edge carry the colour.
+- **Source** is an icon and a word: *Command*, *OSC*, *Connection*, *Alert*, *Web*,
+  *Projector*. In the 800 px window the Source column hides.
+- **OSC rows** show the address in `mono` and the sender (`from 10.0.0.20`). **Command
+  rows** name where the command came from in `description` (*from the control bar*, *from
+  OSC*, *from scheduled task "Evening shutdown"*, *from Web, 10.0.0.5 (operator)*).
+  Today only the Web API passes a source (`'Web · ip · role'`, which breaks the no `·`
+  rule): `sendCommandToSelected`, `sendCommandToGroup(s)` and `sendCommandToAll` take a
+  `source` too, and the control bar, OSC and the scheduler pass theirs. The scheduler's
+  separate `[Scheduler] "name"` line after the dispatch (`scheduled_tasks_provider.dart`)
+  goes; the command row names the task instead.
+- **Repeats collapse**: the same event (type, severity, message) from the same projector
+  becomes one row with *14 times, last 21:02:41* when that projector logged nothing else
+  in between; events of other projectors in between don't break the run (polling
+  interleaves them). So a projector that flaps doesn't fill the log.
+- **Hover actions** on the right of the row: *Locate*, the short text button as in the
+  Monitoring panel (`findOnCanvas`: switches to Controls if needed, selects the card and
+  scrolls to it, no glow). The row knows the IP, not the id, so the node is looked up
+  by IP and *Locate* is hidden when the projector is gone. *Open alerts* on alert rows
+  (the active alerts panel), *Copy row*.
+
+### 7k.3 Commands sent to several projectors
+- **One row per command** with a chevron, replacing today's per-projector lines plus the
+  separate summary line. *Projector*: the group (*Stage, 6 projectors*), or *8 projectors*
+  for a mixed selection or several groups. *Event*: the command, where it came from, and
+  pills: green *4 sent*, red *1 failed*, grey *1 skipped*.
+- **Severity follows the result**: info when every projector got it, warning when some
+  failed or were skipped, so the row shows under *Alerts*.
+- **While it runs** the row is there from the first reply: it is built from the batch id,
+  the pills count up as replies come in, and the summary event only closes it. So a
+  command to 100+ projectors (sent in batches of 100) shows one row from the start
+  instead of loose projector lines that fold up at the end.
+- **Rows start closed.** A click on the row or the chevron lists every projector by IP and
+  model, under a tree line: green *Sent*, red *Failed* with the reason (*no answer within
+  5 s*), grey *Skipped* with the reason (*offline*, *wrong login*). Opening a row doesn't
+  move the rows above it.
+- **Retry failed** (hover action on a row with failures) sends the command again to the
+  failed projectors only and logs a new row (*from retry*). The batch keeps the command
+  and the failed projectors' ids, not their IPs (an IP can change); a projector removed
+  since is skipped.
+- A command to **one projector** stays a single row.
+- **Search** for an IP finds it inside a group row and opens that row. **Copy** writes the
+  summary line and its projector lines.
+- **Data**: `LogEvent` gets a batch id (plain Dart, no codegen); `_dispatchToNodes` writes
+  the projector lines with it and the summary row last. The list shows the summary and
+  folds the lines under it. The cap becomes **500 rows**, not 500 events: a batch with
+  its projector lines counts as one row and is dropped whole, so a command to 100
+  projectors doesn't take 101 places or lose half its lines at the end of the log
+  (decided 2026-10-19). The Web API summary
+  (`dispatchSummary`, `web_api_dto.dart`) keeps its text.
+
+### 7k.4 Follow and new events
+- **Follow** (the arrow to a bar, before *Copy*) is on by default and blue while on: the
+  list stays at the newest event, which is at the top.
+- **Scrolling down** to older events turns it off, so the list doesn't move under the
+  reader; new events then wait in a *5 new events* pill at the top of the list.
+- A click on *Follow* or on the pill goes back to the newest event and turns it on again.
+
+### 7k.5 States, size and Clear
+- **Empty**: the tile, *No events yet* and *Commands, connection changes, OSC and alerts
+  appear here as they happen*.
+- **Nothing matches**: *No events match*, the active filter and search named under it, and
+  a *Show all* text button. The filter and search stay; nothing resets on its own.
+- **Height**: minimum 120 px (was 100: the 56 px header, the column header and one 34 px
+  row; `EventLogPanel.minHeight`), maximum the window minus 150 px.
+  Today `main_workspace_screen.dart` clamps `maxLogHeight` to `defaultHeight` (240), so the
+  grip can't make the panel taller; the clamp goes. The grip keeps its place on top.
+  The 150 px reserve includes the status bar, so in the 600 px minimum window (about
+  550 px under the toolbar) the panel reaches about 340 px, in 1280×720 about 470 px,
+  in a 1080p window about 830 px.
+- **The height is saved** in `appSettingsProvider` and restored on start; when the window
+  is smaller than the saved height allows, the panel takes the maximum and the saved
+  value stays, so it comes back when the window grows.
+- **Clear** opens a `ConfirmDialog` (*Clear the event log?*, *All 486 events are removed.
+  Copy them first if you need them.*, a destructive *Clear*), since the log can't be
+  brought back.
+- An `eventLogRequestProvider` request (alerts only, or a search) still selects *Alerts*
+  or fills the search as today.
+
+### 7k.6 Decisions (owner, 2026-10-19)
+- *Problems* and *Alerts* are one chip, *Alerts*: errors, warnings and all alert events.
+- The log keeps 500 rows; a batch is one row.
+- *Locate* instead of *Find on canvas*, as in Monitoring; select and scroll, no glow.
+- A batch row appears with the first reply and its pills count up.
+- Every command path passes its source; the scheduler's extra line goes.
+- Repeats fold per projector, ignoring other projectors' events in between.
+- Retry targets the failed projectors by id and skips removed ones.
+- The panel height is saved; minimum 120 px so one row always shows, maximum the
+  window minus 150 px.
+- Three waves, each checked on a trial branch: (1) the look, chips, search with
+  highlight, height and Clear confirm; (2) batch rows, sources, Retry; (3) repeats,
+  hover actions, Follow.
+
+---
+
 ## 8. Order
 
 1. **Foundation** (§1): `DialogTitleBar` icon + all dialogs migrated in one go (the change is
@@ -1515,6 +1650,10 @@ Temperatures, signal details and errors stay in Monitoring (§7i).
 15. **Scheduled Tasks** (§4): largest; model change (`targetGroupIds`), one dialog instead
    of two, command picker. Missed runs and their state file (§4.8) are deferred to a later
    step of their own.
+16. **Event log panel** (§7k): `event_log_panel.dart` split into header, row and batch row
+    widgets; three waves (§7k.6): the restyle, chips, search, height and Clear first,
+    then the batch id, grouped command rows, sources and Retry, then repeats, hover
+    actions and Follow.
 
 Each step: behaviour change only where this plan says so; `flutter analyze`, `dart format`,
 tests below, then a GUI check in both themes (`flutter-windows-gui-check`).
@@ -1571,6 +1710,16 @@ tests below, then a GUI check in both themes (`flutter-windows-gui-check`).
   appearing doesn't move the power icon (same `Offset`), the context menu header shows
   model + IP, the quick status popover opens with Space for one selected card only, closes
   on Space / Esc / a selection change / a drag, and doesn't open in Alignment mode;
+  event log: each chip filters as listed and *Alerts* takes errors, warnings and info
+  alert events, an empty chip stays in place dimmed, a command to several projectors
+  shows one closed row with the right pills and severity and opens to its projector
+  lines, the row is there after the first reply and its pills count up, a command to one
+  projector stays one row, a search for an IP opens its group row, repeats collapse with
+  the count across other projectors' events, *Locate* is hidden for a removed projector,
+  Retry sends to the failed ids only, Follow turns off on scroll and the pill brings it
+  back, Clear asks first, the panel grows past 240 px and its height is restored; unit
+  tests for the repeat folding, the batch grouping and the 500-row cap dropping a batch
+  whole (pure functions in `domain/`);
   `DialogTitleBar` with a projector id shows model + IP, the group pill only for a grouped
   projector, and the status badge, and the badge follows the node going offline while the
   dialog is open.
@@ -1604,3 +1753,8 @@ tests below, then a GUI check in both themes (`flutter-windows-gui-check`).
   variant C).
 - ~~Quick status popover trigger (§7j.6)~~ — decided 2026-10-15: Space for one selected
   card, no hover, no new model fields.
+- ~~Event log, commands to several projectors (§7k.3)~~ — decided 2026-10-19: one closed
+  row per command with result pills, opened to the projector lines by IP and model.
+- ~~Event log filters, cap, Locate, sources, repeats, height (§7k.6)~~ — decided
+  2026-10-19: one *Alerts* chip, 500 rows, *Locate* without glow, a source on every
+  command path, per-projector repeats, saved height, minimum 120 px.
