@@ -751,7 +751,12 @@ The minimum-window boards show where it ends up at 800×600, about 720×510 for 
 
 ---
 
-## 7a. `[ ]` Edge Blending
+## 7a. `[x]` Edge Blending
+
+Done 2026-10-19 (wave C, fixes after the owner's check). Differs from the text below: the
+Black Level tab's pill shows the Black Level Mode; the pair's A / B switch is a
+`SegmentedTabs` with custom tab content (letter, IP in mono, status dot), shared by both
+tabs; the hints under the canvas are one line each.
 
 Boards (dark only): *Edge Blending: one projector, Right edge selected / Black Level tab /
 mode Off / pair side by side, linked / pair, B not replying*. Approved 2026-10-14, after the
@@ -1222,7 +1227,20 @@ four favourite slots and a dropdown with *Set*.
 
 ---
 
-## 7i. `[ ]` Monitoring view
+## 7i. `[x]` Monitoring view
+
+Done 2026-10-19 (wave C, fixes after the owner's check). Differs from the text below:
+- Bar: search plus quick filter chips *All*, *Online*, *Attention*, *Offline*, *Standby*
+  (outlined chips with counts, always shown, dimmed at 0; a selected filter that empties
+  stays selected and shows "No projectors match" with *Show all*). Non-matching projectors
+  are hidden, the bar shows "8 of 20"; the filter lives for the session only. *Group by*
+  sits left, next to the filters. As the window narrows the filters, then the other
+  controls, drop to icons. No group filter and no *Export CSV* yet (deferred by the owner).
+- Ctrl+F (Cmd+F) focuses the search; Esc clears it, then closes the projector panel.
+- Extended cards show *AC* in place of light hours; compact tiles show a shutter icon next
+  to power, and power is red in standby and offline.
+- Cards' group rows are a filled band edge to edge, the same height as the table's.
+- The panel's Test pattern row has the pattern thumbnail (`TestPatternThumb`).
 
 Boards (dark only): *Monitoring: table, grouped / table with the projector panel / cards,
 extended / cards, compact, with the projector panel / table without groups*, each in the
@@ -1302,7 +1320,11 @@ near-black; secondary text no darker than `#80838D`. The same applies to the too
 
 ---
 
-## 7j. `[ ]` Projector card (Controls canvas)
+## 7j. `[x]` Projector card (Controls canvas)
+
+Done 2026-10-19 (wave C, fixes after the owner's check). Differs from the text below: the
+offline outline is 1 px in the error colour at 60 %, not 1.5 px; a selected card shows
+only the selection ring on hover, no second hover outline.
 
 Boards (dark only): *Projector card: states, group bands C and D / canvas, group C band
 inside / canvas, group D band under / quick status popover / Alignment mode / group
