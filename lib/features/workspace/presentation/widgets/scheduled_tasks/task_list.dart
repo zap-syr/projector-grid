@@ -37,7 +37,7 @@ class TaskList extends StatefulWidget {
   final ValueChanged<String> onSelect;
   final void Function(String id, bool enabled) onToggleEnabled;
 
-  /// Null disables *New task* (one is already open).
+  /// Null disables *New task* (the editor's filled button is live).
   final VoidCallback? onNewTask;
   final ValueChanged<bool> onCompletedOpenChanged;
   final VoidCallback onClearCompleted;
@@ -111,8 +111,9 @@ class _TaskListState extends State<TaskList> {
                 ),
               ),
               const SizedBox(width: 8),
-              // Tonal: the editor's Save or Create is the filled one.
-              FilledButton.tonalIcon(
+              // Filled, as Manage Groups' New group; the dialog disables it
+              // while the editor's own filled button can be pressed.
+              FilledButton.icon(
                 key: const ValueKey('new-task'),
                 onPressed: widget.onNewTask,
                 icon: const Icon(Icons.add, size: 18),

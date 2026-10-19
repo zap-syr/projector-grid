@@ -231,8 +231,9 @@ class _ScheduledTasksDialogState extends ConsumerState<ScheduledTasksDialog> {
     if (selected != null && isTaskFinished(selected, now)) _clearSelection();
   }
 
-  /// The card's switch applies at once. On the open task it moves the
-  /// editor's switch and baseline with it, so it doesn't read as an edit.
+  /// The card's switch, the only one a task has, applies at once. On the
+  /// open task it moves the draft and its baseline with it, so the header's
+  /// pill follows, it doesn't read as an edit and a Save never undoes it.
   void _toggleEnabled(String id, bool enabled) {
     ref.read(scheduledTasksProvider.notifier).toggleEnabled(id);
     final draft = _draft;
@@ -258,6 +259,15 @@ class _ScheduledTasksDialogState extends ConsumerState<ScheduledTasksDialog> {
     // The selected task can go away under the editor (the scheduler, a
     // Clear); the editor goes with it.
     final draft = _creating || selected != null ? _draft : null;
+    // One filled button enabled at a time, as Manage Groups' New group:
+    // New task waits while the editor's Create, Save or Schedule again can
+    // be pressed.
+    final editorPrimaryEnabled =
+        _creating ||
+        (draft != null &&
+            (isTaskFinished(selected!, now)
+                ? draft.errors(now).isEmpty
+                : _dirty));
 
     return Dialog(
       clipBehavior: Clip.antiAlias,
@@ -303,7 +313,9 @@ class _ScheduledTasksDialogState extends ConsumerState<ScheduledTasksDialog> {
                                   completedOpen: _completedOpen,
                                   onSelect: _select,
                                   onToggleEnabled: _toggleEnabled,
-                                  onNewTask: _creating ? null : _startNew,
+                                  onNewTask: editorPrimaryEnabled
+                                      ? null
+                                      : _startNew,
                                   onCompletedOpenChanged: (v) =>
                                       setState(() => _completedOpen = v),
                                   onClearCompleted: _clearCompleted,
@@ -344,7 +356,7 @@ class _ScheduledTasksDialogState extends ConsumerState<ScheduledTasksDialog> {
     DateTime now,
   ) {
     if (draft == null) {
-      if (tasks.isEmpty) return EditorPlaceholder.empty(onNewTask: _startNew);
+      if (tasks.isEmpty) return const EditorPlaceholder.empty();
       final statuses = tasks.map((t) => taskStatusOf(t, now)).toList();
       final next = nextScheduledRun(
         tasks.where((t) => taskStatusOf(t, now) == TaskStatus.active),

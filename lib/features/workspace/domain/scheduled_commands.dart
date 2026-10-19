@@ -15,11 +15,18 @@ enum CommandCategory {
 /// One command a scheduled task can send: the name the user sees and the
 /// NTCONTROL string, which the picker never shows.
 class ScheduledCommand {
-  const ScheduledCommand(this.label, this.command, this.category);
+  const ScheduledCommand(this.label, this.command, this.category, {this.short});
 
   final String label;
   final String command;
   final CommandCategory category;
+
+  /// The word on the picker's tile where its category header already says
+  /// the rest (`Standby` under *Power*), as on the control bar. Everywhere
+  /// else the command shows by [label].
+  final String? short;
+
+  String get tileLabel => short ?? label;
 
   @override
   bool operator ==(Object other) =>
@@ -33,10 +40,25 @@ class ScheduledCommand {
 }
 
 const builtInScheduledCommands = <ScheduledCommand>[
-  ScheduledCommand('Power on', 'PON', CommandCategory.power),
-  ScheduledCommand('Power standby', 'POF', CommandCategory.power),
-  ScheduledCommand('Shutter open', 'OSH:0', CommandCategory.shutter),
-  ScheduledCommand('Shutter close', 'OSH:1', CommandCategory.shutter),
+  ScheduledCommand('Power on', 'PON', CommandCategory.power, short: 'On'),
+  ScheduledCommand(
+    'Power standby',
+    'POF',
+    CommandCategory.power,
+    short: 'Standby',
+  ),
+  ScheduledCommand(
+    'Shutter open',
+    'OSH:0',
+    CommandCategory.shutter,
+    short: 'Open',
+  ),
+  ScheduledCommand(
+    'Shutter close',
+    'OSH:1',
+    CommandCategory.shutter,
+    short: 'Close',
+  ),
   ScheduledCommand('HDMI 1', 'IIS:HD1', CommandCategory.input),
   ScheduledCommand('HDMI 2', 'IIS:HD2', CommandCategory.input),
   ScheduledCommand('SDI 1', 'IIS:SD1', CommandCategory.input),

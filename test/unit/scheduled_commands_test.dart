@@ -28,6 +28,17 @@ void main() {
     expect(labels(catalog.skip(15)), ['Dynamic contrast', 'Lamp eco']);
   });
 
+  test('Power and Shutter tiles take the control bar word, the rest the '
+      'name', () {
+    expect(
+      [for (final c in catalog.take(5)) c.tileLabel],
+      ['On', 'Standby', 'Open', 'Close', 'HDMI 1'],
+    );
+    expect(catalog.last.tileLabel, 'Lamp eco');
+    // The full name stays the command's name everywhere else.
+    expect(catalog[1].label, 'Power standby');
+  });
+
   group('search', () {
     test('an empty query keeps everything in catalog order', () {
       expect(searchScheduledCommands(catalog, '  '), catalog);

@@ -26,9 +26,10 @@ enum TaskEditorMode {
   finished,
 }
 
-/// The right-hand card: a header with the task's name, its run pill and
-/// (for a saved task) the Active switch; the numbered Command, Target and
-/// When sections, scrolling when they don't fit; and the footer.
+/// The right-hand card: a header with the task's name and its run pill; the
+/// numbered Command, Target and When sections, scrolling when they don't
+/// fit; and the footer. A task is switched on and off on its list card
+/// only, so the header has no switch of its own.
 class TaskEditor extends StatelessWidget {
   const TaskEditor({
     super.key,
@@ -91,14 +92,6 @@ class TaskEditor extends StatelessWidget {
                 ? 'New task'
                 : _title(draft, groups),
             pill: _pill(context, status),
-            activeSwitch: mode == TaskEditorMode.editing
-                ? Switch(
-                    key: const ValueKey('editor-active'),
-                    value: draft.enabled,
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    onChanged: (v) => onChanged((d) => d.copyWith(enabled: v)),
-                  )
-                : null,
           ),
           Divider(
             height: 1,
@@ -411,11 +404,10 @@ class _WidestLabel extends StatelessWidget {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.title, this.pill, this.activeSwitch});
+  const _Header({required this.title, this.pill});
 
   final String title;
   final Widget? pill;
-  final Widget? activeSwitch;
 
   /// Below this the pill goes under the title, in the same 64 px.
   static const _stackBelow = 520.0;
@@ -424,7 +416,6 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = AppText.of(context);
     final pill = this.pill;
-    final activeSwitch = this.activeSwitch;
     final titleText = Text(
       title,
       key: const ValueKey('editor-title'),
@@ -470,12 +461,6 @@ class _Header extends StatelessWidget {
                 if (!stacked && pill != null) ...[
                   const SizedBox(width: 12),
                   pill,
-                ],
-                if (activeSwitch != null) ...[
-                  const SizedBox(width: 16),
-                  Text('Active', style: t.description),
-                  const SizedBox(width: 8),
-                  activeSwitch,
                 ],
               ],
             );

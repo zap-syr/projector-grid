@@ -378,8 +378,23 @@ class _GroupHeader extends StatelessWidget {
   }
 }
 
-/// A command by name only. The current one has a primary border and a
-/// check; the keyboard's position (and the mouse) a soft fill.
+/// The control bar's icon for a Power or Shutter command, in its status
+/// colour: green for what turns the picture on, red for what turns it off.
+(IconData, Color)? _tileIcon(BuildContext context, ScheduledCommand c) {
+  final on = AppStatusColors.of(context).success;
+  final off = Theme.of(context).colorScheme.error;
+  return switch (c.command) {
+    'PON' => (Icons.power_settings_new, on),
+    'POF' => (Icons.bedtime_outlined, off),
+    'OSH:0' => (Icons.visibility_outlined, on),
+    'OSH:1' => (Icons.visibility_off_outlined, off),
+    _ => null,
+  };
+}
+
+/// A command by name (Power and Shutter by the control bar's icon and
+/// word). The current one has a primary border and a check; the
+/// keyboard's position (and the mouse) a soft fill.
 class _CommandTile extends StatefulWidget {
   const _CommandTile({
     required this.command,
@@ -412,6 +427,7 @@ class _CommandTileState extends State<_CommandTile> {
         : lit
         ? surfaces.soft
         : surfaces.field;
+    final icon = _tileIcon(context, widget.command);
     return Semantics(
       button: true,
       selected: widget.selected,
@@ -441,9 +457,13 @@ class _CommandTileState extends State<_CommandTile> {
               ),
               child: Row(
                 children: [
+                  if (icon != null) ...[
+                    Icon(icon.$1, size: 18, color: icon.$2),
+                    const SizedBox(width: 8),
+                  ],
                   Expanded(
                     child: Text(
-                      widget.command.label,
+                      widget.command.tileLabel,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: t.body.copyWith(fontWeight: FontWeight.w600),

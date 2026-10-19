@@ -124,7 +124,9 @@ void main() {
   final today = DateTime(now.year, now.month, now.day);
 
   group('on open', () {
-    testWidgets('no tasks: the empty state and its New task', (tester) async {
+    testWidgets('no tasks: the empty state, the list\'s New task only', (
+      tester,
+    ) async {
       _useWindow(tester, const Size(1280, 900));
       await _pump(tester);
       expect(find.text('No scheduled tasks'), findsOneWidget);
@@ -136,8 +138,9 @@ void main() {
         ),
         findsOneWidget,
       );
+      expect(find.text('New task'), findsOneWidget);
 
-      await tester.tap(find.byKey(const ValueKey('empty-new-task')));
+      await tester.tap(find.byKey(const ValueKey('new-task')));
       await tester.pumpAndSettle();
       expect(_title(tester), 'New task');
       expect(_card('new'), findsOneWidget);
@@ -248,6 +251,25 @@ void main() {
       expect(_title(tester), 'Shutter close, All projectors');
     });
 
+    testWidgets('New task waits while Save changes can be pressed', (
+      tester,
+    ) async {
+      _useWindow(tester, const Size(1280, 900));
+      await _pump(tester, tasks: [_daily('a')]);
+      await tester.tap(_card('a'));
+      await tester.pumpAndSettle();
+      expect(_enabled(tester, _newTask), isTrue);
+
+      await tester.enterText(_timeInput(), '0930');
+      await tester.pump();
+      expect(_enabled(tester, _primary), isTrue);
+      expect(_enabled(tester, _newTask), isFalse);
+
+      await tester.tap(_secondary);
+      await tester.pumpAndSettle();
+      expect(_enabled(tester, _newTask), isTrue);
+    });
+
     testWidgets('on closing, with ✕ or Esc', (tester) async {
       _useWindow(tester, const Size(1280, 900));
       await _pump(tester, tasks: [_daily('a')]);
@@ -312,7 +334,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('HDMI 1'), findsOneWidget);
       expect(find.text('HDMI 2'), findsOneWidget);
-      expect(find.text('Power standby'), findsNothing);
+      expect(find.text('Standby'), findsNothing);
 
       await tester.tap(find.text('HDMI 2'));
       await tester.pumpAndSettle();
@@ -400,7 +422,12 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('command-field')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Power standby'));
+    // Power and Shutter tiles read as on the control bar: icon and word,
+    // the section header carries the rest.
+    expect(find.text('Power standby'), findsNothing);
+    expect(find.byIcon(Icons.bedtime_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.visibility_off_outlined), findsOneWidget);
+    await tester.tap(find.text('Standby'));
     await tester.pumpAndSettle();
     expect(find.text('Select a command'), findsNothing);
     await tester.enterText(_timeInput(), '2300');
@@ -675,9 +702,13 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
 
+      // The open picker pushes When below the fold; the editor scrolls.
+      await tester.ensureVisible(find.text('Once'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Once'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
+      expect(find.byKey(const ValueKey('task-date')), findsOneWidget);
     });
   }
 }
