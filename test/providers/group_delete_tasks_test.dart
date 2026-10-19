@@ -8,16 +8,17 @@ import '../helpers/fake_protocol_service.dart';
 import '../helpers/provider_harness.dart';
 import '../helpers/test_config_dir.dart';
 
-ScheduledTask _task(String id, {String? groupId}) => ScheduledTask(
-  id: id,
-  name: 'Task $id',
-  command: 'OSH:1',
-  commandLabel: 'Shutter close',
-  target: groupId == null ? ScheduleTarget.all : ScheduleTarget.group,
-  targetGroupId: groupId,
-  scheduleType: ScheduleType.daily,
-  timeOfDay: '22:30',
-);
+ScheduledTask _task(String id, {List<String> groupIds = const []}) =>
+    ScheduledTask(
+      id: id,
+      name: 'Task $id',
+      command: 'OSH:1',
+      commandLabel: 'Shutter close',
+      target: groupIds.isEmpty ? ScheduleTarget.all : ScheduleTarget.group,
+      targetGroupIds: groupIds,
+      scheduleType: ScheduleType.daily,
+      timeOfDay: '22:30',
+    );
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -29,19 +30,39 @@ void main() {
     ws.addGroup(const ProjectorGroup(id: 'g', name: 'Left', color: 0));
     ws.addGroup(const ProjectorGroup(id: 'h', name: 'Right', color: 0));
     c.read(scheduledTasksProvider.notifier).loadTasks([
-      _task('1', groupId: 'g'),
-      _task('2', groupId: 'h'),
+      _task('1', groupIds: ['g']),
+      _task('2', groupIds: ['h']),
       _task('3'),
     ]);
 
     ws.deleteGroup('g');
 
     final tasks = c.read(scheduledTasksProvider);
-    expect(tasks[0].targetGroupId, isNull);
+    expect(tasks[0].targetGroupIds, isEmpty);
     expect(tasks[0].enabled, isFalse);
-    expect(tasks[1].targetGroupId, 'h');
+    expect(tasks[1].targetGroupIds, ['h']);
     expect(tasks[1].enabled, isTrue);
     expect(tasks[2].enabled, isTrue);
+  });
+
+  test('a task that keeps another group only loses the deleted one', () {
+    final c = makeContainer(FakeProtocolService());
+    final ws = c.read(workspaceProvider.notifier);
+    ws.addGroup(const ProjectorGroup(id: 'g', name: 'Left', color: 0));
+    ws.addGroup(const ProjectorGroup(id: 'h', name: 'Right', color: 0));
+    c.read(scheduledTasksProvider.notifier).loadTasks([
+      _task('1', groupIds: ['g', 'h']),
+    ]);
+
+    ws.deleteGroup('g');
+    var task = c.read(scheduledTasksProvider).single;
+    expect(task.targetGroupIds, ['h']);
+    expect(task.enabled, isTrue);
+
+    ws.deleteGroup('h');
+    task = c.read(scheduledTasksProvider).single;
+    expect(task.targetGroupIds, isEmpty);
+    expect(task.enabled, isFalse);
   });
 
   test('a task left without a group cannot be switched back on', () {
@@ -49,7 +70,9 @@ void main() {
     final ws = c.read(workspaceProvider.notifier);
     ws.addGroup(const ProjectorGroup(id: 'g', name: 'Left', color: 0));
     final tasks = c.read(scheduledTasksProvider.notifier);
-    tasks.loadTasks([_task('1', groupId: 'g')]);
+    tasks.loadTasks([
+      _task('1', groupIds: ['g']),
+    ]);
     ws.deleteGroup('g');
 
     tasks.toggleEnabled('1');
@@ -62,15 +85,17 @@ void main() {
     final ws = c.read(workspaceProvider.notifier);
     ws.addGroup(const ProjectorGroup(id: 'g', name: 'Left', color: 0));
     final tasks = c.read(scheduledTasksProvider.notifier);
-    tasks.loadTasks([_task('1', groupId: 'g')]);
+    tasks.loadTasks([
+      _task('1', groupIds: ['g']),
+    ]);
     ws.deleteGroup('g');
     ws.undo();
-    tasks.update(_task('1', groupId: 'g'));
+    tasks.update(_task('1', groupIds: ['g']));
 
     ws.redo();
 
     final task = c.read(scheduledTasksProvider).single;
-    expect(task.targetGroupId, isNull);
+    expect(task.targetGroupIds, isEmpty);
     expect(task.enabled, isFalse);
   });
 
@@ -85,4 +110,30 @@ void main() {
 
     expect(identical(c.read(scheduledTasksProvider), before), isTrue);
   });
+
+  test(
+    'a task aimed at several groups sends to all their projectors',
+    () async {
+      final fake = FakeProtocolService();
+      final c = makeContainer(fake);
+      final ws = c.read(workspaceProvider.notifier);
+      ws.setGroups(const [
+        ProjectorGroup(id: 'g', name: 'Left', color: 0),
+        ProjectorGroup(id: 'h', name: 'Right', color: 0),
+        ProjectorGroup(id: 'k', name: 'Back', color: 0),
+      ]);
+      ws.setNodes([
+        node('1', groupId: 'g'),
+        node('2', groupId: 'h'),
+        node('3', groupId: 'k'),
+      ]);
+
+      await ws.sendCommandToGroups({'g', 'h'}, 'OSH:1');
+
+      expect(fake.sentCommands.map((s) => s.$1).toSet(), {
+        '10.0.0.1',
+        '10.0.0.2',
+      });
+    },
+  );
 }

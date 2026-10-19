@@ -34,9 +34,15 @@ void main() {
       expect(isTaskDue(t, at.add(const Duration(seconds: 1))), isTrue);
     });
 
-    test('a missed run still fires on the next tick', () {
+    test('fires within the 2-minute grace, never later', () {
       final t = _task(type: ScheduleType.once, oneTimeAt: at);
-      expect(isTaskDue(t, at.add(const Duration(hours: 5))), isTrue);
+      expect(isTaskDue(t, at), isTrue);
+      expect(isTaskDue(t, at.add(const Duration(minutes: 2))), isTrue);
+      expect(
+        isTaskDue(t, at.add(const Duration(minutes: 2, seconds: 1))),
+        isFalse,
+      );
+      expect(isTaskDue(t, at.add(const Duration(hours: 5))), isFalse);
     });
 
     test('never fires twice', () {

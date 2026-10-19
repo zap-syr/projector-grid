@@ -8,6 +8,7 @@ import '../../domain/log_event.dart';
 import '../../domain/projector_group.dart';
 import '../../domain/projector_node.dart';
 import '../../domain/scheduled_task.dart';
+import '../../domain/scheduled_task_json.dart';
 import 'event_log_provider.dart';
 import 'scheduled_tasks_provider.dart';
 import 'workspace_provider.dart';
@@ -103,7 +104,7 @@ class ProjectStateNotifier extends _$ProjectStateNotifier {
           p.command != t.command ||
           p.commandLabel != t.commandLabel ||
           p.target != t.target ||
-          p.targetGroupId != t.targetGroupId ||
+          !_listsEqual(p.targetGroupIds, t.targetGroupIds) ||
           p.scheduleType != t.scheduleType ||
           p.oneTimeAt != t.oneTimeAt ||
           p.timeOfDay != t.timeOfDay ||
@@ -327,7 +328,7 @@ if (\$r -eq 'OK') { Write-Output \$dialog.FileName }
         'version': 2,
         'groups': groups.map(_serializeGroup).toList(),
         'nodes': nodes.map(_serializeNode).toList(),
-        'scheduledTasks': tasks.map(_scheduledTaskToJson).toList(),
+        'scheduledTasks': tasks.map(scheduledTaskToJson).toList(),
       });
 
       final file = File(path);
@@ -411,52 +412,9 @@ if (\$r -eq 'OK') { Write-Output \$dialog.FileName }
     final list = json['scheduledTasks'] as List<dynamic>?;
     if (list == null) return [];
     return list
-        .map((e) => _scheduledTaskFromJson(e as Map<String, dynamic>))
+        .map((e) => scheduledTaskFromJson(e as Map<String, dynamic>))
         .toList();
   }
-
-  static ScheduledTask _scheduledTaskFromJson(Map<String, dynamic> j) =>
-      ScheduledTask(
-        id: j['id'] as String,
-        name: j['name'] as String,
-        command: j['command'] as String,
-        commandLabel: j['commandLabel'] as String,
-        target: ScheduleTarget.values.firstWhere(
-          (e) => e.name == j['target'],
-          orElse: () => ScheduleTarget.all,
-        ),
-        targetGroupId: j['targetGroupId'] as String?,
-        scheduleType: ScheduleType.values.firstWhere(
-          (e) => e.name == j['scheduleType'],
-          orElse: () => ScheduleType.daily,
-        ),
-        oneTimeAt: j['oneTimeAt'] != null
-            ? DateTime.tryParse(j['oneTimeAt'] as String)
-            : null,
-        timeOfDay: j['timeOfDay'] as String?,
-        weekdays: (j['weekdays'] as List<dynamic>?)
-            ?.map((e) => e as int)
-            .toList(),
-        enabled: j['enabled'] as bool? ?? true,
-        lastRunAt: j['lastRunAt'] != null
-            ? DateTime.tryParse(j['lastRunAt'] as String)
-            : null,
-      );
-
-  static Map<String, dynamic> _scheduledTaskToJson(ScheduledTask t) => {
-    'id': t.id,
-    'name': t.name,
-    'command': t.command,
-    'commandLabel': t.commandLabel,
-    'target': t.target.name,
-    if (t.targetGroupId != null) 'targetGroupId': t.targetGroupId,
-    'scheduleType': t.scheduleType.name,
-    if (t.oneTimeAt != null) 'oneTimeAt': t.oneTimeAt!.toIso8601String(),
-    if (t.timeOfDay != null) 'timeOfDay': t.timeOfDay,
-    if (t.weekdays != null) 'weekdays': t.weekdays,
-    'enabled': t.enabled,
-    if (t.lastRunAt != null) 'lastRunAt': t.lastRunAt!.toIso8601String(),
-  };
 
   // ── Recent projects ───────────────────────────────────────────────────────
 

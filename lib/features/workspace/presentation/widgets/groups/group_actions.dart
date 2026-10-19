@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/group_naming.dart';
 import '../../../domain/projector_group.dart';
+import '../../../domain/schedule_labels.dart';
 import '../../providers/scheduled_tasks_provider.dart';
 import '../../providers/workspace_provider.dart';
 import '../common/confirm_dialog.dart';
@@ -33,9 +34,15 @@ Future<bool> confirmDeleteGroup(
       .read(workspaceProvider)
       .where((n) => n.groupId == group.id)
       .length;
-  final tasks = ref
+  // Only the tasks this group is the last target of get paused; the others
+  // just lose it and keep running for their other groups.
+  final paused = ref
       .read(scheduledTasksProvider)
-      .where((t) => t.targetGroupId == group.id)
+      .where(
+        (t) =>
+            t.targetGroupIds.isNotEmpty &&
+            t.targetGroupIds.every((id) => id == group.id),
+      )
       .toList();
 
   final confirmed = await confirmDestructive(
@@ -50,8 +57,12 @@ Future<bool> confirmDeleteGroup(
           lead: '$memberCount projector${memberCount == 1 ? '' : 's'}',
           rest: 'stay in the project, ungrouped',
         ),
-      for (final t in tasks)
-        ConfirmChange(icon: Icons.schedule, lead: t.name, rest: 'is paused'),
+      for (final t in paused)
+        ConfirmChange(
+          icon: Icons.schedule,
+          lead: taskShortLabel(t),
+          rest: 'is paused',
+        ),
       if (group.oscAddress.isNotEmpty)
         ConfirmChange(
           icon: Icons.sensors,

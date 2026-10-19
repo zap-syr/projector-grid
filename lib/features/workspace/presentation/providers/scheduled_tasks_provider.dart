@@ -4,6 +4,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../domain/log_event.dart';
 import '../../domain/schedule_due.dart';
+import '../../domain/schedule_status.dart';
 import '../../domain/scheduled_task.dart';
 import 'event_log_provider.dart';
 import 'workspace_provider.dart';
@@ -56,8 +57,11 @@ class ScheduledTasksNotifier extends _$ScheduledTasksNotifier {
 
     if (task.target == ScheduleTarget.all) {
       await wsNotifier.sendCommandToAll(task.command);
-    } else if (task.targetGroupId != null) {
-      await wsNotifier.sendCommandToGroup(task.targetGroupId!, task.command);
+    } else if (task.targetGroupIds.isNotEmpty) {
+      await wsNotifier.sendCommandToGroups(
+        task.targetGroupIds.toSet(),
+        task.command,
+      );
     }
 
     logNotifier.log(
@@ -95,26 +99,40 @@ class ScheduledTasksNotifier extends _$ScheduledTasksNotifier {
     state = state.where((t) => t.id != id).toList();
   }
 
-  /// Called when group [groupId] is deleted. A task aimed at it would keep
-  /// firing on schedule and reach no projector, so it loses the target and
-  /// is switched off until the user picks a new one.
-  void detachGroup(String groupId) => detachMissingGroups({
-    for (final t in state)
-      if (t.targetGroupId != null && t.targetGroupId != groupId)
-        t.targetGroupId!,
-  });
+  /// Removes the completed and not-run one-time tasks (the list's *Clear*).
+  void clearFinished(DateTime now) {
+    if (!state.any((t) => isTaskFinished(t, now))) return;
+    state = state.where((t) => !isTaskFinished(t, now)).toList();
+  }
 
-  /// Detaches every task whose group isn't in [groupIds] — after an undo or
-  /// redo puts the group list back to a state where a task's group is gone.
-  void detachMissingGroups(Set<String> groupIds) {
-    bool missing(ScheduledTask t) =>
-        t.targetGroupId != null && !groupIds.contains(t.targetGroupId);
-    if (!state.any(missing)) return;
+  /// Called when group [groupId] is deleted: every task drops it, and one
+  /// left with no group is switched off (it would fire on schedule and reach
+  /// no projector) until the user picks a new target.
+  void detachGroup(String groupId) => _dropGroups((id) => id == groupId);
+
+  /// Drops every group not in [groupIds] from the tasks, after an undo or
+  /// redo puts the group list back to a state where some are gone.
+  void detachMissingGroups(Set<String> groupIds) =>
+      _dropGroups((id) => !groupIds.contains(id));
+
+  void _dropGroups(bool Function(String id) gone) {
+    bool touches(ScheduledTask t) => t.targetGroupIds.any(gone);
+    if (!state.any(touches)) return;
     state = [
       for (final t in state)
-        missing(t) ? t.copyWith(targetGroupId: null, enabled: false) : t,
+        if (touches(t))
+          _withGroups(t, t.targetGroupIds.where((id) => !gone(id)).toList())
+        else
+          t,
     ];
   }
+
+  static ScheduledTask _withGroups(ScheduledTask t, List<String> ids) =>
+      t.copyWith(
+        targetGroupIds: ids,
+        enabled:
+            t.enabled && (ids.isNotEmpty || t.target == ScheduleTarget.all),
+      );
 
   void toggleEnabled(String id) {
     state = state.map((t) {

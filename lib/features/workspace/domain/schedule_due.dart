@@ -1,13 +1,16 @@
+import 'schedule_status.dart';
 import 'scheduled_task.dart';
 
 /// Whether [task] should fire on the scheduler tick at [now]. The scheduler
 /// ticks once per wall-clock minute; daily/weekly tasks match on that exact
-/// minute and are guarded against firing twice within it by [lastRunAt].
+/// minute and are guarded against firing twice within it by [lastRunAt]. A
+/// one-time task fires only within [oneTimeGrace] of its time, never later.
 bool isTaskDue(ScheduledTask task, DateTime now) {
   switch (task.scheduleType) {
     case ScheduleType.once:
-      if (task.oneTimeAt == null || task.lastRunAt != null) return false;
-      return now.isAfter(task.oneTimeAt!);
+      final at = task.oneTimeAt;
+      if (at == null || task.lastRunAt != null) return false;
+      return !now.isBefore(at) && !now.isAfter(at.add(oneTimeGrace));
 
     case ScheduleType.daily:
       if (task.timeOfDay == null) return false;

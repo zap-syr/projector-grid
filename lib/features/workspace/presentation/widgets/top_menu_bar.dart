@@ -10,7 +10,7 @@ import '../providers/edit_history_status_provider.dart';
 import '../providers/monitoring_view_provider.dart';
 import 'preferences_dialog.dart';
 import 'manage_groups_dialog.dart';
-import 'scheduled_tasks_dialog.dart';
+import 'scheduled_tasks/scheduled_tasks_dialog.dart';
 import 'keyboard_shortcuts_dialog.dart';
 import 'about_dialog.dart';
 import 'common/confirm_dialog.dart';

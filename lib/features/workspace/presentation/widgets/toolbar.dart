@@ -14,7 +14,7 @@ import 'common/dialog_parts.dart';
 import 'common/segmented_tabs.dart';
 import 'custom_tooltip.dart';
 import 'manage_groups_dialog.dart';
-import 'scheduled_tasks_dialog.dart';
+import 'scheduled_tasks/scheduled_tasks_dialog.dart';
 
 /// Below this window width the tool buttons drop their labels.
 const double toolbarCompactBelow = 880;

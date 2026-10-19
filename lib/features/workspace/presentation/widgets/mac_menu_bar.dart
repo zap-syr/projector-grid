@@ -18,7 +18,7 @@ import 'keyboard_shortcuts_dialog.dart';
 import 'manage_groups_dialog.dart';
 import 'monitoring_table.dart';
 import 'preferences_dialog.dart';
-import 'scheduled_tasks_dialog.dart';
+import 'scheduled_tasks/scheduled_tasks_dialog.dart';
 import 'top_menu_bar.dart';
 
 /// Wraps [child] with a native macOS menu bar via [PlatformMenuBar].

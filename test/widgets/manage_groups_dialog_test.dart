@@ -208,9 +208,20 @@ void main() {
           command: 'OSH:1',
           commandLabel: 'Shutter close',
           target: ScheduleTarget.group,
-          targetGroupId: 'g1',
+          targetGroupIds: ['g1'],
           scheduleType: ScheduleType.daily,
           timeOfDay: '22:30',
+        ),
+        // Keeps Right wall, so it isn't paused and isn't listed.
+        const ScheduledTask(
+          id: 'u',
+          name: 'Power on, 08:00',
+          command: 'PON',
+          commandLabel: 'Power on',
+          target: ScheduleTarget.group,
+          targetGroupIds: ['g1', 'g2'],
+          scheduleType: ScheduleType.daily,
+          timeOfDay: '08:00',
         ),
       ]);
       await tester.tap(find.byTooltip('Delete Left wall'));
@@ -218,15 +229,21 @@ void main() {
 
       expect(find.text('Delete “Left wall”?'), findsOneWidget);
       expect(find.textContaining('stay in the project'), findsOneWidget);
+      expect(
+        find.textContaining('Shutter close, 22:30 is paused'),
+        findsOneWidget,
+      );
       expect(find.textContaining('is paused'), findsOneWidget);
       expect(find.textContaining('no longer answers'), findsOneWidget);
 
       await tester.tap(find.widgetWithText(FilledButton, 'Delete group'));
       await tester.pumpAndSettle();
       expect(c.read(workspaceProvider.notifier).groups, [_right]);
-      final task = c.read(scheduledTasksProvider).single;
-      expect(task.enabled, isFalse);
-      expect(task.targetGroupId, isNull);
+      final [paused, kept] = c.read(scheduledTasksProvider);
+      expect(paused.enabled, isFalse);
+      expect(paused.targetGroupIds, isEmpty);
+      expect(kept.enabled, isTrue);
+      expect(kept.targetGroupIds, ['g2']);
     });
 
     for (final (name, theme) in [

@@ -55,6 +55,7 @@ const _projectV2 = {
       'commandLabel': 'Power On',
       'target': 'group',
       'targetGroupId': 'g1',
+      'targetGroupIds': ['g1'],
       'scheduleType': 'weekly',
       'timeOfDay': '18:30',
       'weekdays': [1, 3, 5],
@@ -101,6 +102,7 @@ void main() {
     expect(task.scheduleType, ScheduleType.weekly);
     expect(task.weekdays, [1, 3, 5]);
     expect(task.target, ScheduleTarget.group);
+    expect(task.targetGroupIds, ['g1']);
 
     final state = c.read(projectStateProvider);
     expect(state.isDirty, isFalse);
@@ -112,6 +114,21 @@ void main() {
     await project().openProject(file.path);
     expect(await project().saveProject(), isTrue);
 
+    expect(jsonDecode(file.readAsStringSync()), _projectV2);
+  });
+
+  test('a file from before several target groups loads and saves', () async {
+    final task = Map<String, dynamic>.of(
+      (_projectV2['scheduledTasks'] as List).first as Map<String, dynamic>,
+    )..remove('targetGroupIds');
+    final old = Map<String, dynamic>.of(_projectV2)
+      ..['scheduledTasks'] = [task];
+    final file = writeProject('old.pgrid', old);
+    await project().openProject(file.path);
+    expect(c.read(scheduledTasksProvider).single.targetGroupIds, ['g1']);
+
+    // Saved back with the list and, for older apps, the first id.
+    expect(await project().saveProject(), isTrue);
     expect(jsonDecode(file.readAsStringSync()), _projectV2);
   });
 

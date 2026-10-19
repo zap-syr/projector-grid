@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../domain/schedule_next_run.dart';
+import '../../domain/schedule_status.dart';
 import 'scheduled_tasks_provider.dart';
 import 'workspace_provider.dart';
 
@@ -41,7 +42,10 @@ int groupCount(Ref ref) {
   );
   ref.onDispose(timer.cancel);
   return (
-    active: tasks.where((t) => t.enabled).length,
+    // A one-time task past its time stays enabled but will never run.
+    active: tasks
+        .where((t) => taskStatusOf(t, now) == TaskStatus.active)
+        .length,
     nextRun: next == null ? null : describeRunTime(next, now),
   );
 }

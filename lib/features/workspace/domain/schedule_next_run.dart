@@ -7,13 +7,15 @@ DateTime? nextScheduledRun(Iterable<ScheduledTask> tasks, DateTime now) {
   DateTime? next;
   for (final task in tasks) {
     if (!task.enabled) continue;
-    final at = _nextRunOf(task, now);
+    final at = nextRunOf(task, now);
     if (at != null && (next == null || at.isBefore(next))) next = at;
   }
   return next;
 }
 
-DateTime? _nextRunOf(ScheduledTask task, DateTime now) {
+/// When [task] fires next after [now], whether or not it is switched on;
+/// null when it never will.
+DateTime? nextRunOf(ScheduledTask task, DateTime now) {
   switch (task.scheduleType) {
     case ScheduleType.once:
       final at = task.oneTimeAt;

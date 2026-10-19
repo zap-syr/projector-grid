@@ -14,7 +14,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$ScheduledTask {
 
- String get id; String get name; String get command; String get commandLabel; ScheduleTarget get target; String? get targetGroupId; ScheduleType get scheduleType; DateTime? get oneTimeAt; String? get timeOfDay; List<int>? get weekdays; bool get enabled; DateTime? get lastRunAt;
+ String get id; String get name; String get command; String get commandLabel; ScheduleTarget get target; List<String> get targetGroupIds; ScheduleType get scheduleType; DateTime? get oneTimeAt; String? get timeOfDay; List<int>? get weekdays; bool get enabled; DateTime? get lastRunAt;
 /// Create a copy of ScheduledTask
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -25,16 +25,16 @@ $ScheduledTaskCopyWith<ScheduledTask> get copyWith => _$ScheduledTaskCopyWithImp
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is ScheduledTask&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.command, command) || other.command == command)&&(identical(other.commandLabel, commandLabel) || other.commandLabel == commandLabel)&&(identical(other.target, target) || other.target == target)&&(identical(other.targetGroupId, targetGroupId) || other.targetGroupId == targetGroupId)&&(identical(other.scheduleType, scheduleType) || other.scheduleType == scheduleType)&&(identical(other.oneTimeAt, oneTimeAt) || other.oneTimeAt == oneTimeAt)&&(identical(other.timeOfDay, timeOfDay) || other.timeOfDay == timeOfDay)&&const DeepCollectionEquality().equals(other.weekdays, weekdays)&&(identical(other.enabled, enabled) || other.enabled == enabled)&&(identical(other.lastRunAt, lastRunAt) || other.lastRunAt == lastRunAt));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ScheduledTask&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.command, command) || other.command == command)&&(identical(other.commandLabel, commandLabel) || other.commandLabel == commandLabel)&&(identical(other.target, target) || other.target == target)&&const DeepCollectionEquality().equals(other.targetGroupIds, targetGroupIds)&&(identical(other.scheduleType, scheduleType) || other.scheduleType == scheduleType)&&(identical(other.oneTimeAt, oneTimeAt) || other.oneTimeAt == oneTimeAt)&&(identical(other.timeOfDay, timeOfDay) || other.timeOfDay == timeOfDay)&&const DeepCollectionEquality().equals(other.weekdays, weekdays)&&(identical(other.enabled, enabled) || other.enabled == enabled)&&(identical(other.lastRunAt, lastRunAt) || other.lastRunAt == lastRunAt));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,name,command,commandLabel,target,targetGroupId,scheduleType,oneTimeAt,timeOfDay,const DeepCollectionEquality().hash(weekdays),enabled,lastRunAt);
+int get hashCode => Object.hash(runtimeType,id,name,command,commandLabel,target,const DeepCollectionEquality().hash(targetGroupIds),scheduleType,oneTimeAt,timeOfDay,const DeepCollectionEquality().hash(weekdays),enabled,lastRunAt);
 
 @override
 String toString() {
-  return 'ScheduledTask(id: $id, name: $name, command: $command, commandLabel: $commandLabel, target: $target, targetGroupId: $targetGroupId, scheduleType: $scheduleType, oneTimeAt: $oneTimeAt, timeOfDay: $timeOfDay, weekdays: $weekdays, enabled: $enabled, lastRunAt: $lastRunAt)';
+  return 'ScheduledTask(id: $id, name: $name, command: $command, commandLabel: $commandLabel, target: $target, targetGroupIds: $targetGroupIds, scheduleType: $scheduleType, oneTimeAt: $oneTimeAt, timeOfDay: $timeOfDay, weekdays: $weekdays, enabled: $enabled, lastRunAt: $lastRunAt)';
 }
 
 
@@ -45,7 +45,7 @@ abstract mixin class $ScheduledTaskCopyWith<$Res>  {
   factory $ScheduledTaskCopyWith(ScheduledTask value, $Res Function(ScheduledTask) _then) = _$ScheduledTaskCopyWithImpl;
 @useResult
 $Res call({
- String id, String name, String command, String commandLabel, ScheduleTarget target, String? targetGroupId, ScheduleType scheduleType, DateTime? oneTimeAt, String? timeOfDay, List<int>? weekdays, bool enabled, DateTime? lastRunAt
+ String id, String name, String command, String commandLabel, ScheduleTarget target, List<String> targetGroupIds, ScheduleType scheduleType, DateTime? oneTimeAt, String? timeOfDay, List<int>? weekdays, bool enabled, DateTime? lastRunAt
 });
 
 
@@ -62,15 +62,15 @@ class _$ScheduledTaskCopyWithImpl<$Res>
 
 /// Create a copy of ScheduledTask
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? command = null,Object? commandLabel = null,Object? target = null,Object? targetGroupId = freezed,Object? scheduleType = null,Object? oneTimeAt = freezed,Object? timeOfDay = freezed,Object? weekdays = freezed,Object? enabled = null,Object? lastRunAt = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? command = null,Object? commandLabel = null,Object? target = null,Object? targetGroupIds = null,Object? scheduleType = null,Object? oneTimeAt = freezed,Object? timeOfDay = freezed,Object? weekdays = freezed,Object? enabled = null,Object? lastRunAt = freezed,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,command: null == command ? _self.command : command // ignore: cast_nullable_to_non_nullable
 as String,commandLabel: null == commandLabel ? _self.commandLabel : commandLabel // ignore: cast_nullable_to_non_nullable
 as String,target: null == target ? _self.target : target // ignore: cast_nullable_to_non_nullable
-as ScheduleTarget,targetGroupId: freezed == targetGroupId ? _self.targetGroupId : targetGroupId // ignore: cast_nullable_to_non_nullable
-as String?,scheduleType: null == scheduleType ? _self.scheduleType : scheduleType // ignore: cast_nullable_to_non_nullable
+as ScheduleTarget,targetGroupIds: null == targetGroupIds ? _self.targetGroupIds : targetGroupIds // ignore: cast_nullable_to_non_nullable
+as List<String>,scheduleType: null == scheduleType ? _self.scheduleType : scheduleType // ignore: cast_nullable_to_non_nullable
 as ScheduleType,oneTimeAt: freezed == oneTimeAt ? _self.oneTimeAt : oneTimeAt // ignore: cast_nullable_to_non_nullable
 as DateTime?,timeOfDay: freezed == timeOfDay ? _self.timeOfDay : timeOfDay // ignore: cast_nullable_to_non_nullable
 as String?,weekdays: freezed == weekdays ? _self.weekdays : weekdays // ignore: cast_nullable_to_non_nullable
@@ -161,10 +161,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String name,  String command,  String commandLabel,  ScheduleTarget target,  String? targetGroupId,  ScheduleType scheduleType,  DateTime? oneTimeAt,  String? timeOfDay,  List<int>? weekdays,  bool enabled,  DateTime? lastRunAt)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String name,  String command,  String commandLabel,  ScheduleTarget target,  List<String> targetGroupIds,  ScheduleType scheduleType,  DateTime? oneTimeAt,  String? timeOfDay,  List<int>? weekdays,  bool enabled,  DateTime? lastRunAt)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _ScheduledTask() when $default != null:
-return $default(_that.id,_that.name,_that.command,_that.commandLabel,_that.target,_that.targetGroupId,_that.scheduleType,_that.oneTimeAt,_that.timeOfDay,_that.weekdays,_that.enabled,_that.lastRunAt);case _:
+return $default(_that.id,_that.name,_that.command,_that.commandLabel,_that.target,_that.targetGroupIds,_that.scheduleType,_that.oneTimeAt,_that.timeOfDay,_that.weekdays,_that.enabled,_that.lastRunAt);case _:
   return orElse();
 
 }
@@ -182,10 +182,10 @@ return $default(_that.id,_that.name,_that.command,_that.commandLabel,_that.targe
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String name,  String command,  String commandLabel,  ScheduleTarget target,  String? targetGroupId,  ScheduleType scheduleType,  DateTime? oneTimeAt,  String? timeOfDay,  List<int>? weekdays,  bool enabled,  DateTime? lastRunAt)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String name,  String command,  String commandLabel,  ScheduleTarget target,  List<String> targetGroupIds,  ScheduleType scheduleType,  DateTime? oneTimeAt,  String? timeOfDay,  List<int>? weekdays,  bool enabled,  DateTime? lastRunAt)  $default,) {final _that = this;
 switch (_that) {
 case _ScheduledTask():
-return $default(_that.id,_that.name,_that.command,_that.commandLabel,_that.target,_that.targetGroupId,_that.scheduleType,_that.oneTimeAt,_that.timeOfDay,_that.weekdays,_that.enabled,_that.lastRunAt);case _:
+return $default(_that.id,_that.name,_that.command,_that.commandLabel,_that.target,_that.targetGroupIds,_that.scheduleType,_that.oneTimeAt,_that.timeOfDay,_that.weekdays,_that.enabled,_that.lastRunAt);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -202,10 +202,10 @@ return $default(_that.id,_that.name,_that.command,_that.commandLabel,_that.targe
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String name,  String command,  String commandLabel,  ScheduleTarget target,  String? targetGroupId,  ScheduleType scheduleType,  DateTime? oneTimeAt,  String? timeOfDay,  List<int>? weekdays,  bool enabled,  DateTime? lastRunAt)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String name,  String command,  String commandLabel,  ScheduleTarget target,  List<String> targetGroupIds,  ScheduleType scheduleType,  DateTime? oneTimeAt,  String? timeOfDay,  List<int>? weekdays,  bool enabled,  DateTime? lastRunAt)?  $default,) {final _that = this;
 switch (_that) {
 case _ScheduledTask() when $default != null:
-return $default(_that.id,_that.name,_that.command,_that.commandLabel,_that.target,_that.targetGroupId,_that.scheduleType,_that.oneTimeAt,_that.timeOfDay,_that.weekdays,_that.enabled,_that.lastRunAt);case _:
+return $default(_that.id,_that.name,_that.command,_that.commandLabel,_that.target,_that.targetGroupIds,_that.scheduleType,_that.oneTimeAt,_that.timeOfDay,_that.weekdays,_that.enabled,_that.lastRunAt);case _:
   return null;
 
 }
@@ -217,7 +217,7 @@ return $default(_that.id,_that.name,_that.command,_that.commandLabel,_that.targe
 
 
 class _ScheduledTask implements ScheduledTask {
-  const _ScheduledTask({required this.id, required this.name, required this.command, required this.commandLabel, required this.target, this.targetGroupId, required this.scheduleType, this.oneTimeAt, this.timeOfDay, this.weekdays, this.enabled = true, this.lastRunAt});
+  const _ScheduledTask({required this.id, required this.name, required this.command, required this.commandLabel, required this.target, this.targetGroupIds = const <String>[], required this.scheduleType, this.oneTimeAt, this.timeOfDay, this.weekdays, this.enabled = true, this.lastRunAt});
   
 
 @override final  String id;
@@ -225,7 +225,7 @@ class _ScheduledTask implements ScheduledTask {
 @override final  String command;
 @override final  String commandLabel;
 @override final  ScheduleTarget target;
-@override final  String? targetGroupId;
+@override@JsonKey() final  List<String> targetGroupIds;
 @override final  ScheduleType scheduleType;
 @override final  DateTime? oneTimeAt;
 @override final  String? timeOfDay;
@@ -243,16 +243,16 @@ _$ScheduledTaskCopyWith<_ScheduledTask> get copyWith => __$ScheduledTaskCopyWith
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ScheduledTask&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.command, command) || other.command == command)&&(identical(other.commandLabel, commandLabel) || other.commandLabel == commandLabel)&&(identical(other.target, target) || other.target == target)&&(identical(other.targetGroupId, targetGroupId) || other.targetGroupId == targetGroupId)&&(identical(other.scheduleType, scheduleType) || other.scheduleType == scheduleType)&&(identical(other.oneTimeAt, oneTimeAt) || other.oneTimeAt == oneTimeAt)&&(identical(other.timeOfDay, timeOfDay) || other.timeOfDay == timeOfDay)&&const DeepCollectionEquality().equals(other.weekdays, weekdays)&&(identical(other.enabled, enabled) || other.enabled == enabled)&&(identical(other.lastRunAt, lastRunAt) || other.lastRunAt == lastRunAt));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ScheduledTask&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.command, command) || other.command == command)&&(identical(other.commandLabel, commandLabel) || other.commandLabel == commandLabel)&&(identical(other.target, target) || other.target == target)&&const DeepCollectionEquality().equals(other.targetGroupIds, targetGroupIds)&&(identical(other.scheduleType, scheduleType) || other.scheduleType == scheduleType)&&(identical(other.oneTimeAt, oneTimeAt) || other.oneTimeAt == oneTimeAt)&&(identical(other.timeOfDay, timeOfDay) || other.timeOfDay == timeOfDay)&&const DeepCollectionEquality().equals(other.weekdays, weekdays)&&(identical(other.enabled, enabled) || other.enabled == enabled)&&(identical(other.lastRunAt, lastRunAt) || other.lastRunAt == lastRunAt));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,name,command,commandLabel,target,targetGroupId,scheduleType,oneTimeAt,timeOfDay,const DeepCollectionEquality().hash(weekdays),enabled,lastRunAt);
+int get hashCode => Object.hash(runtimeType,id,name,command,commandLabel,target,const DeepCollectionEquality().hash(targetGroupIds),scheduleType,oneTimeAt,timeOfDay,const DeepCollectionEquality().hash(weekdays),enabled,lastRunAt);
 
 @override
 String toString() {
-  return 'ScheduledTask(id: $id, name: $name, command: $command, commandLabel: $commandLabel, target: $target, targetGroupId: $targetGroupId, scheduleType: $scheduleType, oneTimeAt: $oneTimeAt, timeOfDay: $timeOfDay, weekdays: $weekdays, enabled: $enabled, lastRunAt: $lastRunAt)';
+  return 'ScheduledTask(id: $id, name: $name, command: $command, commandLabel: $commandLabel, target: $target, targetGroupIds: $targetGroupIds, scheduleType: $scheduleType, oneTimeAt: $oneTimeAt, timeOfDay: $timeOfDay, weekdays: $weekdays, enabled: $enabled, lastRunAt: $lastRunAt)';
 }
 
 
@@ -263,7 +263,7 @@ abstract mixin class _$ScheduledTaskCopyWith<$Res> implements $ScheduledTaskCopy
   factory _$ScheduledTaskCopyWith(_ScheduledTask value, $Res Function(_ScheduledTask) _then) = __$ScheduledTaskCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String name, String command, String commandLabel, ScheduleTarget target, String? targetGroupId, ScheduleType scheduleType, DateTime? oneTimeAt, String? timeOfDay, List<int>? weekdays, bool enabled, DateTime? lastRunAt
+ String id, String name, String command, String commandLabel, ScheduleTarget target, List<String> targetGroupIds, ScheduleType scheduleType, DateTime? oneTimeAt, String? timeOfDay, List<int>? weekdays, bool enabled, DateTime? lastRunAt
 });
 
 
@@ -280,15 +280,15 @@ class __$ScheduledTaskCopyWithImpl<$Res>
 
 /// Create a copy of ScheduledTask
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = null,Object? command = null,Object? commandLabel = null,Object? target = null,Object? targetGroupId = freezed,Object? scheduleType = null,Object? oneTimeAt = freezed,Object? timeOfDay = freezed,Object? weekdays = freezed,Object? enabled = null,Object? lastRunAt = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = null,Object? command = null,Object? commandLabel = null,Object? target = null,Object? targetGroupIds = null,Object? scheduleType = null,Object? oneTimeAt = freezed,Object? timeOfDay = freezed,Object? weekdays = freezed,Object? enabled = null,Object? lastRunAt = freezed,}) {
   return _then(_ScheduledTask(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,command: null == command ? _self.command : command // ignore: cast_nullable_to_non_nullable
 as String,commandLabel: null == commandLabel ? _self.commandLabel : commandLabel // ignore: cast_nullable_to_non_nullable
 as String,target: null == target ? _self.target : target // ignore: cast_nullable_to_non_nullable
-as ScheduleTarget,targetGroupId: freezed == targetGroupId ? _self.targetGroupId : targetGroupId // ignore: cast_nullable_to_non_nullable
-as String?,scheduleType: null == scheduleType ? _self.scheduleType : scheduleType // ignore: cast_nullable_to_non_nullable
+as ScheduleTarget,targetGroupIds: null == targetGroupIds ? _self.targetGroupIds : targetGroupIds // ignore: cast_nullable_to_non_nullable
+as List<String>,scheduleType: null == scheduleType ? _self.scheduleType : scheduleType // ignore: cast_nullable_to_non_nullable
 as ScheduleType,oneTimeAt: freezed == oneTimeAt ? _self.oneTimeAt : oneTimeAt // ignore: cast_nullable_to_non_nullable
 as DateTime?,timeOfDay: freezed == timeOfDay ? _self.timeOfDay : timeOfDay // ignore: cast_nullable_to_non_nullable
 as String?,weekdays: freezed == weekdays ? _self.weekdays : weekdays // ignore: cast_nullable_to_non_nullable

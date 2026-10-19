@@ -14,7 +14,7 @@ abstract class ScheduledTask with _$ScheduledTask {
     required String command,
     required String commandLabel,
     required ScheduleTarget target,
-    String? targetGroupId,
+    @Default(<String>[]) List<String> targetGroupIds,
     required ScheduleType scheduleType,
     DateTime? oneTimeAt,
     String? timeOfDay,
@@ -24,8 +24,8 @@ abstract class ScheduledTask with _$ScheduledTask {
   }) = _ScheduledTask;
 }
 
-/// False for a group task whose group was deleted: it would fire on
+/// False for a group task whose groups were all deleted: it would fire on
 /// schedule and reach no projector, so it can't be switched on until it
 /// gets a new target.
 bool taskHasTarget(ScheduledTask task) =>
-    task.target == ScheduleTarget.all || task.targetGroupId != null;
+    task.target == ScheduleTarget.all || task.targetGroupIds.isNotEmpty;
