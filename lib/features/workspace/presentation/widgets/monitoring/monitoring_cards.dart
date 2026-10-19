@@ -11,6 +11,7 @@ import '../../../domain/projector_node.dart';
 import '../../providers/app_settings_provider.dart';
 import '../../providers/monitoring_filter_provider.dart';
 import '../../providers/monitoring_panel_provider.dart';
+import '../../providers/monitoring_reveal_provider.dart';
 import '../../providers/monitoring_status_provider.dart';
 import '../../providers/monitoring_view_provider.dart';
 import '../../providers/workspace_provider.dart';
@@ -18,6 +19,7 @@ import '../common/dashed_border.dart';
 import '../common/dialog_parts.dart';
 import '../common/status_pill.dart';
 import '../projector_status_style.dart';
+import 'monitoring_actions.dart';
 import 'monitoring_data_table.dart';
 import 'monitoring_group_header.dart';
 import 'monitoring_layout_watch.dart';
@@ -43,14 +45,77 @@ class MonitoringCards extends ConsumerStatefulWidget {
 class _MonitoringCardsState extends ConsumerState<MonitoringCards> {
   final _scroll = ScrollController();
 
+  // The last build's sections and sizes, for scrolling a projector into
+  // view (*Show in Monitoring*).
+  MonitoringLayout? _layout;
+  Set<String> _collapsed = const {};
+  bool _compact = false;
+  double _groupHeight = 0;
+  double _width = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // A request made before this view was built (the mode switched to
+    // Cards with it pending).
+    WidgetsBinding.instance.addPostFrameCallback((_) => _reveal());
+  }
+
   @override
   void dispose() {
     _scroll.dispose();
     super.dispose();
   }
 
+  /// Scrolls the requested projector's card to the middle, then clears the
+  /// request. Every card in a section has one size, so its place follows
+  /// from its index, the cards per row and the paddings of the build.
+  void _reveal() {
+    if (!mounted) return;
+    final id = ref.read(monitoringRevealProvider);
+    final layout = _layout;
+    if (id == null || layout == null) return;
+    ref.read(monitoringRevealProvider.notifier).consume();
+    final inner = _width - 32;
+    final ({double height, double gap, int perRow}) grid = _compact
+        ? (
+            height: kCompactTileSize.height,
+            gap: 8,
+            perRow: ((inner + 8) / (kCompactTileSize.width + 8)).floor().clamp(
+              1,
+              999,
+            ),
+          )
+        : (
+            height: kExtendedCardHeight,
+            gap: _kGap,
+            perRow: _extendedPerRow(_width),
+          );
+    var top = 0.0;
+    for (final s in layout.sections) {
+      if (!s.flat) top += _groupHeight;
+      if (!s.flat && _collapsed.contains(s.key)) continue;
+      top += s.flat ? 16 : 12;
+      final index = s.nodeIds.indexOf(id);
+      if (index >= 0) {
+        top += (index ~/ grid.perRow) * (grid.height + grid.gap);
+        centerScrollOn(_scroll, top, grid.height);
+        return;
+      }
+      final rows = (s.nodeIds.length + grid.perRow - 1) ~/ grid.perRow;
+      top += rows * (grid.height + grid.gap) - grid.gap + 16;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    // After the frame, so the cards of an expanded group or a cleared
+    // filter are laid out and counted in the scroll range.
+    ref.listen(monitoringRevealProvider, (_, next) {
+      if (next != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _reveal());
+      }
+    });
     final layout = watchMonitoringLayout(ref);
     final density = ref.watch(
       monitoringViewProvider.select((s) => s.cardDensity),
@@ -66,16 +131,18 @@ class _MonitoringCardsState extends ConsumerState<MonitoringCards> {
     );
     final groups = layout.groupsById;
     final compact = density == MonitoringCardDensity.compact;
+    _layout = layout;
+    _collapsed = collapsed;
+    _compact = compact;
+    _groupHeight = groupHeight;
     if (filtering && layout.sections.every((s) => s.nodeIds.isEmpty)) {
       return const MonitoringNoMatches();
     }
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final inner = constraints.maxWidth - 32;
-        final perRow = ((inner + _kGap) / (_kExtendedCardMinWidth + _kGap))
-            .floor()
-            .clamp(1, 99);
+        _width = constraints.maxWidth;
+        final perRow = _extendedPerRow(constraints.maxWidth);
 
         Widget body(MonitoringSection s) => compact
             ? SliverToBoxAdapter(
@@ -137,6 +204,13 @@ class _MonitoringCardsState extends ConsumerState<MonitoringCards> {
     );
   }
 }
+
+/// Extended cards per row in a view [width] wide (16 px side padding).
+int _extendedPerRow(double width) =>
+    ((width - 32 + _kGap) / (_kExtendedCardMinWidth + _kGap)).floor().clamp(
+      1,
+      99,
+    );
 
 /// The node, its status and whether its panel is open, each through a
 /// `select`, so a poll rebuilds only the cards it changed.

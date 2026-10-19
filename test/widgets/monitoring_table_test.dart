@@ -14,6 +14,7 @@ import 'package:projector_grid/features/workspace/presentation/providers/app_set
 import 'package:projector_grid/features/workspace/presentation/providers/canvas_reveal_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/monitoring_filter_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/monitoring_panel_provider.dart';
+import 'package:projector_grid/features/workspace/presentation/providers/monitoring_reveal_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/monitoring_view_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/protocol_service_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/monitoring_table.dart';
@@ -23,6 +24,7 @@ import 'package:projector_grid/features/workspace/presentation/providers/selecti
 import 'package:projector_grid/features/workspace/presentation/providers/workspace_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/common/status_pill.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/common/test_pattern_thumb.dart';
+import 'package:projector_grid/features/workspace/presentation/widgets/monitoring/monitoring_actions.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/monitoring/monitoring_bar.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/monitoring/projector_panel.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/remote_preview_dialog.dart';
@@ -183,6 +185,88 @@ void main() {
     expect(c.read(appSettingsProvider).isMonitoringView, isFalse);
     expect(c.read(selectionProvider), {'2'});
     expect(c.read(canvasRevealProvider)?.nodeId, '2');
+  });
+
+  group('Show in Monitoring', () {
+    // 120 grouped and 120 ungrouped, so even Compact tiles run far below
+    // the fold. 10.0.0.171 sits mid-way through Ungrouped, so it can be
+    // centred and a wrong position shows, and in a left-hand column, clear
+    // of the panel over the right edge.
+    final many = [
+      for (var i = 1; i <= 240; i++) _node('$i', group: i <= 120 ? 'g1' : null),
+    ];
+
+    // Starts in Controls with Ungrouped collapsed, then shows 10.0.0.171.
+    Future<ProviderContainer> showFromControls(
+      WidgetTester tester, {
+      MonitoringViewMode mode = MonitoringViewMode.table,
+      MonitoringCardDensity density = MonitoringCardDensity.extended,
+    }) async {
+      await pumpApp(
+        tester,
+        FakeProtocolService(),
+        overrides: [remotePreviewProvider.overrideWith2((_) => _IdlePreview())],
+      );
+      final c = appContainer(tester);
+      c.read(workspaceProvider.notifier).setGroups([_stage]);
+      c.read(workspaceProvider.notifier).setNodes(many);
+      c.read(monitoringViewProvider.notifier)
+        ..setMode(mode)
+        ..setCardDensity(density)
+        ..toggleCollapsed('');
+      await tester.pumpAndSettle();
+      final node = c.read(workspaceProvider).firstWhere((n) => n.id == '171');
+      showInMonitoring(c, node);
+      await tester.pumpAndSettle();
+      return c;
+    }
+
+    void expectShown(WidgetTester tester, ProviderContainer c) {
+      expect(c.read(appSettingsProvider).isMonitoringView, isTrue);
+      expect(c.read(monitoringPanelProvider), '171');
+      expect(c.read(monitoringViewProvider).collapsed, isNot(contains('')));
+      // The panel's header names the projector too; the row or card is the
+      // one to its left.
+      final ips = find.text('10.0.0.171').hitTestable();
+      expect(ips, findsNWidgets(2));
+      final centres = [
+        for (final e in ips.evaluate())
+          tester.getCenter(find.byWidget(e.widget)),
+      ]..sort((a, b) => a.dx.compareTo(b.dx));
+      // In the middle part of the window, not at an edge.
+      final height =
+          tester.view.physicalSize.height / tester.view.devicePixelRatio;
+      expect(centres.first.dy, inExclusiveRange(height * 0.2, height * 0.8));
+    }
+
+    testWidgets('the table expands the group and scrolls to the row', (
+      tester,
+    ) async {
+      expectShown(tester, await showFromControls(tester));
+    });
+
+    testWidgets('Extended cards scroll to the card', (tester) async {
+      expectShown(
+        tester,
+        await showFromControls(tester, mode: MonitoringViewMode.cards),
+      );
+    });
+
+    testWidgets('Compact tiles scroll to the tile', (tester) async {
+      expectShown(
+        tester,
+        await showFromControls(
+          tester,
+          mode: MonitoringViewMode.cards,
+          density: MonitoringCardDensity.compact,
+        ),
+      );
+    });
+
+    testWidgets('a request is taken once', (tester) async {
+      final c = await showFromControls(tester);
+      expect(c.read(monitoringRevealProvider), isNull);
+    });
   });
 
   group('the row menu', () {

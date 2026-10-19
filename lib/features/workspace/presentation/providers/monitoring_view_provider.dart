@@ -75,4 +75,8 @@ class MonitoringViewNotifier extends _$MonitoringViewNotifier {
     if (!next.remove(sectionKey)) next.add(sectionKey);
     _set(state.copyWith(collapsed: Set.unmodifiable(next)));
   }
+
+  void expand(String sectionKey) {
+    if (state.collapsed.contains(sectionKey)) toggleCollapsed(sectionKey);
+  }
 }

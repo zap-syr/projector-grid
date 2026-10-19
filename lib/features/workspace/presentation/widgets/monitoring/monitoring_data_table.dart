@@ -9,6 +9,7 @@ import '../../../domain/projector_group.dart';
 import '../../providers/app_settings_provider.dart';
 import '../../providers/monitoring_filter_provider.dart';
 import '../../providers/monitoring_panel_provider.dart';
+import '../../providers/monitoring_reveal_provider.dart';
 import '../../providers/monitoring_status_provider.dart';
 import '../../providers/monitoring_view_provider.dart';
 import '../../providers/workspace_provider.dart';
@@ -68,6 +69,11 @@ class _MonitoringDataTableState extends ConsumerState<MonitoringDataTable> {
 
   String? _dragOverId;
 
+  // The last build's rows and their heights, for scrolling a projector
+  // into view (*Show in Monitoring*).
+  List<_Entry> _entries = const [];
+  ({double row, double header, double group, double hpad})? _rowMetrics;
+
   // Header-edge resize, transient while dragging; the width is saved once
   // on drag end, not on every pointer move.
   String? _resizeId;
@@ -86,6 +92,27 @@ class _MonitoringDataTableState extends ConsumerState<MonitoringDataTable> {
         _headerHorizontal.jumpTo(_horizontal.offset);
       }
     });
+    // A request made before this view was built (the mode switched to
+    // Table with it pending).
+    WidgetsBinding.instance.addPostFrameCallback((_) => _reveal());
+  }
+
+  /// Scrolls the requested projector's row to the middle, then clears the
+  /// request.
+  void _reveal() {
+    if (!mounted) return;
+    final id = ref.read(monitoringRevealProvider);
+    final m = _rowMetrics;
+    if (id == null || m == null) return;
+    ref.read(monitoringRevealProvider.notifier).consume();
+    var top = 0.0;
+    for (final e in _entries) {
+      if (e is _NodeEntry && e.nodeId == id) {
+        centerScrollOn(_vertical, top, m.row);
+        return;
+      }
+      top += e is _HeaderEntry ? m.group : m.row;
+    }
   }
 
   @override
@@ -163,6 +190,13 @@ class _MonitoringDataTableState extends ConsumerState<MonitoringDataTable> {
 
   @override
   Widget build(BuildContext context) {
+    // After the frame, so the rows of an expanded group or a cleared
+    // filter are laid out and counted in the scroll range.
+    ref.listen(monitoringRevealProvider, (_, next) {
+      if (next != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _reveal());
+      }
+    });
     final layout = watchMonitoringLayout(ref);
     final saved = ref.watch(monitoringViewProvider.select((s) => s.columns));
     final widthOverrides = ref.watch(
@@ -208,6 +242,8 @@ class _MonitoringDataTableState extends ConsumerState<MonitoringDataTable> {
           for (final id in s.nodeIds) _NodeEntry(id),
       ],
     ];
+    _entries = entries;
+    _rowMetrics = m;
     final groups = layout.groupsById;
 
     final baseWidths = [

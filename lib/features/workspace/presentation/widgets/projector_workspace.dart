@@ -25,6 +25,7 @@ import 'geometry_correction_dialog.dart';
 import 'manage_groups_dialog.dart';
 import 'remote_preview_dialog.dart';
 import 'quick_status_popover.dart';
+import 'monitoring/monitoring_actions.dart' show showInMonitoring;
 import 'common/confirm_dialog.dart';
 import 'dialog_title_bar.dart' show projectorLabel;
 
@@ -281,6 +282,16 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
     );
   }
 
+  void _quickStatusShowInMonitoring(String id) {
+    _closeQuickStatus();
+    final node = ref
+        .read(workspaceProvider)
+        .where((n) => n.id == id)
+        .firstOrNull;
+    if (node == null) return;
+    showInMonitoring(ProviderScope.containerOf(context, listen: false), node);
+  }
+
   /// The popover in the overlay: the selected card's rect from its canvas
   /// position, the zoom and the scroll offsets, in the overlay's
   /// coordinates through the viewport's paint transform.
@@ -311,6 +322,7 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
           ),
           nodeId: id,
           onRemotePreview: () => _quickStatusRemotePreview(id),
+          onShowInMonitoring: () => _quickStatusShowInMonitoring(id),
         );
       },
     );

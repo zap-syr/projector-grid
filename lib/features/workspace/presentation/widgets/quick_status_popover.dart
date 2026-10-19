@@ -11,6 +11,7 @@ import '../../domain/projector_node.dart';
 import '../providers/alerts_provider.dart';
 import '../providers/workspace_provider.dart';
 import 'common/status_pill.dart';
+import 'custom_tooltip.dart';
 import 'projector_status_style.dart';
 
 /// The quick status popover beside the one selected card (Space): the state
@@ -25,6 +26,7 @@ class QuickStatusPopover extends StatelessWidget {
     required this.bounds,
     required this.nodeId,
     required this.onRemotePreview,
+    required this.onShowInMonitoring,
   });
 
   static const double width = 340;
@@ -36,6 +38,7 @@ class QuickStatusPopover extends StatelessWidget {
   final Rect bounds;
   final String nodeId;
   final VoidCallback onRemotePreview;
+  final VoidCallback onShowInMonitoring;
 
   @override
   Widget build(BuildContext context) {
@@ -73,6 +76,7 @@ class QuickStatusPopover extends StatelessWidget {
                 child: QuickStatusContent(
                   nodeId: nodeId,
                   onRemotePreview: onRemotePreview,
+                  onShowInMonitoring: onShowInMonitoring,
                 ),
               ),
             ),
@@ -204,6 +208,7 @@ class QuickStatusContent extends ConsumerWidget {
     super.key,
     required this.nodeId,
     required this.onRemotePreview,
+    required this.onShowInMonitoring,
   });
 
   /// Alerts listed before the rest is summed up in one line.
@@ -211,6 +216,7 @@ class QuickStatusContent extends ConsumerWidget {
 
   final String nodeId;
   final VoidCallback onRemotePreview;
+  final VoidCallback onShowInMonitoring;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -346,13 +352,25 @@ class QuickStatusContent extends ConsumerWidget {
         divider,
         Padding(
           padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: FilledButton.tonalIcon(
-              onPressed: onRemotePreview,
-              icon: const Icon(Icons.monitor_outlined, size: 18),
-              label: const Text('Remote Preview'),
-            ),
+          child: Row(
+            spacing: 6,
+            children: [
+              // Short labels, so both fit the 340 px popover; the same
+              // words as the Monitoring panel's actions.
+              _Action(
+                key: const ValueKey('quick-status-show-in-monitoring'),
+                icon: Icons.table_chart_outlined,
+                label: 'Monitoring',
+                tooltip: 'Show in Monitoring',
+                onPressed: onShowInMonitoring,
+              ),
+              _Action(
+                icon: Icons.monitor_outlined,
+                label: 'Preview',
+                tooltip: 'Remote Preview',
+                onPressed: onRemotePreview,
+              ),
+            ],
           ),
         ),
       ],
@@ -366,6 +384,46 @@ class QuickStatusContent extends ConsumerWidget {
           .where((a) => a.rule == rule && !a.recovered)
           .firstOrNull
           ?.severity;
+}
+
+/// A footer action, tonal like the Monitoring panel's.
+class _Action extends StatelessWidget {
+  const _Action({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+    this.tooltip,
+  });
+
+  final IconData icon;
+  final String label;
+  final String? tooltip;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final button = FilledButton.tonalIcon(
+      style: const ButtonStyle(
+        visualDensity: VisualDensity.compact,
+        padding: WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 10)),
+      ),
+      onPressed: onPressed,
+      icon: Icon(icon, size: 18),
+      label: Text(
+        label,
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+    // Equal halves of the footer, as in the mockup.
+    return Expanded(
+      child: tooltip == null
+          ? button
+          : CustomTooltip(message: tooltip!, child: button),
+    );
+  }
 }
 
 class _GroupLine extends StatelessWidget {

@@ -7,6 +7,8 @@ import 'package:projector_grid/core/services/panasonic_protocol_service.dart';
 import 'package:projector_grid/core/theme/app_theme.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/alignment_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/app_settings_provider.dart';
+import 'package:projector_grid/features/workspace/presentation/providers/monitoring_filter_provider.dart';
+import 'package:projector_grid/features/workspace/presentation/providers/monitoring_panel_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/protocol_service_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/selection_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/workspace_provider.dart';
@@ -82,8 +84,8 @@ void main() {
     expect(find.byKey(_popover), findsOneWidget);
     expect(inPopover('10.0.0.1'), findsOneWidget);
     expect(inPopover('Power'), findsOneWidget);
-    expect(inPopover('Remote Preview'), findsOneWidget);
-    expect(inPopover('Show in Monitoring'), findsNothing);
+    expect(inPopover('Preview'), findsOneWidget);
+    expect(inPopover('Monitoring'), findsOneWidget);
 
     await press(tester, LogicalKeyboardKey.space);
     expect(find.byKey(_popover), findsNothing);
@@ -198,6 +200,55 @@ void main() {
     container.read(appSettingsProvider.notifier).setMonitoringView(true);
     await tester.pumpAndSettle();
     expect(find.byKey(_popover), findsNothing);
+  });
+
+  testWidgets('Show in Monitoring switches the view and opens the panel', (
+    tester,
+  ) async {
+    await pumpCanvas(tester);
+    select({'1'});
+    await tester.pump();
+    await press(tester, LogicalKeyboardKey.space);
+    await tester.tap(
+      find.byKey(const ValueKey('quick-status-show-in-monitoring')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(_popover), findsNothing);
+    expect(container.read(appSettingsProvider).isMonitoringView, isTrue);
+    expect(container.read(monitoringPanelProvider), '1');
+    expect(container.read(selectionProvider), {'1'});
+  });
+
+  testWidgets('Show in Monitoring clears a filter that hides the projector', (
+    tester,
+  ) async {
+    await pumpCanvas(tester);
+    final filter = container.read(monitoringFilterProvider.notifier);
+    filter.setQuery('10.0.0.2');
+    select({'1'});
+    await tester.pump();
+    await press(tester, LogicalKeyboardKey.space);
+    await tester.tap(
+      find.byKey(const ValueKey('quick-status-show-in-monitoring')),
+    );
+    await tester.pumpAndSettle();
+    expect(container.read(monitoringFilterProvider).active, isFalse);
+  });
+
+  testWidgets('Show in Monitoring keeps a filter that lets it through', (
+    tester,
+  ) async {
+    await pumpCanvas(tester);
+    final filter = container.read(monitoringFilterProvider.notifier);
+    filter.setQuery('10.0.0.1');
+    select({'1'});
+    await tester.pump();
+    await press(tester, LogicalKeyboardKey.space);
+    await tester.tap(
+      find.byKey(const ValueKey('quick-status-show-in-monitoring')),
+    );
+    await tester.pumpAndSettle();
+    expect(container.read(monitoringFilterProvider).query, '10.0.0.1');
   });
 
   testWidgets('it does not open in Alignment mode, and Alignment closes it', (
