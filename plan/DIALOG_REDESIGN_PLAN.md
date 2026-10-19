@@ -1324,7 +1324,12 @@ near-black; secondary text no darker than `#80838D`. The same applies to the too
 
 Done 2026-10-19 (wave C, fixes after the owner's check). Differs from the text below: the
 offline outline is 1 px in the error colour at 60 %, not 1.5 px; a selected card shows
-only the selection ring on hover, no second hover outline.
+only the selection ring on hover, no second hover outline. The quick status popover's
+actions (2026-10-19) are two tonal buttons sharing the footer width, labelled *Monitoring*
+and *Preview* with the full names (*Show in Monitoring*, *Remote Preview*) in their
+tooltips, as the panel's *Preview* / *Locate*, so both fit the 340 px popover. *Show in
+Monitoring* clears a search or quick filter that would hide the projector, expands its
+collapsed group and scrolls its row or card to the middle of the view.
 
 Boards (dark only): *Projector card: states, group bands C and D / canvas, group C band
 inside / canvas, group D band under / quick status popover / Alignment mode / group
@@ -1540,7 +1545,9 @@ tests below, then a GUI check in both themes (`flutter-windows-gui-check`).
 
 - ~~A scheduled task whose target groups were all deleted~~ — decided 2026-10-13: paused
   (§4.5).
-- Icons in §1.1 are proposals; confirm during the GUI check.
+- ~~Icons in §1.1~~ — confirmed 2026-10-19 as they are in the code; the menus that open a
+  dialog (card context menu, Alignment *Adjust*, the Remote Preview buttons) use the same
+  icon as its title bar.
 - ~~Scheduled Tasks master-detail, unsaved edits (§4.1)~~ — decided 2026-10-15: a
   `ConfirmDialog` "Discard changes?".
 - ~~Monitoring, No signal colour (§7i.5)~~ — decided 2026-10-15: grey while the projector
