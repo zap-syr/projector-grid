@@ -6,6 +6,7 @@ library;
 import '../../../core/theme/status_thresholds.dart';
 import 'alert_rule.dart';
 import 'ip_sort.dart';
+import 'log_event.dart';
 import 'projector_errors.dart';
 import 'projector_node.dart';
 import 'signal_watch.dart';
@@ -112,6 +113,18 @@ enum AlertChange { raised, recovered, cleared, acknowledged }
 /// [raised] also covers a warning escalating to critical: the operator has
 /// to see it again even if the warning was acknowledged.
 typedef AlertTransition = ({AlertChange change, ActiveAlert alert});
+
+/// The kind of an alert's log line, for folding many projectors' lines
+/// into one row: the rule and the change, so *Back after 3 s* and *Back
+/// after 4 s* fold together (plan §7k.2).
+LogGroupKind alertLogGroupKind(AlertRule rule, AlertChange change) =>
+    LogGroupKind('${rule.slug} ${change.name}', switch (change) {
+      AlertChange.raised => rule.label,
+      AlertChange.recovered when rule == AlertRule.signalLost => 'Signal back',
+      AlertChange.recovered => '${rule.label} recovered',
+      AlertChange.cleared => '${rule.label} cleared',
+      AlertChange.acknowledged => '${rule.label} acknowledged',
+    });
 
 /// A transition as the outside sees it (OSC, notifications): with the
 /// projector's name and IP, known even once it has been deleted.

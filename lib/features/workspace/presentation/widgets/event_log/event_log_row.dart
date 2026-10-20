@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../../../core/theme/app_theme.dart';
 import '../../../domain/event_log_view.dart';
 import '../../../domain/log_event.dart';
+import '../common/dialog_parts.dart';
+import 'event_log_row_actions.dart';
 
 /// Column widths of the log's table, shared by the column header and the
 /// rows so they line up.
@@ -78,15 +80,15 @@ class EventLogColumnHeader extends StatelessWidget {
 
 /// The frame every row of the log shares: the bottom hairline and, for an
 /// error or warning, a faint tint and a 3 px edge in its colour. [cells]
-/// are laid out in the columns; [overlay] sits over the row's right end
-/// (hover actions), so it never moves a column.
-class EventLogRowFrame extends StatelessWidget {
+/// are laid out in the columns; [actions] show on hover over the row's
+/// right end, so they never move a column.
+class EventLogRowFrame extends StatefulWidget {
   const EventLogRowFrame({
     super.key,
     required this.severity,
     required this.cells,
     this.background,
-    this.overlay,
+    this.actions = const [],
   });
 
   final LogSeverity severity;
@@ -94,24 +96,41 @@ class EventLogRowFrame extends StatelessWidget {
 
   /// The fill when the severity gives none (a batch's projector lines).
   final Color? background;
-  final Widget? overlay;
+
+  /// The hover actions (*Locate*, *Open alerts*, *Copy row*, …).
+  final List<Widget> actions;
+
+  @override
+  State<EventLogRowFrame> createState() => _EventLogRowFrameState();
+}
+
+class _EventLogRowFrameState extends State<EventLogRowFrame> {
+  bool _hover = false;
+
+  void _setHover(bool hover) {
+    if (_hover != hover) setState(() => _hover = hover);
+  }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final sc = AppStatusColors.of(context);
+    final severity = widget.severity;
     final edge = switch (severity) {
       LogSeverity.error => cs.error,
       LogSeverity.warning => sc.warning,
       _ => null,
     };
-    return Container(
+    final overlay = _hover && widget.actions.isNotEmpty
+        ? EventLogRowActions(children: widget.actions)
+        : null;
+    final frame = Container(
       decoration: BoxDecoration(
         color:
             edge?.withValues(
               alpha: severity == LogSeverity.error ? 0.07 : 0.06,
             ) ??
-            background,
+            widget.background,
         border: Border(
           bottom: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.6)),
         ),
@@ -137,7 +156,7 @@ class EventLogRowFrame extends StatelessWidget {
             padding: const EdgeInsets.symmetric(
               horizontal: EventLogColumns.sidePadding,
             ),
-            child: Row(children: cells),
+            child: Row(children: widget.cells),
           ),
           if (overlay != null)
             Positioned(
@@ -147,6 +166,43 @@ class EventLogRowFrame extends StatelessWidget {
               child: Center(child: overlay),
             ),
         ],
+      ),
+    );
+    if (widget.actions.isEmpty) return frame;
+    return MouseRegion(
+      onEnter: (_) => _setHover(true),
+      onExit: (_) => _setHover(false),
+      child: frame,
+    );
+  }
+}
+
+/// A soft neutral pill after the message: a repeat's *14 times, last
+/// 21:02:41*, a lens run's *8 steps, last 16:39:17*.
+class EventLogCountPill extends StatelessWidget {
+  const EventLogCountPill(this.text, {super.key});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppText.of(context);
+    return Container(
+      height: 20,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: DialogSurfaces.of(context).soft,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        style: t.caption.copyWith(
+          fontWeight: FontWeight.w600,
+          color: t.secondary,
+          fontFeatures: const [FontFeature.tabularFigures()],
+        ),
+        maxLines: 1,
       ),
     );
   }
@@ -272,7 +328,9 @@ class EventLogCommandText extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = AppText.of(context);
     final source = this.source;
+    // Its own width, so the pills after it follow the text.
     return Row(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.baseline,
       textBaseline: TextBaseline.alphabetic,
       children: [
@@ -305,6 +363,10 @@ class EventLogRow extends StatelessWidget {
     required this.query,
     required this.showSource,
     required this.narrow,
+    this.message,
+    this.countText,
+    this.pills = const [],
+    this.actions = const [],
   });
 
   final LogEvent event;
@@ -313,14 +375,28 @@ class EventLogRow extends StatelessWidget {
   final bool showSource;
   final bool narrow;
 
+  /// Shown instead of the event's message (a lens run's *Lens Shift*).
+  final String? message;
+
+  /// A folded row's soft pill: *14 times, last 21:02:41*.
+  final String? countText;
+
+  /// Pills after the count (a lens run's outcomes).
+  final List<Widget> pills;
+  final List<Widget> actions;
+
   @override
   Widget build(BuildContext context) {
     final t = AppText.of(context);
     final ip = event.projectorIp;
     final model = event.projectorName;
+    final message = this.message ?? event.message;
+    final sender = event.oscSender;
+    final countText = this.countText;
 
     return EventLogRowFrame(
       severity: event.severity,
+      actions: actions,
       cells: [
         EventLogTimeCell(formatLogTime(event.timestamp, now)),
         EventLogIconCell(EventLogSeverityIcon(event.severity)),
@@ -339,13 +415,68 @@ class EventLogRow extends StatelessWidget {
         ),
         if (showSource) EventLogSourceCell(event.type),
         Expanded(
-          child: event.source == null
-              ? HighlightedText(event.message, query: query, style: t.body)
-              : EventLogCommandText(
-                  message: event.message,
-                  source: event.source,
-                  query: query,
-                ),
+          child: Row(
+            children: [
+              Flexible(
+                child: event.source != null
+                    ? EventLogCommandText(
+                        message: message,
+                        source: event.source,
+                        query: query,
+                      )
+                    : sender != null
+                    ? EventLogOscText(
+                        address: message,
+                        sender: sender,
+                        query: query,
+                      )
+                    : HighlightedText(message, query: query, style: t.body),
+              ),
+              if (countText != null) ...[
+                const SizedBox(width: 8),
+                EventLogCountPill(countText),
+              ],
+              for (final p in pills) ...[const SizedBox(width: 8), p],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// An OSC address line: the address in mono and who sent it
+/// (*from 10.0.0.20*) in `description`.
+class EventLogOscText extends StatelessWidget {
+  const EventLogOscText({
+    super.key,
+    required this.address,
+    required this.sender,
+    required this.query,
+  });
+
+  final String address;
+  final String sender;
+  final String query;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppText.of(context);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
+      children: [
+        Flexible(
+          child: HighlightedText(address, query: query, style: t.mono),
+        ),
+        const SizedBox(width: 6),
+        Flexible(
+          child: HighlightedText(
+            oscSenderLabel(sender),
+            query: query,
+            style: t.description,
+          ),
         ),
       ],
     );

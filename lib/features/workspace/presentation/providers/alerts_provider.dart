@@ -6,6 +6,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../domain/alert_rule.dart';
 import '../../domain/alerts.dart';
+import '../../domain/command_log.dart';
 import '../../domain/log_event.dart';
 import '../../domain/projector_node.dart';
 import 'app_settings_provider.dart';
@@ -155,6 +156,21 @@ class AlertsNotifier extends _$AlertsNotifier {
               },
               projectorIp: node?.ipAddress,
               projectorName: node?.name,
+              nodeId: a.nodeId,
+              groupKind: alertLogGroupKind(a.rule, change),
+              groupDetail: switch (change) {
+                AlertChange.raised => a.value,
+                AlertChange.recovered => a.displayValue,
+                AlertChange.cleared => 'Cleared',
+                AlertChange.acknowledged =>
+                  'Acknowledged${source == null ? '' : ' ($source)'}',
+              },
+              projectorGroup: node == null
+                  ? null
+                  : projectorGroupName(
+                      node,
+                      ref.read(workspaceProvider.notifier).groups,
+                    ),
             ),
           );
     }

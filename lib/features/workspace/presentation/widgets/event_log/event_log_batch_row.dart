@@ -7,74 +7,61 @@ import '../../../domain/log_event.dart';
 import '../common/status_pill.dart';
 import 'event_log_row.dart';
 
-/// A command sent to several projectors (plan §7k.3): a chevron, the
-/// target (`Stage, 6 projectors`), the command with where it came from and
-/// the result as pills. A click opens the projector lines under it.
-/// *Retry failed* shows on hover when some failed.
-class EventLogBatchRow extends StatefulWidget {
-  const EventLogBatchRow({
+/// A row that opens to projector lines under it: a chevron, the target
+/// (`Stage, 6 projectors`) and [event] in the Event column. A click on
+/// the row or the chevron opens or closes it.
+class EventLogFoldRow extends StatelessWidget {
+  const EventLogFoldRow({
     super.key,
-    required this.row,
+    required this.severity,
+    required this.timestamp,
+    required this.type,
+    required this.target,
+    required this.event,
     required this.open,
     required this.onToggle,
-    required this.onRetry,
     required this.now,
     required this.query,
     required this.showSource,
     required this.narrow,
+    this.actions = const [],
   });
 
-  final BatchLogRow row;
+  final LogSeverity severity;
+  final DateTime timestamp;
+  final LogEventType type;
+  final String target;
+  final Widget event;
   final bool open;
   final VoidCallback onToggle;
-
-  /// Sends the command again to the failed projectors.
-  final VoidCallback onRetry;
   final DateTime now;
   final String query;
   final bool showSource;
   final bool narrow;
-
-  @override
-  State<EventLogBatchRow> createState() => _EventLogBatchRowState();
-}
-
-class _EventLogBatchRowState extends State<EventLogBatchRow> {
-  bool _hover = false;
+  final List<Widget> actions;
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final sc = AppStatusColors.of(context);
     final t = AppText.of(context);
-    final row = widget.row;
-    // Only once every reply is in: retrying mid-flight would send twice to
-    // a projector whose answer is still on its way.
-    final canRetry = row.done && row.failed > 0;
-
     return MouseRegion(
       cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: widget.onToggle,
+        onTap: onToggle,
         child: EventLogRowFrame(
-          severity: row.severity,
-          overlay: canRetry && _hover
-              ? _RetryButton(onPressed: widget.onRetry)
-              : null,
+          severity: severity,
+          actions: actions,
           cells: [
-            EventLogTimeCell(formatLogTime(row.timestamp, widget.now)),
-            EventLogIconCell(EventLogSeverityIcon(row.severity)),
+            EventLogTimeCell(formatLogTime(timestamp, now)),
+            EventLogIconCell(EventLogSeverityIcon(severity)),
             SizedBox(
-              width: widget.narrow
+              width: narrow
                   ? EventLogColumns.projectorNarrow
                   : EventLogColumns.projector,
               child: Row(
                 children: [
                   Icon(
-                    widget.open ? Icons.expand_more : Icons.chevron_right,
+                    open ? Icons.expand_more : Icons.chevron_right,
                     key: const ValueKey('event-log-batch-chevron'),
                     size: 16,
                     color: t.secondary,
@@ -82,8 +69,8 @@ class _EventLogBatchRowState extends State<EventLogBatchRow> {
                   const SizedBox(width: 6),
                   Flexible(
                     child: HighlightedText(
-                      row.batch.target,
-                      query: widget.query,
+                      target,
+                      query: query,
                       style: t.body.copyWith(fontWeight: FontWeight.w500),
                     ),
                   ),
@@ -91,32 +78,8 @@ class _EventLogBatchRowState extends State<EventLogBatchRow> {
                 ],
               ),
             ),
-            if (widget.showSource)
-              const EventLogSourceCell(LogEventType.command),
-            Expanded(
-              child: Row(
-                children: [
-                  Flexible(
-                    child: EventLogCommandText(
-                      message: row.commandName,
-                      source: row.source,
-                      query: widget.query,
-                    ),
-                  ),
-                  for (final (outcome, label) in batchPills(row)) ...[
-                    const SizedBox(width: 8),
-                    StatusPill(
-                      label: label,
-                      color: switch (outcome) {
-                        CommandOutcome.sent => sc.success,
-                        CommandOutcome.failed => cs.error,
-                        CommandOutcome.skipped => t.secondary,
-                      },
-                    ),
-                  ],
-                ],
-              ),
-            ),
+            if (showSource) EventLogSourceCell(type),
+            Expanded(child: event),
           ],
         ),
       ),
@@ -124,91 +87,286 @@ class _EventLogBatchRowState extends State<EventLogBatchRow> {
   }
 }
 
-/// The row's hover action, the short text button of Monitoring's rows.
-class _RetryButton extends StatelessWidget {
-  const _RetryButton({required this.onPressed});
+/// The outcome pills of a command row, in their status colours.
+class EventLogOutcomePills extends StatelessWidget {
+  const EventLogOutcomePills(this.pills, {super.key});
 
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = AppText.of(context);
-    final cs = Theme.of(context).colorScheme;
-    return DecoratedBox(
-      // Over the end of the row: its own fill keeps the pills under it from
-      // showing through.
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: TextButton(
-        key: const ValueKey('event-log-retry-failed'),
-        onPressed: onPressed,
-        style: TextButton.styleFrom(
-          minimumSize: const Size(0, 28),
-          fixedSize: const Size.fromHeight(28),
-          padding: const EdgeInsets.symmetric(horizontal: 9),
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          textStyle: t.description.copyWith(fontWeight: FontWeight.w500),
-        ),
-        child: const Text('Retry failed'),
-      ),
-    );
-  }
-}
-
-/// One projector of an open batch, under a tree line: IP and model, then
-/// green *Sent*, red *Failed* with the reason or grey *Skipped* with the
-/// reason.
-class EventLogBatchLine extends StatelessWidget {
-  const EventLogBatchLine({
-    super.key,
-    required this.event,
-    required this.last,
-    required this.now,
-    required this.query,
-    required this.showSource,
-    required this.narrow,
-  });
-
-  final LogEvent event;
-
-  /// The batch's last line: the tree line ends here.
-  final bool last;
-  final DateTime now;
-  final String query;
-  final bool showSource;
-  final bool narrow;
-
-  static const double _indent = 30;
+  final List<(CommandOutcome, String)> pills;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final sc = AppStatusColors.of(context);
     final t = AppText.of(context);
-    final (icon, color, label) = switch (event.outcome) {
-      CommandOutcome.failed => (Icons.error, cs.error, 'Failed'),
-      CommandOutcome.skipped => (
-        Icons.remove_circle_outline,
-        cs.outline,
-        'Skipped',
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      spacing: 8,
+      children: [
+        for (final (outcome, label) in pills)
+          StatusPill(
+            label: label,
+            color: switch (outcome) {
+              CommandOutcome.sent => sc.success,
+              CommandOutcome.failed => cs.error,
+              CommandOutcome.skipped => t.secondary,
+            },
+          ),
+      ],
+    );
+  }
+}
+
+/// A command and where it came from, then its pills, the pills following
+/// the text.
+class _CommandWithPills extends StatelessWidget {
+  const _CommandWithPills({
+    required this.message,
+    required this.source,
+    required this.query,
+    this.countText,
+    required this.pills,
+  });
+
+  final String message;
+  final CommandSource? source;
+  final String query;
+  final String? countText;
+  final List<(CommandOutcome, String)> pills;
+
+  @override
+  Widget build(BuildContext context) {
+    final countText = this.countText;
+    return Row(
+      children: [
+        Flexible(
+          child: EventLogCommandText(
+            message: message,
+            source: source,
+            query: query,
+          ),
+        ),
+        if (countText != null) ...[
+          const SizedBox(width: 8),
+          EventLogCountPill(countText),
+        ],
+        if (pills.isNotEmpty) ...[
+          const SizedBox(width: 8),
+          EventLogOutcomePills(pills),
+        ],
+      ],
+    );
+  }
+}
+
+/// A command sent to several projectors (plan §7k.3): the target, the
+/// command with where it came from and the result as pills. Opened, it
+/// lists the projector lines.
+class EventLogBatchRow extends StatelessWidget {
+  const EventLogBatchRow({
+    super.key,
+    required this.row,
+    required this.open,
+    required this.onToggle,
+    required this.now,
+    required this.query,
+    required this.showSource,
+    required this.narrow,
+    this.actions = const [],
+  });
+
+  final BatchLogRow row;
+  final bool open;
+  final VoidCallback onToggle;
+  final DateTime now;
+  final String query;
+  final bool showSource;
+  final bool narrow;
+  final List<Widget> actions;
+
+  @override
+  Widget build(BuildContext context) => EventLogFoldRow(
+    severity: row.severity,
+    timestamp: row.timestamp,
+    type: LogEventType.command,
+    target: row.batch.target,
+    open: open,
+    onToggle: onToggle,
+    now: now,
+    query: query,
+    showSource: showSource,
+    narrow: narrow,
+    actions: actions,
+    event: _CommandWithPills(
+      message: row.commandName,
+      source: row.source,
+      query: query,
+      pills: batchPills(row),
+    ),
+  );
+}
+
+/// The same kind of event from several projectors at once (plan §7k.2):
+/// *20 projectors*, *Came online*. Opened, each projector with its own
+/// text.
+class EventLogGroupRow extends StatelessWidget {
+  const EventLogGroupRow({
+    super.key,
+    required this.row,
+    required this.open,
+    required this.onToggle,
+    required this.now,
+    required this.query,
+    required this.showSource,
+    required this.narrow,
+    this.actions = const [],
+  });
+
+  final GroupLogRow row;
+  final bool open;
+  final VoidCallback onToggle;
+  final DateTime now;
+  final String query;
+  final bool showSource;
+  final bool narrow;
+  final List<Widget> actions;
+
+  @override
+  Widget build(BuildContext context) => EventLogFoldRow(
+    severity: row.severity,
+    timestamp: row.timestamp,
+    type: row.type,
+    target: row.target,
+    open: open,
+    onToggle: onToggle,
+    now: now,
+    query: query,
+    showSource: showSource,
+    narrow: narrow,
+    actions: actions,
+    event: HighlightedText(
+      row.kind.title,
+      query: query,
+      style: AppText.of(context).body,
+    ),
+  );
+}
+
+/// Lens Shift steps folded into one row (plan §7k.2): *Lens Shift from
+/// the control bar*, *8 steps, last 16:39:17*. To several projectors it
+/// opens like a batch, each projector once with its totals.
+class EventLogLensRunRow extends StatelessWidget {
+  const EventLogLensRunRow({
+    super.key,
+    required this.row,
+    required this.open,
+    required this.onToggle,
+    required this.now,
+    required this.query,
+    required this.showSource,
+    required this.narrow,
+    this.actions = const [],
+  });
+
+  final LensRunLogRow row;
+  final bool open;
+  final VoidCallback onToggle;
+  final DateTime now;
+  final String query;
+  final bool showSource;
+  final bool narrow;
+  final List<Widget> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    final count = lensRunCountText(row, now);
+    final single = row.single;
+    if (single != null) {
+      return EventLogRow(
+        event: single,
+        now: now,
+        query: query,
+        showSource: showSource,
+        narrow: narrow,
+        message: lensRunTitle,
+        countText: count,
+        pills: [
+          if (lensRunPills(row) case final pills when pills.isNotEmpty)
+            EventLogOutcomePills(pills),
+        ],
+        actions: actions,
+      );
+    }
+    return EventLogFoldRow(
+      severity: row.severity,
+      timestamp: row.timestamp,
+      type: LogEventType.command,
+      target: row.batchTarget!,
+      open: open,
+      onToggle: onToggle,
+      now: now,
+      query: query,
+      showSource: showSource,
+      narrow: narrow,
+      actions: actions,
+      event: _CommandWithPills(
+        message: lensRunTitle,
+        source: row.source,
+        query: query,
+        countText: count,
+        pills: lensRunPills(row),
       ),
-      _ => (Icons.check_circle_outline, sc.success, 'Sent'),
-    };
+    );
+  }
+}
+
+/// One projector under an opened row, on a tree line: IP and model, then
+/// [icon] and [text].
+class EventLogTreeLine extends StatelessWidget {
+  const EventLogTreeLine({
+    super.key,
+    required this.event,
+    required this.icon,
+    required this.text,
+    required this.textColor,
+    required this.last,
+    required this.now,
+    required this.query,
+    required this.showSource,
+    required this.narrow,
+    this.actions = const [],
+  });
+
+  /// The projector's line: its IP, model and time.
+  final LogEvent event;
+  final Widget icon;
+  final String text;
+  final Color textColor;
+
+  /// The row's last line: the tree line ends here.
+  final bool last;
+  final DateTime now;
+  final String query;
+  final bool showSource;
+  final bool narrow;
+  final List<Widget> actions;
+
+  static const double _indent = 30;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final t = AppText.of(context);
     final ip = event.projectorIp ?? '';
 
     return EventLogRowFrame(
-      // The line's own result is in its icon and text; only the batch row
+      // The line's own result is in its icon and text; only the row above
       // carries a severity edge.
       severity: LogSeverity.info,
       background: cs.onSurface.withValues(alpha: 0.025),
+      actions: actions,
       cells: [
         EventLogTimeCell(formatLogTime(event.timestamp, now), quiet: true),
-        EventLogIconCell(
-          Icon(icon, size: 16, color: color, semanticLabel: label),
-        ),
+        EventLogIconCell(icon),
         SizedBox(
           width: narrow
               ? EventLogColumns.projectorNarrow
@@ -245,13 +403,9 @@ class EventLogBatchLine extends StatelessWidget {
         if (showSource) const SizedBox(width: EventLogColumns.source),
         Expanded(
           child: HighlightedText(
-            event.message,
+            text,
             query: query,
-            style: t.body.copyWith(
-              color: event.outcome == CommandOutcome.failed
-                  ? cs.error
-                  : t.secondary,
-            ),
+            style: t.body.copyWith(color: textColor),
           ),
         ),
       ],
@@ -259,9 +413,158 @@ class EventLogBatchLine extends StatelessWidget {
   }
 }
 
-/// The tree line from the batch's chevron down to a projector line: a
-/// trunk through the row (half of it on the last line) and an elbow into
-/// the line.
+/// One projector of an open batch: green *Sent*, red *Failed* with the
+/// reason or grey *Skipped* with the reason.
+class EventLogBatchLine extends StatelessWidget {
+  const EventLogBatchLine({
+    super.key,
+    required this.event,
+    required this.last,
+    required this.now,
+    required this.query,
+    required this.showSource,
+    required this.narrow,
+    this.actions = const [],
+  });
+
+  final LogEvent event;
+  final bool last;
+  final DateTime now;
+  final String query;
+  final bool showSource;
+  final bool narrow;
+  final List<Widget> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final t = AppText.of(context);
+    return EventLogTreeLine(
+      event: event,
+      icon: EventLogOutcomeIcon(event.outcome ?? CommandOutcome.sent),
+      text: event.message,
+      textColor: event.outcome == CommandOutcome.failed
+          ? cs.error
+          : t.secondary,
+      last: last,
+      now: now,
+      query: query,
+      showSource: showSource,
+      narrow: narrow,
+      actions: actions,
+    );
+  }
+}
+
+/// One projector of an open group, with its own text (*Back after 3 s*).
+class EventLogGroupLine extends StatelessWidget {
+  const EventLogGroupLine({
+    super.key,
+    required this.event,
+    required this.last,
+    required this.now,
+    required this.query,
+    required this.showSource,
+    required this.narrow,
+    this.actions = const [],
+  });
+
+  final LogEvent event;
+  final bool last;
+  final DateTime now;
+  final String query;
+  final bool showSource;
+  final bool narrow;
+  final List<Widget> actions;
+
+  @override
+  Widget build(BuildContext context) => EventLogTreeLine(
+    event: event,
+    icon: EventLogSeverityIcon(event.severity),
+    text: event.groupDetail ?? event.message,
+    textColor: AppText.of(context).secondary,
+    last: last,
+    now: now,
+    query: query,
+    showSource: showSource,
+    narrow: narrow,
+    actions: actions,
+  );
+}
+
+/// One projector of an open lens run, with its totals (*12 sent, 1
+/// failed*).
+class EventLogLensLine extends StatelessWidget {
+  const EventLogLensLine({
+    super.key,
+    required this.total,
+    required this.last,
+    required this.now,
+    required this.query,
+    required this.showSource,
+    required this.narrow,
+    this.actions = const [],
+  });
+
+  final LensRunTotal total;
+  final bool last;
+  final DateTime now;
+  final String query;
+  final bool showSource;
+  final bool narrow;
+  final List<Widget> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final t = AppText.of(context);
+    return EventLogTreeLine(
+      event: total.latest,
+      icon: EventLogOutcomeIcon(
+        total.failed > 0
+            ? CommandOutcome.failed
+            : total.sent > 0
+            ? CommandOutcome.sent
+            : CommandOutcome.skipped,
+      ),
+      text: lensTotalText(total),
+      textColor: total.failed > 0 ? cs.error : t.secondary,
+      last: last,
+      now: now,
+      query: query,
+      showSource: showSource,
+      narrow: narrow,
+      actions: actions,
+    );
+  }
+}
+
+/// A command's result at one projector as an icon.
+class EventLogOutcomeIcon extends StatelessWidget {
+  const EventLogOutcomeIcon(this.outcome, {super.key});
+
+  final CommandOutcome outcome;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final sc = AppStatusColors.of(context);
+    final (icon, color, label) = switch (outcome) {
+      CommandOutcome.failed => (Icons.error, cs.error, 'Failed'),
+      CommandOutcome.skipped => (
+        Icons.remove_circle_outline,
+        cs.outline,
+        'Skipped',
+      ),
+      CommandOutcome.sent => (Icons.check_circle_outline, sc.success, 'Sent'),
+    };
+    return Icon(icon, size: 16, color: color, semanticLabel: label);
+  }
+}
+
+/// The tree line from the row's chevron down to a projector line: a trunk
+/// through the row (half of it on the last line) and an elbow into the
+/// line.
 class _TreeLinePainter extends CustomPainter {
   _TreeLinePainter({required this.color, required this.last});
 

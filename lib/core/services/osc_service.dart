@@ -135,11 +135,15 @@ const Map<String, String> _oscCommandMap = {
   'quad-pixel/off': 'VXX:QPDI1=+00000',
 };
 
-/// Callback type for dispatching resolved NTCONTROL commands.
+/// Callback type for dispatching resolved NTCONTROL commands. [address] is
+/// the OSC address that asked for it and [sender] who sent it, for the
+/// Event Log.
 typedef OscCommandCallback = Future<void> Function({
   required String ntcontrolCmd,
   String? groupId,
   bool all,
+  required String address,
+  String? sender,
 });
 
 /// One outgoing OSC 1.0 message: strings as UTF-8, null-terminated and
@@ -296,7 +300,7 @@ class OscService {
   void _handleDatagram(Datagram datagram) {
     try {
       final msg = OSCMessage.fromBytes(datagram.data);
-      _processMessage(msg);
+      _processMessage(msg, sender: datagram.address.address);
     } catch (e) {
       debugPrint('OSC: Failed to parse message — $e');
     }
@@ -305,9 +309,10 @@ class OscService {
   /// Routes [msg] exactly as if it had arrived on the socket, without binding
   /// one.
   @visibleForTesting
-  void processMessage(OSCMessage msg) => _processMessage(msg);
+  void processMessage(OSCMessage msg, {String? sender}) =>
+      _processMessage(msg, sender: sender);
 
-  void _processMessage(OSCMessage msg) {
+  void _processMessage(OSCMessage msg, {String? sender}) {
     final address = msg.address;
 
     final now = DateTime.now();
@@ -327,6 +332,8 @@ class OscService {
             onCommand!(
               ntcontrolCmd: ntCmd,
               all: true,
+              address: address,
+              sender: sender,
             ).catchError((Object e) => debugPrint('OSC command error: $e')),
           );
         } else {
@@ -339,6 +346,8 @@ class OscService {
             onCommand!(
               ntcontrolCmd: ntCmd,
               all: true,
+              address: address,
+              sender: sender,
             ).catchError((Object e) => debugPrint('OSC command error: $e')),
           );
         } else {
@@ -374,6 +383,8 @@ class OscService {
               ntcontrolCmd: ntCmd,
               groupId: groupId,
               all: false,
+              address: address,
+              sender: sender,
             ).catchError((Object e) => debugPrint('OSC command error: $e')),
           );
         } else {
@@ -391,6 +402,8 @@ class OscService {
               ntcontrolCmd: ntCmd,
               groupId: groupId,
               all: false,
+              address: address,
+              sender: sender,
             ).catchError((Object e) => debugPrint('OSC command error: $e')),
           );
         }

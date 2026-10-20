@@ -35,6 +35,24 @@ class CommandBatch {
   });
 }
 
+/// The kind of event that folds across projectors into one row (plan
+/// §7k.2): the same kind, not the same text, so *Back after 3 s* and *Back
+/// after 4 s* fold together.
+class LogGroupKind {
+  /// What makes two events the same kind: `online`, `offline`, `auth`,
+  /// `signal-lost raised`, …
+  final String key;
+
+  /// The folded row's Event text: *Came online*, *Signal lost*.
+  final String title;
+
+  const LogGroupKind(this.key, this.title);
+
+  static const online = LogGroupKind('online', 'Came online');
+  static const offline = LogGroupKind('offline', 'Went offline');
+  static const auth = LogGroupKind('auth', 'Authentication failed');
+}
+
 class LogEvent {
   final DateTime timestamp;
   final LogSeverity severity;
@@ -53,8 +71,27 @@ class LogEvent {
   /// on a command to a single projector. Null on a batch's summary.
   final CommandOutcome? outcome;
 
-  /// The projector a command line is about.
+  /// The projector the event is about, where it is known: the row looks
+  /// at it to tell one projector's events from another's.
   final String? nodeId;
+
+  /// The NTCONTROL command of a command to one projector and of an OSC
+  /// address line, so the log can fold lens steps.
+  final String? command;
+
+  /// Set where events of several projectors at once fold into one row.
+  final LogGroupKind? groupKind;
+
+  /// The projector's own text in an opened group (*Back after 3 s*); the
+  /// message when null.
+  final String? groupDetail;
+
+  /// The project group the projector was in, for a folded row's
+  /// Projector column (*Stage, 6 projectors*).
+  final String? projectorGroup;
+
+  /// Who sent an OSC address line.
+  final String? oscSender;
 
   LogEvent({
     required this.severity,
@@ -66,12 +103,23 @@ class LogEvent {
     this.batch,
     this.outcome,
     this.nodeId,
+    this.command,
+    this.groupKind,
+    this.groupDetail,
+    this.projectorGroup,
+    this.oscSender,
     DateTime? timestamp,
   }) : timestamp = timestamp ?? DateTime.now();
 
   /// A batch's closing event, written after the last reply.
   bool get isBatchSummary => batch != null && outcome == null;
 }
+
+/// A *Lens Shift* step, H or V, either direction: the nudges the log folds
+/// into one row.
+bool isLensShiftCommand(String? cmd) =>
+    cmd != null &&
+    (cmd.startsWith('VXX:LNSI2=') || cmd.startsWith('VXX:LNSI3='));
 
 String commandLabel(String cmd) {
   const labels = <String, String>{

@@ -9,7 +9,7 @@ import '../custom_tooltip.dart';
 import 'event_log_row.dart';
 
 /// The log's 56 px header (plan §7k.1): icon tile and title, the filter
-/// chips, *Search log*, then Copy, Clear and Close. [narrow] drops the
+/// chips, *Search log*, then Follow, Copy, Clear and Close. [narrow] drops the
 /// title text, steps the chips down to icon and count and narrows the
 /// search; nothing is dropped.
 class EventLogHeader extends StatelessWidget {
@@ -22,11 +22,18 @@ class EventLogHeader extends StatelessWidget {
     required this.search,
     required this.searchFocus,
     required this.onSearch,
+    required this.follow,
+    required this.onFollow,
     required this.copiedCount,
     required this.onCopy,
     required this.onClear,
     required this.onClose,
   });
+
+  /// The search's widest: in the full header 36 px less than before
+  /// Follow came, so the header needs no more room than it did.
+  static const double searchWidth = 204;
+  static const double searchWidthNarrow = 160;
 
   static const double height = 56;
 
@@ -37,6 +44,10 @@ class EventLogHeader extends StatelessWidget {
   final TextEditingController search;
   final FocusNode searchFocus;
   final ValueChanged<String> onSearch;
+
+  /// Whether the list follows the newest event (plan §7k.4).
+  final bool follow;
+  final VoidCallback onFollow;
 
   /// Rows just copied, while Copy shows its check; null otherwise.
   final int? copiedCount;
@@ -86,7 +97,9 @@ class EventLogHeader extends StatelessWidget {
             child: Align(
               alignment: Alignment.centerRight,
               child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: narrow ? 160 : 240),
+                constraints: BoxConstraints(
+                  maxWidth: narrow ? searchWidthNarrow : searchWidth,
+                ),
                 child: _SearchField(
                   controller: search,
                   focusNode: searchFocus,
@@ -103,6 +116,13 @@ class EventLogHeader extends StatelessWidget {
             color: cs.outlineVariant,
           ),
           const SizedBox(width: 2),
+          _HeaderButton(
+            key: const ValueKey('event-log-follow'),
+            icon: Icons.vertical_align_top,
+            tooltip: 'Follow new events',
+            selected: follow,
+            onPressed: onFollow,
+          ),
           _HeaderButton(
             key: const ValueKey('event-log-copy'),
             icon: copiedCount == null ? Icons.copy_outlined : Icons.check,
@@ -265,26 +285,40 @@ class _SearchField extends StatelessWidget {
   }
 }
 
-/// A 36 px icon button of the header with its tooltip.
+/// A 36 px icon button of the header with its tooltip. [selected] fills
+/// it in the primary container, the state colour (Follow while on).
 class _HeaderButton extends StatelessWidget {
   const _HeaderButton({
     super.key,
     required this.icon,
     required this.tooltip,
     required this.onPressed,
+    this.selected = false,
   });
 
   final IconData icon;
   final String tooltip;
   final VoidCallback? onPressed;
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return CustomTooltip(
       message: tooltip,
       child: IconButton(
         icon: Icon(icon, size: 18),
         onPressed: onPressed,
+        isSelected: selected,
+        style: selected
+            ? IconButton.styleFrom(
+                backgroundColor: cs.primaryContainer,
+                foregroundColor: cs.onPrimaryContainer,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              )
+            : null,
         visualDensity: VisualDensity.standard,
         padding: EdgeInsets.zero,
         constraints: const BoxConstraints.tightFor(width: 36, height: 36),

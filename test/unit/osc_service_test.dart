@@ -17,9 +17,16 @@ void main() {
   setUp(() {
     osc = OscService();
     calls = [];
-    osc.onCommand = ({required ntcontrolCmd, groupId, all = false}) async {
-      calls.add((cmd: ntcontrolCmd, groupId: groupId, all: all));
-    };
+    osc.onCommand =
+        ({
+          required ntcontrolCmd,
+          groupId,
+          all = false,
+          required address,
+          sender,
+        }) async {
+          calls.add((cmd: ntcontrolCmd, groupId: groupId, all: all));
+        };
     osc.resolveGroupId = (address) => address == '/group/stage' ? 'g1' : null;
     osc.resolveCustomCommand = (slug) =>
         slug == 'dynamic-contrast' ? 'VXX:DCNI0=+00001' : null;

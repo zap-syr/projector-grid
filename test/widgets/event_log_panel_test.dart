@@ -5,7 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:projector_grid/core/theme/app_theme.dart';
 import 'package:projector_grid/features/workspace/domain/log_event.dart';
+import 'package:projector_grid/features/workspace/presentation/providers/active_alerts_request_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/app_settings_provider.dart';
+import 'package:projector_grid/features/workspace/presentation/providers/canvas_reveal_provider.dart';
+import 'package:projector_grid/features/workspace/presentation/providers/selection_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/event_log_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/event_log_request_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/workspace_provider.dart';
@@ -518,6 +521,242 @@ void main() {
       expect(retry.nodeId, '2');
       expect(find.text('from retry'), findsOneWidget);
       c.dispose();
+    });
+  });
+
+  group('hover actions', () {
+    Future<void> hover(WidgetTester tester, Finder row) async {
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      addTearDown(mouse.removePointer);
+      await mouse.addPointer(location: tester.getCenter(row));
+      await tester.pump();
+    }
+
+    Finder rowWith(String text) =>
+        find.ancestor(of: find.text(text), matching: find.byType(EventLogRow));
+
+    testWidgets('Locate selects and reveals the projector by its IP', (
+      tester,
+    ) async {
+      final c = makeContainer(FakeProtocolService());
+      c.read(workspaceProvider.notifier).setNodes([node('1'), node('2')]);
+      c.read(appSettingsProvider.notifier).setMonitoringView(true);
+      await pumpPanel(
+        tester,
+        container: c,
+        events: [
+          _e(
+            LogEventType.connectivity,
+            LogSeverity.info,
+            'Came online',
+            ip: '10.0.0.2',
+          ),
+          _e(
+            LogEventType.connectivity,
+            LogSeverity.info,
+            'Went offline',
+            ip: '10.0.9.9',
+          ),
+        ],
+      );
+      final row = rowWith('Came online');
+      final rowSize = tester.getSize(row);
+      final textAt = tester.getTopLeft(find.text('Came online'));
+      await hover(tester, row);
+      expect(find.byKey(const ValueKey('event-log-locate')), findsOneWidget);
+      expect(find.byKey(const ValueKey('event-log-open-alerts')), findsNothing);
+      expect(tester.getSize(row), rowSize, reason: 'actions sit over the row');
+      expect(tester.getTopLeft(find.text('Came online')), textAt);
+
+      await tester.tap(find.byKey(const ValueKey('event-log-locate')));
+      await tester.pump();
+      expect(c.read(selectionProvider), {'2'});
+      expect(c.read(canvasRevealProvider)?.nodeId, '2');
+      expect(c.read(appSettingsProvider).isMonitoringView, isFalse);
+      // Locate watches the workspace, whose polling timer only the
+      // container's disposal stops.
+      c.dispose();
+    });
+
+    testWidgets('Locate is hidden once the projector is gone', (tester) async {
+      final c = makeContainer(FakeProtocolService());
+      c.read(workspaceProvider.notifier).setNodes([node('1')]);
+      await pumpPanel(
+        tester,
+        container: c,
+        events: [
+          _e(
+            LogEventType.connectivity,
+            LogSeverity.info,
+            'Went offline',
+            ip: '10.0.9.9',
+          ),
+        ],
+      );
+      await hover(tester, rowWith('Went offline'));
+      expect(find.byKey(const ValueKey('event-log-copy-row')), findsOneWidget);
+      expect(find.byKey(const ValueKey('event-log-locate')), findsNothing);
+      c.dispose();
+    });
+
+    testWidgets('Open alerts on an alert row opens Active alerts', (
+      tester,
+    ) async {
+      final c = makeContainer(FakeProtocolService());
+      await pumpPanel(tester, container: c);
+      await hover(tester, rowWith('Error F305: exhaust fan stopped'));
+      final before = c.read(activeAlertsRequestProvider);
+      await tester.tap(find.byKey(const ValueKey('event-log-open-alerts')));
+      await tester.pump();
+      expect(c.read(activeAlertsRequestProvider), before + 1);
+      c.dispose();
+    });
+
+    testWidgets('Copy row copies that row', (tester) async {
+      String? copied;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            copied = (call.arguments as Map)['text'] as String;
+          }
+          return null;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      final c = makeContainer(FakeProtocolService());
+      await pumpPanel(tester, container: c);
+      await hover(tester, rowWith('Wrong login'));
+      await tester.tap(find.byKey(const ValueKey('event-log-copy-row')));
+      await tester.pump();
+      expect(copied, '09:30:00  warning  10.0.1.51  Connection  Wrong login');
+      await tester.pump(const Duration(seconds: 1));
+      c.dispose();
+    });
+  });
+
+  testWidgets('a group across projectors is one row and opens to them', (
+    tester,
+  ) async {
+    LogEvent online(String id) => LogEvent(
+      severity: LogSeverity.success,
+      type: LogEventType.connectivity,
+      message: 'Came online',
+      projectorIp: '10.0.1.$id',
+      projectorName: 'PT-RZ120',
+      nodeId: id,
+      groupKind: LogGroupKind.online,
+      projectorGroup: 'Stage',
+      timestamp: DateTime(_today.year, _today.month, _today.day, 9, 31),
+    );
+    await pumpPanel(tester, events: [online('3'), online('2'), online('1')]);
+    expect(find.byType(EventLogGroupRow), findsOneWidget);
+    expect(find.text('Stage, 3 projectors'), findsOneWidget);
+    expect(find.byType(EventLogGroupLine), findsNothing);
+    await tester.tap(find.text('Stage, 3 projectors'));
+    await tester.pumpAndSettle();
+    final ips = [
+      for (final l in tester.widgetList<EventLogGroupLine>(
+        find.byType(EventLogGroupLine),
+      ))
+        l.event.projectorIp,
+    ];
+    expect(ips, ['10.0.1.1', '10.0.1.2', '10.0.1.3']);
+  });
+
+  testWidgets('repeats show one row with the count', (tester) async {
+    LogEvent lost(int s) => LogEvent(
+      severity: LogSeverity.warning,
+      type: LogEventType.connectivity,
+      message: 'Connection lost',
+      projectorIp: '10.0.1.7',
+      timestamp: DateTime(_today.year, _today.month, _today.day, 21, 2, s),
+    );
+    await pumpPanel(tester, events: [lost(41), lost(30), lost(10)]);
+    expect(find.text('Connection lost'), findsOneWidget);
+    expect(find.text('3 times, last 21:02:41'), findsOneWidget);
+  });
+
+  group('Follow', () {
+    List<LogEvent> many(int n, {int from = 0}) => [
+      for (var i = from + n - 1; i >= from; i--)
+        _e(
+          LogEventType.connectivity,
+          LogSeverity.info,
+          'event $i',
+          ip: '10.0.2.$i',
+        ),
+    ];
+    bool following(WidgetTester tester) => tester
+        .widget<IconButton>(
+          find.descendant(
+            of: find.byKey(const ValueKey('event-log-follow')),
+            matching: find.byType(IconButton),
+          ),
+        )
+        .isSelected!;
+
+    testWidgets('scrolling down turns it off; the pill brings it back', (
+      tester,
+    ) async {
+      final c = await pumpPanel(tester, events: many(40));
+      expect(following(tester), isTrue);
+      expect(find.text('event 39'), findsOneWidget);
+
+      await tester.drag(
+        find.byKey(const ValueKey('event-log-list')),
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
+      expect(following(tester), isFalse);
+      final firstShown = tester.getTopLeft(find.text('event 30'));
+
+      for (final e in many(2, from: 40).reversed) {
+        c.read(eventLogProvider.notifier).log(e);
+      }
+      await tester.pumpAndSettle();
+      expect(find.text('2 new events'), findsOneWidget);
+      expect(
+        tester.getTopLeft(find.text('event 30')),
+        firstShown,
+        reason: 'the list does not move under the reader',
+      );
+
+      await tester.tap(find.text('2 new events'));
+      await tester.pumpAndSettle();
+      expect(following(tester), isTrue);
+      expect(find.text('2 new events'), findsNothing);
+      expect(find.text('event 41'), findsOneWidget);
+      expect(
+        tester
+            .widget<ListView>(find.byKey(const ValueKey('event-log-list')))
+            .controller!
+            .offset,
+        0,
+      );
+    });
+
+    testWidgets('the Follow button goes back to the newest too', (
+      tester,
+    ) async {
+      final c = await pumpPanel(tester, events: many(40));
+      await tester.drag(
+        find.byKey(const ValueKey('event-log-list')),
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
+      c.read(eventLogProvider.notifier).log(many(1, from: 40).single);
+      await tester.pumpAndSettle();
+      expect(find.text('1 new event'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('event-log-follow')));
+      await tester.pumpAndSettle();
+      expect(following(tester), isTrue);
+      expect(find.text('event 40'), findsOneWidget);
     });
   });
 

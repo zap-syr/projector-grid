@@ -74,40 +74,34 @@ class OscNotifier extends _$OscNotifier {
           required String ntcontrolCmd,
           String? groupId,
           bool all = false,
+          required String address,
+          String? sender,
         }) async {
           final wsNotifier = ref.read(workspaceProvider.notifier);
-
-          String target;
-          if (all) {
-            target = 'all projectors';
-          } else if (groupId != null) {
-            final group = wsNotifier.groups
-                .where((g) => g.id == groupId)
-                .firstOrNull;
-            target = group != null ? 'group: ${group.oscAddress}' : 'group';
-          } else {
-            target = 'unknown';
-          }
+          // The address names the target and the command; the row shows
+          // it in mono with who sent it.
           ref
               .read(eventLogProvider.notifier)
               .log(
                 LogEvent(
                   severity: LogSeverity.info,
                   type: LogEventType.osc,
-                  message: 'OSC → ${commandLabel(ntcontrolCmd)} ($target)',
+                  message: address,
+                  command: ntcontrolCmd,
+                  oscSender: sender,
                 ),
               );
+          final source = sender == null
+              ? CommandSource.osc
+              : CommandSource.oscFrom(sender);
 
           if (all) {
-            await wsNotifier.sendCommandToAll(
-              ntcontrolCmd,
-              source: CommandSource.osc,
-            );
+            await wsNotifier.sendCommandToAll(ntcontrolCmd, source: source);
           } else if (groupId != null) {
             await wsNotifier.sendCommandToGroup(
               groupId,
               ntcontrolCmd,
-              source: CommandSource.osc,
+              source: source,
             );
           }
         };

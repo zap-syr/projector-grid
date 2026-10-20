@@ -17,6 +17,7 @@ import 'common/dialog_parts.dart';
 import 'event_log/event_log_batch_row.dart';
 import 'event_log/event_log_header.dart';
 import 'event_log/event_log_row.dart';
+import 'event_log/event_log_row_actions.dart';
 
 /// The event log, docked under the views (plan §7k): a grip, the header
 /// with the filter chips and search, the column header and the rows.
@@ -76,7 +77,56 @@ class _EventLogPanelState extends ConsumerState<EventLogPanel> {
     _copiedTimer?.cancel();
     _searchController.dispose();
     _searchFocus.dispose();
+    _scroll.dispose();
     super.dispose();
+  }
+
+  final _scroll = ScrollController();
+
+  /// Follow (plan §7k.4): on, the list stays at the newest event (the
+  /// top). Scrolling down turns it off and holds the list as it was in
+  /// [_frozen], so new events wait in a pill instead of moving the rows
+  /// under the reader.
+  bool _follow = true;
+  List<LogEvent>? _frozen;
+
+  final _liveRows = _RowsMemo();
+  final _frozenRows = _RowsMemo();
+
+  void _stopFollowing() => setState(() {
+    _follow = false;
+    _frozen = ref.read(eventLogProvider);
+  });
+
+  /// Back to the newest event, following again.
+  void _followNow() {
+    if (_scroll.hasClients) _scroll.jumpTo(0);
+    setState(() {
+      _follow = true;
+      _frozen = null;
+    });
+  }
+
+  bool _onScroll(ScrollUpdateNotification n) {
+    if (n.depth == 0 && _follow && n.metrics.pixels > 0) _stopFollowing();
+    return false;
+  }
+
+  /// The rows shown under [_filter] and [_query] that came in since the
+  /// list was held: the *N new events* pill.
+  int _newRowCount(List<LogEvent> live, List<LogRow> liveRows) {
+    final frozen = _frozen!;
+    var since = frozen.isEmpty
+        ? live.length
+        : live.indexWhere((e) => identical(e, frozen.first));
+    if (since < 0) since = live.length;
+    if (since == 0) return 0;
+    final fresh = Set<LogEvent>.identity()..addAll(live.take(since));
+    return visibleRows(
+      liveRows,
+      _filter,
+      _query,
+    ).where((r) => r.events.any(fresh.contains)).length;
   }
 
   /// Esc empties a search; on an empty one it goes on up.
@@ -98,15 +148,16 @@ class _EventLogPanelState extends ConsumerState<EventLogPanel> {
     });
   }
 
-  /// Batch rows opened or closed by a click, by batch id. A row without an
+  /// Rows opened or closed by a click, by [rowOpenKey]. A row without an
   /// entry is open while the search matches one of its projector lines.
   final Map<String, bool> _openOverride = {};
 
-  bool _isOpen(BatchLogRow row) =>
-      _openOverride[row.batch.id] ?? batchOpenedBySearch(row, _query);
+  bool _isOpen(LogRow row) =>
+      rowOpens(row) &&
+      (_openOverride[rowOpenKey(row)] ?? rowOpenedBySearch(row, _query));
 
-  void _toggle(BatchLogRow row) =>
-      setState(() => _openOverride[row.batch.id] = !_isOpen(row));
+  void _toggle(LogRow row) =>
+      setState(() => _openOverride[rowOpenKey(row)!] = !_isOpen(row));
 
   /// A row closed against the search stays closed only for that search; a
   /// row opened by hand stays open.
@@ -148,6 +199,152 @@ class _EventLogPanelState extends ConsumerState<EventLogPanel> {
     if (confirmed) ref.read(eventLogProvider.notifier).clear();
   }
 
+  /// The lines an open [row] lists under it.
+  List<_ListItem> _linesOf(LogRow row) {
+    final lines = switch (row) {
+      BatchLogRow(:final lines) => [
+        for (final l in lines) (last) => _BatchLineItem(l, last: last),
+      ],
+      GroupLogRow(:final members) => [
+        for (final m in members) (last) => _GroupLineItem(m, last: last),
+      ],
+      LensRunLogRow() => [
+        for (final t in row.totals) (last) => _LensLineItem(t, last: last),
+      ],
+      _ => <_ListItem Function(bool)>[],
+    };
+    return [for (final (i, l) in lines.indexed) l(i == lines.length - 1)];
+  }
+
+  /// The hover actions of a row or line: *Retry failed* on a batch with
+  /// failures, *Open alerts* on alert rows, *Locate* where there is one
+  /// projector, *Copy row*.
+  List<Widget> _actions({
+    String? ip,
+    bool alert = false,
+    VoidCallback? retry,
+    String Function()? copy,
+  }) => [
+    if (retry != null)
+      EventLogTextAction(
+        key: const ValueKey('event-log-retry-failed'),
+        label: 'Retry failed',
+        onPressed: retry,
+      ),
+    if (alert) const EventLogOpenAlertsButton(),
+    if (ip != null) EventLogLocateButton(ip: ip),
+    if (copy != null) EventLogCopyRowButton(text: copy),
+  ];
+
+  Widget _buildItem(
+    _ListItem item, {
+    required DateTime now,
+    required bool showSource,
+    required bool narrow,
+  }) {
+    String Function() copyOf(LogRow row) =>
+        () => logRowCopyText(row, DateTime.now());
+    return switch (item) {
+      _RowItem(row: final SingleLogRow row) => EventLogRow(
+        event: row.event,
+        now: now,
+        query: _query,
+        showSource: showSource,
+        narrow: narrow,
+        actions: _actions(
+          ip: row.event.projectorIp,
+          alert: row.type == LogEventType.alert,
+          copy: copyOf(row),
+        ),
+      ),
+      _RowItem(row: final RepeatLogRow row) => EventLogRow(
+        event: row.latest,
+        now: now,
+        query: _query,
+        showSource: showSource,
+        narrow: narrow,
+        countText: repeatCountText(row, now),
+        actions: _actions(
+          ip: row.latest.projectorIp,
+          alert: row.type == LogEventType.alert,
+          copy: copyOf(row),
+        ),
+      ),
+      _RowItem(row: final BatchLogRow row) => EventLogBatchRow(
+        key: ValueKey('event-log-batch-${row.batch.id}'),
+        row: row,
+        open: _isOpen(row),
+        onToggle: () => _toggle(row),
+        now: now,
+        query: _query,
+        showSource: showSource,
+        narrow: narrow,
+        // Only once every reply is in: retrying mid-flight would send
+        // twice to a projector whose answer is still on its way.
+        actions: _actions(
+          retry: row.done && row.failed > 0 ? () => _retry(row) : null,
+          copy: copyOf(row),
+        ),
+      ),
+      _RowItem(row: final GroupLogRow row) => EventLogGroupRow(
+        row: row,
+        open: _isOpen(row),
+        onToggle: () => _toggle(row),
+        now: now,
+        query: _query,
+        showSource: showSource,
+        narrow: narrow,
+        actions: _actions(
+          alert: row.type == LogEventType.alert,
+          copy: copyOf(row),
+        ),
+      ),
+      _RowItem(row: final LensRunLogRow row) => EventLogLensRunRow(
+        row: row,
+        open: _isOpen(row),
+        onToggle: () => _toggle(row),
+        now: now,
+        query: _query,
+        showSource: showSource,
+        narrow: narrow,
+        actions: _actions(ip: row.single?.projectorIp, copy: copyOf(row)),
+      ),
+      _BatchLineItem(:final event, :final last) => EventLogBatchLine(
+        event: event,
+        last: last,
+        now: now,
+        query: _query,
+        showSource: showSource,
+        narrow: narrow,
+        actions: _actions(
+          ip: event.projectorIp,
+          copy: () => logCopyLine(event, DateTime.now()),
+        ),
+      ),
+      _GroupLineItem(:final event, :final last) => EventLogGroupLine(
+        event: event,
+        last: last,
+        now: now,
+        query: _query,
+        showSource: showSource,
+        narrow: narrow,
+        actions: _actions(
+          ip: event.projectorIp,
+          copy: () => logCopyLine(event, DateTime.now()),
+        ),
+      ),
+      _LensLineItem(:final total, :final last) => EventLogLensLine(
+        total: total,
+        last: last,
+        now: now,
+        query: _query,
+        showSource: showSource,
+        narrow: narrow,
+        actions: _actions(ip: total.latest.projectorIp),
+      ),
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     ref.listen(eventLogRequestProvider, (_, request) {
@@ -159,16 +356,19 @@ class _EventLogPanelState extends ConsumerState<EventLogPanel> {
       appSettingsProvider.select((s) => s.eventLogHeight),
     );
     final allEvents = ref.watch(eventLogProvider);
-    final allRows = buildLogRows(allEvents);
-    final rows = visibleRows(allRows, _filter, _query);
+    if (allEvents.isEmpty) {
+      // Cleared: nothing is held any more.
+      _follow = true;
+      _frozen = null;
+    }
+    final allRows = _liveRows.of(allEvents);
+    final frozen = _frozen;
+    final shownRows = frozen == null ? allRows : _frozenRows.of(frozen);
+    final rows = visibleRows(shownRows, _filter, _query);
     final counts = rowFilterCounts(allRows);
+    final newRows = frozen == null ? 0 : _newRowCount(allEvents, allRows);
     final items = <_ListItem>[
-      for (final r in rows) ...[
-        _RowItem(r),
-        if (r is BatchLogRow && _isOpen(r))
-          for (final (i, line) in r.lines.indexed)
-            _LineItem(line, last: i == r.lines.length - 1),
-      ],
+      for (final r in rows) ...[_RowItem(r), if (_isOpen(r)) ..._linesOf(r)],
     ];
     final now = DateTime.now();
     final cs = Theme.of(context).colorScheme;
@@ -213,6 +413,8 @@ class _EventLogPanelState extends ConsumerState<EventLogPanel> {
                   search: _searchController,
                   searchFocus: _searchFocus,
                   onSearch: _setQuery,
+                  follow: _follow,
+                  onFollow: _followNow,
                   copiedCount: _copiedCount,
                   onCopy: rows.isEmpty
                       ? null
@@ -238,42 +440,38 @@ class _EventLogPanelState extends ConsumerState<EventLogPanel> {
                               narrow: narrow,
                             ),
                             Expanded(
-                              child: ListView.builder(
-                                itemCount: items.length,
-                                itemExtent: EventLogColumns.rowHeight,
-                                itemBuilder: (_, i) => switch (items[i]) {
-                                  _RowItem(row: SingleLogRow(:final event)) =>
-                                    EventLogRow(
-                                      event: event,
-                                      now: now,
-                                      query: _query,
-                                      showSource: showSource,
-                                      narrow: narrow,
-                                    ),
-                                  _RowItem(row: final BatchLogRow row) =>
-                                    EventLogBatchRow(
-                                      key: ValueKey(
-                                        'event-log-batch-${row.batch.id}',
+                              child: Stack(
+                                children: [
+                                  NotificationListener<
+                                    ScrollUpdateNotification
+                                  >(
+                                    onNotification: _onScroll,
+                                    child: ListView.builder(
+                                      key: const ValueKey('event-log-list'),
+                                      controller: _scroll,
+                                      itemCount: items.length,
+                                      itemExtent: EventLogColumns.rowHeight,
+                                      itemBuilder: (_, i) => _buildItem(
+                                        items[i],
+                                        now: now,
+                                        showSource: showSource,
+                                        narrow: narrow,
                                       ),
-                                      row: row,
-                                      open: _isOpen(row),
-                                      onToggle: () => _toggle(row),
-                                      onRetry: () => _retry(row),
-                                      now: now,
-                                      query: _query,
-                                      showSource: showSource,
-                                      narrow: narrow,
                                     ),
-                                  _LineItem(:final event, :final last) =>
-                                    EventLogBatchLine(
-                                      event: event,
-                                      last: last,
-                                      now: now,
-                                      query: _query,
-                                      showSource: showSource,
-                                      narrow: narrow,
+                                  ),
+                                  if (newRows > 0)
+                                    Positioned(
+                                      top: 8,
+                                      left: 0,
+                                      right: 0,
+                                      child: Center(
+                                        child: _NewEventsPill(
+                                          count: newRows,
+                                          onPressed: _followNow,
+                                        ),
+                                      ),
                                     ),
-                                },
+                                ],
                               ),
                             ),
                           ],
@@ -288,7 +486,7 @@ class _EventLogPanelState extends ConsumerState<EventLogPanel> {
   }
 }
 
-/// One line of the list: a row, or a projector line of an open batch.
+/// One line of the list: a row, or a projector line of an open row.
 sealed class _ListItem {
   const _ListItem();
 }
@@ -299,11 +497,85 @@ class _RowItem extends _ListItem {
   final LogRow row;
 }
 
-class _LineItem extends _ListItem {
-  const _LineItem(this.event, {required this.last});
+class _BatchLineItem extends _ListItem {
+  const _BatchLineItem(this.event, {required this.last});
 
   final LogEvent event;
   final bool last;
+}
+
+class _GroupLineItem extends _ListItem {
+  const _GroupLineItem(this.event, {required this.last});
+
+  final LogEvent event;
+  final bool last;
+}
+
+class _LensLineItem extends _ListItem {
+  const _LensLineItem(this.total, {required this.last});
+
+  final LensRunTotal total;
+  final bool last;
+}
+
+/// The rows of the last event list it was given: the panel rebuilds on
+/// hover, copy and search changes that don't change the events.
+class _RowsMemo {
+  List<LogEvent>? _events;
+  List<LogRow> _rows = const [];
+
+  List<LogRow> of(List<LogEvent> events) {
+    if (!identical(events, _events)) {
+      _events = events;
+      _rows = buildLogRows(events);
+    }
+    return _rows;
+  }
+}
+
+/// *5 new events* at the top of the list while Follow is off; a click goes
+/// back to the newest event and follows again.
+class _NewEventsPill extends StatelessWidget {
+  const _NewEventsPill({required this.count, required this.onPressed});
+
+  final int count;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final t = AppText.of(context);
+    return Material(
+      key: const ValueKey('event-log-new-events'),
+      color: cs.primaryContainer,
+      elevation: 6,
+      shape: StadiumBorder(
+        side: BorderSide(color: cs.primary.withValues(alpha: 0.4)),
+      ),
+      child: InkWell(
+        customBorder: const StadiumBorder(),
+        onTap: onPressed,
+        child: Container(
+          height: 32,
+          padding: const EdgeInsets.fromLTRB(10, 0, 14, 0),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            spacing: 6,
+            children: [
+              Icon(Icons.arrow_upward, size: 16, color: cs.onPrimaryContainer),
+              Text(
+                '$count new ${count == 1 ? 'event' : 'events'}',
+                style: t.description.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: cs.onPrimaryContainer,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// The resize handle on top of the panel.

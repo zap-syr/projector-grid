@@ -19,11 +19,24 @@ String batchTargetLabel(
   List<ProjectorNode> nodes,
   List<ProjectorGroup> groups,
 ) {
-  final count = '${nodes.length} projectors';
   final groupIds = nodes.map((n) => n.groupId).toSet();
-  if (groupIds.length != 1 || groupIds.first == null) return count;
-  final group = groups.where((g) => g.id == groupIds.first).firstOrNull;
-  return group == null ? count : '${group.name}, $count';
+  final group = groupIds.length == 1
+      ? groups.where((g) => g.id == groupIds.first).firstOrNull
+      : null;
+  return projectorCountLabel(nodes.length, group?.name);
+}
+
+/// `Stage, 6 projectors` when every projector is in [groupName], else
+/// `6 projectors`: the Projector column of any row that stands for several
+/// projectors.
+String projectorCountLabel(int count, String? groupName) =>
+    groupName == null ? '$count projectors' : '$groupName, $count projectors';
+
+/// The group name of a projector's project group, for the log.
+String? projectorGroupName(ProjectorNode node, List<ProjectorGroup> groups) {
+  final id = node.groupId;
+  if (id == null) return null;
+  return groups.where((g) => g.id == id).firstOrNull?.name;
 }
 
 /// The Event text of a batch's projector line: `Sent`, `Failed: no answer

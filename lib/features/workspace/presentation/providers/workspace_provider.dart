@@ -247,6 +247,25 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     ref.read(eventLogProvider.notifier).log(event);
   }
 
+  /// A Connection line of [node]: with its id, project group and kind, so
+  /// the same change on many projectors at once folds into one row.
+  void _logConnection(
+    ProjectorNode node,
+    LogGroupKind kind,
+    LogSeverity severity,
+  ) => _logEvent(
+    LogEvent(
+      severity: severity,
+      type: LogEventType.connectivity,
+      message: kind.title,
+      projectorIp: node.ipAddress,
+      projectorName: node.name,
+      nodeId: node.id,
+      groupKind: kind,
+      projectorGroup: projectorGroupName(node, _groups),
+    ),
+  );
+
   /// One line per drop: the Offline alert doesn't log its own (§7k), so
   /// this one takes its critical red while the rule is on. A projector
   /// already offline at its first poll (a just-opened project) logs it too,
@@ -256,14 +275,10 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
         .read(appSettingsProvider)
         .alerts
         .isEnabled(AlertRule.offline);
-    _logEvent(
-      LogEvent(
-        severity: alerted ? LogSeverity.error : LogSeverity.warning,
-        type: LogEventType.connectivity,
-        message: 'Went offline',
-        projectorIp: node.ipAddress,
-        projectorName: node.name,
-      ),
+    _logConnection(
+      node,
+      LogGroupKind.offline,
+      alerted ? LogSeverity.error : LogSeverity.warning,
     );
   }
 
@@ -607,15 +622,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
       // It answered, just not to this login.
       _lastAnswer[node.id] = DateTime.now();
       if (oldStatus != ConnectionStatus.unauthorized) {
-        _logEvent(
-          LogEvent(
-            severity: LogSeverity.error,
-            type: LogEventType.connectivity,
-            message: 'Authentication failed',
-            projectorIp: node.ipAddress,
-            projectorName: node.name,
-          ),
-        );
+        _logConnection(node, LogGroupKind.auth, LogSeverity.error);
       }
       _applyPollResult(
         node.id,
@@ -651,15 +658,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
       _lastAnswer[node.id] = DateTime.now();
       if (oldStatus == ConnectionStatus.offline ||
           oldStatus == ConnectionStatus.unauthorized) {
-        _logEvent(
-          LogEvent(
-            severity: LogSeverity.success,
-            type: LogEventType.connectivity,
-            message: 'Came online',
-            projectorIp: node.ipAddress,
-            projectorName: node.name,
-          ),
-        );
+        _logConnection(node, LogGroupKind.online, LogSeverity.success);
       }
 
       // NTCONTROL's own signal read is unusable while in Standby — go to the
@@ -1012,6 +1011,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
             source: source,
             outcome: outcome,
             nodeId: node.id,
+            command: cmd,
           ),
         );
         return;
