@@ -1725,7 +1725,18 @@ dialogs' type, fields, chips and icons (`projector-grid-visual-rules`).
 
 ---
 
-## 7l. `[ ]` Status bar
+## 7l. `[x]` Status bar
+
+Done 2026-10-20 (agent on a trial branch, fixes after the owner's check). Differs from the
+text below: the narrow bar is measured, not guessed: the full bar takes 1192 to 1222 px
+with its longest values, so it steps down below **1240 px** and back above **1280 px**
+(the narrow bar is about 700 px). `oscProvider` state is `OscStatus` (off / listening /
+bind failed, `domain/osc_status.dart`); `PreferencesDialog` takes a `PreferencesSection`.
+The severity pill is `widgets/common/severity_pill.dart`. In the narrow bar the meter's
+tooltip is *N projectors* (the wrong-login one replaces it) and *None* is just the check;
+*Updated*'s tooltip before the first poll is *Not updated yet*. Projectors not yet polled
+still count as offline for the moment after a project opens (owner: not worth a grey
+state). The OSC start/stop race found here is in `ROADMAP_PLAN.md` §7.5.
 
 Boards (dark only): *Status bar: in the window, Offline hovered / today, states, 800 px
 window, tooltips*. Approved 2026-10-20. Today (`status_bar.dart`,
@@ -1871,8 +1882,28 @@ filter, acknowledged alerts folded at the bottom, groups folded past 4.
 - **Footer 56 px**, as the dialogs: *Event log* (list icon) as a text button on the left,
   **Acknowledge all** as the **filled** button on the right, the panel's one main action
   (owner, 2026-10-20: not `primaryContainer`, that is only the control bar's send
-  buttons). With nothing to acknowledge it is disabled, never removed. The one-projector
-  panel's *Event log* opens the log searched for its IP, as today.
+  buttons). ~~With nothing to acknowledge it is disabled, never removed.~~ It **shows only
+  while something is unacknowledged** and is hidden otherwise (nothing active, all
+  acknowledged); *Event log* keeps its place on the left (owner, 2026-10-20). The
+  one-projector panel's *Event log* opens the log searched for its IP, as today.
+- **Acknowledge all acknowledges everything**, also what the severity filter hides, as
+  today (owner, 2026-10-20); the same for the group and section double checks (every
+  alert of that projector, alert or project group).
+- **Filters**: an alert that is over (recovered) shows under *All* only; *Critical* and
+  *Warning* show what is still wrong, as today (`active_alerts_panel.dart`). No chip for
+  the ones that are over (owner, 2026-10-20).
+- **The one-projector panel** (card badge) is a **compact popover**, not a second Active
+  alerts panel (owner, 2026-10-20, after the first build looked bulky): width **320**, a
+  **40 px header** with the model (gives way first) and the IP in mono, the severity
+  pills, and two 32 px icon buttons with tooltips, *Acknowledge all* (double check,
+  only while something is unacknowledged) before *Show in event log* (list icon, always
+  in place); the same rows as the Active alerts panel; acknowledged folded at the
+  bottom. **No footer**, no filter row, no grouping controls. Empty: one quiet line,
+  *No active alerts*; all acknowledged: the line *All acknowledged* above the
+  *Acknowledged N* fold, no notice tile.
+- **Small window**: header 52, filters about 46 and footer 56 leave the list what the
+  window allows; in 800×600 the whole panel fits on screen with the footer visible and
+  only the list scrolling. A test checks it (owner, 2026-10-20).
 
 ### 7m.2 Rows
 - **52 px**, **70** when the message needs a second line (the message wraps to two lines
@@ -1884,8 +1915,9 @@ filter, acknowledged alerts folded at the bottom, groups folded past 4.
 - Text: the **message** in `body` w500, **white**, not in the severity colour; under it in
   `description` the alert kind (*Projector error*, *Temperature*), or, grouped by alert,
   the projector as IP in mono and the model on the first line with the message under it.
-- An alert that is over and not acknowledged: green check and edge, *Signal lost, over
-  at 21:03* with the time part in green.
+- An alert that is over and not acknowledged: green check and edge, the alert's message
+  then *, over at 21:03* with the time part in green, for every rule: *Signal lost, over
+  at 21:03*, *Exhaust temperature 52 °C, over at 21:03* (owner, 2026-10-20).
 - On the right the **start time** in `monoSmall` (one value; the duration goes into the
   tooltip, *Started 21:04, 6 min ago*) and **Acknowledge**: a quiet 30 px icon button
   (check, `secondary`), filled `primaryContainer` on hover, tooltip *Acknowledge*.
@@ -1893,6 +1925,14 @@ filter, acknowledged alerts folded at the bottom, groups folded past 4.
   alert group*, *Acknowledge Stage*).
 - The row height comes from the message's line count, measured with the ambient style
   (§8 of the visual rules), so `AlertScrollArea` still counts the hidden rows.
+- **The message** (owner, 2026-10-20): short. A temperature reads *Exhaust temperature
+  52 °C* with the kind *Temperature*; the limit it crossed goes into the start time's
+  tooltip (*Started 21:04, 6 min ago, limit 50 °C*), not the row. Other rules show their
+  value (*Fan error (F305)*, *No signal on HDMI 1*, *No answer*) with the rule as kind.
+  **Grouped by alert**, where the header names the rule, a row shows just the value
+  (*52 °C*, *No signal on HDMI 1*), not *Intake temperature 52 °C* again.
+- *over at* follows the message (*No signal on HDMI 1, over at 21:03*), not the kind
+  line of the mockup (owner, 2026-10-20).
 
 ### 7m.3 Group headers and sections
 - **Projector group** 36 px: chevron, the IP in mono and the model in `description`,
@@ -1900,7 +1940,14 @@ filter, acknowledged alerts folded at the bottom, groups folded past 4.
   green over) and the double-check button.
 - **Alert group** 36 px: chevron, the severity icon, the alert kind in w600 and *2
   projectors* in `description` (the earliest start in its tooltip), its pills and the
-  double check.
+  double check. One group per rule: intake and exhaust temperature stay apart, not
+  merged as the mockup's *Temperature* (their limits differ; owner, 2026-10-20). The
+  rule's name never ellipsizes; *N projectors* gives way first.
+- **Header**: *Active alerts* never ellipsizes; the note after it (*21 acknowledged*)
+  gives way first.
+- **The filter row hides** while nothing is unacknowledged (the filter's effect goes
+  with it), so three chips at 0 don't sit over the acknowledged list (owner,
+  2026-10-20).
 - **Project group section** 30 px: chevron, the group colour square, the name in sentence
   case (`label`, not capitals) and *2 projectors* in `caption`, pills, double check.
 - **Acknowledged** fold at the bottom: *Acknowledged 3* in `label` after a divider; its
@@ -1912,7 +1959,7 @@ filter, acknowledged alerts folded at the bottom, groups folded past 4.
   limits. Past alerts are in the event log*; the footer keeps *Event log* only.
 - All acknowledged: a tile with the double check, *All acknowledged*, *These alerts are
   still active and leave the list when the condition clears*, the acknowledged lines
-  open under it, *Acknowledge all* disabled.
+  open under it, *Acknowledge all* hidden (§7m.1).
 - A filter that hides everything: *No warnings*, *2 critical alerts are hidden by the
   filter* and a *Show all* text button; the filter stays selected.
 
@@ -2061,9 +2108,15 @@ tests below, then a GUI check in both themes (`flutter-windows-gui-check`).
   alerts panels: the message is in the primary text colour and only the icon and edge
   carry the severity, a long message takes two lines and the row grows to 70, the icon,
   time and Acknowledge share the row's centre line, Acknowledge all is a filled button
-  and disabled (same `Size`) when nothing is left, a chip at 0 stays dimmed, the filter
+  shown only while something is unacknowledged (hidden when nothing is active and when
+  all are acknowledged, *Event log* in place) and it acknowledges also what the filter
+  hides, a recovered alert shows under All only, a chip at 0 stays dimmed, the filter
   with no match shows *Show all*, both groupings and the project-group sections render
-  with their pills;
+  with their pills, the one-projector panel is the compact popover (no footer, no
+  filled button, Acknowledge all as a header icon, no filter row), *over at* on a
+  recovered row of any rule, grouped by alert a row shows only the value, a
+  temperature's start tooltip names its limit, both panels fit an 800×600 window with
+  the Active alerts footer visible and only the list scrolling;
   `DialogTitleBar` with a projector id shows model + IP, the group pill only for a grouped
   projector, and the status badge, and the badge follows the node going offline while the
   dialog is open.

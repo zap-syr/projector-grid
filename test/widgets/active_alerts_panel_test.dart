@@ -165,6 +165,19 @@ void main() {
     expect(find.text('10.0.0.2  PT-RZ2', findRichText: true), findsOneWidget);
   });
 
+  testWidgets('a group header hovers over its full height, IP and model on '
+      'one baseline', (tester) async {
+    await pump(tester, alerts);
+    final ip = find.text('10.0.0.1');
+    final ink = find.ancestor(of: ip, matching: find.byType(InkWell)).first;
+    // Was the text's height: a thin strip of hover fill.
+    expect(tester.getSize(ink).height, 36);
+    expect(
+      tester.getBottomLeft(ip).dy,
+      closeTo(tester.getBottomLeft(find.text('PT-RZ1')).dy, 3),
+    );
+  });
+
   testWidgets('both groupings show the severity pills in their headers', (
     tester,
   ) async {

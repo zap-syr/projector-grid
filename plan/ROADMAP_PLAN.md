@@ -1676,7 +1676,9 @@ because the work is large. In short:
   amber part), Online and Offline as buttons that open Monitoring filtered, an Offline
   tooltip listing up to 5 projectors by IP and model; alert pills per severity; a new OSC
   item (port, or *port busy* in red on a bind failure), Web as today, both hidden while
-  off; *Updated* with a fixed width (spinner in place of the icon).
+  off; *Updated* with a fixed width (spinner in place of the icon). **Done 2026-10-20**;
+  the narrow bar below 1240 px (measured), *port busy* also shown in Preferences
+  (plan §7l).
 - **Alerts panels** (Active alerts and the card badge's panel): radius 14, 420 / 340 px; a
   52 px header with the view controls, filter chips with words, a footer with *Event log*
   and a filled *Acknowledge all*; rows with the message in white and the severity only in

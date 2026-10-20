@@ -377,19 +377,37 @@ String formatAlertStart(DateTime since, DateTime now) {
 
 /// The start time's tooltip in the alerts panels: `Started 21:04, 6 min
 /// ago`, `Started 21:04, just now`.
-String formatAlertStarted(DateTime since, DateTime now) {
+String formatAlertStarted(DateTime since, DateTime now, {String? limit}) {
   final d = now.difference(since);
   final ago = d.inMinutes < 1 ? 'just now' : '${formatAlertDuration(d)} ago';
-  return 'Started ${formatAlertStart(since, now)}, $ago';
+  return 'Started ${formatAlertStart(since, now)}, $ago'
+      '${limit == null ? '' : ', limit $limit'}';
+}
+
+/// The threshold a temperature alert crossed, for its start time's tooltip
+/// (`limit 50 °C`): the row's message stays short (owner, 2026-10-20). Null
+/// for the other rules.
+String? alertLimit(ActiveAlert a, AlertSettings settings) {
+  final t = switch (a.rule) {
+    AlertRule.intakeTemp => settings.intake,
+    AlertRule.exhaustTemp => settings.exhaust,
+    _ => null,
+  };
+  if (t == null) return null;
+  return formatCelsius(a.severity == AlertSeverity.critical ? t.hot : t.warm);
 }
 
 /// What an alert row says (plan §7m.2): the reading with its name for a
 /// temperature (`Exhaust temperature 52 °C`), otherwise the value itself
-/// (`Fan error (F305)`, `No signal on HDMI 1`, `No answer`).
-String alertMessage(ActiveAlert a) => switch (a.rule) {
-  AlertRule.intakeTemp || AlertRule.exhaustTemp => '${a.rule.label} ${a.value}',
-  _ => a.value,
-};
+/// (`Fan error (F305)`, `No signal on HDMI 1`, `No answer`). Under an alert
+/// group's header, which already names the rule, just the value
+/// ([inAlertGroup]): `52 °C`.
+String alertMessage(ActiveAlert a, {bool inAlertGroup = false}) =>
+    switch (a.rule) {
+      AlertRule.intakeTemp ||
+      AlertRule.exhaustTemp when !inAlertGroup => '${a.rule.label} ${a.value}',
+      _ => a.value,
+    };
 
 /// The kind under an alert's message: both temperatures read *Temperature*,
 /// the message already names which.

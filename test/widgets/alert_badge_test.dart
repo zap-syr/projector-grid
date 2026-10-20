@@ -187,7 +187,7 @@ void main() {
     expect(find.byKey(const ValueKey('alerts-event-log')), findsOneWidget);
   });
 
-  testWidgets('the panel acknowledges all of its projector from the footer', (
+  testWidgets('the compact panel acknowledges all from its header icon', (
     tester,
   ) async {
     final c = await pump(tester, [
@@ -195,8 +195,17 @@ void main() {
       _alert(AlertRule.offline, AlertSeverity.critical, 'No answer'),
     ]);
     final mouse = await hoverOpen(tester);
+    // A popover, not the Active alerts panel: no footer, no filled button.
+    expect(find.byType(FilledButton), findsNothing);
     final button = find.byKey(const ValueKey('alerts-acknowledge-all'));
-    expect(tester.widget(button), isA<FilledButton>());
+    expect(
+      tester.getRect(button).bottom,
+      lessThanOrEqualTo(
+        tester
+            .getRect(find.byKey(const ValueKey('projector-alerts-header')))
+            .bottom,
+      ),
+    );
     final at = tester.getCenter(button);
     await mouse.moveTo(at);
     await tester.pump(const Duration(milliseconds: 300));

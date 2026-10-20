@@ -616,6 +616,25 @@ void main() {
       final error = a(AlertRule.error, AlertSeverity.critical, 'Fan (F305)');
       expect(alertMessage(error), 'Fan (F305)');
       expect(alertKind(AlertRule.error), 'Projector error');
+      // Under an alert group's header, which names the rule: the value.
+      expect(alertMessage(exhaust, inAlertGroup: true), '52 °C');
+      expect(alertMessage(error, inAlertGroup: true), 'Fan (F305)');
+    });
+
+    test('a temperature names its limit in the start tooltip', () {
+      const settings = AlertSettings(exhaust: (warm: 45, hot: 50));
+      final hot = a(AlertRule.exhaustTemp, AlertSeverity.critical, '52 °C');
+      final warm = a(AlertRule.exhaustTemp, AlertSeverity.warning, '47 °C');
+      expect(alertLimit(hot, settings), '50 °C');
+      expect(alertLimit(warm, settings), '45 °C');
+      expect(
+        alertLimit(a(AlertRule.error, AlertSeverity.critical, 'x'), settings),
+        isNull,
+      );
+      expect(
+        formatAlertStarted(since, since, limit: '50 °C'),
+        'Started 21:04, just now, limit 50 °C',
+      );
     });
 
     test('over at for any rule that carries restoredAt', () {

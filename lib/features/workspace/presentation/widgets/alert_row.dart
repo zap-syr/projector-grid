@@ -37,10 +37,15 @@ class AlertPalette {
 
 /// The message of an alert row with, for an alert that is over, its green
 /// `, over at 21:03` tail (plan §7m.2).
-TextSpan alertMessageSpan(BuildContext context, ActiveAlert a, DateTime now) {
+TextSpan alertMessageSpan(
+  BuildContext context,
+  ActiveAlert a,
+  DateTime now, {
+  bool inAlertGroup = false,
+}) {
   final over = alertOverAt(a, now);
   return TextSpan(
-    text: alertMessage(a),
+    text: alertMessage(a, inAlertGroup: inAlertGroup),
     children: [
       if (over != null) ...[
         const TextSpan(text: ', '),
@@ -65,7 +70,12 @@ class AlertRow extends StatefulWidget {
     required this.onAcknowledge,
     this.ip,
     this.model,
+    this.limit,
   });
+
+  /// A temperature alert's threshold for the start time's tooltip
+  /// (`alertLimit`), null for the other rules.
+  final String? limit;
 
   /// One line of message; [tallHeight] when it takes two. Fixed per row so
   /// the panels can count the rows hidden below the fold.
@@ -128,7 +138,9 @@ class AlertRow extends StatefulWidget {
     final message = TextPainter(
       text: TextSpan(
         style: ambient.merge(withProjector ? t.description : _messageStyle(t)),
-        children: [alertMessageSpan(context, alert, now)],
+        children: [
+          alertMessageSpan(context, alert, now, inAlertGroup: withProjector),
+        ],
       ),
       textDirection: TextDirection.ltr,
       textScaler: scaler,
@@ -155,7 +167,13 @@ class _AlertRowState extends State<AlertRow> {
     final alert = widget.alert;
     final color = AlertPalette.colorOf(context, alert);
     final soft = DialogSurfaces.of(context).soft;
-    final message = alertMessageSpan(context, alert, widget.now);
+    // Grouped by alert ([AlertRow.ip] set), the header names the rule.
+    final message = alertMessageSpan(
+      context,
+      alert,
+      widget.now,
+      inAlertGroup: widget.ip != null,
+    );
 
     final List<Widget> lines;
     if (widget.ip case final ip?) {
@@ -242,7 +260,11 @@ class _AlertRowState extends State<AlertRow> {
                   ),
                   const SizedBox(width: AlertRow._gap),
                   CustomTooltip(
-                    message: formatAlertStarted(alert.since, widget.now),
+                    message: formatAlertStarted(
+                      alert.since,
+                      widget.now,
+                      limit: widget.limit,
+                    ),
                     child: Text(
                       formatAlertStart(alert.since, widget.now),
                       key: const ValueKey('alert-row-time'),
@@ -347,8 +369,12 @@ class AcknowledgedAlertLine extends StatelessWidget {
     final t = AppText.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(28, 0, 8, 0),
+      // On one baseline: the mono IP and time sat off the message's line
+      // when each was centred on its own.
       child: Row(
         spacing: 8,
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
         children: [
           Icon(
             AlertPalette.iconOf(alert, filled: false),

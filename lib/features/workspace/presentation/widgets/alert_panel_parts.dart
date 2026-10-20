@@ -81,16 +81,20 @@ class AlertPanelHeader extends StatelessWidget {
         child: Row(
           spacing: 10,
           children: [
-            Flexible(
-              child: Text(
-                title,
+            // The title keeps its words; the note gives way first, so a long
+            // *21 acknowledged* no longer turned *Active alerts* into
+            // *Active a...*.
+            Text(title, maxLines: 1, style: t.cardTitle),
+            Expanded(
+              child: DefaultTextStyle.merge(
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: t.cardTitle,
+                child: Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: note ?? const SizedBox.shrink(),
+                ),
               ),
             ),
-            ?note,
-            const Spacer(),
             if (actions.isNotEmpty)
               Row(
                 mainAxisSize: MainAxisSize.min,

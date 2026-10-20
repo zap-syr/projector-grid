@@ -98,14 +98,19 @@ class _ActiveAlertsPanelState extends ConsumerState<ActiveAlertsPanel> {
     ProjectorGroup? projectGroup(String? id) =>
         projectGroups.where((g) => g.id == id).firstOrNull;
 
-    // A severity filter is for what is still wrong; recovered ones show
-    // under All only.
-    bool passes(ActiveAlert a) =>
-        _filter == null || (a.severity == _filter && !a.recovered);
     final unacked = [
       for (final a in alerts)
         if (!a.acknowledged) a,
     ];
+    // The filter row is for what is still to acknowledge: with nothing left
+    // it is hidden (three chips at 0 over the acknowledged list read as
+    // broken), and so is its effect.
+    final showFilters = unacked.isNotEmpty;
+    final filter = showFilters ? _filter : null;
+    // A severity filter is for what is still wrong; recovered ones show
+    // under All only.
+    bool passes(ActiveAlert a) =>
+        filter == null || (a.severity == filter && !a.recovered);
     final counts = countAlerts(unacked);
     final groups = groupAlerts(
       unacked.where(passes),
@@ -172,6 +177,7 @@ class _ActiveAlertsPanelState extends ConsumerState<ActiveAlertsPanel> {
               model: byProjector
                   ? null
                   : nodes[a.nodeId]?.name ?? 'Removed projector',
+              limit: alertLimit(a, settings),
               onAcknowledge: () => notifier.acknowledge(a.key),
             ),
           ),
@@ -247,7 +253,6 @@ class _ActiveAlertsPanelState extends ConsumerState<ActiveAlertsPanel> {
       ];
     }
 
-    final filter = _filter;
     final entries = <AlertScrollEntry>[
       if (unacked.isEmpty)
         (
@@ -386,11 +391,12 @@ class _ActiveAlertsPanelState extends ConsumerState<ActiveAlertsPanel> {
           if (alerts.isEmpty)
             const AlertPanelNothingActive()
           else ...[
-            _Filters(
-              filter: _filter,
-              counts: counts,
-              onFilter: (f) => setState(() => _filter = f),
-            ),
+            if (showFilters)
+              _Filters(
+                filter: filter,
+                counts: counts,
+                onFilter: (f) => setState(() => _filter = f),
+              ),
             Flexible(
               child: AlertPanelList(
                 entries: entries,
@@ -563,20 +569,23 @@ class _GroupHeader extends StatelessWidget {
           size: 16,
           color: AlertPalette.colorOf(context, first),
         ),
-        Flexible(
-          child: Text(
-            first.rule.label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: t.body.copyWith(fontWeight: FontWeight.w600),
-          ),
+        // The rule's name keeps its words (they're short); the count gives
+        // way first, so pills no longer cut it to *Intake temperat...*.
+        Text(
+          first.rule.label,
+          maxLines: 1,
+          style: t.body.copyWith(fontWeight: FontWeight.w600),
         ),
-        CustomTooltip(
-          message: 'Earliest start ${formatAlertStart(earliest, now)}',
-          child: Text(
-            '$projectors ${projectors == 1 ? 'projector' : 'projectors'}$over',
-            maxLines: 1,
-            style: t.description,
+        Flexible(
+          child: CustomTooltip(
+            message: 'Earliest start ${formatAlertStart(earliest, now)}',
+            child: Text(
+              '$projectors ${projectors == 1 ? 'projector' : 'projectors'}'
+              '$over',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: t.description,
+            ),
           ),
         ),
       ];
@@ -605,13 +614,25 @@ class _GroupHeader extends StatelessWidget {
           child: InkWell(
             onTap: onToggle,
             borderRadius: BorderRadius.circular(9),
-            child: Padding(
+            // The header's full height, so the hover fill isn't a strip the
+            // height of the text.
+            child: Container(
+              height: height,
               padding: const EdgeInsets.only(left: 6, right: 8),
               child: Row(
                 spacing: 8,
                 children: [
                   AlertChevron(open: open),
-                  Expanded(child: Row(spacing: 8, children: title)),
+                  Expanded(
+                    // On one baseline: the mono IP and the model sat at
+                    // different heights when each was centred.
+                    child: Row(
+                      spacing: 8,
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: title,
+                    ),
+                  ),
                   AlertCountPills(alerts),
                 ],
               ),
@@ -663,7 +684,9 @@ class _SectionHeader extends StatelessWidget {
           child: InkWell(
             onTap: onToggle,
             borderRadius: BorderRadius.circular(8),
-            child: Padding(
+            // The section's full height for the hover fill.
+            child: Container(
+              height: height,
               padding: const EdgeInsets.only(left: 6, right: 8),
               child: Row(
                 spacing: 8,
@@ -680,6 +703,8 @@ class _SectionHeader extends StatelessWidget {
                   Expanded(
                     child: Row(
                       spacing: 8,
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
                       children: [
                         Flexible(
                           child: Text(
