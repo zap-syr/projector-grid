@@ -12,6 +12,7 @@ import 'package:projector_grid/features/workspace/domain/monitoring_filter.dart'
 import 'package:projector_grid/features/workspace/domain/osc_status.dart';
 import 'package:projector_grid/features/workspace/domain/projector_group.dart';
 import 'package:projector_grid/features/workspace/domain/projector_node.dart';
+import 'package:projector_grid/features/workspace/domain/status_bar_view.dart';
 import 'package:projector_grid/features/workspace/domain/web_clients.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/alert_counts_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/app_settings_provider.dart';
@@ -474,6 +475,113 @@ void main() {
       await _pump(tester, nodes: [_node(1)]);
       expect(find.text('None'), findsOneWidget);
       expect(find.byType(SeverityPill), findsNothing);
+    });
+
+    testWidgets('a typical project stays full in a 1000 px window', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        width: 1000,
+        nodes: [for (var i = 1; i <= 20; i++) _node(i)],
+      );
+      expect(find.text('Projectors'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('the longest values: full while they fit, then narrow', (
+      tester,
+    ) async {
+      final c = await _pump(
+        tester,
+        width: 1300,
+        nodes: [
+          for (var i = 1; i <= 444; i++) _node(i),
+          for (var i = 445; i <= 888; i++)
+            _node(i, status: ConnectionStatus.offline),
+        ],
+        overrides: [
+          oscProvider.overrideWith(() => _FakeOsc(const OscBindFailed(65535))),
+          webServerProvider.overrideWith(_FakeWeb.new),
+          alertCountsProvider.overrideWithValue((
+            critical: 88,
+            warning: 88,
+            criticalTotal: 88,
+            warningTotal: 88,
+            recovered: 88,
+          )),
+        ],
+      );
+      c.read(webClientsProvider.notifier).set([
+        for (var i = 0; i < 12; i++)
+          WebClient(
+            id: '$i',
+            ip: '10.0.0.$i',
+            role: i < 3 ? WebRole.operator : WebRole.viewer,
+            pages: 1,
+            lastSeen: DateTime(2026),
+          ),
+      ]);
+      c.read(pollStatusProvider.notifier).completed();
+      await tester.pump();
+      expect(find.text('Projectors'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      final alerts = tester.getRect(
+        find.byKey(const ValueKey('status-alerts')),
+      );
+      final osc = tester.getRect(find.byKey(const ValueKey('status-osc')));
+      expect(osc.left - alerts.right, greaterThanOrEqualTo(statusBarGap));
+
+      // A window where they don't fit: narrow in the same frame, no
+      // overflow on the way.
+      tester.view.physicalSize = const Size(1150, 600);
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(find.text('Projectors'), findsNothing);
+      expect(find.text('888'), findsOneWidget);
+
+      // Back at a width with room, but within the hysteresis: still narrow.
+      tester.view.physicalSize = const Size(1230, 600);
+      await tester.pump();
+      expect(find.text('Projectors'), findsNothing);
+      tester.view.physicalSize = const Size(1300, 600);
+      await tester.pump();
+      expect(find.text('Projectors'), findsOneWidget);
+    });
+
+    testWidgets('a value that grows steps a tight window down, no overflow', (
+      tester,
+    ) async {
+      final c = await _pump(
+        tester,
+        width: 1000,
+        nodes: [for (var i = 1; i <= 20; i++) _node(i)],
+        overrides: [
+          oscProvider.overrideWith(() => _FakeOsc(const OscListening(8001))),
+          webServerProvider.overrideWith(_FakeWeb.new),
+        ],
+      );
+      expect(find.text('Projectors'), findsOneWidget);
+      final osc = c.read(oscProvider.notifier) as _FakeOsc;
+      osc.set(const OscBindFailed(65535));
+      c.read(webClientsProvider.notifier).set([
+        for (var i = 0; i < 12; i++)
+          WebClient(
+            id: '$i',
+            ip: '10.0.0.$i',
+            role: i < 3 ? WebRole.operator : WebRole.viewer,
+            pages: 1,
+            lastSeen: DateTime(2026),
+          ),
+      ]);
+      c.read(workspaceProvider.notifier).setNodes([
+        for (var i = 1; i <= 444; i++) _node(i),
+        for (var i = 445; i <= 888; i++)
+          _node(i, status: ConnectionStatus.offline),
+      ]);
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(find.text('Projectors'), findsNothing);
     });
 
     for (final (name, theme) in [

@@ -1728,9 +1728,14 @@ dialogs' type, fields, chips and icons (`projector-grid-visual-rules`).
 ## 7l. `[x]` Status bar
 
 Done 2026-10-20 (agent on a trial branch, fixes after the owner's check). Differs from the
-text below: the narrow bar is measured, not guessed: the full bar takes 1192 to 1222 px
-with its longest values, so it steps down below **1240 px** and back above **1280 px**
-(the narrow bar is about 700 px). `oscProvider` state is `OscStatus` (off / listening /
+text below: the bar is narrow **when its full form doesn't fit the current values**, not
+below a window width (owner, 2026-10-20: the first threshold, 1240 / 1280 from the
+longest values, cut a 1238 px window with room to icons). A typical project's full bar
+takes about 920 px, the longest values about 1203; the layout measures the full bar
+(intrinsic width) and picks full or narrow in the same frame, so a growing value never
+shows a frame of overflow; full again once it fits with 40 px to spare
+(`statusBarNarrow`, `_FullOrNarrow`). A value that grows can therefore step a tight
+window down to icons. The narrow bar is about 700 px. `oscProvider` state is `OscStatus` (off / listening /
 bind failed, `domain/osc_status.dart`); `PreferencesDialog` takes a `PreferencesSection`.
 The severity pill is `widgets/common/severity_pill.dart`. In the narrow bar the meter's
 tooltip is *N projectors* (the wrong-login one replaces it) and *None* is just the check;
@@ -1842,6 +1847,8 @@ changes width every poll.
   pills without *Alerts*, the OSC dot and port, the globe and count, the time without
   *Updated*. Nothing is dropped. Chosen from the window width with hysteresis, not from
   measured content.
+- ~~Window width with hysteresis~~, then **from the content** (owner, 2026-10-20, see the
+  Done note above).
 - **The threshold is measured, not guessed** (owner, 2026-10-20): the full bar's width
   with its longest values (three-digit counts, all three alert pills, OSC *port busy*,
   *Web 12 (3 operators)*, the time) in the real font sets it, plus a margin, with
@@ -1850,7 +1857,17 @@ changes width every poll.
 
 ---
 
-## 7m. `[ ]` Alerts panels
+## 7m. `[x]` Alerts panels
+
+Done 2026-10-20 (agent on a trial branch, fixes after two owner checks). Differs from the
+text below as recorded in its owner decisions: the card badge's panel is a compact
+popover (320, a 40 px header with icon buttons, no footer); *Acknowledge all* shows only
+while something is unacknowledged and takes what the filter hides; the filter row hides
+with nothing to acknowledge; rows grouped by alert show only the value; a temperature's
+limit is in the start time's tooltip; intake and exhaust stay separate alert groups;
+group and section headers hover over their full height, mono and text on one baseline.
+The grouping switch is `SegmentedTabs(iconOnly: true)`; tests load the real fonts
+through `test/helpers/app_fonts.dart`.
 
 Boards (dark only): *Alerts panel: in the window, grouped by projector, a row hovered /
 grouped by alert, project groups, a long message / empty, all acknowledged, no match, one

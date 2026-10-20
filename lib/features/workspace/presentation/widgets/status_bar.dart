@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_theme.dart';
@@ -17,8 +18,9 @@ import 'status_bar_web_clients.dart';
 
 /// The status bar (plan §7l): projectors with the health meter and the
 /// Online / Offline counts, the alerts, and on the right OSC, Web and the
-/// time of the last poll. Below [statusBarNarrowBelow] the words step down
-/// to icons and counts, the names going to the tooltips.
+/// time of the last poll. When the full bar doesn't fit with the current
+/// values ([statusBarNarrow]), the words step down to icons and counts, the
+/// names going to the tooltips.
 class StatusBar extends ConsumerStatefulWidget {
   const StatusBar({super.key});
 
@@ -29,14 +31,37 @@ class StatusBar extends ConsumerStatefulWidget {
 }
 
 class _StatusBarState extends ConsumerState<StatusBar> {
-  bool? _narrow;
+  /// The mode last laid out, for focus only: the hidden bar is kept out of
+  /// Tab traversal. The layout itself picks the mode in the same frame.
+  bool _narrowShown = false;
+
+  void _onMode(bool narrow) {
+    if (narrow != _narrowShown) setState(() => _narrowShown = narrow);
+  }
+
+  Widget _row(bool narrow) => ExcludeFocus(
+    excluding: narrow != _narrowShown,
+    child: Row(
+      // A hidden OSC or Web item still gets its gap, but only left of the
+      // divider, where nothing shows it.
+      spacing: 4,
+      children: [
+        _Projectors(narrow: narrow),
+        const StatusBarDivider(),
+        _CountButtons(narrow: narrow),
+        const StatusBarDivider(),
+        StatusBarAlertsButton(narrow: narrow),
+        const Spacer(),
+        StatusBarOsc(narrow: narrow),
+        StatusBarWebClients(narrow: narrow),
+        const StatusBarDivider(),
+        _Updated(narrow: narrow),
+      ],
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
-    final narrow = _narrow = statusBarNarrow(
-      MediaQuery.sizeOf(context).width,
-      wasNarrow: _narrow,
-    );
     final cs = Theme.of(context).colorScheme;
     return Container(
       height: StatusBar.height,
@@ -47,26 +72,121 @@ class _StatusBarState extends ConsumerState<StatusBar> {
       ),
       child: DefaultTextStyle.merge(
         style: AppText.of(context).description,
-        child: Row(
-          // A hidden OSC or Web item still gets its gap, but only left of
-          // the divider, where nothing shows it.
-          spacing: 4,
-          children: [
-            _Projectors(narrow: narrow),
-            const StatusBarDivider(),
-            _CountButtons(narrow: narrow),
-            const StatusBarDivider(),
-            StatusBarAlertsButton(narrow: narrow),
-            const Spacer(),
-            StatusBarOsc(narrow: narrow),
-            StatusBarWebClients(narrow: narrow),
-            const StatusBarDivider(),
-            _Updated(narrow: narrow),
-          ],
+        child: _FullOrNarrow(
+          full: _row(false),
+          narrow: _row(true),
+          onMode: _onMode,
         ),
       ),
     );
   }
+}
+
+enum _BarSlot { full, narrow }
+
+/// Lays out and shows [full] while its items fit the width with the current
+/// values, else [narrow] (owner, 2026-10-20), deciding in the layout itself
+/// so a value that grows never shows a frame of overflow. Both stay built;
+/// only the shown one is painted, hit and in the semantics tree.
+class _FullOrNarrow
+    extends SlottedMultiChildRenderObjectWidget<_BarSlot, RenderBox> {
+  const _FullOrNarrow({
+    required this.full,
+    required this.narrow,
+    required this.onMode,
+  });
+
+  final Widget full;
+  final Widget narrow;
+
+  /// After a layout that changed the mode: true for narrow.
+  final ValueChanged<bool> onMode;
+
+  @override
+  Iterable<_BarSlot> get slots => _BarSlot.values;
+
+  @override
+  Widget? childForSlot(_BarSlot slot) => switch (slot) {
+    _BarSlot.full => full,
+    _BarSlot.narrow => narrow,
+  };
+
+  @override
+  SlottedRenderObjectElement<_BarSlot, RenderBox> createElement() =>
+      _FullOrNarrowElement(this);
+
+  @override
+  _RenderFullOrNarrow createRenderObject(BuildContext context) =>
+      _RenderFullOrNarrow(onMode);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderFullOrNarrow renderObject,
+  ) => renderObject.onMode = onMode;
+}
+
+class _FullOrNarrowElement
+    extends SlottedRenderObjectElement<_BarSlot, RenderBox> {
+  _FullOrNarrowElement(super.widget);
+
+  // Finders and the inspector see only the bar on screen.
+  @override
+  void debugVisitOnstageChildren(ElementVisitor visitor) {
+    final shown = (renderObject as _RenderFullOrNarrow).shownSlot;
+    visitChildren((e) {
+      if (e.slot == shown) visitor(e);
+    });
+  }
+}
+
+class _RenderFullOrNarrow extends RenderBox
+    with SlottedContainerRenderObjectMixin<_BarSlot, RenderBox> {
+  _RenderFullOrNarrow(this.onMode);
+
+  ValueChanged<bool> onMode;
+  bool? _narrow;
+
+  _BarSlot get shownSlot => _narrow ?? false ? _BarSlot.narrow : _BarSlot.full;
+
+  RenderBox get _shown => childForSlot(shownSlot)!;
+
+  @override
+  void performLayout() {
+    final was = _narrow;
+    final fullWidth = childForSlot(_BarSlot.full)!
+        .getMaxIntrinsicWidth(constraints.maxHeight);
+    final narrow = _narrow = statusBarNarrow(
+      constraints.maxWidth,
+      fullWidth: fullWidth,
+      wasNarrow: was,
+    );
+    final child = _shown..layout(constraints, parentUsesSize: true);
+    size = child.size;
+    if (narrow != (was ?? false)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => onMode(narrow));
+    }
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) =>
+      context.paintChild(_shown, offset);
+
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) =>
+      _shown.hitTest(result, position: position);
+
+  @override
+  void visitChildrenForSemantics(RenderObjectVisitor visitor) =>
+      visitor(_shown);
+
+  @override
+  double computeMinIntrinsicHeight(double width) =>
+      _shown.getMinIntrinsicHeight(width);
+
+  @override
+  double computeMaxIntrinsicHeight(double width) =>
+      _shown.getMaxIntrinsicHeight(width);
 }
 
 /// *Projectors 18* and the health meter; a tooltip only while a projector

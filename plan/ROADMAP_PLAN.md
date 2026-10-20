@@ -1677,13 +1677,16 @@ because the work is large. In short:
   tooltip listing up to 5 projectors by IP and model; alert pills per severity; a new OSC
   item (port, or *port busy* in red on a bind failure), Web as today, both hidden while
   off; *Updated* with a fixed width (spinner in place of the icon). **Done 2026-10-20**;
-  the narrow bar below 1240 px (measured), *port busy* also shown in Preferences
+  the bar steps down to icons only when its current values don't fit (about 920 px for a
+  typical project), *port busy* also shown in Preferences
   (plan §7l).
 - **Alerts panels** (Active alerts and the card badge's panel): radius 14, 420 / 340 px; a
   52 px header with the view controls, filter chips with words, a footer with *Event log*
   and a filled *Acknowledge all*; rows with the message in white and the severity only in
   the icon and a 3 px edge, wrapping to two lines, one start time, a quiet Acknowledge
   icon button; group and section headers with status-bar pills, sentence case.
+  **Done 2026-10-20**; the card badge's panel is a compact popover with header icon
+  buttons and no footer (plan §7m).
 
 Order: foundation (with the tooltip) → Groups → Add / Edit Projector → Brightness Control →
 Color Correction → Geometry Correction → Edge Blending → Remote Preview → Custom Command →

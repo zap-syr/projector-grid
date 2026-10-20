@@ -8,28 +8,33 @@ import 'monitoring_layout.dart';
 import 'projector_group.dart';
 import 'projector_node.dart';
 
-/// Below this window width the status bar is narrow: icons and counts, the
-/// names in tooltips. Measured in Inter and IBM Plex Mono: the full bar with
-/// its longest values (three-digit projector counts, all three alert pills
-/// at two digits, OSC *65535 port busy*, *Web 12 (3 operators)*, the time)
-/// needs 1199 px (1192 with port 9000, 1222 with three-digit pills); this
-/// keeps about 40 px of margin, and three-digit pills still fit. The narrow
-/// bar with the same values needs 702 px.
-const double statusBarNarrowBelow = 1240;
+/// The least gap kept between the bar's left and right groups in the full
+/// bar.
+const double statusBarGap = 16;
 
-/// Above this width it is full again. The band in between keeps the current
-/// mode, so resizing across the edge doesn't flicker (as the toolbar, §7f.2).
-const double statusBarFullAbove = 1280;
+/// How much more room than [statusBarGap] a narrow bar waits for before it
+/// is full again, so a width or a value right at the edge doesn't flicker
+/// (as the toolbar, §7f.2).
+const double statusBarHysteresis = 40;
 
-/// Whether the status bar is narrow at [windowWidth]. Chosen from the
-/// window, not the bar's content, so a count can never switch the mode.
-/// [wasNarrow] is the current mode (null on the first build, when the band
-/// splits at its middle).
-bool statusBarNarrow(double windowWidth, {bool? wasNarrow}) {
-  if (windowWidth < statusBarNarrowBelow) return true;
-  if (windowWidth > statusBarFullAbove) return false;
-  return wasNarrow ??
-      windowWidth < (statusBarNarrowBelow + statusBarFullAbove) / 2;
+/// Whether the status bar is narrow (icons and counts, the names in
+/// tooltips) in [width] when the full bar's items take [fullWidth] with the
+/// current values. Chosen from what is shown, not from a fixed window width
+/// (owner, 2026-10-20): a typical project's full bar takes about 920 px and
+/// the longest values (three-digit counts, three alert pills, *port busy*,
+/// *Web 12 (3 operators)*) about 1203, so a fixed threshold either cut a
+/// roomy window to icons or let the worst case overflow. The cost: a value
+/// that grows (a third alert pill) can step a tight window down to icons,
+/// and back once it has the room again. [wasNarrow] is the current mode,
+/// null before the first layout.
+bool statusBarNarrow(
+  double width, {
+  required double fullWidth,
+  bool? wasNarrow,
+}) {
+  final needs =
+      fullWidth + statusBarGap + (wasNarrow ?? false ? statusBarHysteresis : 0);
+  return width < needs;
 }
 
 /// One projector in the Offline tooltip.

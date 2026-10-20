@@ -91,17 +91,30 @@ void main() {
   });
 
   group('statusBarNarrow', () {
-    test('thresholds and hysteresis', () {
-      expect(statusBarNarrow(800), isTrue);
-      expect(statusBarNarrow(statusBarNarrowBelow - 1), isTrue);
-      expect(statusBarNarrow(statusBarFullAbove + 1), isFalse);
-      expect(statusBarNarrow(1920), isFalse);
-      // In the band the current mode stays.
+    test('full while the current values fit with the gap', () {
+      expect(statusBarNarrow(1238, fullWidth: 920), isFalse);
+      expect(statusBarNarrow(936, fullWidth: 920), isFalse);
+      expect(statusBarNarrow(935, fullWidth: 920), isTrue);
+      expect(statusBarNarrow(1210, fullWidth: 1203), isTrue);
+      expect(statusBarNarrow(1238, fullWidth: 1203), isFalse);
+    });
+
+    test('a narrow bar waits for the hysteresis before it is full again', () {
+      const full = 920.0;
+      final edge = full + statusBarGap;
+      expect(statusBarNarrow(edge + 10, fullWidth: full), isFalse);
       expect(
-        statusBarNarrow(statusBarNarrowBelow + 1, wasNarrow: false),
+        statusBarNarrow(edge + 10, fullWidth: full, wasNarrow: true),
+        isTrue,
+      );
+      expect(
+        statusBarNarrow(
+          edge + statusBarHysteresis,
+          fullWidth: full,
+          wasNarrow: true,
+        ),
         isFalse,
       );
-      expect(statusBarNarrow(statusBarFullAbove - 1, wasNarrow: true), isTrue);
     });
   });
 }
