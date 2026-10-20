@@ -40,6 +40,12 @@ class AppSettings {
   final bool showLogs;
   final bool isMonitoringView;
 
+  /// The event log panel's height as the user left it. A window too small
+  /// for it shows the panel shorter but keeps this, so it comes back when
+  /// the window grows.
+  static const double defaultEventLogHeight = 240;
+  final double eventLogHeight;
+
   /// Web Access: the built-in HTTP server for the Web UI.
   static const int defaultWebPort = 8080;
   final bool webEnabled;
@@ -106,6 +112,7 @@ class AppSettings {
     this.oscSendPort = 9000,
     this.showLogs = false,
     this.isMonitoringView = false,
+    this.eventLogHeight = defaultEventLogHeight,
     this.webEnabled = false,
     this.webPort = defaultWebPort,
     this.webUrlIp = '',
@@ -140,6 +147,7 @@ class AppSettings {
     int? oscSendPort,
     bool? showLogs,
     bool? isMonitoringView,
+    double? eventLogHeight,
     bool? webEnabled,
     int? webPort,
     String? webUrlIp,
@@ -175,6 +183,7 @@ class AppSettings {
       oscSendPort: oscSendPort ?? this.oscSendPort,
       showLogs: showLogs ?? this.showLogs,
       isMonitoringView: isMonitoringView ?? this.isMonitoringView,
+      eventLogHeight: eventLogHeight ?? this.eventLogHeight,
       webEnabled: webEnabled ?? this.webEnabled,
       webPort: webPort ?? this.webPort,
       webUrlIp: webUrlIp ?? this.webUrlIp,
@@ -218,6 +227,7 @@ class AppSettings {
     'oscSendPort': oscSendPort,
     'showLogs': showLogs,
     'isMonitoringView': isMonitoringView,
+    'eventLogHeight': eventLogHeight,
     'webEnabled': webEnabled,
     'webPort': webPort,
     'webUrlIp': webUrlIp,
@@ -261,6 +271,8 @@ class AppSettings {
     oscSendPort: (json['oscSendPort'] as int?) ?? 9000,
     showLogs: (json['showLogs'] as bool?) ?? false,
     isMonitoringView: (json['isMonitoringView'] as bool?) ?? false,
+    eventLogHeight:
+        (json['eventLogHeight'] as num?)?.toDouble() ?? defaultEventLogHeight,
     webEnabled: (json['webEnabled'] as bool?) ?? false,
     webPort: (json['webPort'] as int?) ?? defaultWebPort,
     webUrlIp: (json['webUrlIp'] as String?) ?? '',
@@ -379,6 +391,11 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
 
   void setShowLogs(bool show) {
     state = state.copyWith(showLogs: show);
+    _save(state);
+  }
+
+  void setEventLogHeight(double height) {
+    state = state.copyWith(eventLogHeight: height);
     _save(state);
   }
 

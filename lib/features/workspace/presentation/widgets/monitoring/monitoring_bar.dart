@@ -11,6 +11,7 @@ import '../../providers/monitoring_filter_provider.dart';
 import '../../providers/monitoring_status_provider.dart';
 import '../../providers/monitoring_view_provider.dart';
 import '../../providers/workspace_provider.dart';
+import '../common/bar_chip.dart';
 import '../common/dialog_parts.dart';
 import '../common/menu_check_gutter.dart';
 import '../common/segmented_tabs.dart';
@@ -305,58 +306,6 @@ double _textWidth(BuildContext context, String text, TextStyle style) {
   return w;
 }
 
-/// The outlined, rounded chip of the mockup's bar: the quick filters and
-/// Group by. Selected, it fills with the primary container.
-class _BarChip extends StatelessWidget {
-  const _BarChip({
-    super.key,
-    required this.selected,
-    required this.onPressed,
-    required this.children,
-  });
-
-  static const double height = 32;
-  static const double padding = 12;
-  static const double gap = 7;
-
-  final bool selected;
-
-  /// Null greys the chip out: a filter with nothing behind it.
-  final VoidCallback? onPressed;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final shape = StadiumBorder(
-      side: BorderSide(color: selected ? cs.primary : cs.outlineVariant),
-    );
-    return Opacity(
-      opacity: onPressed == null && !selected ? 0.45 : 1,
-      child: Material(
-        color: selected ? cs.primaryContainer : Colors.transparent,
-        shape: shape,
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: selected ? null : onPressed,
-          customBorder: shape,
-          child: SizedBox(
-            height: height,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: padding),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                spacing: gap,
-                children: children,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _FilterChip extends StatelessWidget {
   const _FilterChip({
     required this.filter,
@@ -408,9 +357,9 @@ class _FilterChip extends StatelessWidget {
       if (!iconOnly) _textWidth(context, labelOf(f), _labelStyle(context)),
       _textWidth(context, '$count', _countStyle(context)),
     ];
-    return 2 * _BarChip.padding +
+    return 2 * BarChip.defaultPadding +
         parts.fold<double>(0, (a, b) => a + b) +
-        _BarChip.gap * (parts.length - 1);
+        BarChip.gap * (parts.length - 1);
   }
 
   /// A dot in the colour the table and the status bar use, or the icon of
@@ -447,7 +396,7 @@ class _FilterChip extends StatelessWidget {
     final t = AppText.of(context);
     final fg = selected ? cs.onPrimaryContainer : t.secondary;
     final label = labelOf(filter);
-    final chip = _BarChip(
+    final chip = BarChip(
       key: ValueKey('monitoring-filter-${filter.name}'),
       selected: selected,
       onPressed: count == 0 ? null : onPressed,
@@ -563,9 +512,9 @@ class _GroupByButton extends ConsumerWidget {
     bool byGroup, {
     required bool iconOnly,
   }) =>
-      2 * _BarChip.padding +
+      2 * BarChip.defaultPadding +
       (iconOnly ? 14 : _textWidth(context, labelOf(byGroup), _style(context))) +
-      _BarChip.gap +
+      BarChip.gap +
       16;
 
   @override
@@ -588,7 +537,7 @@ class _GroupByButton extends ConsumerWidget {
         ),
       ],
       builder: (context, controller, _) {
-        final chip = _BarChip(
+        final chip = BarChip(
           key: const ValueKey('monitoring-group-by'),
           selected: false,
           onPressed: () =>

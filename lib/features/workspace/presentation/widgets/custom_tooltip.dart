@@ -87,6 +87,21 @@ class _CustomTooltipState extends State<CustomTooltip> {
   }
 
   @override
+  void didUpdateWidget(CustomTooltip oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // A tooltip that changes while shown (Copy's "Copied 42 events") is
+    // redrawn with the new text instead of keeping the old one.
+    if (_entry != null &&
+        (oldWidget.message != widget.message ||
+            oldWidget.detail != widget.detail)) {
+      final entry = _entry!;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_entry == entry) entry.markNeedsBuild();
+      });
+    }
+  }
+
+  @override
   void dispose() {
     _hide();
     super.dispose();

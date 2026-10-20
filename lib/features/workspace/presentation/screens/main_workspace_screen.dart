@@ -1,4 +1,5 @@
 import 'dart:io' show Platform;
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -124,11 +125,12 @@ class _WorkspaceBodyState extends ConsumerState<_WorkspaceBody> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Reserve at least 150px for the workspace above the log panel.
+        // The log can grow until 150 px are left above it (the status bar
+        // included), so the view never disappears behind it.
         const minWorkspaceHeight = 150.0;
-        final maxLogHeight = (constraints.maxHeight - minWorkspaceHeight).clamp(
+        final maxLogHeight = math.max(
           EventLogPanel.minHeight,
-          EventLogPanel.defaultHeight,
+          constraints.maxHeight - minWorkspaceHeight,
         );
 
         // Each major section gets its own RepaintBoundary so a repaint in one
