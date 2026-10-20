@@ -148,6 +148,9 @@ class HealthMeter extends StatelessWidget {
         height: size.height,
         color: cs.surfaceContainerHighest,
         child: Row(
+          // Stretched: an empty ColoredBox under a Row's loose height
+          // takes 0 px, and the meter showed only its grey track.
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           spacing: 1,
           children: [
             for (final (key, n, color) in parts)
@@ -306,8 +309,18 @@ class _Updated extends ConsumerWidget {
                 )
               : Icon(Icons.schedule, size: 14, color: t.secondary),
         ),
-        if (!narrow) const Text('Updated'),
-        Text(time, style: t.monoSmall.copyWith(color: t.primary)),
+        // One paragraph, so the mono time sits on the word's baseline.
+        Text.rich(
+          TextSpan(
+            children: [
+              if (!narrow) const TextSpan(text: 'Updated  '),
+              TextSpan(
+                text: time,
+                style: t.monoSmall.copyWith(color: t.primary),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }

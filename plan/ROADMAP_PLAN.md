@@ -1477,6 +1477,12 @@ Refactors done first (behaviour unchanged):
 - `[ ]` Custom-command ids are `microsecondsSinceEpoch`; Windows' clock is coarse enough that
   two adds in the same tick share an id. Unreachable at human click speed — fix only if
   commands are ever created programmatically.
+- `[ ]` OSC start/stop race (found 2026-10-20, predates the status bar redesign): a `stop()`
+  sent while a `start()` still awaits its socket bind can be overtaken, and OSC ends up
+  listening with the switch off. `OscService.start()` now reports when it was superseded
+  (so a superseded bind isn't shown as *port busy*), but stop doesn't wait for or cancel a
+  pending start. Fix by serialising start/stop in `oscProvider` (one in flight, the last
+  request wins).
 
 Note: on the dev laptop `flutter_tester.exe` sometimes dies with the same Dart VM profiler
 access violation as the debug app (`debug_crash_investigation.md`). A run then shows a batch of

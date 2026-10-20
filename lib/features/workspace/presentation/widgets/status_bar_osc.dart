@@ -53,15 +53,26 @@ class StatusBarOsc extends ConsumerWidget {
         StatusBarDot(
           color: failed ? error : AppStatusColors.of(context).success,
         ),
-        if (!narrow) const Text('OSC'),
-        Text(
-          '$port',
-          style: t.monoSmall.copyWith(
-            color: failed && narrow ? error : t.primary,
+        // One paragraph, so the mono port sits on the words' baseline; as
+        // separate Texts centred in the Row it sat lower.
+        Text.rich(
+          TextSpan(
+            children: [
+              if (!narrow) const TextSpan(text: 'OSC  '),
+              TextSpan(
+                text: '$port',
+                style: t.monoSmall.copyWith(
+                  color: failed && narrow ? error : t.primary,
+                ),
+              ),
+              if (failed && !narrow)
+                TextSpan(
+                  text: '  port busy',
+                  style: TextStyle(color: error),
+                ),
+            ],
           ),
         ),
-        if (failed && !narrow)
-          Text('port busy', style: TextStyle(color: error)),
       ],
     );
   }

@@ -196,6 +196,14 @@ void main() {
       expect(_meterFlex(tester, 'wrong-login'), 1);
       expect(_meterFlex(tester, 'offline'), 2);
       expect(find.text('18'), findsOneWidget);
+      // The parts fill the track's height; at 0 px only the grey showed.
+      for (final part in ['online', 'wrong-login', 'offline']) {
+        expect(
+          tester.getSize(find.byKey(ValueKey('meter-$part'))).height,
+          HealthMeter.size.height,
+          reason: part,
+        );
+      }
 
       // Without a failed login there is no amber part.
       c.read(workspaceProvider.notifier).setNodes([
@@ -363,9 +371,11 @@ void main() {
           webServerProvider.overrideWith(_FakeWeb.new),
         ],
       );
-      expect(find.text('OSC'), findsOneWidget);
-      expect(find.text('9000'), findsOneWidget);
-      expect(find.text('port busy'), findsNothing);
+      expect(find.text('OSC  9000', findRichText: true), findsOneWidget);
+      expect(
+        find.textContaining('port busy', findRichText: true),
+        findsNothing,
+      );
       expect(find.text('Web'), findsOneWidget);
       expect(find.text('0'), findsWidgets);
 
@@ -404,27 +414,36 @@ void main() {
       c.read(appSettingsProvider.notifier).setOscActive(false);
       osc.set(const OscBindFailed(9000));
       await tester.pump();
-      expect(find.text('port busy'), findsOneWidget);
+      expect(
+        find.text('OSC  9000  port busy', findRichText: true),
+        findsOneWidget,
+      );
       await _hover(tester, find.byKey(const ValueKey('status-osc')));
       expect(find.text('OSC port 9000 is in use'), findsOneWidget);
       expect(find.text('Choose another in Preferences'), findsOneWidget);
 
       osc.set(const OscListening(9001));
       await tester.pump();
-      expect(find.text('port busy'), findsNothing);
-      expect(find.text('9001'), findsOneWidget);
+      expect(find.text('OSC  9001', findRichText: true), findsOneWidget);
     });
 
     testWidgets('Updated --:--:-- before the first poll, then the time', (
       tester,
     ) async {
       final c = await _pump(tester, nodes: [_node(1)]);
-      expect(find.text('Updated'), findsOneWidget);
-      expect(find.text('--:--:--'), findsOneWidget);
+      expect(
+        find.text('Updated  --:--:--', findRichText: true),
+        findsOneWidget,
+      );
       c.read(pollStatusProvider.notifier).completed();
       await tester.pump();
-      expect(find.text('--:--:--'), findsNothing);
-      expect(find.textContaining(RegExp(r'^\d\d:\d\d:\d\d$')), findsOneWidget);
+      expect(
+        find.textContaining(
+          RegExp(r'^Updated  \d\d:\d\d:\d\d$'),
+          findRichText: true,
+        ),
+        findsOneWidget,
+      );
     });
 
     testWidgets('the bar keeps its size while polling', (tester) async {
