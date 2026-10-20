@@ -1478,9 +1478,10 @@ Temperatures, signal details and errors stay in Monitoring (§7i).
 
 ## 7k. `[ ]` Event log panel
 
-Boards (dark only): *Event log: the panel in the window, a row hovered / Problems filter
+Boards (dark only): *Event log: the panel in the window, a row hovered / Alerts filter
 and search / empty, no match, minimum height, 800 px window, clear / a command sent to
-several projectors, collapsed and opened*. Approved 2026-10-19. Today
+several projectors, collapsed and opened*. Approved 2026-10-19; updated 2026-10-20 to
+one *Alerts* chip, *Locate* without glow and the 120 px minimum. Today
 (`event_log_panel.dart`): a 34 px bar with a blue *EVENT LOG*, text filter tabs with
 counts, a 22 px search field, three 14 px icon buttons; 26 px rows in 11 px text with a
 6 px severity dot; a command to several projectors writes one line per projector and a
@@ -1501,24 +1502,42 @@ dialogs' type, fields, chips and icons (`projector-grid-visual-rules`).
   Projector events (`hardware`, the error codes) show under *All* and *Alerts*. A chip
   with no events stays in place, dimmed (§8 of the visual rules); a selected one that
   empties stays selected.
+- *Web* takes the web server's own events (`LogEventType.web`: started, stopped,
+  clients, errors) **and the commands sent from the Web page**. The latter are told
+  apart only by the command's source, which wave 2 adds; until then *Web* shows the
+  server events alone, and that is expected on the wave 1 check.
 - **Search log**: a 40 px `dialogFieldDecoration` field with the search icon, the ✕ in
   `Visibility(maintainSize: true)`. It searches IP, model and message; matches are
   highlighted in the row.
 - **Buttons**, 36 px icon buttons with `CustomTooltip`s, after a thin divider: *Follow
   new events*, *Copy*, *Clear*, *Close*.
-- **Narrow** (the 800 px window, or the panel at half width): the title text goes, the
-  chips step down to icon + count with the name in a tooltip, the search field narrows.
-  Nothing is dropped.
+- **Narrow**: chosen from the **panel's width** (it always spans the window), below
+  about **1000 px**, with hysteresis as the toolbar (§7f.2), so it doesn't flicker at
+  the edge. The title text goes, the chips step down to icon + count with the name in a
+  tooltip, the search field narrows. Nothing is dropped. (The board's half-width frames
+  only show the compact header; the panel itself is never half width.)
+- **Copy** copies what is shown (filter and search applied), one line per row:
+  `21:04:12  error  10.0.1.33 PT-RZ120  Projector  Error F305: exhaust fan stopped`, *App*
+  where there is no projector (not `–`), the date before the time for an event of an
+  earlier day. No SnackBar: the button shows a check for about a second and its tooltip
+  reads *Copied 42 events*.
 
 ### 7k.2 Columns and rows
 - A **column header** under the bar: *Time*, *Projector*, *Source*, *Event* (`label`).
 - **Rows 34 px** (was 26), text `body` 14. Time and IP in `mono`, the model after the IP in
   `description`; an event with no projector shows *App* or the group in its place.
+- **Time**: today's events show the time only (*21:04:12*); an event from an earlier day
+  shows the date before it (*19 Oct 23:58:04*). The log isn't cleared at midnight, so a
+  night shift would otherwise mix two days under the same hours. The Time column is
+  wide enough for the dated form, so it never changes width.
 - **Severity is an icon**, not a dot: red error, amber warning, green success, grey info.
   Error and warning rows get a faint tint of their colour and a 3 px left edge; the
   message stays in the primary text colour, only the icon and the edge carry the colour.
 - **Source** is an icon and a word: *Command*, *OSC*, *Connection*, *Alert*, *Web*,
-  *Projector*. In the 800 px window the Source column hides.
+  *Projector*. In the 800 px window the Source column hides. It comes from the event's
+  type: `command` *Command*, `osc` *OSC*, `connectivity` *Connection*, `alert` *Alert*,
+  `web` *Web*, `hardware` *Projector*. Wave 1 builds it from that alone; the *from …*
+  part of command rows comes with the sources in wave 2.
 - **OSC rows** show the address in `mono` and the sender (`from 10.0.0.20`). **Command
   rows** name where the command came from in `description` (*from the control bar*, *from
   OSC*, *from scheduled task "Evening shutdown"*, *from Web, 10.0.0.5 (operator)*).
@@ -1608,6 +1627,12 @@ dialogs' type, fields, chips and icons (`projector-grid-visual-rules`).
 - Three waves, each checked on a trial branch: (1) the look, chips, search with
   highlight, height and Clear confirm; (2) batch rows, sources, Retry; (3) repeats,
   hover actions, Follow.
+- Added 2026-10-20: *Web* takes the server events and the Web page's commands (the
+  commands from wave 2); the narrow header follows the panel's width (about 1000 px,
+  with hysteresis); Copy copies what is shown, *App* for no projector, a check on the
+  button instead of a SnackBar; events of an earlier day show their date; the Source
+  column comes from the event type in wave 1. The mockup now shows one *Alerts* chip,
+  *Locate* and the 120 px minimum.
 
 ---
 
