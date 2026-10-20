@@ -117,7 +117,9 @@ class EdgeBlendCanvas extends StatefulWidget {
 
 class _EdgeBlendCanvasState extends State<EdgeBlendCanvas> {
   // Room around the raster for handles and value chips on the outer edges.
-  static const double _margin = 16;
+  // Wider at the sides: a left or right handle's chip is centred above it,
+  // so at the raster's edge half a chip (`Border 3840`) hangs outside.
+  static const _margin = EdgeInsets.symmetric(horizontal: 56, vertical: 16);
   static const double _handleHitRadius = 12;
   static const double _minZoneHitThickness = 10;
 
@@ -221,8 +223,8 @@ class _EdgeBlendCanvasState extends State<EdgeBlendCanvas> {
     final sideBySide = arrangement == PairArrangement.sideBySide;
     final bandTop = sideBySide ? _pillBandTop : 0.0;
     final bandLeft = sideBySide ? 0.0 : _pillBandLeft;
-    final availW = max(0.0, size.width - 2 * _margin - bandLeft);
-    final availH = max(0.0, size.height - 2 * _margin - bandTop);
+    final availW = max(0.0, size.width - _margin.horizontal - bandLeft);
+    final availH = max(0.0, size.height - _margin.vertical - bandTop);
     // Every supported raster is 16:10; both are drawn the same size, each
     // mapping its own units.
     final aspect = a.raster.v / a.raster.h;
@@ -230,8 +232,8 @@ class _EdgeBlendCanvasState extends State<EdgeBlendCanvas> {
     final unitW = min(availW / extent.h, availH / (extent.v * aspect));
     final unitH = unitW * aspect;
     final origin = Rect.fromLTWH(
-      _margin + bandLeft + (availW - extent.h * unitW) / 2,
-      _margin + bandTop + (availH - extent.v * unitH) / 2,
+      _margin.left + bandLeft + (availW - extent.h * unitW) / 2,
+      _margin.top + bandTop + (availH - extent.v * unitH) / 2,
       unitW,
       unitH,
     );
@@ -810,11 +812,11 @@ class _RasterBox {
   const _RasterBox(this.rect, this.raster);
 
   /// The largest rectangle with the raster's aspect ratio that fits [size]
-  /// minus [margin] on every side, centred.
-  factory _RasterBox.fit(Size size, EdgeBlendRaster raster, double margin) {
+  /// minus [margin], centred.
+  factory _RasterBox.fit(Size size, EdgeBlendRaster raster, EdgeInsets margin) {
     final avail = Size(
-      max(0, size.width - 2 * margin),
-      max(0, size.height - 2 * margin),
+      max(0, size.width - margin.horizontal),
+      max(0, size.height - margin.vertical),
     );
     final scale = min(avail.width / raster.h, avail.height / raster.v);
     final w = raster.h * scale;
@@ -1295,8 +1297,11 @@ class _EdgeBlendPainter extends CustomPainter {
     );
   }
 
-  /// The selected handle's value in a pill beside it, on the zone's inner
-  /// side, kept inside the raster: `Width 640`.
+  /// The selected handle's value in a pill across the edge's axis from it,
+  /// kept inside the raster: `Width 640`. An edge's handles all sit on the
+  /// raster's midline and move only along it, so a pill above (left, right)
+  /// or beside (upper, lower) never covers a neighbouring handle, as one
+  /// placed inward along the axis did at a small Width.
   void _paintValuePill(
     Canvas canvas,
     _PaintSide side,
@@ -1335,18 +1340,28 @@ class _EdgeBlendPainter extends CustomPainter {
       text.width + pad.horizontal,
       text.height + pad.vertical,
     );
-    final inwardOffset = switch (edge) {
-      BlendEdge.left => Offset(12, -chipSize.height / 2),
-      BlendEdge.right => Offset(-12 - chipSize.width, -chipSize.height / 2),
-      BlendEdge.upper => Offset(-chipSize.width / 2, 12),
-      BlendEdge.lower => Offset(-chipSize.width / 2, -12 - chipSize.height),
-    };
-    var topLeft = handle + inwardOffset;
+    // Half the handle's 30 px long side, plus a gap.
+    const clear = 15.0 + 6;
     final r = side.box.rect;
-    topLeft = Offset(
-      topLeft.dx.clamp(r.left, max(r.left, r.right - chipSize.width)),
-      topLeft.dy.clamp(r.top, max(r.top, r.bottom - chipSize.height)),
-    );
+    final Offset offset;
+    if (edge.isHorizontal) {
+      // Above, or below when the raster has no room above.
+      final above = handle.dy - clear - chipSize.height >= r.top;
+      offset = Offset(
+        -chipSize.width / 2,
+        above ? -clear - chipSize.height : clear,
+      );
+    } else {
+      // Right, or left when the raster has no room on the right.
+      final right = handle.dx + clear + chipSize.width <= r.right;
+      offset = Offset(
+        right ? clear : -clear - chipSize.width,
+        -chipSize.height / 2,
+      );
+    }
+    // Not clamped to the raster: pushed in at its edge the chip slid off
+    // its handle. The canvas margin leaves room for it to hang out.
+    final topLeft = handle + offset;
     canvas.drawRRect(
       RRect.fromRectAndRadius(topLeft & chipSize, const Radius.circular(6)),
       Paint()..color = fill,

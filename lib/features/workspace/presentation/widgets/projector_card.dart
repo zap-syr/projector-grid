@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/services/external_links.dart';
@@ -13,6 +12,7 @@ import '../../domain/test_patterns.dart';
 import '../providers/alignment_provider.dart';
 import '../providers/selection_provider.dart';
 import 'alert_badge.dart';
+import 'common/key_caps.dart';
 import 'common/test_pattern_thumb.dart';
 import 'projector_status_style.dart';
 
@@ -113,8 +113,10 @@ class _ProjectorCardState extends ConsumerState<ProjectorCard> {
             ? null
             : () => _closeAndRun(widget.onQuickStatus),
         leadingIcon: const Icon(Icons.info_outline),
-        // Shown only: the key itself is bound in the canvas Shortcuts.
-        shortcut: const SingleActivator(LogicalKeyboardKey.space),
+        // Shown only: the key itself is bound in the canvas Shortcuts. Key
+        // caps, as tooltips show shortcuts: `shortcut:` would draw it in the
+        // item's own type, like a second label.
+        trailingIcon: const KeyCaps(['Space'], small: true),
         child: const Text('Quick status'),
       ),
       const _MenuDivider(),

@@ -41,8 +41,8 @@ class EdgeBlendCanvasCard extends StatelessWidget {
   final Widget? leading;
   final EdgeBlendHint hint;
 
-  /// A narrow card: the mouse and keyboard hint moves into a keyboard
-  /// icon's tooltip in the header.
+  /// A narrow card: the footer note moves into a header icon's tooltip
+  /// (keyboard, info on Black Level, warning for [notice]).
   final bool compact;
   final bool off;
 
@@ -56,10 +56,11 @@ class EdgeBlendCanvasCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = AppText.of(context);
-    final keyHint = hint != EdgeBlendHint.black && notice == null;
+    final notice = this.notice;
     // One line on every tab and in every state, so the footer keeps its
-    // height and the raster stays put when the tab changes. The keys are
-    // in Keyboard Shortcuts and, in a narrow card, the keyboard icon.
+    // height and the raster stays put when the tab changes. A narrow card
+    // drops it for the raster's room, as Corner Correction does, and an icon
+    // in the header carries it in a tooltip on every tab.
     final note =
         notice ??
         switch (hint) {
@@ -74,19 +75,35 @@ class EdgeBlendCanvasCard extends StatelessWidget {
     return CanvasCard(
       key: edgeBlendCanvasCardKey,
       leading: leading,
-      help: compact && keyHint
+      help: compact
           ? CustomTooltip(
-              message: 'Mouse and keyboard',
-              detail: hint == EdgeBlendHint.pair
-                  ? 'Click a raster or its pill to edit that projector. '
-                        '$_hintPlain'
-                  : _hintPlain,
+              message: notice != null
+                  ? 'Projector not replying'
+                  : hint == EdgeBlendHint.black
+                  ? 'Black Level'
+                  : 'Mouse and keyboard',
+              detail:
+                  notice ??
+                  switch (hint) {
+                    EdgeBlendHint.single => _hintPlain,
+                    EdgeBlendHint.pair =>
+                      'Click a raster or its pill to edit that projector. '
+                          '$_hintPlain',
+                    EdgeBlendHint.black => note,
+                  },
+              warning: notice != null,
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 6),
                 child: Icon(
-                  Icons.keyboard_outlined,
+                  notice != null
+                      ? Icons.warning_amber_rounded
+                      : hint == EdgeBlendHint.black
+                      ? Icons.info_outline
+                      : Icons.keyboard_outlined,
                   size: 18,
-                  color: t.secondary,
+                  color: notice != null
+                      ? AppStatusColors.of(context).warning
+                      : t.secondary,
                 ),
               ),
             )
@@ -104,17 +121,19 @@ class EdgeBlendCanvasCard extends StatelessWidget {
         opacity: off ? 0.38 : 1,
         child: _Legend(hint: hint),
       ),
-      note: Opacity(
-        opacity: off ? 0.38 : 1,
-        child: CanvasNote(
-          child: Text(
-            note,
-            key: const ValueKey('edge-blend-note'),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ),
+      note: compact
+          ? null
+          : Opacity(
+              opacity: off ? 0.38 : 1,
+              child: CanvasNote(
+                child: Text(
+                  note,
+                  key: const ValueKey('edge-blend-note'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
     );
   }
 }
