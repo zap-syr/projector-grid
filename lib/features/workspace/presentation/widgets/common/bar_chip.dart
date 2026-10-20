@@ -10,9 +10,10 @@ class BarChip extends StatelessWidget {
     required this.onPressed,
     required this.children,
     this.padding = BarChip.defaultPadding,
+    this.height = BarChip.defaultHeight,
   });
 
-  static const double height = 32;
+  static const double defaultHeight = 32;
   static const double defaultPadding = 12;
   static const double gap = 7;
 
@@ -24,6 +25,9 @@ class BarChip extends StatelessWidget {
 
   /// Horizontal padding; a bar short of room passes less.
   final double padding;
+
+  /// The alerts panel's filter row takes 30 (plan §7m.1).
+  final double height;
 
   @override
   Widget build(BuildContext context) {

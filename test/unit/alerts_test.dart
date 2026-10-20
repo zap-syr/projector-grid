@@ -590,4 +590,79 @@ void main() {
       AlertSettings.defaultEnabled,
     );
   });
+
+  group('alerts panel text', () {
+    final since = DateTime(2026, 10, 20, 21, 4);
+    ActiveAlert a(
+      AlertRule rule,
+      AlertSeverity severity,
+      String value, {
+      DateTime? restoredAt,
+      String item = '',
+    }) => ActiveAlert(
+      nodeId: '1',
+      rule: rule,
+      item: item,
+      severity: severity,
+      value: value,
+      since: since,
+      restoredAt: restoredAt,
+    );
+
+    test('message and kind', () {
+      final exhaust = a(AlertRule.exhaustTemp, AlertSeverity.critical, '52 °C');
+      expect(alertMessage(exhaust), 'Exhaust temperature 52 °C');
+      expect(alertKind(AlertRule.exhaustTemp), 'Temperature');
+      final error = a(AlertRule.error, AlertSeverity.critical, 'Fan (F305)');
+      expect(alertMessage(error), 'Fan (F305)');
+      expect(alertKind(AlertRule.error), 'Projector error');
+    });
+
+    test('over at for any rule that carries restoredAt', () {
+      final at = since.add(const Duration(minutes: 3));
+      expect(
+        alertOverAt(
+          a(
+            AlertRule.intakeTemp,
+            AlertSeverity.warning,
+            '41 °C',
+            restoredAt: at,
+          ),
+          at,
+        ),
+        'over at 21:07',
+      );
+      expect(
+        alertOverAt(a(AlertRule.offline, AlertSeverity.critical, 'x'), at),
+        isNull,
+      );
+    });
+
+    test('started tooltip', () {
+      expect(
+        formatAlertStarted(since, since.add(const Duration(minutes: 6))),
+        'Started 21:04, 6 min ago',
+      );
+      expect(formatAlertStarted(since, since), 'Started 21:04, just now');
+    });
+
+    test('what the filter hides', () {
+      final crit = a(AlertRule.offline, AlertSeverity.critical, 'No answer');
+      final crit2 = a(AlertRule.error, AlertSeverity.critical, 'F', item: 'F');
+      final warn = a(AlertRule.intakeTemp, AlertSeverity.warning, '41 °C');
+      expect(alertFilterEmptyTitle(AlertSeverity.warning), 'No warnings');
+      expect(
+        alertsHiddenByFilter([crit, crit2], AlertSeverity.warning),
+        '2 critical alerts are hidden by the filter',
+      );
+      expect(
+        alertsHiddenByFilter([warn], AlertSeverity.critical),
+        '1 warning is hidden by the filter',
+      );
+      expect(
+        alertsHiddenByFilter([warn, crit], AlertSeverity.warning),
+        '1 critical alert is hidden by the filter',
+      );
+    });
+  });
 }

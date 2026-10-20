@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../domain/alert_rule.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../domain/alerts.dart';
 import '../../domain/projector_node.dart';
 import '../providers/alerts_provider.dart';
@@ -12,16 +12,17 @@ import 'alert_panel_parts.dart';
 import 'alert_row.dart';
 import 'alert_scroll_area.dart';
 
-/// One projector's alerts, opened from its card badge. Header with counts
-/// and actions on top (never scrolls), active alerts below, acknowledged
-/// ones folded at the bottom.
+/// One projector's alerts, opened from its card badge (plan §7m.1): a
+/// header with the model, IP and severity pills, its active alerts,
+/// acknowledged ones folded at the bottom and the footer. No filter row and
+/// no grouping controls.
 class ProjectorAlertPanel extends ConsumerStatefulWidget {
   const ProjectorAlertPanel({super.key, required this.node});
 
-  static const double width = 320;
+  static const double width = 340;
 
-  /// List height before it scrolls, about eight rows. Less when the window
-  /// is shorter: the list takes what the panel's constraints leave.
+  /// List height before it scrolls. Less when the window is shorter: the
+  /// list takes what the panel's constraints leave.
   static const double maxListHeight = 436;
 
   final ProjectorNode node;
@@ -32,7 +33,7 @@ class ProjectorAlertPanel extends ConsumerStatefulWidget {
 }
 
 class _ProjectorAlertPanelState extends ConsumerState<ProjectorAlertPanel> {
-  /// Durations count up while the panel is open.
+  /// Start times' tooltips count up while the panel is open.
   late final Timer _tick;
   bool? _ackedOpen;
 
@@ -50,7 +51,7 @@ class _ProjectorAlertPanelState extends ConsumerState<ProjectorAlertPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final t = AppText.of(context);
     final node = widget.node;
     final all = sortAlerts(
       ref.watch(alertsProvider).values.where((a) => a.nodeId == node.id),
@@ -65,9 +66,22 @@ class _ProjectorAlertPanelState extends ConsumerState<ProjectorAlertPanel> {
     ];
     final now = DateTime.now();
     final notifier = ref.read(alertsProvider.notifier);
-    final ackedOpen = _ackedOpen ?? acked.length <= 3;
+    final ackedOpen = _ackedOpen ?? (active.isEmpty || acked.length <= 3);
+    const rowWidth = ProjectorAlertPanel.width - AlertPanelList.inset;
 
     final entries = <AlertScrollEntry>[
+      if (active.isEmpty && acked.isNotEmpty)
+        (
+          child: const AlertPanelNotice(
+            icon: Icons.done_all,
+            title: 'All acknowledged',
+            text:
+                'These alerts are still active and leave the list when the '
+                'condition clears',
+          ),
+          height: AlertPanelNotice.height,
+          counts: false,
+        ),
       for (final a in active)
         (
           child: AlertRow(
@@ -75,7 +89,12 @@ class _ProjectorAlertPanelState extends ConsumerState<ProjectorAlertPanel> {
             now: now,
             onAcknowledge: () => notifier.acknowledge(a.key),
           ),
-          height: AlertRow.height,
+          height: AlertRow.heightFor(
+            context,
+            alert: a,
+            now: now,
+            width: rowWidth,
+          ),
           counts: true,
         ),
       if (acked.isNotEmpty)
@@ -97,67 +116,34 @@ class _ProjectorAlertPanelState extends ConsumerState<ProjectorAlertPanel> {
           ),
     ];
 
-    final counts = countAlerts(active);
-
     return AlertPanelSurface(
       width: ProjectorAlertPanel.width,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        spacing: 4,
         children: [
-          SizedBox(
-            height: 32,
-            child: Row(
-              children: [
-                const SizedBox(width: 8),
-                Expanded(
-                  child: AlertPanelTitle(
-                    title: node.name,
-                    note: node.ipAddress,
-                  ),
-                ),
-                if (active.length > 1) ...[
-                  if (counts.critical > 0)
-                    AlertSeverityCount(AlertSeverity.critical, counts.critical),
-                  if (counts.warning > 0)
-                    AlertSeverityCount(AlertSeverity.warning, counts.warning),
-                  if (counts.recovered > 0)
-                    AlertRecoveredCount(counts.recovered),
-                  const SizedBox(width: 4),
-                ],
-                if (active.isNotEmpty)
-                  AlertPanelIconButton(
-                    icon: Icons.done_all,
-                    label: 'Acknowledge all',
-                    onPressed: () => notifier.acknowledgeAll(nodeId: node.id),
-                  ),
-                AlertPanelIconButton(
-                  icon: Icons.receipt_long,
-                  label: 'Show in event log',
-                  onPressed: () => ref
-                      .read(eventLogRequestProvider.notifier)
-                      .show(query: node.ipAddress),
-                ),
-              ],
-            ),
+          AlertPanelHeader(
+            title: node.name,
+            note: Text(node.ipAddress, style: t.monoSmall),
+            actions: [AlertCountPills(all)],
           ),
           if (entries.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Text(
-                'No active alerts',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodySmall,
-              ),
-            )
+            const AlertPanelNothingActive()
           else
             Flexible(
-              child: AlertScrollArea(
+              child: AlertPanelList(
                 entries: entries,
                 maxHeight: ProjectorAlertPanel.maxListHeight,
               ),
             ),
+          AlertPanelFooter(
+            onEventLog: () => ref
+                .read(eventLogRequestProvider.notifier)
+                .show(query: node.ipAddress),
+            onAcknowledgeAll: active.isEmpty
+                ? null
+                : () => notifier.acknowledgeAll(nodeId: node.id),
+          ),
         ],
       ),
     );

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/theme/app_theme.dart';
 import '../../domain/alert_rule.dart';
 import '../../domain/alerts.dart';
 import '../../domain/projector_group.dart';
@@ -14,16 +15,20 @@ import '../providers/workspace_provider.dart';
 import 'alert_panel_parts.dart';
 import 'alert_row.dart';
 import 'alert_scroll_area.dart';
+import 'common/bar_chip.dart';
+import 'common/segmented_tabs.dart';
+import 'common/severity_pill.dart';
+import 'custom_tooltip.dart';
 
-/// Every active alert in the project, opened from the status bar: grouped by
-/// projector (optionally inside the project's groups) or by rule,
-/// filterable by severity, acknowledged ones folded at the bottom. It only
-/// holds conditions true right now, so it stays bounded; history is in the
-/// event log.
+/// Every active alert in the project, opened from the status bar (plan
+/// §7m): grouped by projector (optionally inside the project's groups) or
+/// by alert, filterable by severity, acknowledged ones folded at the
+/// bottom, Acknowledge all in the footer. It only holds conditions true
+/// right now, so it stays bounded; history is in the event log.
 class ActiveAlertsPanel extends ConsumerStatefulWidget {
   const ActiveAlertsPanel({super.key});
 
-  static const double width = 404;
+  static const double width = 420;
 
   /// Less when the window is shorter: the list takes what the panel's
   /// constraints leave.
@@ -37,7 +42,10 @@ class ActiveAlertsPanel extends ConsumerStatefulWidget {
 }
 
 class _ActiveAlertsPanelState extends ConsumerState<ActiveAlertsPanel> {
-  /// Indent of the projector groups inside a project-group section.
+  /// Indent of the rows under their group header.
+  static const double _rowIndent = 12;
+
+  /// Indent of the groups inside a project-group section.
   static const double _sectionIndent = 14;
 
   late final Timer _tick;
@@ -69,7 +77,7 @@ class _ActiveAlertsPanelState extends ConsumerState<ActiveAlertsPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final t = AppText.of(context);
     final alerts = ref.watch(alertsProvider).values.toList();
     final settings = ref.watch(appSettingsProvider.select((s) => s.alerts));
     final grouping = settings.grouping;
@@ -81,8 +89,8 @@ class _ActiveAlertsPanelState extends ConsumerState<ActiveAlertsPanel> {
     final now = DateTime.now();
 
     final byProjector = grouping == AlertGrouping.projector;
-    // Offered in both groupings, so switching them doesn't move the toolbar:
-    // projector groups go into sections, a rule's rows into subsections.
+    // Offered in both groupings, so switching them doesn't move the header:
+    // projector groups go into sections, an alert's rows into subsections.
     final canSection = projectGroups.isNotEmpty;
     final sectioned = canSection && settings.byProjectGroups;
     final groupOrder = [for (final g in projectGroups) g.id];
@@ -113,7 +121,7 @@ class _ActiveAlertsPanelState extends ConsumerState<ActiveAlertsPanel> {
     bool subsectionOpen(String rule, String? id) =>
         _open['sub|$rule|$id'] ?? true;
     // Everything Fold all / Unfold all reaches, in both groupings: the groups,
-    // and the project-group sections or a rule's subsections.
+    // and the project-group sections or an alert's subsections.
     final foldable = <(String, bool)>[
       for (final g in groups) (openKey(g.key), isOpen(g)),
       if (sectioned && byProjector)
@@ -129,9 +137,8 @@ class _ActiveAlertsPanelState extends ConsumerState<ActiveAlertsPanel> {
             ('sub|${g.key}|${s.groupId}', subsectionOpen(g.key, s.groupId)),
     ];
     final allOpen = foldable.isNotEmpty && foldable.every((f) => f.$2);
-    final ackedOpen = _ackedOpen ?? acked.length <= 3;
-
-    String nameOf(String nodeId) => nodes[nodeId]?.name ?? 'Removed projector';
+    // With nothing left to acknowledge the acknowledged lines are the list.
+    final ackedOpen = _ackedOpen ?? (unacked.isEmpty || acked.length <= 3);
 
     void acknowledgeAlerts(Iterable<ActiveAlert> alerts) {
       final keys = {for (final a in alerts) a.key};
@@ -148,6 +155,8 @@ class _ActiveAlertsPanelState extends ConsumerState<ActiveAlertsPanel> {
             child: child,
           );
 
+    const listWidth = ActiveAlertsPanel.width - AlertPanelList.inset;
+
     List<AlertScrollEntry> rowEntries(
       Iterable<ActiveAlert> alerts,
       double by,
@@ -159,19 +168,27 @@ class _ActiveAlertsPanelState extends ConsumerState<ActiveAlertsPanel> {
             AlertRow(
               alert: a,
               now: now,
-              title: byProjector ? null : nameOf(a.nodeId),
-              titleNote: byProjector ? null : nodes[a.nodeId]?.ipAddress,
+              ip: byProjector ? null : nodes[a.nodeId]?.ipAddress,
+              model: byProjector
+                  ? null
+                  : nodes[a.nodeId]?.name ?? 'Removed projector',
               onAcknowledge: () => notifier.acknowledge(a.key),
             ),
           ),
-          height: AlertRow.height,
+          height: AlertRow.heightFor(
+            context,
+            alert: a,
+            now: now,
+            width: listWidth - by,
+            withProjector: !byProjector,
+          ),
           counts: true,
         ),
     ];
 
-    /// A rule group's rows, split by project group when sectioned.
+    /// An alert group's rows, split by project group when sectioned.
     List<AlertScrollEntry> ruleRowEntries(AlertGroup g) {
-      if (!sectioned) return rowEntries(g.alerts, 12);
+      if (!sectioned) return rowEntries(g.alerts, _rowIndent);
       return [
         for (final s in subsectionByProjectGroup(
           g.alerts,
@@ -180,7 +197,7 @@ class _ActiveAlertsPanelState extends ConsumerState<ActiveAlertsPanel> {
         )) ...[
           (
             child: indent(
-              12,
+              _rowIndent,
               _SectionHeader(
                 group: projectGroup(s.groupId),
                 projectors: {for (final a in s.alerts) a.nodeId}.length,
@@ -199,21 +216,21 @@ class _ActiveAlertsPanelState extends ConsumerState<ActiveAlertsPanel> {
             counts: false,
           ),
           if (subsectionOpen(g.key, s.groupId))
-            ...rowEntries(s.alerts, 12 + _sectionIndent),
+            ...rowEntries(s.alerts, _rowIndent + _sectionIndent),
         ],
       ];
     }
 
     List<AlertScrollEntry> groupEntries(AlertGroup g, double by) {
-      Widget indented(Widget child) => indent(by, child);
       final open = isOpen(g);
       return [
         (
-          child: indented(
+          child: indent(
+            by,
             _GroupHeader(
               group: g,
               node: byProjector ? nodes[g.key] : null,
-              byRule: !byProjector,
+              byAlert: !byProjector,
               open: open,
               now: now,
               onToggle: () => setState(() => _open[openKey(g.key)] = !open),
@@ -224,11 +241,39 @@ class _ActiveAlertsPanelState extends ConsumerState<ActiveAlertsPanel> {
           counts: !open,
         ),
         if (open)
-          ...(byProjector ? rowEntries(g.alerts, by + 12) : ruleRowEntries(g)),
+          ...(byProjector
+              ? rowEntries(g.alerts, by + _rowIndent)
+              : ruleRowEntries(g)),
       ];
     }
 
+    final filter = _filter;
     final entries = <AlertScrollEntry>[
+      if (unacked.isEmpty)
+        (
+          child: const AlertPanelNotice(
+            icon: Icons.done_all,
+            title: 'All acknowledged',
+            text:
+                'These alerts are still active and leave the list when the '
+                'condition clears',
+          ),
+          height: AlertPanelNotice.height,
+          counts: false,
+        )
+      else if (groups.isEmpty && filter != null)
+        (
+          child: AlertPanelNotice(
+            title: alertFilterEmptyTitle(filter),
+            text: alertsHiddenByFilter(unacked, filter),
+            action: TextButton(
+              onPressed: () => setState(() => _filter = null),
+              child: const Text('Show all'),
+            ),
+          ),
+          height: AlertPanelNotice.height,
+          counts: false,
+        ),
       if (sectioned && byProjector)
         for (final s in sectionByProjectGroup(groups, groupOf, groupOrder)) ...[
           (
@@ -266,127 +311,233 @@ class _ActiveAlertsPanelState extends ConsumerState<ActiveAlertsPanel> {
             child: AcknowledgedAlertLine(
               alert: a,
               now: now,
-              prefix: nameOf(a.nodeId),
+              ip: nodes[a.nodeId]?.ipAddress,
             ),
             height: AcknowledgedAlertLine.height,
             counts: true,
           ),
     ];
 
+    final String? note = alerts.isEmpty
+        ? null
+        : unacked.isEmpty
+        ? '${alerts.length} acknowledged'
+        : '${unacked.length} active';
+
     return AlertPanelSurface(
       width: ActiveAlertsPanel.width,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        spacing: 4,
         children: [
-          SizedBox(
-            height: 32,
-            child: Row(
-              children: [
-                const SizedBox(width: 8),
-                Expanded(
-                  child: AlertPanelTitle(
-                    title: 'Active alerts',
-                    note: alerts.isEmpty ? null : '${alerts.length} total',
+          AlertPanelHeader(
+            title: 'Active alerts',
+            note: note == null
+                ? null
+                : Text(
+                    note,
+                    key: const ValueKey('alerts-header-note'),
+                    style: t.description,
                   ),
+            actions: [
+              if (alerts.isNotEmpty) ...[
+                if (canSection)
+                  AlertPanelIconButton(
+                    icon: Icons.layers_outlined,
+                    label: 'Sort into project groups',
+                    selected: sectioned,
+                    onPressed: () => _saveAlertSettings(
+                      (s) => s.copyWith(byProjectGroups: !s.byProjectGroups),
+                    ),
+                  ),
+                SegmentedTabs<AlertGrouping>(
+                  iconOnly: true,
+                  expand: false,
+                  selected: grouping,
+                  onChanged: (g) =>
+                      _saveAlertSettings((s) => s.copyWith(grouping: g)),
+                  tabs: const [
+                    SegmentedTab(
+                      value: AlertGrouping.projector,
+                      label: 'By projector',
+                      icon: Icons.videocam_outlined,
+                    ),
+                    SegmentedTab(
+                      value: AlertGrouping.alert,
+                      label: 'By alert',
+                      icon: Icons.notifications_none,
+                    ),
+                  ],
                 ),
-                if (foldable.isNotEmpty)
-                  AlertPanelIconButton(
-                    icon: allOpen ? Icons.unfold_less : Icons.unfold_more,
-                    label: allOpen ? 'Fold all' : 'Unfold all',
-                    onPressed: () => setState(() {
-                      for (final (key, _) in foldable) {
-                        _open[key] = !allOpen;
-                      }
-                    }),
-                  ),
-                if (unacked.isNotEmpty)
-                  AlertPanelIconButton(
-                    icon: Icons.done_all,
-                    label: 'Acknowledge all',
-                    onPressed: notifier.acknowledgeAll,
-                  ),
                 AlertPanelIconButton(
-                  icon: Icons.receipt_long,
-                  label: 'Open event log',
-                  onPressed: () => ref
-                      .read(eventLogRequestProvider.notifier)
-                      .show(alertsOnly: true),
+                  icon: allOpen ? Icons.unfold_less : Icons.unfold_more,
+                  label: allOpen ? 'Fold all' : 'Unfold all',
+                  onPressed: foldable.isEmpty
+                      ? null
+                      : () => setState(() {
+                          for (final (key, _) in foldable) {
+                            _open[key] = !allOpen;
+                          }
+                        }),
                 ),
               ],
-            ),
+            ],
           ),
           if (alerts.isEmpty)
-            const _EmptyState(
-              icon: Icons.check_circle,
-              title: 'No active alerts',
-              text:
-                  'Everything is within limits. Past alerts are in the '
-                  'event log.',
-            )
+            const AlertPanelNothingActive()
           else ...[
-            _Toolbar(
+            _Filters(
               filter: _filter,
               counts: counts,
-              grouping: grouping,
-              byProjectGroups: canSection ? settings.byProjectGroups : null,
               onFilter: (f) => setState(() => _filter = f),
-              onGrouping: (g) =>
-                  _saveAlertSettings((s) => s.copyWith(grouping: g)),
-              onByProjectGroups: (on) =>
-                  _saveAlertSettings((s) => s.copyWith(byProjectGroups: on)),
             ),
-            if (unacked.isEmpty)
-              const _EmptyState(
-                icon: Icons.done_all,
-                title: 'All acknowledged',
-                text:
-                    'These alerts are still active; they leave the list when '
-                    'the condition clears.',
+            Flexible(
+              child: AlertPanelList(
+                entries: entries,
+                maxHeight: ActiveAlertsPanel.maxListHeight,
               ),
-            if (entries.isNotEmpty)
-              Flexible(
-                child: AlertScrollArea(
-                  entries: entries,
-                  maxHeight: ActiveAlertsPanel.maxListHeight,
-                ),
-              ),
-            if (entries.isEmpty && unacked.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                child: Text(
-                  'Nothing at this severity',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodySmall,
-                ),
-              ),
+            ),
           ],
+          AlertPanelFooter(
+            onEventLog: () => ref
+                .read(eventLogRequestProvider.notifier)
+                .show(alertsOnly: true),
+            // Everything, also what the filter hides (owner, 2026-10-20).
+            onAcknowledgeAll: unacked.isEmpty ? null : notifier.acknowledgeAll,
+          ),
         ],
       ),
     );
   }
 }
 
-/// A projector's or a rule's group: one line, the same folded and unfolded.
+/// The severity filter on its own row (plan §7m.1): outlined 30 px chips
+/// with words, a chip at 0 dimmed in place.
+class _Filters extends StatelessWidget {
+  const _Filters({
+    required this.filter,
+    required this.counts,
+    required this.onFilter,
+  });
+
+  static const double height = 40;
+
+  final AlertSeverity? filter;
+  final AlertCounts counts;
+  final ValueChanged<AlertSeverity?> onFilter;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final t = AppText.of(context);
+    Widget chip({
+      required String key,
+      required String label,
+      required int count,
+      required bool selected,
+      required VoidCallback onTap,
+      AlertSeverity? severity,
+    }) {
+      final fg = selected ? cs.onPrimaryContainer : t.secondary;
+      return Semantics(
+        label: label,
+        selected: selected,
+        button: true,
+        container: true,
+        excludeSemantics: true,
+        child: BarChip(
+          key: ValueKey('alerts-filter-$key'),
+          height: 30,
+          padding: 11,
+          selected: selected,
+          onPressed: count == 0 ? null : onTap,
+          children: [
+            if (severity != null)
+              Icon(
+                AlertPalette.iconData(severity),
+                size: 14,
+                color: SeverityPill.colorOf(
+                  context,
+                  SeverityPillKind.of(severity),
+                ),
+              ),
+            Text(
+              label,
+              style: t.description.copyWith(
+                fontWeight: FontWeight.w500,
+                color: fg,
+              ),
+            ),
+            Text(
+              '$count',
+              style: t.caption.copyWith(
+                fontWeight: FontWeight.w700,
+                fontFeatures: const [FontFeature.tabularFigures()],
+                color: selected ? cs.onPrimaryContainer : t.tertiary,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return SizedBox(
+      height: height,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+        child: Row(
+          spacing: 6,
+          children: [
+            chip(
+              key: 'all',
+              label: 'All',
+              count: counts.critical + counts.warning + counts.recovered,
+              selected: filter == null,
+              onTap: () => onFilter(null),
+            ),
+            chip(
+              key: 'critical',
+              label: 'Critical',
+              severity: AlertSeverity.critical,
+              count: counts.critical,
+              selected: filter == AlertSeverity.critical,
+              onTap: () => onFilter(AlertSeverity.critical),
+            ),
+            chip(
+              key: 'warning',
+              label: 'Warning',
+              severity: AlertSeverity.warning,
+              count: counts.warning,
+              selected: filter == AlertSeverity.warning,
+              onTap: () => onFilter(AlertSeverity.warning),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A projector's or an alert's group (plan §7m.3): one 36 px line, the same
+/// folded and unfolded.
 class _GroupHeader extends StatelessWidget {
   const _GroupHeader({
     required this.group,
     required this.node,
-    required this.byRule,
+    required this.byAlert,
     required this.open,
     required this.now,
     required this.onToggle,
     required this.onAcknowledge,
   });
 
-  static const double height = 34;
+  static const double height = 36;
 
   final AlertGroup group;
 
   /// The group's projector when grouped by projector (null if removed).
   final ProjectorNode? node;
-  final bool byRule;
+  final bool byAlert;
   final bool open;
   final DateTime now;
   final VoidCallback onToggle;
@@ -394,30 +545,58 @@ class _GroupHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final t = AppText.of(context);
     final alerts = group.alerts;
-    final counts = countAlerts(alerts);
-    final top = alerts.first.severity;
-    // Sorted problems first: the first one being over means all are.
-    final allBack = alerts.first.recovered;
-    final topColor = allBack
-        ? AlertPalette.recoveredIcon
-        : AlertPalette.icon(top);
+    final first = alerts.first;
 
-    final String title;
-    final String? note;
-    if (byRule) {
+    final List<Widget> title;
+    if (byAlert) {
       final projectors = {for (final a in alerts) a.nodeId}.length;
       final earliest = alerts
           .map((a) => a.since)
           .reduce((a, b) => a.isBefore(b) ? a : b);
-      title = alerts.first.rule.label;
-      note =
-          '$projectors ${projectors == 1 ? 'projector' : 'projectors'}, '
-          'since ${formatAlertStart(earliest, now)}';
+      // Sorted problems first: the first one being over means all are.
+      final over = first.recovered ? ', over' : '';
+      title = [
+        Icon(
+          AlertPalette.iconOf(first),
+          size: 16,
+          color: AlertPalette.colorOf(context, first),
+        ),
+        Flexible(
+          child: Text(
+            first.rule.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: t.body.copyWith(fontWeight: FontWeight.w600),
+          ),
+        ),
+        CustomTooltip(
+          message: 'Earliest start ${formatAlertStart(earliest, now)}',
+          child: Text(
+            '$projectors ${projectors == 1 ? 'projector' : 'projectors'}$over',
+            maxLines: 1,
+            style: t.description,
+          ),
+        ),
+      ];
     } else {
-      title = node?.name ?? 'Removed projector';
-      note = node?.ipAddress;
+      final node = this.node;
+      title = [
+        if (node == null)
+          Text('Removed projector', style: t.description)
+        else ...[
+          Text(node.ipAddress, style: t.mono),
+          Flexible(
+            child: Text(
+              node.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: t.description,
+            ),
+          ),
+        ],
+      ];
     }
 
     return Row(
@@ -425,74 +604,34 @@ class _GroupHeader extends StatelessWidget {
         Expanded(
           child: InkWell(
             onTap: onToggle,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(9),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
+              padding: const EdgeInsets.only(left: 6, right: 8),
               child: Row(
                 spacing: 8,
                 children: [
-                  _Chevron(open: open),
-                  if (byRule)
-                    Container(
-                      width: 22,
-                      height: 22,
-                      decoration: BoxDecoration(
-                        color: topColor.withValues(alpha: 0.17),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Icon(
-                        allBack
-                            ? Icons.check_circle
-                            : AlertPalette.iconData(top),
-                        size: 14,
-                        color: topColor,
-                      ),
-                    ),
-                  Expanded(
-                    child: AlertPanelTitle(title: title, note: note),
-                  ),
-                  if (byRule)
-                    Text(
-                      '${alerts.length}',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: allBack
-                            ? AlertPalette.of(context).recovered
-                            : AlertPalette.of(context).text(top),
-                      ),
-                    )
-                  else ...[
-                    if (counts.critical > 0)
-                      AlertSeverityCount(
-                        AlertSeverity.critical,
-                        counts.critical,
-                      ),
-                    if (counts.warning > 0)
-                      AlertSeverityCount(AlertSeverity.warning, counts.warning),
-                    if (counts.recovered > 0)
-                      AlertRecoveredCount(counts.recovered),
-                  ],
+                  AlertChevron(open: open),
+                  Expanded(child: Row(spacing: 8, children: title)),
+                  AlertCountPills(alerts),
                 ],
               ),
             ),
           ),
         ),
-        const SizedBox(width: 4),
-        Padding(
-          padding: const EdgeInsets.only(right: 6),
-          child: AcknowledgeButton(
-            icon: Icons.done_all,
-            label: byRule ? 'Acknowledge alert group' : 'Acknowledge projector',
-            onPressed: onAcknowledge,
-          ),
+        AcknowledgeButton(
+          icon: Icons.done_all,
+          label: byAlert ? 'Acknowledge alert group' : 'Acknowledge projector',
+          onPressed: onAcknowledge,
         ),
+        const SizedBox(width: 4),
       ],
     );
   }
 }
 
-/// One of the project's groups (or Ungrouped) above its projectors.
+/// One of the project's groups (or Ungrouped) above its projectors or an
+/// alert's rows (plan §7m.3): 30 px, the group's colour and its name in
+/// sentence case.
 class _SectionHeader extends StatelessWidget {
   const _SectionHeader({
     required this.group,
@@ -515,11 +654,8 @@ class _SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    final counts = countAlerts(alerts);
+    final t = AppText.of(context);
     final name = group?.name ?? 'Ungrouped';
-    final muted = colors.onSurfaceVariant.withValues(alpha: 0.75);
 
     return Row(
       children: [
@@ -528,369 +664,52 @@ class _SectionHeader extends StatelessWidget {
             onTap: onToggle,
             borderRadius: BorderRadius.circular(8),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
+              padding: const EdgeInsets.only(left: 6, right: 8),
               child: Row(
                 spacing: 8,
                 children: [
-                  _Chevron(open: open),
+                  AlertChevron(open: open),
                   Container(
                     width: 10,
                     height: 10,
                     decoration: BoxDecoration(
-                      color: group == null ? muted : Color(group!.color),
+                      color: group == null ? t.tertiary : Color(group!.color),
                       borderRadius: BorderRadius.circular(3),
                     ),
                   ),
                   Expanded(
-                    child: Text.rich(
-                      TextSpan(
-                        children: [
-                          TextSpan(text: name.toUpperCase()),
-                          TextSpan(
-                            text:
-                                '   $projectors '
-                                '${projectors == 1 ? 'projector' : 'projectors'}',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w400,
-                              letterSpacing: 0,
-                              color: muted,
-                            ),
+                    child: Row(
+                      spacing: 8,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: t.label,
                           ),
-                        ],
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.8,
-                        color: colors.onSurfaceVariant,
-                      ),
+                        ),
+                        Text(
+                          '$projectors '
+                          '${projectors == 1 ? 'projector' : 'projectors'}',
+                          style: t.caption,
+                        ),
+                      ],
                     ),
                   ),
-                  if (counts.critical > 0)
-                    AlertSeverityCount(AlertSeverity.critical, counts.critical),
-                  if (counts.warning > 0)
-                    AlertSeverityCount(AlertSeverity.warning, counts.warning),
-                  if (counts.recovered > 0)
-                    AlertRecoveredCount(counts.recovered),
+                  AlertCountPills(alerts),
                 ],
               ),
             ),
           ),
         ),
+        AcknowledgeButton(
+          icon: Icons.done_all,
+          label: 'Acknowledge $name',
+          onPressed: onAcknowledge,
+        ),
         const SizedBox(width: 4),
-        Padding(
-          padding: const EdgeInsets.only(right: 6),
-          child: AcknowledgeButton(
-            icon: Icons.done_all,
-            label: 'Acknowledge $name',
-            onPressed: onAcknowledge,
-          ),
-        ),
       ],
-    );
-  }
-}
-
-class _Chevron extends StatelessWidget {
-  const _Chevron({required this.open});
-
-  final bool open;
-
-  @override
-  Widget build(BuildContext context) => AnimatedRotation(
-    turns: open ? 0.25 : 0,
-    duration: const Duration(milliseconds: 120),
-    child: Icon(
-      Icons.chevron_right,
-      size: 16,
-      color: Theme.of(context).colorScheme.onSurfaceVariant
-          .withValues(alpha: 0.75),
-    ),
-  );
-}
-
-class _Toolbar extends StatelessWidget {
-  const _Toolbar({
-    required this.filter,
-    required this.counts,
-    required this.grouping,
-    required this.byProjectGroups,
-    required this.onFilter,
-    required this.onGrouping,
-    required this.onByProjectGroups,
-  });
-
-  final AlertSeverity? filter;
-  final AlertCounts counts;
-  final AlertGrouping grouping;
-
-  /// The project-groups toggle's state; null hides it (rule grouping, or a
-  /// project without groups).
-  final bool? byProjectGroups;
-  final ValueChanged<AlertSeverity?> onFilter;
-  final ValueChanged<AlertGrouping> onGrouping;
-  final ValueChanged<bool> onByProjectGroups;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(4, 0, 2, 4),
-    // Wraps rather than overflows if the chips' counts grow wide.
-    child: Wrap(
-      alignment: WrapAlignment.spaceBetween,
-      runSpacing: 4,
-      children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          spacing: 6,
-          children: [
-            _Chip(
-              label: 'All',
-              count: counts.critical + counts.warning + counts.recovered,
-              selected: filter == null,
-              onTap: () => onFilter(null),
-            ),
-            for (final s in [AlertSeverity.critical, AlertSeverity.warning])
-              _Chip(
-                severity: s,
-                count: s == AlertSeverity.critical
-                    ? counts.critical
-                    : counts.warning,
-                selected: filter == s,
-                onTap: () => onFilter(s),
-              ),
-          ],
-        ),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          spacing: 6,
-          children: [
-            if (byProjectGroups case final on?)
-              _ProjectGroupsToggle(
-                on: on,
-                onChanged: () => onByProjectGroups(!on),
-              ),
-            _GroupingToggle(value: grouping, onChanged: onGrouping),
-          ],
-        ),
-      ],
-    ),
-  );
-}
-
-/// An icon button that reads as pressed while the projectors are sorted
-/// into the project's groups.
-class _ProjectGroupsToggle extends StatelessWidget {
-  const _ProjectGroupsToggle({required this.on, required this.onChanged});
-
-  final bool on;
-  final VoidCallback onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    // No Tooltip, like the other alert-panel buttons; the semantics label
-    // carries the name.
-    return Semantics(
-      button: true,
-      toggled: on,
-      label: 'Sort into project groups',
-      child: InkWell(
-        onTap: onChanged,
-        borderRadius: BorderRadius.circular(6),
-        child: Container(
-          width: 24,
-          height: 24,
-          decoration: BoxDecoration(
-            color: on ? colors.secondaryContainer : null,
-            border: on ? null : Border.all(color: colors.outlineVariant),
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Icon(
-            Icons.workspaces_outlined,
-            size: 15,
-            color: on ? colors.onSecondaryContainer : colors.onSurfaceVariant,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// A 24px filter chip; the M3 chips are too tall for this toolbar.
-class _Chip extends StatelessWidget {
-  const _Chip({
-    this.label,
-    this.severity,
-    required this.count,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String? label;
-  final AlertSeverity? severity;
-  final int count;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    final style = theme.textTheme.bodySmall;
-    return Semantics(
-      button: true,
-      selected: selected,
-      label: label ?? severity?.name,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          height: 24,
-          padding: const EdgeInsets.symmetric(horizontal: 9),
-          decoration: BoxDecoration(
-            color: selected ? colors.secondaryContainer : null,
-            border: selected ? null : Border.all(color: colors.outlineVariant),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            spacing: 5,
-            children: [
-              if (severity case final s?)
-                Icon(
-                  AlertPalette.iconData(s),
-                  size: 13,
-                  color: AlertPalette.icon(s),
-                ),
-              if (label case final l?)
-                Text(
-                  l,
-                  style: style?.copyWith(
-                    color: selected ? colors.onSecondaryContainer : null,
-                  ),
-                ),
-              Text(
-                '$count',
-                style: style?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                  color: selected
-                      ? colors.onSecondaryContainer
-                      : colors.onSurfaceVariant.withValues(alpha: 0.75),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _GroupingToggle extends StatelessWidget {
-  const _GroupingToggle({required this.value, required this.onChanged});
-
-  final AlertGrouping value;
-  final ValueChanged<AlertGrouping> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    Widget segment(AlertGrouping g, IconData icon, String label) {
-      final selected = g == value;
-      return Semantics(
-        button: true,
-        selected: selected,
-        child: InkWell(
-          onTap: () => onChanged(g),
-          child: Container(
-            height: 22,
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            color: selected ? colors.secondaryContainer : null,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              spacing: 4,
-              children: [
-                Icon(
-                  icon,
-                  size: 14,
-                  color: selected ? colors.onSecondaryContainer : null,
-                ),
-                Text(
-                  label,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    fontSize: 11.5,
-                    color: selected ? colors.onSecondaryContainer : null,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: colors.outlineVariant),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          segment(
-            AlertGrouping.projector,
-            Icons.videocam_outlined,
-            'Projector',
-          ),
-          Container(width: 1, height: 22, color: colors.outlineVariant),
-          segment(AlertGrouping.alert, Icons.category_outlined, 'Alert'),
-        ],
-      ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({
-    required this.icon,
-    required this.title,
-    required this.text,
-  });
-
-  final IconData icon;
-  final String title;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 22),
-      child: Column(
-        spacing: 6,
-        children: [
-          Icon(icon, size: 30, color: Colors.green),
-          Text(
-            title,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          Text(
-            text,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.75),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

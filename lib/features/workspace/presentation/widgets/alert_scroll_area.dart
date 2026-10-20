@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/theme/app_theme.dart';
+
 /// A panel row of known height, so the area can tell how many are hidden.
 typedef AlertScrollEntry = ({Widget child, double height, bool counts});
 
@@ -78,7 +80,6 @@ class _AlertScrollAreaState extends State<AlertScrollArea> {
   );
 
   Widget _build(BuildContext context, double content, double viewport) {
-    final theme = Theme.of(context);
     final offset = _controller.hasClients ? _controller.offset : 0.0;
     final fadeTop = offset > 2;
     final fadeBottom = offset + viewport < content - 2;
@@ -128,13 +129,7 @@ class _AlertScrollAreaState extends State<AlertScrollArea> {
             child: Center(
               child: Text(
                 below > 0 ? '$below more below' : '',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  fontSize: 11,
-                  height: 1.2,
-                  color: theme.colorScheme.onSurfaceVariant.withValues(
-                    alpha: 0.75,
-                  ),
-                ),
+                style: AppText.of(context).caption.copyWith(height: 1.2),
               ),
             ),
           ),

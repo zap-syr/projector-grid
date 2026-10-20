@@ -375,6 +375,73 @@ String formatAlertStart(DateTime since, DateTime now) {
   return sameDay ? hhmm : '${_months[since.month - 1]} ${since.day} $hhmm';
 }
 
+/// The start time's tooltip in the alerts panels: `Started 21:04, 6 min
+/// ago`, `Started 21:04, just now`.
+String formatAlertStarted(DateTime since, DateTime now) {
+  final d = now.difference(since);
+  final ago = d.inMinutes < 1 ? 'just now' : '${formatAlertDuration(d)} ago';
+  return 'Started ${formatAlertStart(since, now)}, $ago';
+}
+
+/// What an alert row says (plan §7m.2): the reading with its name for a
+/// temperature (`Exhaust temperature 52 °C`), otherwise the value itself
+/// (`Fan error (F305)`, `No signal on HDMI 1`, `No answer`).
+String alertMessage(ActiveAlert a) => switch (a.rule) {
+  AlertRule.intakeTemp || AlertRule.exhaustTemp => '${a.rule.label} ${a.value}',
+  _ => a.value,
+};
+
+/// The kind under an alert's message: both temperatures read *Temperature*,
+/// the message already names which.
+String alertKind(AlertRule rule) => switch (rule) {
+  AlertRule.intakeTemp || AlertRule.exhaustTemp => 'Temperature',
+  _ => rule.label,
+};
+
+/// The green tail of an alert that is over: `over at 21:03` (any rule that
+/// carries a `restoredAt`), null while it still holds.
+String? alertOverAt(ActiveAlert a, DateTime now) => switch (a.restoredAt) {
+  final at? => 'over at ${formatAlertStart(at, now)}',
+  null => null,
+};
+
+/// The title of the Active alerts panel when the severity filter hides
+/// everything: `No critical alerts`, `No warnings`.
+String alertFilterEmptyTitle(AlertSeverity filter) => switch (filter) {
+  AlertSeverity.critical => 'No critical alerts',
+  AlertSeverity.warning => 'No warnings',
+};
+
+/// The line under [alertFilterEmptyTitle]: what the filter hides of
+/// [unacknowledged], by kind when they are all one (`2 critical alerts are
+/// hidden by the filter`), else counted together.
+String alertsHiddenByFilter(
+  Iterable<ActiveAlert> unacknowledged,
+  AlertSeverity filter,
+) {
+  final hidden = [
+    for (final a in unacknowledged)
+      if (a.recovered || a.severity != filter) a,
+  ];
+  final n = hidden.length;
+  final verb = n == 1 ? 'is' : 'are';
+  final String what;
+  if (hidden.every((a) => a.recovered)) {
+    what = n == 1 ? 'alert that is over' : 'alerts that are over';
+  } else if (hidden.every(
+    (a) => !a.recovered && a.severity == AlertSeverity.critical,
+  )) {
+    what = n == 1 ? 'critical alert' : 'critical alerts';
+  } else if (hidden.every(
+    (a) => !a.recovered && a.severity == AlertSeverity.warning,
+  )) {
+    what = n == 1 ? 'warning' : 'warnings';
+  } else {
+    what = n == 1 ? 'alert' : 'alerts';
+  }
+  return '$n $what $verb hidden by the filter';
+}
+
 /// Display order: unacknowledged first, problems before recovered ones, then
 /// critical before warning, then newest first.
 int compareAlerts(ActiveAlert a, ActiveAlert b) {

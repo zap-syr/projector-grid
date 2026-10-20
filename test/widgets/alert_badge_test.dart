@@ -9,9 +9,11 @@ import 'package:projector_grid/features/workspace/domain/projector_node.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/alerts_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/alert_badge.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/alert_row.dart';
+import 'package:projector_grid/features/workspace/presentation/widgets/common/bar_chip.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/projector_alert_panel.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/projector_card.dart';
 
+import '../helpers/app_fonts.dart';
 import '../helpers/test_config_dir.dart';
 
 /// Starts from fixed alerts instead of evaluating the workspace.
@@ -50,6 +52,8 @@ ActiveAlert _alert(
 
 void main() {
   useTempConfigDir();
+  // The panel's footer lays out at its real width.
+  setUpAll(loadAppFonts);
 
   Future<ProviderContainer> pump(
     WidgetTester tester,
@@ -142,7 +146,14 @@ void main() {
     expect(find.byIcon(Icons.error), findsNothing);
 
     await hoverOpen(tester);
-    expect(find.text('Back after 3 s'), findsOneWidget);
+    final at = since.add(const Duration(seconds: 3));
+    expect(
+      find.text(
+        'No signal on HDMI 1, over at ${formatAlertStart(at, at)}',
+        findRichText: true,
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('the panel acknowledges, staying open while hovered', (
@@ -154,9 +165,13 @@ void main() {
     final mouse = await hoverOpen(tester);
 
     expect(find.byType(ProjectorAlertPanel), findsOneWidget);
-    expect(find.text('Exhaust temperature'), findsOneWidget);
-    expect(find.text('58 °C'), findsOneWidget);
-    expect(find.text('12 min'), findsOneWidget);
+    expect(find.text('Exhaust temperature 58 °C'), findsOneWidget);
+    expect(find.text('Temperature'), findsOneWidget);
+    final since = c.read(alertsProvider).values.single.since;
+    expect(find.text(formatAlertStart(since, since)), findsOneWidget);
+    // The one-projector panel has no filters and no grouping controls.
+    expect(find.byType(BarChip), findsNothing);
+    expect(find.bySemanticsLabel('By alert'), findsNothing);
 
     final ack = tester.getCenter(find.byType(AcknowledgeButton));
     await mouse.moveTo(ack);
@@ -165,7 +180,65 @@ void main() {
     await mouse.up();
     await tester.pump();
     expect(c.read(alertsProvider).values.single.acknowledged, isTrue);
-    expect(find.text('ACKNOWLEDGED (1)'), findsOneWidget);
+    expect(find.text('Acknowledged 1', findRichText: true), findsOneWidget);
+    expect(find.text('All acknowledged'), findsOneWidget);
+    // Nothing left to acknowledge: no Acknowledge all, Event log stays.
+    expect(find.byKey(const ValueKey('alerts-acknowledge-all')), findsNothing);
+    expect(find.byKey(const ValueKey('alerts-event-log')), findsOneWidget);
+  });
+
+  testWidgets('the panel acknowledges all of its projector from the footer', (
+    tester,
+  ) async {
+    final c = await pump(tester, [
+      _alert(AlertRule.exhaustTemp, AlertSeverity.warning, '58 °C'),
+      _alert(AlertRule.offline, AlertSeverity.critical, 'No answer'),
+    ]);
+    final mouse = await hoverOpen(tester);
+    final button = find.byKey(const ValueKey('alerts-acknowledge-all'));
+    expect(tester.widget(button), isA<FilledButton>());
+    final at = tester.getCenter(button);
+    await mouse.moveTo(at);
+    await tester.pump(const Duration(milliseconds: 300));
+    await mouse.down(at);
+    await mouse.up();
+    await tester.pump();
+    expect(c.read(alertsProvider).values.every((a) => a.acknowledged), isTrue);
+  });
+
+  testWidgets('the panel fits an 800×600 window, the footer shown', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await pump(tester, [
+      for (var i = 0; i < 16; i++)
+        _alert(
+          AlertRule.error,
+          AlertSeverity.critical,
+          'Error $i',
+          item: 'E$i',
+        ),
+    ]);
+    await hoverOpen(tester);
+    expect(tester.takeException(), isNull);
+    final panel = tester.getRect(find.byType(ProjectorAlertPanel));
+    expect(panel.top, greaterThanOrEqualTo(0));
+    expect(panel.bottom, lessThanOrEqualTo(600));
+    expect(
+      tester
+          .getRect(find.byKey(const ValueKey('alerts-acknowledge-all')))
+          .bottom,
+      lessThan(panel.bottom),
+    );
+    final list = tester.state<ScrollableState>(
+      find.descendant(
+        of: find.byType(ProjectorAlertPanel),
+        matching: find.byType(Scrollable),
+      ),
+    );
+    expect(list.position.maxScrollExtent, greaterThan(0));
   });
 
   testWidgets('a click on the badge does not keep the panel open', (
@@ -253,8 +326,22 @@ void main() {
     expect(find.byType(ProjectorAlertPanel), findsOneWidget);
 
     // Click the card's name, the way one selects it, then move away.
-    await mouse.moveTo(tester.getCenter(find.text('PRJ-03 Right')));
-    await mouse.down(tester.getCenter(find.text('PRJ-03 Right')));
+    // The card's name, not the panel header's.
+    final inPanel = find
+        .descendant(
+          of: find.byType(ProjectorAlertPanel),
+          matching: find.text('PRJ-03 Right'),
+        )
+        .evaluate()
+        .toSet();
+    final name = find.byElementPredicate(
+      (e) =>
+          e.widget is Text &&
+          (e.widget as Text).data == 'PRJ-03 Right' &&
+          !inPanel.contains(e),
+    );
+    await mouse.moveTo(tester.getCenter(name));
+    await mouse.down(tester.getCenter(name));
     await tester.pump(const Duration(milliseconds: 50));
     await mouse.up();
     await mouse.moveTo(const Offset(700, 500));
@@ -280,9 +367,9 @@ void main() {
     await hoverOpen(tester);
 
     final fan = tester.getTopLeft(find.text('Fan error'));
-    final temp = tester.getTopLeft(find.text('58 °C'));
+    final temp = tester.getTopLeft(find.text('Exhaust temperature 58 °C'));
     expect(fan.dy, lessThan(temp.dy));
-    expect(find.text('ACKNOWLEDGED (4)'), findsOneWidget);
-    expect(find.textContaining('Old 1'), findsNothing);
+    expect(find.text('Acknowledged 4', findRichText: true), findsOneWidget);
+    expect(find.textContaining('Old 1', findRichText: true), findsNothing);
   });
 }

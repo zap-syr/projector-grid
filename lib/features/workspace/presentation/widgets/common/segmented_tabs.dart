@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../core/theme/app_theme.dart';
+import '../custom_tooltip.dart';
 
 class SegmentedTab<T> {
   const SegmentedTab({
@@ -36,6 +37,7 @@ class SegmentedTabs<T> extends StatelessWidget {
     required this.selected,
     required this.onChanged,
     this.expand = true,
+    this.iconOnly = false,
   });
 
   final List<SegmentedTab<T>> tabs;
@@ -45,15 +47,22 @@ class SegmentedTabs<T> extends StatelessWidget {
   /// Tabs share the full width; otherwise each takes its own width.
   final bool expand;
 
+  /// A 32 px strip of icons, each label in a tooltip (the alerts panel's
+  /// grouping switch, in a 52 px header).
+  final bool iconOnly;
+
+  double get _height => iconOnly ? 32 : 40;
+  double get _tabRadius => iconOnly ? 8 : 9;
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Container(
-      height: 40,
+      height: _height,
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
         color: cs.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(iconOnly ? 10 : 12),
         border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.6)),
       ),
       child: Row(
@@ -81,18 +90,18 @@ class SegmentedTabs<T> extends StatelessWidget {
             cs.surfaceContainerHighest,
           );
     final content = t.content;
-    return Semantics(
+    final tab = Semantics(
       selected: isSelected,
       button: true,
-      label: content == null ? null : t.label,
+      label: content == null && !iconOnly ? null : t.label,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(9),
+          borderRadius: BorderRadius.circular(_tabRadius),
           onTap: isSelected ? null : () => onChanged(t.value),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            padding: EdgeInsets.symmetric(horizontal: iconOnly ? 8 : 12),
             alignment: Alignment.center,
             // No shadow: a BoxShadow paints a blurred filled box under the
             // whole tab, which showed through as a dark flash while the fill
@@ -102,7 +111,7 @@ class SegmentedTabs<T> extends StatelessWidget {
             // zero alpha rather than to null.
             decoration: BoxDecoration(
               color: isSelected ? raised : raised.withValues(alpha: 0),
-              borderRadius: BorderRadius.circular(9),
+              borderRadius: BorderRadius.circular(_tabRadius),
               border: Border.all(
                 color: isSelected
                     ? cs.outlineVariant
@@ -111,6 +120,8 @@ class SegmentedTabs<T> extends StatelessWidget {
             ),
             child: content != null
                 ? ExcludeSemantics(child: content(context, isSelected))
+                : iconOnly
+                ? Icon(t.icon, size: 16, color: fg)
                 : Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -161,5 +172,6 @@ class SegmentedTabs<T> extends StatelessWidget {
         ),
       ),
     );
+    return iconOnly ? CustomTooltip(message: t.label, child: tab) : tab;
   }
 }
