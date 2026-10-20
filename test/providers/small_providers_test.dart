@@ -70,16 +70,17 @@ void main() {
       message: 'e$i',
     );
 
-    test('newest first, capped at 500', () {
+    test('newest first, capped at maxRows', () {
       final c = ProviderContainer();
       addTearDown(c.dispose);
       final log = c.read(eventLogProvider.notifier);
-      for (var i = 0; i < 510; i++) {
+      const max = EventLogNotifier.maxRows;
+      for (var i = 0; i < max + 10; i++) {
         log.log(event(i));
       }
       final events = c.read(eventLogProvider);
-      expect(events, hasLength(500));
-      expect(events.first.message, 'e509');
+      expect(events, hasLength(max));
+      expect(events.first.message, 'e${max + 9}');
       expect(events.last.message, 'e10');
     });
 

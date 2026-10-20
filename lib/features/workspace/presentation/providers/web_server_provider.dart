@@ -40,7 +40,7 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
   late final WebAuth _auth = WebAuth(
     onLockout: (ip, lockout) => _log(
       LogSeverity.warning,
-      'Web · $ip locked out for ${lockout.inSeconds} s after wrong PINs',
+      '$ip locked out for ${lockout.inSeconds} s after wrong PINs',
     ),
     onChange: _publishClients,
   );
@@ -159,13 +159,13 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
         data: accessJson(s.role, controlAllowed: allow),
       ));
     }
-    _log(LogSeverity.info, 'Web · control ${allow ? 'allowed' : 'off'}');
+    _log(LogSeverity.info, 'Control ${allow ? 'allowed' : 'off'}');
   }
 
   void signOutAll() {
     final hadClients = _auth.sessions.isNotEmpty;
     _endAllSessions();
-    if (hadClients) _log(LogSeverity.info, 'Web · all clients signed out');
+    if (hadClients) _log(LogSeverity.info, 'All clients signed out');
   }
 
   /// Signs one client out from Preferences: its pages go back to the PIN.
@@ -178,7 +178,7 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
       token,
       last: (name: WebEvents.signedOut, data: const <String, Object?>{}),
     );
-    _log(LogSeverity.info, 'Web · ${session.ip} signed out from the app');
+    _log(LogSeverity.info, '${session.ip} signed out from the app');
   }
 
   void _publishClients() {
@@ -302,10 +302,7 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
       await _pollFinished();
       return {'polled': false};
     }
-    _log(
-      LogSeverity.info,
-      'Web · ${session.ip} · ${session.role.name} · Refresh status',
-    );
+    _log(LogSeverity.info, '${_who(session)}: Refresh status');
     await ref.read(workspaceProvider.notifier).refreshAll();
     return {'polled': true};
   }
@@ -350,15 +347,15 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
       preset: ref.read(alignmentProvider).preset,
     );
     if (parsed == null) return null;
-    final source = 'Web · ${session.ip} · ${session.role.name}';
+    final source = _who(session);
     switch (parsed) {
       case WebAlignmentEnter(:final selection):
-        _log(LogSeverity.info, '$source · Alignment mode');
+        _log(LogSeverity.info, '$source: Alignment mode');
         await notifier.enter(selection: selection);
       case WebAlignmentSimple(:final command):
         switch (command) {
           case WebAlignmentCommand.exit:
-            _log(LogSeverity.info, '$source · Alignment mode exit');
+            _log(LogSeverity.info, '$source: Alignment mode exit');
             await notifier.exit();
           case WebAlignmentCommand.next:
             notifier.next();
@@ -411,8 +408,7 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
     if (node.powerStatus != PowerStatus.standby || !live) return null;
     _log(
       LogSeverity.info,
-      'Web · ${session.ip} · ${session.role.name} · '
-      'Pre-show ${on ? 'on' : 'off'} · ${node.name}',
+      '${_who(session)}: Pre-show ${on ? 'on' : 'off'} for ${node.ipAddress}',
     );
     unawaited(ref.read(preShowProvider(id).notifier).set(on));
     return {'on': on};
@@ -422,10 +418,8 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
       ref.read(workspaceProvider).where((n) => n.id == id).firstOrNull;
 
   @override
-  void signedIn(WebSession session) => _log(
-    LogSeverity.info,
-    'Web · ${session.ip} · ${session.role.name} signed in',
-  );
+  void signedIn(WebSession session) =>
+      _log(LogSeverity.info, '${_who(session)} signed in');
 
   /// Projectors with a lens step from the web still in flight.
   final Set<String> _lensBusy = {};
@@ -468,9 +462,13 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
   @override
   void roleChanged(WebSession session) => _log(
     LogSeverity.info,
-    'Web · ${session.ip} · '
+    '${session.ip} '
     '${session.role == WebRole.operator ? 'control unlocked' : 'locked'}',
   );
+
+  /// The client in a log line, under the Web source: `10.0.0.5 (operator)`.
+  static String _who(WebSession session) =>
+      '${session.ip} (${session.role.name})';
 
   void _log(LogSeverity severity, String message) => ref
       .read(eventLogProvider.notifier)

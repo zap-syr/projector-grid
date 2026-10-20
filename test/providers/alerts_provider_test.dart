@@ -140,6 +140,21 @@ void main() {
     },
   );
 
+  test('Offline is left to the Connection line; its acknowledgement logs', () {
+    final c = makeContainer(FakeProtocolService());
+    c.listen(alertsProvider, (_, _) {});
+    c.read(workspaceProvider.notifier).setNodes([
+      node('1')
+          .copyWith(connectionStatus: ConnectionStatus.offline, polled: true),
+    ]);
+    final alert = c.read(alertsProvider).entries.single;
+    expect(alert.value.rule, AlertRule.offline);
+    expect(alertLog(c), isEmpty);
+
+    c.read(alertsProvider.notifier).acknowledge(alert.key);
+    expect(alertLog(c).single.message, 'Offline acknowledged');
+  });
+
   test('switching a rule off clears its alerts', () {
     final c = makeContainer(FakeProtocolService());
     c.listen(alertsProvider, (_, _) {});

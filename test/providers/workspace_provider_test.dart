@@ -284,6 +284,20 @@ void main() {
       c.dispose();
     });
 
+    testWidgets('one offline projector gets a grey skipped row', (
+      tester,
+    ) async {
+      final c = makeContainer(fake);
+      final ws = c.read(workspaceProvider.notifier);
+      ws.setNodes([node('1', status: ConnectionStatus.offline)]);
+      c.read(selectionProvider.notifier).set({'1'});
+      await ws.sendCommandToSelected('OOS:1', source: _bar);
+      expect(fake.sentCommands, isEmpty);
+      expect(logMessages(c), ['OSD On skipped: offline']);
+      expect(c.read(eventLogProvider).single.severity, LogSeverity.info);
+      c.dispose();
+    });
+
     testWidgets('group commands only reach that group', (tester) async {
       final c = makeContainer(fake);
       c.read(workspaceProvider.notifier).setNodes([
@@ -469,6 +483,18 @@ void main() {
       await ws.refreshAll();
       await ws.refreshAll();
       expect(logMessages(c).where((m) => m == 'Went offline'), hasLength(1));
+      // The Offline rule is on by default: the line carries its red.
+      expect(c.read(eventLogProvider).first.severity, LogSeverity.error);
+    });
+
+    test('a projector offline at its first poll logs "Went offline"', () async {
+      final c = makeContainer(fake);
+      final ws = c.read(workspaceProvider.notifier);
+      ws.setNodes([node('1', status: ConnectionStatus.offline)]);
+      await ws.refreshAll();
+      expect(logMessages(c), ['Went offline']);
+      await ws.refreshAll();
+      expect(logMessages(c), ['Went offline']);
     });
 
     group('lastSeen', () {

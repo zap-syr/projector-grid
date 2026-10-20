@@ -125,32 +125,39 @@ class AlertsNotifier extends _$AlertsNotifier {
 
   void _publish(AlertChange change, ActiveAlert a, {String? source}) {
     final node = _nodes[a.nodeId];
-    ref
-        .read(eventLogProvider.notifier)
-        .log(
-          LogEvent(
-            severity: switch (change) {
-              AlertChange.raised =>
-                a.severity == AlertSeverity.critical
-                    ? LogSeverity.error
-                    : LogSeverity.warning,
-              AlertChange.recovered ||
-              AlertChange.cleared => LogSeverity.success,
-              AlertChange.acknowledged => LogSeverity.info,
-            },
-            type: LogEventType.alert,
-            message: switch (change) {
-              AlertChange.raised => '${a.rule.label}: ${a.value}',
-              AlertChange.recovered => '${a.rule.label}: ${a.displayValue}',
-              AlertChange.cleared => '${a.rule.label} cleared',
-              AlertChange.acknowledged =>
-                '${a.rule.label} acknowledged'
-                    '${source == null ? '' : ' ($source)'}',
-            },
-            projectorIp: node?.ipAddress,
-            projectorName: node?.name,
-          ),
-        );
+    // Offline coming and going is the Connection line's ("Went offline",
+    // red while this rule is on, and "Came online"); a second line per
+    // projector would double every drop. Its acknowledgement still logs.
+    final duplicate =
+        a.rule == AlertRule.offline && change != AlertChange.acknowledged;
+    if (!duplicate) {
+      ref
+          .read(eventLogProvider.notifier)
+          .log(
+            LogEvent(
+              severity: switch (change) {
+                AlertChange.raised =>
+                  a.severity == AlertSeverity.critical
+                      ? LogSeverity.error
+                      : LogSeverity.warning,
+                AlertChange.recovered ||
+                AlertChange.cleared => LogSeverity.success,
+                AlertChange.acknowledged => LogSeverity.info,
+              },
+              type: LogEventType.alert,
+              message: switch (change) {
+                AlertChange.raised => '${a.rule.label}: ${a.value}',
+                AlertChange.recovered => '${a.rule.label}: ${a.displayValue}',
+                AlertChange.cleared => '${a.rule.label} cleared',
+                AlertChange.acknowledged =>
+                  '${a.rule.label} acknowledged'
+                      '${source == null ? '' : ' ($source)'}',
+              },
+              projectorIp: node?.ipAddress,
+              projectorName: node?.name,
+            ),
+          );
+    }
     _events.add((
       change: change,
       alert: a,

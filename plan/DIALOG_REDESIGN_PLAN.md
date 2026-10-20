@@ -1551,6 +1551,30 @@ dialogs' type, fields, chips and icons (`projector-grid-visual-rules`).
   becomes one row with *14 times, last 21:02:41* when that projector logged nothing else
   in between; events of other projectors in between don't break the run (polling
   interleaves them). So a projector that flaps doesn't fill the log.
+- **Groups across projectors** (wave 3, 2026-10-20): the same kind of event from several
+  projectors at once folds into one row with a chevron, like a command batch:
+  *20 projectors, Came online*, *Stage, 6 projectors, Went offline*, *12 projectors,
+  Signal lost*. Opened, it lists the projectors by IP and model under the tree line,
+  each with its own text (*Back after 3 s*, *Back after 4 s*). Search for an IP opens the
+  group; Copy writes the group line and its projector lines.
+  - **Same kind**, not the same text: `LogEvent` gets a group key set where it is
+    logged. Connection: the transition (`online`, `offline`, `auth`). Alerts: the rule
+    and the change (`signal-lost raised`, `signal-lost recovered`, `error raised`, …),
+    so *Back after 3 s* and *Back after 4 s* group. Commands keep their batch; OSC and
+    Web lines don't group.
+  - **At once**: within 2 s of the group's first event (a poll pass over many
+    projectors), and only while no other kind of event came in between from those
+    projectors. A group of one is a plain row.
+  - The group's severity is its events' (they are the same kind); the Projector column
+    is the group name when all are in one group, else *N projectors*, as a batch.
+  - Grouping is in the view (`domain/` pure function over the stored events); the 5000-row
+    cap counts a group as one row.
+  - Repeats and groups combine: repeats fold one projector over time, groups fold many
+    projectors at one moment.
+- **Lens nudges fold** (wave 3, 2026-10-20): consecutive *Lens Shift* (H and V, any
+  source) and other step commands to the same projector, with nothing else from it in
+  between and less than 3 s apart, become one row: *Lens Shift, 8 steps, last 16:39:17*.
+  Today every arrow press is a row.
 - **Hover actions** on the right of the row: *Locate*, the short text button as in the
   Monitoring panel (`findOnCanvas`: switches to Controls if needed, selects the card and
   scrolls to it, no glow). The row knows the IP, not the id, so the node is looked up
@@ -1569,22 +1593,30 @@ dialogs' type, fields, chips and icons (`projector-grid-visual-rules`).
   command to 100+ projectors (sent in batches of 100) shows one row from the start
   instead of loose projector lines that fold up at the end.
 - **Rows start closed.** A click on the row or the chevron lists every projector by IP and
-  model, under a tree line: green *Sent*, red *Failed* with the reason (*no answer within
-  5 s*), grey *Skipped* with the reason (*offline*, *wrong login*). Opening a row doesn't
-  move the rows above it.
+  model, under a tree line: green *Sent*, red *Failed* with the reason, grey *Skipped*
+  with the reason (*offline*, *wrong login*). Opening a row doesn't move the rows above
+  it. The failure reason is one text, *no answer or refused*: `sendCommand` returns only
+  true or false, so a timeout, a refused login and an `ERxxx` reply look the same. The
+  real reason needs the protocol service, its isolate wrapper and the fake to return
+  it; postponed (owner, 2026-10-20).
 - **Retry failed** (hover action on a row with failures) sends the command again to the
   failed projectors only and logs a new row (*from retry*). The batch keeps the command
   and the failed projectors' ids, not their IPs (an IP can change); a projector removed
   since is skipped.
-- A command to **one projector** stays a single row.
+- A command to **one projector** stays a single row; one that isn't sent (offline, wrong
+  login) gets a grey row too, *Shutter Open skipped: offline*, so a click that did
+  nothing says why.
 - **Search** for an IP finds it inside a group row and opens that row. **Copy** writes the
   summary line and its projector lines.
 - **Data**: `LogEvent` gets a batch id (plain Dart, no codegen); `_dispatchToNodes` writes
   the projector lines with it and the summary row last. The list shows the summary and
-  folds the lines under it. The cap becomes **500 rows**, not 500 events: a batch with
-  its projector lines counts as one row and is dropped whole, so a command to 100
+  folds the lines under it. The cap counts **rows**, not events: a batch with its
+  projector lines counts as one row and is dropped whole, so a command to 100
   projectors doesn't take 101 places or lose half its lines at the end of the log
-  (decided 2026-10-19). The Web API summary
+  (decided 2026-10-19). The cap is **5000 rows** (2026-10-20, was 500): the log is in
+  memory only, an event is a few hundred bytes, the list builds only the rows on
+  screen, and 500 filled within a show. Writing the log to a daily file is a later
+  option, not planned. The Web API summary
   (`dispatchSummary`, `web_api_dto.dart`) keeps its text.
 
 ### 7k.4 Follow and new events
@@ -1617,7 +1649,7 @@ dialogs' type, fields, chips and icons (`projector-grid-visual-rules`).
 
 ### 7k.6 Decisions (owner, 2026-10-19)
 - *Problems* and *Alerts* are one chip, *Alerts*: errors, warnings and all alert events.
-- The log keeps 500 rows; a batch is one row.
+- The log keeps 500 rows; a batch is one row. (Raised to 5000 on 2026-10-20.)
 - *Locate* instead of *Find on canvas*, as in Monitoring; select and scroll, no glow.
 - A batch row appears with the first reply and its pills count up.
 - Every command path passes its source; the scheduler's extra line goes.
@@ -1641,6 +1673,21 @@ dialogs' type, fields, chips and icons (`projector-grid-visual-rules`).
   baseline. The narrow header switches at 1120 / 1200 px (the full header needs about
   1100 to 1185 px), the Source column hides below 900 px; the grip is 6 px and the
   column header 24 px so 120 px holds one row.
+- After the wave 2 check (2026-10-20):
+  - **One line per Offline transition.** The Offline alert no longer logs its raise
+    and clear; the Connection line *Went offline* takes its red (error) while the rule
+    is on (amber when off), and *Came online* stays. A projector already offline at
+    its first poll (a just-opened project) logs *Went offline* too, since that's when
+    the alert raises. *Offline acknowledged* still logs.
+  - The failure reason stays *no answer or refused* (protocol change postponed); a
+    command to one projector that isn't sent gets a grey *skipped* row.
+  - Web log lines lose `·`: the Source says Web, so the text is `10.0.0.5 (operator)
+    signed in`, `10.0.0.5 (operator): Refresh status`, `Control allowed`.
+  - The cap is 5000 rows.
+  - Keyboard lens shortcuts have their own source, *from a keyboard shortcut*; Retry
+    shows only once every reply is in.
+  - Wave 3 grows: repeats, **groups across projectors** and **lens nudges** (§7k.2),
+    hover actions, Follow.
 
 ---
 
@@ -1928,8 +1975,10 @@ tests below, then a GUI check in both themes (`flutter-windows-gui-check`).
   the count across other projectors' events, *Locate* is hidden for a removed projector,
   Retry sends to the failed ids only, Follow turns off on scroll and the pill brings it
   back, Clear asks first, the panel grows past 240 px and its height is restored; unit
-  tests for the repeat folding, the batch grouping and the 500-row cap dropping a batch
-  whole (pure functions in `domain/`);
+  tests for the repeat folding, the batch grouping and the row cap dropping a batch
+  whole, the groups across projectors (same kind with different text groups, the 2 s
+  window, another kind in between splits, a group of one is a plain row, search opens
+  a group) and the lens nudge folding (pure functions in `domain/`);
   status bar: the meter's parts follow online / wrong login / offline and the amber part
   is absent without a failed login, a count at 0 stays in place dimmed, a click on
   Offline opens Monitoring with the Offline filter, the Offline tooltip shows 5 rows and

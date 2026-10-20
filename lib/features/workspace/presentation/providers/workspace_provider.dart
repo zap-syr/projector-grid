@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../domain/alert_rule.dart';
 import '../../domain/card_layout.dart';
 import '../../domain/command_log.dart';
 import '../../domain/dispatch_result.dart';
@@ -244,6 +245,26 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
 
   void _logEvent(LogEvent event) {
     ref.read(eventLogProvider.notifier).log(event);
+  }
+
+  /// One line per drop: the Offline alert doesn't log its own (§7k), so
+  /// this one takes its critical red while the rule is on. A projector
+  /// already offline at its first poll (a just-opened project) logs it too,
+  /// since that's when the alert would have.
+  void _logWentOffline(ProjectorNode node) {
+    final alerted = ref
+        .read(appSettingsProvider)
+        .alerts
+        .isEnabled(AlertRule.offline);
+    _logEvent(
+      LogEvent(
+        severity: alerted ? LogSeverity.error : LogSeverity.warning,
+        type: LogEventType.connectivity,
+        message: 'Went offline',
+        projectorIp: node.ipAddress,
+        projectorName: node.name,
+      ),
+    );
   }
 
   void _startPolling({
@@ -608,16 +629,8 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     }
 
     if (probe == ProbeResult.offline) {
-      if (oldStatus != ConnectionStatus.offline) {
-        _logEvent(
-          LogEvent(
-            severity: LogSeverity.warning,
-            type: LogEventType.connectivity,
-            message: 'Went offline',
-            projectorIp: node.ipAddress,
-            projectorName: node.name,
-          ),
-        );
+      if (oldStatus != ConnectionStatus.offline || !node.polled) {
+        _logWentOffline(node);
       }
       _applyPollResult(
         node.id,
@@ -768,16 +781,8 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
       // code's text and severity, not here.
     } else {
       // If telemetry fails, mark as offline
-      if (oldStatus != ConnectionStatus.offline) {
-        _logEvent(
-          LogEvent(
-            severity: LogSeverity.warning,
-            type: LogEventType.connectivity,
-            message: 'Went offline',
-            projectorIp: node.ipAddress,
-            projectorName: node.name,
-          ),
-        );
+      if (oldStatus != ConnectionStatus.offline || !node.polled) {
+        _logWentOffline(node);
       }
       _applyPollResult(
         node.id,
@@ -884,9 +889,12 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
         _telemetryConcurrencyFor(state.length),
         previousStatus: previousStatus,
       );
-    } else if (state.any((n) => n.id == id && !n.polled)) {
+    } else if (state.where((n) => n.id == id && !n.polled).firstOrNull
+        case final node?) {
       // Written once: later failed checks of a node already known to be
-      // offline change nothing, so they don't touch state.
+      // offline change nothing, so they don't touch state. The first one is
+      // when its Offline alert raises, so the log says so here.
+      _logWentOffline(node);
       state = [
         for (final n in state)
           if (n.id == id) n.copyWith(polled: true) else n,
@@ -986,15 +994,19 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
 
     void logLine(ProjectorNode node, CommandOutcome outcome) {
       if (batch == null) {
-        // A single projector keeps one row; one that wasn't sent to logs
-        // nothing, as before.
-        if (outcome == CommandOutcome.skipped) return;
-        final success = outcome == CommandOutcome.sent;
+        // A single projector keeps one row; one that wasn't sent to gets a
+        // grey row too, so a click that did nothing says why.
         _logEvent(
           LogEvent(
-            severity: success ? LogSeverity.info : LogSeverity.error,
+            severity: outcome == CommandOutcome.failed
+                ? LogSeverity.error
+                : LogSeverity.info,
             type: LogEventType.command,
-            message: singleCommandMessage(cmd, success: success),
+            message: singleCommandMessage(
+              cmd,
+              outcome,
+              skipReason: commandSkipReason(node.connectionStatus),
+            ),
             projectorIp: node.ipAddress,
             projectorName: node.name,
             source: source,

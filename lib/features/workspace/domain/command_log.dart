@@ -36,7 +36,13 @@ String batchLineMessage(CommandOutcome outcome, {String? reason}) =>
     };
 
 /// A command to a single projector: the command's name, with the reason
-/// when it failed.
-String singleCommandMessage(String cmd, {required bool success}) => success
-    ? commandLabel(cmd)
-    : '${commandLabel(cmd)} failed: $commandFailedReason';
+/// when it failed or wasn't sent (`Shutter Open skipped: offline`).
+String singleCommandMessage(
+  String cmd,
+  CommandOutcome outcome, {
+  String? skipReason,
+}) => switch (outcome) {
+  CommandOutcome.sent => commandLabel(cmd),
+  CommandOutcome.failed => '${commandLabel(cmd)} failed: $commandFailedReason',
+  CommandOutcome.skipped => '${commandLabel(cmd)} skipped: $skipReason',
+};
