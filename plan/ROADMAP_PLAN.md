@@ -33,7 +33,7 @@ accepted item so each can be picked up independently. Edge Blending has its own 
 | U4 | Side panel instead of modal dialogs | `[dropped]` | Doesn't fit the current layout; dialogs are open → adjust → close, rarely revisited |
 | U5 | Command palette (Ctrl+K) | **Accepted** → §11 | Owner asked for UX + code design |
 | U6 | Monitoring table keyboard/filter/export | `[later]` | Already tracked in `MONITORING_UI_PLAN.md` §5/§7/§9 |
-| U7 | Dialog redesign (Add / Edit Projector, Groups, Scheduled Tasks, Brightness Control, Color Correction, Geometry Correction, Edge Blending, Remote Preview, Custom Command, Keyboard Shortcuts, About; main toolbar; tooltip; control bar; Monitoring view; projector card; event log panel; icon title bar for all dialogs) | **Accepted** → §13 | Design approved 2026-10-13 from the mockups; full plan in `DIALOG_REDESIGN_PLAN.md` |
+| U7 | Dialog redesign (Add / Edit Projector, Groups, Scheduled Tasks, Brightness Control, Color Correction, Geometry Correction, Edge Blending, Remote Preview, Custom Command, Keyboard Shortcuts, About; main toolbar; tooltip; control bar; Monitoring view; projector card; event log panel; status bar; alerts panels; icon title bar for all dialogs) | **Accepted** → §13 | Design approved 2026-10-13 from the mockups; full plan in `DIALOG_REDESIGN_PLAN.md` |
 
 Suggested order (value ÷ effort, and what unblocks what):
 **U1 → U2 → (Edge Blending) → F1 → F4 → U3 → F5 → F3 → U5 → F7/§5 → R6 in parallel throughout.**
@@ -557,7 +557,7 @@ above covering standby and app-made input switches.
 
 **Decided 2026-10-05:** the dedicated `QVX:NSGS1` poll. Plan below.
 
-### Signal watch: implementation plan `[~]`
+### Signal watch: implementation plan `[x]`
 Must hold up with **150 projectors** in a project.
 
 **Measured on hardware (2026-10-05, PT-RQ35K):**
@@ -850,7 +850,7 @@ Build order: engine → Preferences (fields, dropdown, Alerts section) → card 
   shortcut), so the installer's shortcut sets `AppUserModelID` and the toast activator
   CLSID; dev and portable builds show the header without an icon. Checked on Windows;
   awaiting a check on macOS.
-- `[~]` Signal lost (2026-10-05): built as in "Signal watch: implementation plan"
+- `[x]` Signal lost (2026-10-05, hardware runs done 2026-10-20): built as in "Signal watch: implementation plan"
   (`sendQuickQuery` + the FIN wait, `domain/signal_watch.dart`, `signalWatchProvider`,
   latched alert with "Back after 3 s" in green, Signal cell red while lost, simulator
   `sig`). Changed from the plan while building:
@@ -887,7 +887,36 @@ Build order: engine → Preferences (fields, dropdown, Alerts section) → card 
   and card drags; `flutter run --profile` is smooth, DevTools shows the UI thread idle
   and only raster time (a few ms, rare ~12 ms frames) with active alerts. Closing the
   project stops all queries (no connections to the projectors, TIME_WAIT decays).
-  Still to do: the 1-hour hardware run.
+  **1-hour hardware run (2026-10-20, PT-RQ25KE, wired LAN):** 100 minutes with the watch
+  on and the projector on (HDMI 1, signal present). The scheduler kept pace (120,199
+  ticks, ~3,000 `NSGS1` queries, period never stretched); event log without a single
+  Offline, warning or error, no Signal lost; TIME_WAIT to the projector 0 on the PC
+  throughout; the projector's web UI answered in 6-25 ms at the end, Remote Preview
+  opened and ran normally. Watch timeouts aren't counted (a failed reading is dropped
+  silently), so "no timeouts" rests on the clean poll and current signal; a repeat in the
+  same calm conditions wouldn't add anything.
+  **Command bursts (2026-10-20, same run):** with the watch on, Color Correction opened
+  several times and switched 3 colors / 7 colors / Off (its worst case, 13 reads at
+  once), Edge Blending and Alignment opened. Afterwards: no Signal lost, no Offline, no
+  confirmations or queries left in flight, the watch still armed with the current
+  signal and on schedule (167,092 ticks = the app's 139.5 minutes), no runtime errors.
+  Expected by design: a timeout reads `-` and any `ER` code but `ER401` reads unknown,
+  neither starts a loss, and an `ER401` is confirmed with `QVX:POWI1` before it raises,
+  so an overloaded projector can only blind the watch for a moment, not raise a false
+  alert.
+- `[ ]` Signal watch on weak Wi-Fi (hardware): the PC on poor Wi-Fi with the watch on.
+  Timeouts are expected; the check is no false Signal lost or Offline, queries don't pile
+  up and the UI stays responsive.
+- `[ ]` Color Correction reads in batches: on open in a matching mode, and on every
+  switch to one, it starts the colour reads and the 6 white-balance reads at once
+  (13 connections for 7 colors, `color_correction_dialog.dart` `_loadValues` /
+  `_selectMethod`), past the 3-per-projector ceiling measured for the poll
+  (`_telemetryConcurrencyFor`); weaker models answer ERR3 to wide bursts and the dialog
+  would show defaults for the values that failed. Route them through
+  `ProjectorSettingsClient.queryAll` or a smaller cap.
+- `[later]` A missed-readings warning in the event log when the watch gets no answers
+  from a projector for a while: under bad conditions it goes blind silently, and the
+  operator can't tell a short dropout may have been missed.
 
 ### Code
 - `domain/alert_rule.dart` (plain Dart + JSON, saved in app settings — alerts are a machine
@@ -1635,8 +1664,18 @@ because the work is large. In short:
   (Locate, Open alerts, Copy row); a command sent to several projectors as one
   row with sent / failed / skipped pills that opens to the projector lines, with Retry
   failed; Clear behind a confirm; the panel can grow past 240 px and keeps its height.
+- **Status bar:** same 36 px place; Projectors with a health meter (wrong login only as its
+  amber part), Online and Offline as buttons that open Monitoring filtered, an Offline
+  tooltip listing up to 5 projectors by IP and model; alert pills per severity; a new OSC
+  item (port, or *port busy* in red on a bind failure), Web as today, both hidden while
+  off; *Updated* with a fixed width (spinner in place of the icon).
+- **Alerts panels** (Active alerts and the card badge's panel): radius 14, 420 / 340 px; a
+  52 px header with the view controls, filter chips with words, a footer with *Event log*
+  and a filled *Acknowledge all*; rows with the message in white and the severity only in
+  the icon and a 3 px edge, wrapping to two lines, one start time, a quiet Acknowledge
+  icon button; group and section headers with status-bar pills, sentence case.
 
 Order: foundation (with the tooltip) → Groups → Add / Edit Projector → Brightness Control →
 Color Correction → Geometry Correction → Edge Blending → Remote Preview → Custom Command →
 Keyboard Shortcuts and About → main toolbar → control bar → projector card → Monitoring
-view → Scheduled Tasks → event log panel (plan §8).
+view → Scheduled Tasks → event log panel → status bar → alerts panels (plan §8).

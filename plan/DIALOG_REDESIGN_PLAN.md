@@ -5,7 +5,7 @@ Status: `[ ]` pending · `[~]` in progress · `[x]` done · `[dropped]` not doin
 Design approved by the owner on 2026-10-13. Mockups (light and dark for every board,
 Geometry Correction, Edge Blending, Remote Preview, Custom Command, Keyboard Shortcuts,
 About, the main toolbar, the tooltip, the control bar, the Monitoring view, the
-projector card and the event log dark only; the tooltip also in light):
+projector card, the event log, the status bar and the alerts panels dark only; the tooltip also in light):
 https://claude.ai/artifact/AL2c8Kh9aoXrrv2eUmVdcJ (canvas *Projector Grid dialogs redesign*).
 Roadmap item: `ROADMAP_PLAN.md` §13 (U7).
 
@@ -17,7 +17,8 @@ The redesign covers twelve dialogs in depth (Add Projectors, Edit Projector, Gro
 Scheduled Tasks, Brightness Control, Color Correction, Geometry Correction, Edge Blending,
 Remote Preview, Custom Command, Keyboard Shortcuts, About), the main toolbar, the
 tooltip, the control bar, the Monitoring view, the projector card on the Controls
-canvas and the event log panel (§7f, §7g, §7h, §7i, §7j, §7k), and one
+canvas, the event log panel, the status bar and the alerts panels (§7f, §7g, §7h, §7i,
+§7j, §7k, §7l, §7m), and one
 change that reaches **every** dialog: the shared title bar gets an icon tile, so all dialogs
 take the new look, not just the redesigned ones.
 
@@ -1610,6 +1611,175 @@ dialogs' type, fields, chips and icons (`projector-grid-visual-rules`).
 
 ---
 
+## 7l. `[ ]` Status bar
+
+Boards (dark only): *Status bar: in the window, Offline hovered / today, states, 800 px
+window, tooltips*. Approved 2026-10-20. Today (`status_bar.dart`,
+`status_bar_alerts_button.dart`, `status_bar_web_clients.dart`): a 36 px
+`surfaceContainerHigh` row with *Projectors: 18*, *Online: 15*, *Offline: 2* behind
+blue-grey, green and red Material dots, the Alerts button with severity icons and counts,
+then on the right *Web: 3 (1 operator)* (hidden while web access is off) and *Last refresh:
+21:04:12*, which turns into *Refreshing…* with a spinner while a poll runs, so the bar
+changes width every poll.
+
+### 7l.1 Frame
+- Same place and height: **36 px**, between the toolbar and the view, shared by Controls
+  and Monitoring. The bar colour of the toolbar family, a 1 px `outlineVariant` line
+  below, instead of `surfaceContainerHigh`.
+- Text in `description`, counts in `body` w600 with tabular figures; the OSC port and the
+  time in `monoSmall`. Status colours only for status (`AppStatusColors`), no Material
+  `Colors.green` / `Colors.red`.
+- Items are 28 px flat buttons, radius 8, a light fill on hover, separated by thin
+  vertical dividers into: projectors, alerts, and on the right the services and the time.
+
+### 7l.2 Projectors
+- **Projectors 18** and a small **health meter** (84×6, rounded): green online, red
+  offline, amber wrong login, in proportion. The amber part appears only when a projector
+  has a failed login; there is **no Wrong login count** (rare, and the card already says
+  *Login failed*, owner 2026-10-20).
+- **Online 15** and **Offline 2** with a status dot. A count at 0 stays in place, dimmed.
+- Each count is a button: it switches to **Monitoring with the matching quick filter**
+  (*Online*, *Offline*, §7i).
+- **Offline tooltip** (§7g): the title *2 offline*, then one row per projector, IP in mono
+  and the model, in Monitoring order (group, then IP), **5 rows at most** and then *and 12
+  more*; the last line *Click to show them in Monitoring* in tertiary. When every projector
+  is offline: *All 18 offline*, *Check the network connection*, no list. The **Online
+  tooltip** has no list: *15 online* and the click line.
+- Counts come from `statusSummaryProvider`, which gains the wrong-login count for the
+  meter; the tooltip list `select`s the offline nodes only while it is open.
+
+### 7l.3 Alerts
+- *Alerts* and one **pill per severity** (`caption` w600): critical red and warning amber,
+  **filled** with a filled icon while unacknowledged, **outlined** once all are
+  acknowledged, green for alerts that are over and not acknowledged. Nothing active:
+  *None* with an outlined green check.
+- Opens Active alerts as today; the button stays pressed (fill) while the panel is open.
+  The counts and rules are unchanged (`alertCountsProvider`; the green pill is its
+  existing `recovered`).
+- The severity pills are a **shared widget** in `widgets/common/` from the start, not
+  private to `status_bar_alerts_button.dart`: the alerts panels' group headers and
+  sections (§7m.3) use the same one (owner, 2026-10-20).
+
+### 7l.4 OSC and Web (right side)
+- **OSC (new)**: a green dot and the port (*OSC 9000*) while listening. When OSC is on
+  in the settings but the port can't be opened: a red dot and *port busy* in red, so a
+  failure never looks like "off". A click opens Preferences on OSC. Tooltip: *OSC on port
+  9000*, *Status to 10.0.0.20 port 9001*; on error, warning variant *OSC port 9000 is in
+  use*, *Choose another in Preferences*.
+- **Web**: a green globe, *Web 3* and *(1 operator)* in tertiary; *Web 0* with a grey
+  globe when no page is open. Tooltip *Web access, 3 pages open* and a row per page (IP in
+  mono, role). A click opens Preferences on Web Access, as today.
+- **Both are hidden while switched off** in Preferences, as Web is today (owner,
+  2026-10-20): that only changes from Preferences, never during work, so the shift of
+  the items to their left is acceptable.
+- The OSC error state comes **only from an explicit bind failure** that `oscProvider`
+  reports (today its state is only running / not running), never from "on in the
+  settings but not running": that is also true for a moment at start and while the
+  service restarts on a new port, and must not flash *port busy* (owner, 2026-10-20).
+
+### 7l.5 Updated
+- **Updated 21:04:12** replaces *Last refresh* and *Refreshing…*. The time always stays;
+  while a poll runs only the clock icon becomes a 12 px spinner (still inside its
+  `RepaintBoundary`), so the bar never changes width.
+- Tooltip *Updated 21:04:12*, *Polling every 5 s*.
+- ~~**Polling late**~~ `[dropped]` (owner, 2026-10-20): with many projectors a full pass
+  can rightly take longer than an interval, so "3 intervals without a poll" would turn
+  amber with nothing wrong. The time never changes colour.
+
+### 7l.6 Narrow window
+- Below about 1000 px the words step down to icons and counts with the names in
+  tooltips, as the toolbar does (§7f.2): the meter and *18*, dots and counts, the alert
+  pills without *Alerts*, the OSC dot and port, the globe and count, the time without
+  *Updated*. Nothing is dropped. Chosen from the window width with hysteresis, not from
+  measured content.
+
+---
+
+## 7m. `[ ]` Alerts panels
+
+Boards (dark only): *Alerts panel: in the window, grouped by projector, a row hovered /
+grouped by alert, project groups, a long message / empty, all acknowledged, no match, one
+projector*. Approved 2026-10-20. Today (`active_alerts_panel.dart`,
+`projector_alert_panel.dart`, `alert_row.dart`, `alert_panel_parts.dart`): a 404 px
+`surfaceContainerHigh` panel, radius 12, 6 px inset; a 32 px header with three unlabelled
+icon buttons (Fold all, Acknowledge all, Open event log); 24 px chips with severity icons
+only; rows of 46 px whose message is large, bold and in the severity colour, with a
+tinted icon tile, a duration and a start time stacked, and an outlined blue 26 px
+Acknowledge square; section headers in capitals; *ACKNOWLEDGED (2)*.
+
+Behaviour stays: anchored to the status bar's Alerts button (§7l.3) and to the card
+badge, grouped by projector or by alert, optionally in project groups, the severity
+filter, acknowledged alerts folded at the bottom, groups folded past 4.
+
+### 7m.1 Frame
+- The menu surface (`surfaceContainerHigh`, 1 px `outlineVariant`), radius **14**, the
+  popover shadow, no inset: the list and the footer run edge to edge. Width **420**
+  (Active alerts) and **340** (one projector, from the card badge).
+- **Header 52 px**: *Active alerts* in `cardTitle` and *4 active* in `description`
+  (*3 acknowledged* when nothing is left); on the right 32 px icon buttons with
+  `CustomTooltip`s: *Sort into project groups* (filled `primaryContainer` while on), the
+  grouping switch *By projector* / *By alert* (two icons in the `SegmentedTabs` style)
+  and *Fold all* / *Unfold all*. The one-projector panel's header is the model in
+  `cardTitle`, the IP in `monoSmall` and its severity pills.
+- **Filters** on their own row under the header: outlined 30 px chips with words, *All 4*,
+  *Critical 2*, *Warning 1*, the severity icon before the word, the selected one in
+  `primaryContainer` (as Monitoring and the event log). A chip at 0 stays, dimmed.
+- **Footer 56 px**, as the dialogs: *Event log* (list icon) as a text button on the left,
+  **Acknowledge all** as the **filled** button on the right, the panel's one main action
+  (owner, 2026-10-20: not `primaryContainer`, that is only the control bar's send
+  buttons). With nothing to acknowledge it is disabled, never removed. The one-projector
+  panel's *Event log* opens the log searched for its IP, as today.
+
+### 7m.2 Rows
+- **52 px**, **70** when the message needs a second line (the message wraps to two lines
+  at most, then ellipsizes); a `DialogSurfaces.soft`-like fill, radius 10, indented under
+  its group.
+- Left a **3 px severity edge** (critical red, warning amber, over green), then the
+  severity icon 18 px; both **centred on the row's height**, as the time and the
+  Acknowledge button (owner, 2026-10-20).
+- Text: the **message** in `body` w500, **white**, not in the severity colour; under it in
+  `description` the alert kind (*Projector error*, *Temperature*), or, grouped by alert,
+  the projector as IP in mono and the model on the first line with the message under it.
+- An alert that is over and not acknowledged: green check and edge, *Signal lost, over
+  at 21:03* with the time part in green.
+- On the right the **start time** in `monoSmall` (one value; the duration goes into the
+  tooltip, *Started 21:04, 6 min ago*) and **Acknowledge**: a quiet 30 px icon button
+  (check, `secondary`), filled `primaryContainer` on hover, tooltip *Acknowledge*.
+  Groups and sections take the double check (*Acknowledge projector*, *Acknowledge
+  alert group*, *Acknowledge Stage*).
+- The row height comes from the message's line count, measured with the ambient style
+  (§8 of the visual rules), so `AlertScrollArea` still counts the hidden rows.
+
+### 7m.3 Group headers and sections
+- **Projector group** 36 px: chevron, the IP in mono and the model in `description`,
+  then on the right the severity pills of the status bar (filled critical / warning,
+  green over) and the double-check button.
+- **Alert group** 36 px: chevron, the severity icon, the alert kind in w600 and *2
+  projectors* in `description` (the earliest start in its tooltip), its pills and the
+  double check.
+- **Project group section** 30 px: chevron, the group colour square, the name in sentence
+  case (`label`, not capitals) and *2 projectors* in `caption`, pills, double check.
+- **Acknowledged** fold at the bottom: *Acknowledged 3* in `label` after a divider; its
+  lines 30 px: the outlined severity icon, the IP in mono, the message, the start time in
+  tertiary mono.
+
+### 7m.4 Empty and filtered
+- Nothing active: a tile with a green check, *No active alerts*, *Everything is within
+  limits. Past alerts are in the event log*; the footer keeps *Event log* only.
+- All acknowledged: a tile with the double check, *All acknowledged*, *These alerts are
+  still active and leave the list when the condition clears*, the acknowledged lines
+  open under it, *Acknowledge all* disabled.
+- A filter that hides everything: *No warnings*, *2 critical alerts are hidden by the
+  filter* and a *Show all* text button; the filter stays selected.
+
+### 7m.5 Notes
+- `AlertPalette.text` (the severity text tones) is no longer used for messages; the
+  severity colours come from `AppStatusColors` like the rest of the app.
+- Tooltips through `CustomTooltip` only: the Material `Tooltip` is what broke the
+  accessibility tree under `MenuAnchor` (the reason the panels have none today).
+
+---
+
 ## 8. Order
 
 1. **Foundation** (§1): `DialogTitleBar` icon + all dialogs migrated in one go (the change is
@@ -1654,6 +1824,13 @@ dialogs' type, fields, chips and icons (`projector-grid-visual-rules`).
     widgets; three waves (§7k.6): the restyle, chips, search, height and Clear first,
     then the batch id, grouped command rows, sources and Retry, then repeats, hover
     actions and Follow.
+17. **Status bar** (§7l): `status_bar.dart` and its two item widgets; the restyle, the
+    meter, *Updated* and the shared severity pills (`widgets/common/`) first, then the
+    count buttons and tooltips, then the OSC item with the bind error in `oscProvider`.
+18. **Alerts panels** (§7m): `alert_row.dart` and `alert_panel_parts.dart` first (both
+    panels share them), then the header, filters and footer of `active_alerts_panel.dart`
+    and `projector_alert_panel.dart`. Goes with or after the status bar, whose pills it
+    reuses.
 
 Each step: behaviour change only where this plan says so; `flutter analyze`, `dart format`,
 tests below, then a GUI check in both themes (`flutter-windows-gui-check`).
@@ -1720,6 +1897,21 @@ tests below, then a GUI check in both themes (`flutter-windows-gui-check`).
   back, Clear asks first, the panel grows past 240 px and its height is restored; unit
   tests for the repeat folding, the batch grouping and the 500-row cap dropping a batch
   whole (pure functions in `domain/`);
+  status bar: the meter's parts follow online / wrong login / offline and the amber part
+  is absent without a failed login, a count at 0 stays in place dimmed, a click on
+  Offline opens Monitoring with the Offline filter, the Offline tooltip shows 5 rows and
+  "and N more" and the all-offline text, OSC and Web hidden while off, *port busy* only
+  on a bind failure and not while the service is starting or restarting, the bar keeps
+  its width while polling (same `Size` before and during), at an **800 px** window the
+  compact bar lays out without overflow in both themes and with every item shown (OSC,
+  Web, all three alert pills, the largest counts); a unit test for the tooltip list
+  (pure function in `domain/`);
+  alerts panels: the message is in the primary text colour and only the icon and edge
+  carry the severity, a long message takes two lines and the row grows to 70, the icon,
+  time and Acknowledge share the row's centre line, Acknowledge all is a filled button
+  and disabled (same `Size`) when nothing is left, a chip at 0 stays dimmed, the filter
+  with no match shows *Show all*, both groupings and the project-group sections render
+  with their pills;
   `DialogTitleBar` with a projector id shows model + IP, the group pill only for a grouped
   projector, and the status badge, and the badge follows the node going offline while the
   dialog is open.
@@ -1758,3 +1950,10 @@ tests below, then a GUI check in both themes (`flutter-windows-gui-check`).
 - ~~Event log filters, cap, Locate, sources, repeats, height (§7k.6)~~ — decided
   2026-10-19: one *Alerts* chip, 500 rows, *Locate* without glow, a source on every
   command path, per-projector repeats, saved height, minimum 120 px.
+- ~~Status bar, wrong login and services that are off (§7l)~~ — decided 2026-10-20: no
+  Wrong login count, only the amber part of the meter; OSC and Web hidden while off, OSC
+  shown red when its port is busy, from an explicit bind failure only; no *Polling late*
+  state; the severity pills a shared widget; an 800 px no-overflow test.
+- ~~Alerts panels, colour and main button (§7m)~~ — decided 2026-10-20: messages in white
+  with the colour in the icon and edge, icons centred in the row, Acknowledge all as the
+  filled button in a footer.
