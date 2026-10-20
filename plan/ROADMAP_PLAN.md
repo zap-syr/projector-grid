@@ -1664,6 +1664,8 @@ because the work is large. In short:
   (Locate, Open alerts, Copy row); a command sent to several projectors as one
   row with sent / failed / skipped pills that opens to the projector lines, with Retry
   failed; Clear behind a confirm; the panel can grow past 240 px and keeps its height.
+  **Done 2026-10-20**, plus groups across projectors (*20 projectors, Came online*), lens
+  step runs, one line per Offline transition and a 5000-row cap (plan §7k).
 - **Status bar:** same 36 px place; Projectors with a health meter (wrong login only as its
   amber part), Online and Offline as buttons that open Monitoring filtered, an Offline
   tooltip listing up to 5 projectors by IP and model; alert pills per severity; a new OSC

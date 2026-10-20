@@ -1476,7 +1476,16 @@ Temperatures, signal details and errors stay in Monitoring (§7i).
 
 ---
 
-## 7k. `[ ]` Event log panel
+## 7k. `[x]` Event log panel
+
+Done 2026-10-20 in three waves (agents on trial branches, fixes after each owner check).
+Differs from the text below as recorded in §7k.6: the narrow header switches at 1120 /
+1200 px and the Source column hides below 900 px; grip 6 px, column header 24 px; the
+cap is 5000 rows; the `hardware` line is gone (the Projector error alert carries the
+code) and Offline logs one Connection line per transition; a failed command reads *no
+answer or refused* (the real reason waits for a protocol change); keyboard lens steps
+have their own source; OSC lines show the address and sender; an opened group lists
+its projectors by IP; scrolling back to the top turns Follow on.
 
 Boards (dark only): *Event log: the panel in the window, a row hovered / Alerts filter
 and search / empty, no match, minimum height, 800 px window, clear / a command sent to
@@ -1752,6 +1761,14 @@ changes width every poll.
   tooltip** has no list: *15 online* and the click line.
 - Counts come from `statusSummaryProvider`, which gains the wrong-login count for the
   meter; the tooltip list `select`s the offline nodes only while it is open.
+- **Meter tooltip** only while a projector has a failed login, since then *Projectors 18*
+  is more than Online + Offline: *1 wrong login*, *Check the login in Edit Projector*.
+  Otherwise the meter has no tooltip (the counts beside it say it all; owner
+  2026-10-20).
+- **The click** sets the quick filter, **clears the search** and expands collapsed groups
+  (as `showInMonitoring` does), so every matching projector is in view.
+- **No projectors**: *Projectors 0*, an empty grey meter track, Online 0 and Offline 0
+  dimmed in place.
 
 ### 7l.3 Alerts
 - *Alerts* and one **pill per severity** (`caption` w600): critical red and warning amber,
@@ -1781,12 +1798,29 @@ changes width every poll.
   reports (today its state is only running / not running), never from "on in the
   settings but not running": that is also true for a moment at start and while the
   service restarts on a new port, and must not flash *port busy* (owner, 2026-10-20).
+- **How the failure is kept** (owner, 2026-10-20): today a failed bind writes OSC *off*
+  to the settings (`setOscActive(false)`, so the next launch doesn't retry a doomed
+  port), which would hide the item. That stays; `oscProvider`'s state becomes three:
+  off, listening (port), **bind failed (port)**, the last kept in memory for the
+  session only. While it is set the status bar shows the red *port busy* item although
+  the setting is off; it goes on a successful start or when the app restarts (OSC is
+  off then, no item).
+- **Preferences shows it too**: the OSC section's dot is red (not grey) and a line under
+  the switch says *Port 9000 is in use. Choose another port*, so the switch that turned
+  itself off says why. `PreferencesDialog` takes the section to open (OSC, Web Access)
+  instead of the `openWebAccess` flag.
 
 ### 7l.5 Updated
 - **Updated 21:04:12** replaces *Last refresh* and *Refreshing…*. The time always stays;
   while a poll runs only the clock icon becomes a 12 px spinner (still inside its
   `RepaintBoundary`), so the bar never changes width.
 - Tooltip *Updated 21:04:12*, *Polling every 5 s*.
+- **Before the first poll** completes: *Updated --:--:--* in `monoSmall` (the width of a
+  real time, no dash characters), the spinner in the icon's place while it runs. Today
+  it is *Last refresh: —*.
+- *Updated* rather than *Last refresh* (owner, 2026-10-20): shorter for the narrow bar,
+  "refresh" reads as an action (the Web page has *Refresh status*), and one label
+  replaces the *Last refresh* / *Refreshing…* pair.
 - ~~**Polling late**~~ `[dropped]` (owner, 2026-10-20): with many projectors a full pass
   can rightly take longer than an interval, so "3 intervals without a poll" would turn
   amber with nothing wrong. The time never changes colour.
@@ -1797,6 +1831,11 @@ changes width every poll.
   pills without *Alerts*, the OSC dot and port, the globe and count, the time without
   *Updated*. Nothing is dropped. Chosen from the window width with hysteresis, not from
   measured content.
+- **The threshold is measured, not guessed** (owner, 2026-10-20): the full bar's width
+  with its longest values (three-digit counts, all three alert pills, OSC *port busy*,
+  *Web 12 (3 operators)*, the time) in the real font sets it, plus a margin, with
+  hysteresis; "about 1000 px" above is a starting guess (the event log's came out at
+  1120 / 1200).
 
 ---
 
@@ -2010,7 +2049,11 @@ tests below, then a GUI check in both themes (`flutter-windows-gui-check`).
   is absent without a failed login, a count at 0 stays in place dimmed, a click on
   Offline opens Monitoring with the Offline filter, the Offline tooltip shows 5 rows and
   "and N more" and the all-offline text, OSC and Web hidden while off, *port busy* only
-  on a bind failure and not while the service is starting or restarting, the bar keeps
+  on a bind failure and not while the service is starting or restarting, *port busy*
+  still shown after the failed bind has turned the setting off and gone after a
+  successful start, the Preferences OSC dot red with the in-use line, the meter tooltip
+  only with a wrong login, a count click clearing the search, *Updated --:--:--* before
+  the first poll, the bar keeps
   its width while polling (same `Size` before and during), at an **800 px** window the
   compact bar lays out without overflow in both themes and with every item shown (OSC,
   Web, all three alert pills, the largest counts); a unit test for the tooltip list
