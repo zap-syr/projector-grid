@@ -163,7 +163,7 @@ class OscNotifier extends _$OscNotifier {
               severity: LogSeverity.error,
               type: LogEventType.osc,
               message:
-                  'OSC failed to start — could not bind receive port '
+                  'OSC failed to start: could not bind receive port '
                   '${settings.oscReceivePort}',
             ),
           );

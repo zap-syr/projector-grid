@@ -590,18 +590,21 @@ void main() {
       expect(logMessages(c).where((m) => m == 'Came online'), hasLength(1));
     });
 
-    test('a new hardware error is logged once', () async {
-      final c = makeContainer(fake);
-      final ws = c.read(workspaceProvider.notifier);
-      fake.pollResults['10.0.0.1'] = (
-        ProbeResult.online,
-        telemetry(errors: 'ERRS2=000100000000'),
-      );
-      ws.setNodes([node('1')]);
-      await ws.refreshAll();
-      await ws.refreshAll();
-      expect(logMessages(c), ['Hardware error: 000100000000']);
-    });
+    test(
+      'a new error code is left to its alert, not logged by the poll',
+      () async {
+        final c = makeContainer(fake);
+        final ws = c.read(workspaceProvider.notifier);
+        fake.pollResults['10.0.0.1'] = (
+          ProbeResult.online,
+          telemetry(errors: 'ERRS2=000100000000'),
+        );
+        ws.setNodes([node('1')]);
+        await ws.refreshAll();
+        await ws.refreshAll();
+        expect(logMessages(c), isEmpty);
+      },
+    );
 
     test('concurrent refreshes do not poll twice', () async {
       final c = makeContainer(fake);

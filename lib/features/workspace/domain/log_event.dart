@@ -1,6 +1,6 @@
 enum LogSeverity { error, warning, info, success }
 
-enum LogEventType { connectivity, command, osc, hardware, web, alert }
+enum LogEventType { connectivity, command, osc, web, alert }
 
 class LogEvent {
   final DateTime timestamp;

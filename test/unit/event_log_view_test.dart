@@ -26,7 +26,7 @@ void main() {
     final cmdFail = _e(LogEventType.command, LogSeverity.error);
     final connWarn = _e(LogEventType.connectivity, LogSeverity.warning);
     final alertInfo = _e(LogEventType.alert, LogSeverity.info);
-    final hwError = _e(LogEventType.hardware, LogSeverity.error);
+    final alertError = _e(LogEventType.alert, LogSeverity.error);
     final oscInfo = _e(LogEventType.osc, LogSeverity.info);
     final webInfo = _e(LogEventType.web, LogSeverity.info);
     final all = [
@@ -34,7 +34,7 @@ void main() {
       cmdFail,
       connWarn,
       alertInfo,
-      hwError,
+      alertError,
       oscInfo,
       webInfo,
     ];
@@ -44,11 +44,11 @@ void main() {
         cmdFail,
         connWarn,
         alertInfo,
-        hwError,
+        alertError,
       ]);
     });
 
-    test('each type chip takes its type, projector events only All', () {
+    test('each type chip takes its type', () {
       expect(visibleEvents(all, EventLogFilter.commands, ''), [cmdOk, cmdFail]);
       expect(visibleEvents(all, EventLogFilter.connection, ''), [connWarn]);
       expect(visibleEvents(all, EventLogFilter.osc, ''), [oscInfo]);
@@ -99,16 +99,15 @@ void main() {
   group('copy', () {
     test('one line per row in the plan format', () {
       final e = _e(
-        LogEventType.hardware,
+        LogEventType.alert,
         LogSeverity.error,
         ip: '10.0.1.33',
         model: 'PT-RZ120',
-        message: 'Error F305: exhaust fan stopped',
+        message: 'Projector error: F305',
       );
       expect(
         logCopyLine(e, now),
-        '21:04:12  error  10.0.1.33 PT-RZ120  Projector  '
-        'Error F305: exhaust fan stopped',
+        '21:04:12  error  10.0.1.33 PT-RZ120  Alert  Projector error: F305',
       );
     });
 

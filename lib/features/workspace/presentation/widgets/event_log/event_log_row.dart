@@ -29,7 +29,6 @@ IconData logSourceIcon(LogEventType type) => switch (type) {
   LogEventType.connectivity => Icons.link,
   LogEventType.alert => Icons.notifications_none,
   LogEventType.web => Icons.language,
-  LogEventType.hardware => Icons.memory,
 };
 
 /// *Time*, *Projector*, *Source*, *Event* under the log's header.
@@ -169,7 +168,11 @@ class EventLogRow extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         )
+                      // On one baseline: the mono IP is taller than the
+                      // model, and centred the model sat higher.
                       : Row(
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
                           children: [
                             HighlightedText(ip, query: query, style: t.mono),
                             if (model != null && model.isNotEmpty) ...[

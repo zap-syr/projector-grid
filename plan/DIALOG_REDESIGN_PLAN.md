@@ -1499,7 +1499,8 @@ dialogs' type, fields, chips and icons (`projector-grid-visual-rules`).
   takes every error and warning of any source (the old *Errors* folds into it, the
   board's *Problems* chip is dropped, decided 2026-10-19) and every alert event, the
   info ones too (acknowledged, cleared), so an alert's history reads in one place.
-  Projector events (`hardware`, the error codes) show under *All* and *Alerts*. A chip
+  Projector error codes come only as their *Projector error* alert (the poll's separate
+  `hardware` line, always red even for a warning code, is gone, 2026-10-20). A chip
   with no events stays in place, dimmed (§8 of the visual rules); a selected one that
   empties stays selected.
 - *Web* takes the web server's own events (`LogEventType.web`: started, stopped,
@@ -1512,7 +1513,7 @@ dialogs' type, fields, chips and icons (`projector-grid-visual-rules`).
 - **Buttons**, 36 px icon buttons with `CustomTooltip`s, after a thin divider: *Follow
   new events*, *Copy*, *Clear*, *Close*.
 - **Narrow**: chosen from the **panel's width** (it always spans the window), below
-  about **1000 px**, with hysteresis as the toolbar (§7f.2), so it doesn't flicker at
+  **1120 px**, back to full above **1200 px** (hysteresis as the toolbar, §7f.2), so it doesn't flicker at
   the edge. The title text goes, the chips step down to icon + count with the name in a
   tooltip, the search field narrows. Nothing is dropped. (The board's half-width frames
   only show the compact header; the panel itself is never half width.)
@@ -1533,10 +1534,10 @@ dialogs' type, fields, chips and icons (`projector-grid-visual-rules`).
 - **Severity is an icon**, not a dot: red error, amber warning, green success, grey info.
   Error and warning rows get a faint tint of their colour and a 3 px left edge; the
   message stays in the primary text colour, only the icon and the edge carry the colour.
-- **Source** is an icon and a word: *Command*, *OSC*, *Connection*, *Alert*, *Web*,
-  *Projector*. In the 800 px window the Source column hides. It comes from the event's
+- **Source** is an icon and a word: *Command*, *OSC*, *Connection*, *Alert*, *Web*. The
+  Source column hides below about 900 px of panel width. It comes from the event's
   type: `command` *Command*, `osc` *OSC*, `connectivity` *Connection*, `alert` *Alert*,
-  `web` *Web*, `hardware` *Projector*. Wave 1 builds it from that alone; the *from …*
+  `web` *Web*. Wave 1 builds it from that alone; the *from …*
   part of command rows comes with the sources in wave 2.
 - **OSC rows** show the address in `mono` and the sender (`from 10.0.0.20`). **Command
   rows** name where the command came from in `description` (*from the control bar*, *from
@@ -1633,6 +1634,13 @@ dialogs' type, fields, chips and icons (`projector-grid-visual-rules`).
   button instead of a SnackBar; events of an earlier day show their date; the Source
   column comes from the event type in wave 1. The mockup now shows one *Alerts* chip,
   *Locate* and the 120 px minimum.
+- After the wave 1 check (2026-10-20): the `hardware` log line and its type are gone
+  (the alert carries the code with its real severity); alert messages lose the
+  *(critical)* / *(warning)* tail (the icon says it); log messages lose their dashes
+  (Web, OSC, Alignment; the command summary goes in wave 2); the model sits on the IP's
+  baseline. The narrow header switches at 1120 / 1200 px (the full header needs about
+  1100 to 1185 px), the Source column hides below 900 px; the grip is 6 px and the
+  column header 24 px so 120 px holds one row.
 
 ---
 

@@ -568,7 +568,6 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     ConnectionStatus? previousStatus,
   }) async {
     final oldStatus = previousStatus ?? node.connectionStatus;
-    final oldErrors = node.errors;
 
     // pollProjectorTelemetry folds in what used to be a separate
     // probeProjector() call — both started with the same QID query, so this
@@ -763,25 +762,8 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
           lastSeen: null,
         );
       });
-
-      // Log new hardware errors detected during this poll
-      final updatedNode = state.firstWhere(
-        (n) => n.id == node.id,
-        orElse: () => node,
-      );
-      if (updatedNode.errors != 'NO ERRORS' &&
-          updatedNode.errors != '-' &&
-          updatedNode.errors != oldErrors) {
-        _logEvent(
-          LogEvent(
-            severity: LogSeverity.error,
-            type: LogEventType.hardware,
-            message: 'Hardware error: ${updatedNode.errors}',
-            projectorIp: node.ipAddress,
-            projectorName: node.name,
-          ),
-        );
-      }
+      // A new error code is logged by its Projector error alert, with the
+      // code's text and severity, not here.
     } else {
       // If telemetry fails, mark as offline
       if (oldStatus != ConnectionStatus.offline) {

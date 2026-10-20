@@ -32,7 +32,7 @@ LogEvent _e(
 /// Newest first, as the provider keeps them.
 final _events = [
   _e(
-    LogEventType.hardware,
+    LogEventType.alert,
     LogSeverity.error,
     'Error F305: exhaust fan stopped',
     ip: '10.0.1.33',
@@ -247,7 +247,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('event-log-copy')));
     await tester.pump();
     expect(copied!.split('\n'), [
-      '09:30:00  error  10.0.1.33 PT-RZ120  Projector  '
+      '09:30:00  error  10.0.1.33 PT-RZ120  Alert  '
           'Error F305: exhaust fan stopped',
       '09:30:00  info  10.0.1.31 PT-RZ120  Alert  Signal lost acknowledged',
       '09:30:00  warning  10.0.1.51  Connection  Wrong login',

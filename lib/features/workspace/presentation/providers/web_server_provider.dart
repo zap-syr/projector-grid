@@ -114,8 +114,8 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
     _log(
       ok ? LogSeverity.info : LogSeverity.error,
       ok
-          ? 'Web access on — port $port'
-          : 'Web access failed to start — could not bind port $port',
+          ? 'Web access on, port $port'
+          : 'Web access failed to start: could not bind port $port',
     );
   }
 

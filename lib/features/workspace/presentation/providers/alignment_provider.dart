@@ -211,7 +211,7 @@ class AlignmentNotifier extends _$AlignmentNotifier {
     final skipped = scopeNodes.length - scope.length;
     _log(
       LogSeverity.info,
-      'Alignment mode on — ${scope.length} projector(s)'
+      'Alignment mode on, ${scope.length} projector(s)'
       '${skipped > 0 ? ', $skipped offline or not answering skipped' : ''}',
     );
     _updateRoles();
@@ -236,7 +236,7 @@ class AlignmentNotifier extends _$AlignmentNotifier {
       showNeighbours: state.showNeighbours,
       includeDiagonals: state.includeDiagonals,
     );
-    _log(LogSeverity.info, 'Alignment mode off — projectors restored');
+    _log(LogSeverity.info, 'Alignment mode off, projectors restored');
   }
 
   // ── Navigation ───────────────────────────────────────────────────────────

@@ -108,7 +108,6 @@ String logSourceLabel(LogEventType type) => switch (type) {
   LogEventType.connectivity => 'Connection',
   LogEventType.alert => 'Alert',
   LogEventType.web => 'Web',
-  LogEventType.hardware => 'Projector',
 };
 
 /// The Projector column as text: IP and model, or *App* for an event with

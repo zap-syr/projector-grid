@@ -140,8 +140,7 @@ class AlertsNotifier extends _$AlertsNotifier {
             },
             type: LogEventType.alert,
             message: switch (change) {
-              AlertChange.raised =>
-                '${a.rule.label}: ${a.value} (${a.severity.name})',
+              AlertChange.raised => '${a.rule.label}: ${a.value}',
               AlertChange.recovered => '${a.rule.label}: ${a.displayValue}',
               AlertChange.cleared => '${a.rule.label} cleared',
               AlertChange.acknowledged =>

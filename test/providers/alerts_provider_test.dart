@@ -41,7 +41,7 @@ void main() {
     ws.setNodes([node('1').copyWith(exhaustTemp: '58°C', polled: true)]);
     final alert = c.read(alertsProvider).values.single;
     expect(alert.rule, AlertRule.exhaustTemp);
-    expect(alertLog(c).single.message, 'Exhaust temperature: 58 °C (warning)');
+    expect(alertLog(c).single.message, 'Exhaust temperature: 58 °C');
     expect(alertLog(c).single.projectorName, 'Proj 1');
 
     ws.setNodes([node('1').copyWith(exhaustTemp: '40°C', polled: true)]);
