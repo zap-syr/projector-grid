@@ -11,6 +11,8 @@ import '../helpers/fake_protocol_service.dart';
 import '../helpers/provider_harness.dart';
 import '../helpers/test_config_dir.dart';
 
+const _bar = CommandSource.controlBar;
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   useTempConfigDir();
@@ -165,17 +167,18 @@ void main() {
       ws.setNodes([node('1'), node('2')]);
       c.read(selectionProvider.notifier).set({'1'});
 
-      await ws.sendCommandToSelected('OSH:0');
+      await ws.sendCommandToSelected('OSH:0', source: _bar);
       expect(c.read(workspaceProvider).map((n) => n.shutterStatus), [
         ShutterStatus.open,
         ShutterStatus.closed,
       ]);
-      await ws.sendCommandToSelected('OSH:1');
+      await ws.sendCommandToSelected('OSH:1', source: _bar);
       expect(
         c.read(workspaceProvider).first.shutterStatus,
         ShutterStatus.closed,
       );
-      expect(logMessages(c).first, 'Sent: Shutter Close');
+      expect(logMessages(c).first, 'Shutter Close');
+      expect(c.read(eventLogProvider).first.source, _bar);
       // Cancels the poll/power-transition timers before the pending-timer check.
       c.dispose();
     });
@@ -187,12 +190,16 @@ void main() {
       final ws = c.read(workspaceProvider.notifier);
       fake.commandSucceeds['10.0.0.1'] = false;
       ws.setNodes([node('1')]);
-      await ws.sendCommandToAll('OSH:0');
+      await ws.sendCommandToAll('OSH:0', source: _bar);
       expect(
         c.read(workspaceProvider).single.shutterStatus,
         ShutterStatus.closed,
       );
-      expect(logMessages(c).single, 'Failed: Shutter Open');
+      expect(
+        logMessages(c).single,
+        'Shutter Open failed: no answer or refused',
+      );
+      expect(c.read(eventLogProvider).single.severity, LogSeverity.error);
       // Cancels the poll/power-transition timers before the pending-timer check.
       c.dispose();
     });
@@ -205,13 +212,17 @@ void main() {
         node('3', status: ConnectionStatus.unauthorized),
         node('4', status: ConnectionStatus.unprotected),
       ]);
-      await c.read(workspaceProvider.notifier).sendCommandToAll('OOS:1');
+      await c
+          .read(workspaceProvider.notifier)
+          .sendCommandToAll('OOS:1', source: _bar);
       expect(fake.sentCommands.map((s) => s.$1), ['10.0.0.1', '10.0.0.4']);
       // Cancels the poll/power-transition timers before the pending-timer check.
       c.dispose();
     });
 
-    testWidgets('multi-projector commands log a summary line', (tester) async {
+    testWidgets('a command to several projectors logs one batch', (
+      tester,
+    ) async {
       final c = makeContainer(fake);
       final ws = c.read(workspaceProvider.notifier);
       fake.commandSucceeds['10.0.0.2'] = false;
@@ -219,31 +230,56 @@ void main() {
         node('1'),
         node('2'),
         node('3', status: ConnectionStatus.offline),
+        node('4', status: ConnectionStatus.unauthorized),
       ]);
-      final result = await ws.sendCommandToAll('OOS:1');
+      final result = await ws.sendCommandToAll('OOS:1', source: _bar);
       expect(result.ok, 1);
       expect(result.failed.map((n) => n.id), ['2']);
-      expect(result.skipped.map((n) => n.id), ['3']);
+      expect(result.skipped.map((n) => n.id), ['3', '4']);
 
-      final summary = c.read(eventLogProvider).first;
+      final events = c.read(eventLogProvider);
+      final batchIds = events.map((e) => e.batch?.id).toSet();
+      expect(batchIds, hasLength(1), reason: 'every line in one batch');
+      expect(batchIds.single, isNotNull);
+      final summary = events.first;
+      expect(summary.isBatchSummary, isTrue);
       expect(summary.severity, LogSeverity.warning);
-      expect(summary.projectorIp, isNull);
-      expect(
-        summary.message,
-        'OSD On — 1/3 OK · 1 failed · 1 skipped. '
-        'Failed: Proj 2. Skipped: Proj 3',
-      );
+      expect(summary.message, 'OSD On');
+      expect(summary.batch!.target, '4 projectors');
+      expect(summary.batch!.source, _bar);
+      final lines = {
+        for (final e in events.skip(1)) e.projectorIp: (e.outcome, e.message),
+      };
+      expect(lines, {
+        '10.0.0.1': (CommandOutcome.sent, 'Sent'),
+        '10.0.0.2': (CommandOutcome.failed, 'Failed: no answer or refused'),
+        '10.0.0.3': (CommandOutcome.skipped, 'Skipped: offline'),
+        '10.0.0.4': (CommandOutcome.skipped, 'Skipped: wrong login'),
+      });
       // Cancels the poll/power-transition timers before the pending-timer check.
       c.dispose();
     });
 
-    testWidgets('single-projector commands log no summary', (tester) async {
+    testWidgets('a batch to one group names the group', (tester) async {
+      final c = makeContainer(fake);
+      final ws = c.read(workspaceProvider.notifier);
+      ws.setNodes([node('1', groupId: 'g'), node('2', groupId: 'g')]);
+      ws.addGroup(const ProjectorGroup(id: 'g', name: 'Stage', color: 0));
+      await ws.sendCommandToGroup('g', 'OSH:1', source: CommandSource.osc);
+      final summary = c.read(eventLogProvider).first;
+      expect(summary.batch!.target, 'Stage, 2 projectors');
+      expect(summary.severity, LogSeverity.info);
+      c.dispose();
+    });
+
+    testWidgets('single-projector commands stay one row', (tester) async {
       final c = makeContainer(fake);
       final ws = c.read(workspaceProvider.notifier);
       ws.setNodes([node('1'), node('2')]);
       c.read(selectionProvider.notifier).set({'1'});
-      await ws.sendCommandToSelected('OOS:1');
-      expect(logMessages(c), ['Sent: OSD On']);
+      await ws.sendCommandToSelected('OOS:1', source: _bar);
+      expect(logMessages(c), ['OSD On']);
+      expect(c.read(eventLogProvider).single.batch, isNull);
       // Cancels the poll/power-transition timers before the pending-timer check.
       c.dispose();
     });
@@ -254,7 +290,9 @@ void main() {
         node('1', groupId: 'g'),
         node('2'),
       ]);
-      await c.read(workspaceProvider.notifier).sendCommandToGroup('g', 'POF');
+      await c
+          .read(workspaceProvider.notifier)
+          .sendCommandToGroup('g', 'POF', source: _bar);
       expect(fake.sentCommands, [('10.0.0.1', 'POF')]);
       // Cancels the poll/power-transition timers before the pending-timer check.
       c.dispose();
@@ -266,14 +304,32 @@ void main() {
       final c = makeContainer(fake);
       final ws = c.read(workspaceProvider.notifier);
       ws.setNodes([node('1'), node('2'), node('3')]);
-      await ws.sendCommandToNodes(['1', '3'], 'OOS:1', source: 'Web · x');
+      const web = CommandSource.web(ip: '10.0.0.5', role: 'operator');
+      await ws.sendCommandToNodes(['1', '3'], 'OOS:1', source: web);
       expect(fake.sentCommands, [('10.0.0.1', 'OOS:1'), ('10.0.0.3', 'OOS:1')]);
-      expect(logMessages(c), [
-        'OSD On — 2/2 OK (Web · x)',
-        'Sent: OSD On (Web · x)',
-        'Sent: OSD On (Web · x)',
-      ]);
+      final summary = c.read(eventLogProvider).first;
+      expect(summary.source!.label, 'from Web, 10.0.0.5 (operator)');
+      expect(summary.batch!.source.kind, CommandSourceKind.web);
       // Cancels the poll/power-transition timers before the pending-timer check.
+      c.dispose();
+    });
+
+    testWidgets('retryFailed sends to the failed ids still there', (
+      tester,
+    ) async {
+      final c = makeContainer(fake);
+      final ws = c.read(workspaceProvider.notifier);
+      // '2' changed its IP since the batch, '9' was removed.
+      ws.setNodes([
+        node('1'),
+        node('2').copyWith(ipAddress: '10.0.0.22'),
+        node('3'),
+      ]);
+      await ws.retryFailed(['2', '9'], 'OSH:1');
+      expect(fake.sentCommands, [('10.0.0.22', 'OSH:1')]);
+      final row = c.read(eventLogProvider).single;
+      expect(row.source, CommandSource.retry);
+      expect(row.nodeId, '2');
       c.dispose();
     });
 
@@ -289,7 +345,7 @@ void main() {
         'QVX:NSGS1': 'NSGS1=1080/60p',
       });
 
-      await ws.sendCommandToAll('PON');
+      await ws.sendCommandToAll('PON', source: _bar);
       expect(
         c.read(workspaceProvider).single.powerStatus,
         PowerStatus.turningOn,
@@ -320,7 +376,7 @@ void main() {
       ws.setNodes([node('1')]);
       fake.rawResponses['QVX:POWI1'] = 'POWI1=+00001';
 
-      await ws.sendCommandToAll('PON');
+      await ws.sendCommandToAll('PON', source: _bar);
       expect(
         c.read(workspaceProvider).single.powerStatus,
         PowerStatus.turningOn,
@@ -336,7 +392,7 @@ void main() {
       final ws = c.read(workspaceProvider.notifier);
       ws.setNodes([node('1').copyWith(powerStatus: PowerStatus.on)]);
       fake.rawResponses['QVX:POWI1'] = 'POWI1=+00001';
-      await ws.sendCommandToAll('POF');
+      await ws.sendCommandToAll('POF', source: _bar);
       expect(c.read(workspaceProvider).single.powerStatus, PowerStatus.cooling);
       await tester.pump(const Duration(seconds: 2));
       await tester.pump();
@@ -629,7 +685,7 @@ void main() {
       expect(c.read(workspaceProvider).single.testPattern, 'OTS:70');
 
       c.read(selectionProvider.notifier).set({'1'});
-      await ws.sendCommandToSelected('OTS:00');
+      await ws.sendCommandToSelected('OTS:00', source: _bar);
       expect(c.read(workspaceProvider).single.testPattern, 'OTS:00');
     });
   });

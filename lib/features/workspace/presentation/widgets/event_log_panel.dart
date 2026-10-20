@@ -5,12 +5,16 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../domain/event_log_rows.dart';
 import '../../domain/event_log_view.dart';
+import '../../domain/log_event.dart';
 import '../providers/app_settings_provider.dart';
 import '../providers/event_log_provider.dart';
 import '../providers/event_log_request_provider.dart';
+import '../providers/workspace_provider.dart';
 import 'common/confirm_dialog.dart';
 import 'common/dialog_parts.dart';
+import 'event_log/event_log_batch_row.dart';
 import 'event_log/event_log_header.dart';
 import 'event_log/event_log_row.dart';
 
@@ -63,6 +67,7 @@ class _EventLogPanelState extends ConsumerState<EventLogPanel> {
   void _apply(EventLogRequest request) {
     _searchController.text = request.query;
     _query = request.query;
+    _dropSearchCloses();
     _filter = request.alertsOnly ? EventLogFilter.alerts : EventLogFilter.all;
   }
 
@@ -87,14 +92,36 @@ class _EventLogPanelState extends ConsumerState<EventLogPanel> {
 
   void _setQuery(String query) {
     if (_searchController.text != query) _searchController.text = query;
-    setState(() => _query = query);
+    setState(() {
+      _query = query;
+      _dropSearchCloses();
+    });
   }
+
+  /// Batch rows opened or closed by a click, by batch id. A row without an
+  /// entry is open while the search matches one of its projector lines.
+  final Map<String, bool> _openOverride = {};
+
+  bool _isOpen(BatchLogRow row) =>
+      _openOverride[row.batch.id] ?? batchOpenedBySearch(row, _query);
+
+  void _toggle(BatchLogRow row) =>
+      setState(() => _openOverride[row.batch.id] = !_isOpen(row));
+
+  /// A row closed against the search stays closed only for that search; a
+  /// row opened by hand stays open.
+  void _dropSearchCloses() => _openOverride.removeWhere((_, open) => !open);
+
+  void _retry(BatchLogRow row) => ref
+      .read(workspaceProvider.notifier)
+      .retryFailed(row.failedNodeIds, row.batch.command);
 
   void _showAll() {
     _searchController.text = '';
     setState(() {
       _query = '';
       _filter = EventLogFilter.all;
+      _dropSearchCloses();
     });
   }
 
@@ -132,8 +159,17 @@ class _EventLogPanelState extends ConsumerState<EventLogPanel> {
       appSettingsProvider.select((s) => s.eventLogHeight),
     );
     final allEvents = ref.watch(eventLogProvider);
-    final rows = visibleEvents(allEvents, _filter, _query);
-    final counts = eventFilterCounts(allEvents);
+    final allRows = buildLogRows(allEvents);
+    final rows = visibleRows(allRows, _filter, _query);
+    final counts = rowFilterCounts(allRows);
+    final items = <_ListItem>[
+      for (final r in rows) ...[
+        _RowItem(r),
+        if (r is BatchLogRow && _isOpen(r))
+          for (final (i, line) in r.lines.indexed)
+            _LineItem(line, last: i == r.lines.length - 1),
+      ],
+    ];
     final now = DateTime.now();
     final cs = Theme.of(context).colorScheme;
     final height = eventLogPanelHeight(
@@ -183,7 +219,7 @@ class _EventLogPanelState extends ConsumerState<EventLogPanel> {
                       : () => _copy(rows.length, logCopyText(rows, now)),
                   onClear: allEvents.isEmpty
                       ? null
-                      : () => _confirmClear(allEvents.length),
+                      : () => _confirmClear(allRows.length),
                   onClose: () =>
                       ref.read(appSettingsProvider.notifier).setShowLogs(false),
                 ),
@@ -203,15 +239,41 @@ class _EventLogPanelState extends ConsumerState<EventLogPanel> {
                             ),
                             Expanded(
                               child: ListView.builder(
-                                itemCount: rows.length,
+                                itemCount: items.length,
                                 itemExtent: EventLogColumns.rowHeight,
-                                itemBuilder: (_, i) => EventLogRow(
-                                  event: rows[i],
-                                  now: now,
-                                  query: _query,
-                                  showSource: showSource,
-                                  narrow: narrow,
-                                ),
+                                itemBuilder: (_, i) => switch (items[i]) {
+                                  _RowItem(row: SingleLogRow(:final event)) =>
+                                    EventLogRow(
+                                      event: event,
+                                      now: now,
+                                      query: _query,
+                                      showSource: showSource,
+                                      narrow: narrow,
+                                    ),
+                                  _RowItem(row: final BatchLogRow row) =>
+                                    EventLogBatchRow(
+                                      key: ValueKey(
+                                        'event-log-batch-${row.batch.id}',
+                                      ),
+                                      row: row,
+                                      open: _isOpen(row),
+                                      onToggle: () => _toggle(row),
+                                      onRetry: () => _retry(row),
+                                      now: now,
+                                      query: _query,
+                                      showSource: showSource,
+                                      narrow: narrow,
+                                    ),
+                                  _LineItem(:final event, :final last) =>
+                                    EventLogBatchLine(
+                                      event: event,
+                                      last: last,
+                                      now: now,
+                                      query: _query,
+                                      showSource: showSource,
+                                      narrow: narrow,
+                                    ),
+                                },
                               ),
                             ),
                           ],
@@ -224,6 +286,24 @@ class _EventLogPanelState extends ConsumerState<EventLogPanel> {
       ),
     );
   }
+}
+
+/// One line of the list: a row, or a projector line of an open batch.
+sealed class _ListItem {
+  const _ListItem();
+}
+
+class _RowItem extends _ListItem {
+  const _RowItem(this.row);
+
+  final LogRow row;
+}
+
+class _LineItem extends _ListItem {
+  const _LineItem(this.event, {required this.last});
+
+  final LogEvent event;
+  final bool last;
 }
 
 /// The resize handle on top of the panel.

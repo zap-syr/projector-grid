@@ -41,7 +41,7 @@ final class EventLogNotifierProvider
   }
 }
 
-String _$eventLogNotifierHash() => r'35a206722d14fa20e6303997d2fb21895cc30cff';
+String _$eventLogNotifierHash() => r'eaca60e991de65b86d350b93a03cfa3f189fdea1';
 
 abstract class _$EventLogNotifier extends $Notifier<List<LogEvent>> {
   List<LogEvent> build();

@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,9 +8,13 @@ import 'package:projector_grid/features/workspace/domain/log_event.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/app_settings_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/event_log_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/event_log_request_provider.dart';
+import 'package:projector_grid/features/workspace/presentation/providers/workspace_provider.dart';
+import 'package:projector_grid/features/workspace/presentation/widgets/event_log/event_log_batch_row.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/event_log/event_log_row.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/event_log_panel.dart';
 
+import '../helpers/fake_protocol_service.dart';
+import '../helpers/provider_harness.dart';
 import '../helpers/test_config_dir.dart';
 
 final _today = DateTime.now();
@@ -69,12 +74,15 @@ void main() {
     Size size = const Size(1600, 900),
     List<LogEvent>? events,
     double? maxHeight,
+    ProviderContainer? container,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
-    final container = ProviderContainer();
-    addTearDown(container.dispose);
+    if (container == null) {
+      container = ProviderContainer();
+      addTearDown(container.dispose);
+    }
     for (final e in (events ?? _events).reversed) {
       container.read(eventLogProvider.notifier).log(e);
     }
@@ -308,6 +316,209 @@ void main() {
     await tester.pumpAndSettle();
     expect(rowCount(), 1);
     expect(find.text('Error F305: exhaust fan stopped'), findsOneWidget);
+  });
+
+  group('batch rows', () {
+    const batch = CommandBatch(
+      id: 'b1',
+      command: 'OSH:0',
+      source: CommandSource.controlBar,
+      target: 'Stage, 3 projectors',
+      nodeIds: ['31', '33', '35'],
+    );
+    LogEvent line(String id, CommandOutcome o, String message) => LogEvent(
+      severity: switch (o) {
+        CommandOutcome.sent => LogSeverity.success,
+        CommandOutcome.failed => LogSeverity.error,
+        CommandOutcome.skipped => LogSeverity.info,
+      },
+      type: LogEventType.command,
+      message: message,
+      projectorIp: '10.0.1.$id',
+      projectorName: 'PT-RZ120',
+      batch: batch,
+      outcome: o,
+      nodeId: id,
+      timestamp: DateTime(_today.year, _today.month, _today.day, 9, 30),
+    );
+    final batchEvents = [
+      LogEvent(
+        severity: LogSeverity.warning,
+        type: LogEventType.command,
+        message: 'Shutter Open',
+        source: CommandSource.controlBar,
+        batch: batch,
+        timestamp: DateTime(_today.year, _today.month, _today.day, 9, 30),
+      ),
+      line('35', CommandOutcome.skipped, 'Skipped: offline'),
+      line('33', CommandOutcome.failed, 'Failed: no answer or refused'),
+      line('31', CommandOutcome.sent, 'Sent'),
+    ];
+    Finder lines() => find.byType(EventLogBatchLine);
+    // The batch second, so it is on screen with a row above it.
+    final mixed = [_events.first, ...batchEvents, ..._events.skip(1)];
+
+    testWidgets('one closed row with pills, opened to its projector lines', (
+      tester,
+    ) async {
+      await pumpPanel(tester, events: mixed);
+      expect(find.byType(EventLogBatchRow), findsOneWidget);
+      expect(lines(), findsNothing, reason: 'rows start closed');
+      expect(find.text('Stage, 3 projectors'), findsOneWidget);
+      expect(find.text('from the control bar'), findsOneWidget);
+      expect(find.text('1 sent'), findsOneWidget);
+      expect(find.text('1 failed'), findsOneWidget);
+      expect(find.text('1 skipped'), findsOneWidget);
+      expect(find.byIcon(Icons.chevron_right), findsOneWidget);
+
+      final above = tester.getTopLeft(find.byType(EventLogRow).first);
+      await tester.tap(find.text('Stage, 3 projectors'));
+      await tester.pumpAndSettle();
+      expect(lines(), findsNWidgets(3));
+      expect(find.byIcon(Icons.expand_more), findsOneWidget);
+      expect(
+        tester.getTopLeft(find.byType(EventLogRow).first),
+        above,
+        reason: 'opening a row moves nothing above it',
+      );
+      // Workspace order: the sent ones, then the skipped one.
+      final ips = [
+        for (final l in tester.widgetList<EventLogBatchLine>(lines()))
+          l.event.projectorIp,
+      ];
+      expect(ips, ['10.0.1.31', '10.0.1.33', '10.0.1.35']);
+      expect(find.text('Failed: no answer or refused'), findsOneWidget);
+      expect(find.text('Skipped: offline'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('event-log-batch-chevron')));
+      await tester.pumpAndSettle();
+      expect(lines(), findsNothing);
+    });
+
+    testWidgets('the batch row keeps the row height and columns', (
+      tester,
+    ) async {
+      await pumpPanel(tester, events: mixed);
+      expect(
+        tester.getSize(find.byType(EventLogBatchRow)).height,
+        EventLogColumns.rowHeight,
+      );
+      final rowTarget = tester.getTopLeft(find.text('Stage, 3 projectors'));
+      final singleIp = tester.getTopLeft(find.text('10.0.1.33').first);
+      // Same Projector column, after the chevron.
+      expect(rowTarget.dx, greaterThan(singleIp.dx));
+      expect(rowTarget.dx - singleIp.dx, lessThan(30));
+    });
+
+    testWidgets('a search for an IP opens its batch', (tester) async {
+      await pumpPanel(tester, events: [..._events, ...batchEvents]);
+      await tester.enterText(
+        find.byKey(const ValueKey('event-log-search')),
+        '10.0.1.35',
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(EventLogBatchRow), findsOneWidget);
+      expect(lines(), findsNWidgets(3));
+
+      await tester.tap(find.byKey(const ValueKey('event-log-search-clear')));
+      await tester.pumpAndSettle();
+      expect(lines(), findsNothing, reason: 'the search opened it');
+    });
+
+    testWidgets('Copy writes the summary and its projector lines', (
+      tester,
+    ) async {
+      String? copied;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            copied = (call.arguments as Map)['text'] as String;
+          }
+          return null;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      await pumpPanel(tester, events: batchEvents);
+      await tester.tap(find.byKey(const ValueKey('event-log-copy')));
+      await tester.pump();
+      expect(copied!.split('\n'), [
+        '09:30:00  warning  Stage, 3 projectors  Command  '
+            'Shutter Open from the control bar, 1 sent, 1 failed, 1 skipped',
+        '  09:30:00  success  10.0.1.31 PT-RZ120  Command  Sent',
+        '  09:30:00  error  10.0.1.33 PT-RZ120  Command  '
+            'Failed: no answer or refused',
+        '  09:30:00  info  10.0.1.35 PT-RZ120  Command  Skipped: offline',
+      ]);
+      await tester.pump(const Duration(seconds: 1));
+    });
+
+    testWidgets('Web counts the commands sent from the Web page', (
+      tester,
+    ) async {
+      final web = LogEvent(
+        severity: LogSeverity.info,
+        type: LogEventType.command,
+        message: 'Power On',
+        projectorIp: '10.0.1.40',
+        source: const CommandSource.web(ip: '10.0.0.5', role: 'operator'),
+        timestamp: DateTime(_today.year, _today.month, _today.day, 9, 30),
+      );
+      await pumpPanel(tester, events: [web, ..._events]);
+      final opacity = tester.widget<Opacity>(
+        find.descendant(of: chip('web'), matching: find.byType(Opacity)).first,
+      );
+      expect(opacity.opacity, 1, reason: 'Web is no longer empty');
+      await tester.tap(chip('web'));
+      await tester.pumpAndSettle();
+      expect(rowCount(), 1);
+      expect(find.text('from Web, 10.0.0.5 (operator)'), findsOneWidget);
+    });
+
+    testWidgets('Retry failed sends to the failed projectors only', (
+      tester,
+    ) async {
+      final fake = FakeProtocolService();
+      final c = makeContainer(fake);
+      final ws = c.read(workspaceProvider.notifier);
+      ws.setNodes([node('1'), node('2'), node('3')]);
+      fake.commandSucceeds['10.0.0.2'] = false;
+      fake.commandSucceeds['10.0.0.3'] = false;
+      await ws.sendCommandToAll('OSH:1', source: CommandSource.controlBar);
+      // '3' is removed before the retry.
+      ws.setNodes([node('1'), node('2')]);
+      fake.sentCommands.clear();
+
+      await pumpPanel(tester, events: const [], container: c);
+      final row = find.byType(EventLogBatchRow);
+      expect(find.text('2 failed'), findsOneWidget);
+      expect(find.text('Retry failed'), findsNothing, reason: 'hover only');
+      final rowSize = tester.getSize(row);
+      final pillAt = tester.getTopLeft(find.text('2 failed'));
+
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      addTearDown(mouse.removePointer);
+      await mouse.addPointer(location: tester.getCenter(row));
+      await tester.pump();
+      expect(find.text('Retry failed'), findsOneWidget);
+      // The hover action sits over the row; nothing in it moves.
+      expect(tester.getSize(row), rowSize);
+      expect(tester.getTopLeft(find.text('2 failed')), pillAt);
+      await tester.tap(find.text('Retry failed'));
+      await tester.pumpAndSettle();
+
+      expect(fake.sentCommands, [('10.0.0.2', 'OSH:1')]);
+      final retry = c.read(eventLogProvider).first;
+      expect(retry.source, CommandSource.retry);
+      expect(retry.nodeId, '2');
+      expect(find.text('from retry'), findsOneWidget);
+      c.dispose();
+    });
   });
 
   testWidgets('the 800 px window: narrow header, no Source column', (

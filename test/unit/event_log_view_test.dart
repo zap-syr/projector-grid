@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:projector_grid/features/workspace/domain/event_log_rows.dart';
 import 'package:projector_grid/features/workspace/domain/event_log_view.dart';
 import 'package:projector_grid/features/workspace/domain/log_event.dart';
 
@@ -29,6 +30,12 @@ void main() {
     final alertError = _e(LogEventType.alert, LogSeverity.error);
     final oscInfo = _e(LogEventType.osc, LogSeverity.info);
     final webInfo = _e(LogEventType.web, LogSeverity.info);
+    final webCmd = LogEvent(
+      type: LogEventType.command,
+      severity: LogSeverity.info,
+      message: 'Shutter Close',
+      source: const CommandSource.web(ip: '10.0.0.5', role: 'operator'),
+    );
     final all = [
       cmdOk,
       cmdFail,
@@ -37,10 +44,15 @@ void main() {
       alertError,
       oscInfo,
       webInfo,
+      webCmd,
+    ];
+    List<LogEvent> shown(EventLogFilter f) => [
+      for (final r in visibleRows(buildLogRows(all), f, ''))
+        (r as SingleLogRow).event,
     ];
 
     test('Alerts takes errors and warnings of any type and every alert', () {
-      expect(visibleEvents(all, EventLogFilter.alerts, ''), [
+      expect(shown(EventLogFilter.alerts), [
         cmdFail,
         connWarn,
         alertInfo,
@@ -48,21 +60,21 @@ void main() {
       ]);
     });
 
-    test('each type chip takes its type', () {
-      expect(visibleEvents(all, EventLogFilter.commands, ''), [cmdOk, cmdFail]);
-      expect(visibleEvents(all, EventLogFilter.connection, ''), [connWarn]);
-      expect(visibleEvents(all, EventLogFilter.osc, ''), [oscInfo]);
-      expect(visibleEvents(all, EventLogFilter.web, ''), [webInfo]);
-      expect(visibleEvents(all, EventLogFilter.all, ''), all);
+    test('each type chip takes its type, Web also the Web page commands', () {
+      expect(shown(EventLogFilter.commands), [cmdOk, cmdFail, webCmd]);
+      expect(shown(EventLogFilter.connection), [connWarn]);
+      expect(shown(EventLogFilter.osc), [oscInfo]);
+      expect(shown(EventLogFilter.web), [webInfo, webCmd]);
+      expect(shown(EventLogFilter.all), all);
     });
 
     test('counts per chip ignore the search', () {
-      final counts = eventFilterCounts(all);
-      expect(counts[EventLogFilter.all], 7);
+      final counts = rowFilterCounts(buildLogRows(all));
+      expect(counts[EventLogFilter.all], 8);
       expect(counts[EventLogFilter.alerts], 4);
-      expect(counts[EventLogFilter.commands], 2);
-      expect(counts[EventLogFilter.web], 1);
-      expect(eventFilterCounts([cmdOk])[EventLogFilter.web], 0);
+      expect(counts[EventLogFilter.commands], 3);
+      expect(counts[EventLogFilter.web], 2);
+      expect(rowFilterCounts(buildLogRows([cmdOk]))[EventLogFilter.web], 0);
     });
   });
 
@@ -127,7 +139,7 @@ void main() {
     test('rows joined by newlines', () {
       final a = _e(LogEventType.osc, LogSeverity.info, message: 'a');
       final b = _e(LogEventType.osc, LogSeverity.info, message: 'b');
-      expect(logCopyText([a, b], now).split('\n'), hasLength(2));
+      expect(logCopyText(buildLogRows([a, b]), now).split('\n'), hasLength(2));
     });
   });
 

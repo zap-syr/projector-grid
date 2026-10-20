@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:projector_grid/features/workspace/domain/command_source.dart';
 import 'package:projector_grid/features/workspace/domain/projector_group.dart';
 import 'package:projector_grid/features/workspace/domain/scheduled_task.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/scheduled_tasks_provider.dart';
@@ -128,7 +129,11 @@ void main() {
         node('3', groupId: 'k'),
       ]);
 
-      await ws.sendCommandToGroups({'g', 'h'}, 'OSH:1');
+      await ws.sendCommandToGroups(
+        {'g', 'h'},
+        'OSH:1',
+        source: const CommandSource.schedule('Evening'),
+      );
 
       expect(fake.sentCommands.map((s) => s.$1).toSet(), {
         '10.0.0.1',

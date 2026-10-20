@@ -59,7 +59,7 @@ final class AlertsNotifierProvider
   }
 }
 
-String _$alertsNotifierHash() => r'bf360a8ca9006e0e7f6dbe8806e8e51a88c9399e';
+String _$alertsNotifierHash() => r'33da77464811b85382186b9d0e59e7e0c329ab50';
 
 /// The active alerts, rebuilt from every workspace change. In memory only:
 /// after a restart, conditions that still hold come back as new.

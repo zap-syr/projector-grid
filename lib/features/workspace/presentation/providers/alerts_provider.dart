@@ -103,7 +103,7 @@ class AlertsNotifier extends _$AlertsNotifier {
 
   /// Every unacknowledged alert that passes [test] (a group of the Active
   /// alerts panel); returns how many. [source] names who did it in the Event
-  /// Log when it isn't the app's own UI, e.g. "Web · 10.0.0.5 · operator".
+  /// Log when it isn't the app's own UI, e.g. "Web, 10.0.0.5 (operator)".
   int acknowledgeWhere(bool Function(ActiveAlert) test, {String? source}) {
     final hits = [
       for (final a in state.values)

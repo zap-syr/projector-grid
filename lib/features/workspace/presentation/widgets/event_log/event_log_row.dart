@@ -76,43 +76,42 @@ class EventLogColumnHeader extends StatelessWidget {
   }
 }
 
-/// One event: time, severity icon, projector, source and message. Error
-/// and warning rows get a faint tint and a 3 px edge in their colour; the
-/// message keeps the primary text colour.
-class EventLogRow extends StatelessWidget {
-  const EventLogRow({
+/// The frame every row of the log shares: the bottom hairline and, for an
+/// error or warning, a faint tint and a 3 px edge in its colour. [cells]
+/// are laid out in the columns; [overlay] sits over the row's right end
+/// (hover actions), so it never moves a column.
+class EventLogRowFrame extends StatelessWidget {
+  const EventLogRowFrame({
     super.key,
-    required this.event,
-    required this.now,
-    required this.query,
-    required this.showSource,
-    required this.narrow,
+    required this.severity,
+    required this.cells,
+    this.background,
+    this.overlay,
   });
 
-  final LogEvent event;
-  final DateTime now;
-  final String query;
-  final bool showSource;
-  final bool narrow;
+  final LogSeverity severity;
+  final List<Widget> cells;
+
+  /// The fill when the severity gives none (a batch's projector lines).
+  final Color? background;
+  final Widget? overlay;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final sc = AppStatusColors.of(context);
-    final t = AppText.of(context);
-    final edge = switch (event.severity) {
+    final edge = switch (severity) {
       LogSeverity.error => cs.error,
       LogSeverity.warning => sc.warning,
       _ => null,
     };
-    final ip = event.projectorIp;
-    final model = event.projectorName;
-
     return Container(
       decoration: BoxDecoration(
-        color: edge?.withValues(
-          alpha: event.severity == LogSeverity.error ? 0.07 : 0.06,
-        ),
+        color:
+            edge?.withValues(
+              alpha: severity == LogSeverity.error ? 0.07 : 0.06,
+            ) ??
+            background,
         border: Border(
           bottom: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.6)),
         ),
@@ -138,87 +137,115 @@ class EventLogRow extends StatelessWidget {
             padding: const EdgeInsets.symmetric(
               horizontal: EventLogColumns.sidePadding,
             ),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: EventLogColumns.time,
-                  child: Text(
-                    formatLogTime(event.timestamp, now),
-                    style: t.monoSmall,
-                    maxLines: 1,
-                    overflow: TextOverflow.clip,
-                    softWrap: false,
-                  ),
-                ),
-                SizedBox(
-                  width: EventLogColumns.severity,
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: _SeverityIcon(event.severity),
-                  ),
-                ),
-                SizedBox(
-                  width: narrow
-                      ? EventLogColumns.projectorNarrow
-                      : EventLogColumns.projector,
-                  child: ip == null
-                      ? Text(
-                          model ?? 'App',
-                          style: t.description.copyWith(color: t.tertiary),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        )
-                      // On one baseline: the mono IP is taller than the
-                      // model, and centred the model sat higher.
-                      : Row(
-                          crossAxisAlignment: CrossAxisAlignment.baseline,
-                          textBaseline: TextBaseline.alphabetic,
-                          children: [
-                            HighlightedText(ip, query: query, style: t.mono),
-                            if (model != null && model.isNotEmpty) ...[
-                              const SizedBox(width: 8),
-                              Flexible(
-                                child: HighlightedText(
-                                  model,
-                                  query: query,
-                                  style: t.description,
-                                ),
-                              ),
-                            ],
-                            const SizedBox(width: 8),
-                          ],
-                        ),
-                ),
-                if (showSource)
-                  SizedBox(
-                    width: EventLogColumns.source,
-                    child: Row(
-                      children: [
-                        Icon(
-                          logSourceIcon(event.type),
-                          size: 16,
-                          color: t.secondary,
-                        ),
-                        const SizedBox(width: 7),
-                        Flexible(
-                          child: Text(
-                            logSourceLabel(event.type),
-                            style: t.description,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                Expanded(
-                  child: HighlightedText(
-                    event.message,
-                    query: query,
-                    style: t.body,
-                  ),
-                ),
-              ],
+            child: Row(children: cells),
+          ),
+          if (overlay != null)
+            Positioned(
+              right: EventLogColumns.sidePadding - 6,
+              top: 0,
+              bottom: 0,
+              child: Center(child: overlay),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The Time column.
+class EventLogTimeCell extends StatelessWidget {
+  const EventLogTimeCell(this.text, {super.key, this.quiet = false});
+
+  final String text;
+
+  /// In the tertiary colour, as a batch's projector lines show it.
+  final bool quiet;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppText.of(context);
+    return SizedBox(
+      width: EventLogColumns.time,
+      child: Text(
+        text,
+        style: quiet ? t.monoSmall.copyWith(color: t.tertiary) : t.monoSmall,
+        maxLines: 1,
+        overflow: TextOverflow.clip,
+        softWrap: false,
+      ),
+    );
+  }
+}
+
+/// The narrow column of the severity icon.
+class EventLogIconCell extends StatelessWidget {
+  const EventLogIconCell(this.icon, {super.key});
+
+  final Widget icon;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: EventLogColumns.severity,
+    child: Align(alignment: Alignment.centerLeft, child: icon),
+  );
+}
+
+/// IP and model on one baseline: the mono IP is taller than the model, and
+/// centred the model sat higher.
+class EventLogIpModel extends StatelessWidget {
+  const EventLogIpModel({
+    super.key,
+    required this.ip,
+    required this.model,
+    required this.query,
+  });
+
+  final String ip;
+  final String? model;
+  final String query;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppText.of(context);
+    final model = this.model;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
+      children: [
+        HighlightedText(ip, query: query, style: t.mono),
+        if (model != null && model.isNotEmpty) ...[
+          const SizedBox(width: 8),
+          Flexible(
+            child: HighlightedText(model, query: query, style: t.description),
+          ),
+        ],
+        const SizedBox(width: 8),
+      ],
+    );
+  }
+}
+
+/// The Source column: the event type's icon and word.
+class EventLogSourceCell extends StatelessWidget {
+  const EventLogSourceCell(this.type, {super.key});
+
+  final LogEventType type;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppText.of(context);
+    return SizedBox(
+      width: EventLogColumns.source,
+      child: Row(
+        children: [
+          Icon(logSourceIcon(type), size: 16, color: t.secondary),
+          const SizedBox(width: 7),
+          Flexible(
+            child: Text(
+              logSourceLabel(type),
+              style: t.description,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -227,8 +254,108 @@ class EventLogRow extends StatelessWidget {
   }
 }
 
-class _SeverityIcon extends StatelessWidget {
-  const _SeverityIcon(this.severity);
+/// A command's name and, after it in `description`, where it came from
+/// (*from the control bar*).
+class EventLogCommandText extends StatelessWidget {
+  const EventLogCommandText({
+    super.key,
+    required this.message,
+    required this.source,
+    required this.query,
+  });
+
+  final String message;
+  final CommandSource? source;
+  final String query;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppText.of(context);
+    final source = this.source;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
+      children: [
+        Flexible(
+          child: HighlightedText(message, query: query, style: t.body),
+        ),
+        if (source != null) ...[
+          const SizedBox(width: 6),
+          Flexible(
+            child: HighlightedText(
+              source.label,
+              query: query,
+              style: t.description,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// One event: time, severity icon, projector, source and message. Error
+/// and warning rows get a faint tint and a 3 px edge in their colour; the
+/// message keeps the primary text colour.
+class EventLogRow extends StatelessWidget {
+  const EventLogRow({
+    super.key,
+    required this.event,
+    required this.now,
+    required this.query,
+    required this.showSource,
+    required this.narrow,
+  });
+
+  final LogEvent event;
+  final DateTime now;
+  final String query;
+  final bool showSource;
+  final bool narrow;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppText.of(context);
+    final ip = event.projectorIp;
+    final model = event.projectorName;
+
+    return EventLogRowFrame(
+      severity: event.severity,
+      cells: [
+        EventLogTimeCell(formatLogTime(event.timestamp, now)),
+        EventLogIconCell(EventLogSeverityIcon(event.severity)),
+        SizedBox(
+          width: narrow
+              ? EventLogColumns.projectorNarrow
+              : EventLogColumns.projector,
+          child: ip == null
+              ? Text(
+                  model ?? 'App',
+                  style: t.description.copyWith(color: t.tertiary),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                )
+              : EventLogIpModel(ip: ip, model: model, query: query),
+        ),
+        if (showSource) EventLogSourceCell(event.type),
+        Expanded(
+          child: event.source == null
+              ? HighlightedText(event.message, query: query, style: t.body)
+              : EventLogCommandText(
+                  message: event.message,
+                  source: event.source,
+                  query: query,
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The severity of an event as an icon: red error, amber warning, green
+/// success, grey info.
+class EventLogSeverityIcon extends StatelessWidget {
+  const EventLogSeverityIcon(this.severity, {super.key});
 
   final LogSeverity severity;
 

@@ -13,6 +13,7 @@ import '../providers/canvas_reveal_provider.dart';
 import '../providers/workspace_provider.dart';
 import '../providers/selection_provider.dart';
 import '../../domain/card_layout.dart';
+import '../../domain/command_source.dart';
 import '../../domain/edge_blend_pair.dart';
 import '../../domain/projector_node.dart';
 import '../../domain/projector_group.dart';
@@ -860,8 +861,10 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
                         },
                       ),
                       SendCommandIntent: CallbackAction<SendCommandIntent>(
-                        onInvoke: (intent) =>
-                            notifier.sendCommandToSelected(intent.command),
+                        onInvoke: (intent) => notifier.sendCommandToSelected(
+                          intent.command,
+                          source: CommandSource.shortcut,
+                        ),
                       ),
                       UndoIntent: CallbackAction<UndoIntent>(
                         onInvoke: (intent) => notifier.undo(),

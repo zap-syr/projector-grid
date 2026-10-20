@@ -53,7 +53,7 @@ final class AlignmentNotifierProvider
   }
 }
 
-String _$alignmentNotifierHash() => r'7f63cb38afd764e24319d01b2f9bcab4cd34dabe';
+String _$alignmentNotifierHash() => r'c0defb085c339cbea3cf7aa169b20ea96e116be0';
 
 /// Alignment mode (ROADMAP_PLAN.md §3.2): one focused projector open with
 /// its pattern, neighbours or everyone optionally open with the Others

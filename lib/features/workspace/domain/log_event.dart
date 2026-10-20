@@ -1,6 +1,39 @@
+import 'command_source.dart';
+
+export 'command_source.dart';
+
 enum LogSeverity { error, warning, info, success }
 
 enum LogEventType { connectivity, command, osc, web, alert }
+
+/// What happened to a command at one projector.
+enum CommandOutcome { sent, failed, skipped }
+
+/// One command sent to several projectors (plan §7k.3). Every event of the
+/// batch holds the same instance, so the log can build the batch's row
+/// from whichever of its events arrives first.
+class CommandBatch {
+  final String id;
+
+  /// The NTCONTROL command, kept for *Retry failed*.
+  final String command;
+  final CommandSource source;
+
+  /// The Projector column: `Stage, 6 projectors` or `8 projectors`.
+  final String target;
+
+  /// Every projector of the batch: the ones sent to, then the skipped ones,
+  /// each in workspace order. Orders the projector lines.
+  final List<String> nodeIds;
+
+  const CommandBatch({
+    required this.id,
+    required this.command,
+    required this.source,
+    required this.target,
+    required this.nodeIds,
+  });
+}
 
 class LogEvent {
   final DateTime timestamp;
@@ -10,14 +43,34 @@ class LogEvent {
   final String? projectorIp;
   final String? projectorName;
 
+  /// Where a command came from, on command rows.
+  final CommandSource? source;
+
+  /// Set on a batch's projector lines and its summary.
+  final CommandBatch? batch;
+
+  /// A command's result at one projector: on a batch's projector lines and
+  /// on a command to a single projector. Null on a batch's summary.
+  final CommandOutcome? outcome;
+
+  /// The projector a command line is about.
+  final String? nodeId;
+
   LogEvent({
     required this.severity,
     required this.type,
     required this.message,
     this.projectorIp,
     this.projectorName,
+    this.source,
+    this.batch,
+    this.outcome,
+    this.nodeId,
     DateTime? timestamp,
   }) : timestamp = timestamp ?? DateTime.now();
+
+  /// A batch's closing event, written after the last reply.
+  bool get isBatchSummary => batch != null && outcome == null;
 }
 
 String commandLabel(String cmd) {

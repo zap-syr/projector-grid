@@ -2,11 +2,10 @@ import 'dart:async';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
-import '../../domain/log_event.dart';
+import '../../domain/command_source.dart';
 import '../../domain/schedule_due.dart';
 import '../../domain/schedule_status.dart';
 import '../../domain/scheduled_task.dart';
-import 'event_log_provider.dart';
 import 'workspace_provider.dart';
 
 part 'scheduled_tasks_provider.g.dart';
@@ -53,24 +52,18 @@ class ScheduledTasksNotifier extends _$ScheduledTasksNotifier {
 
   Future<void> _execute(ScheduledTask task, DateTime now) async {
     final wsNotifier = ref.read(workspaceProvider.notifier);
-    final logNotifier = ref.read(eventLogProvider.notifier);
+    // The command's row names the task, so no line of its own follows.
+    final source = CommandSource.schedule(task.name);
 
     if (task.target == ScheduleTarget.all) {
-      await wsNotifier.sendCommandToAll(task.command);
+      await wsNotifier.sendCommandToAll(task.command, source: source);
     } else if (task.targetGroupIds.isNotEmpty) {
       await wsNotifier.sendCommandToGroups(
         task.targetGroupIds.toSet(),
         task.command,
+        source: source,
       );
     }
-
-    logNotifier.log(
-      LogEvent(
-        severity: LogSeverity.info,
-        type: LogEventType.command,
-        message: '[Scheduler] "${task.name}"',
-      ),
-    );
 
     state = state.map((t) {
       if (t.id != task.id) return t;

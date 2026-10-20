@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../domain/card_layout.dart';
+import '../../domain/command_log.dart';
 import '../../domain/dispatch_result.dart';
+import '../../domain/event_log_rows.dart';
 import '../../domain/projector_node.dart';
 import '../../domain/projector_group.dart';
 import '../../domain/log_event.dart';
@@ -893,18 +895,27 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     }
   }
 
-  Future<DispatchResult> sendCommandToSelected(String cmd) {
+  /// [source] names where the command came from in the Event Log, here and
+  /// in the other sendCommandTo… methods.
+  Future<DispatchResult> sendCommandToSelected(
+    String cmd, {
+    required CommandSource source,
+  }) {
     final selected = ref.read(selectionProvider);
-    return _dispatchToNodes(state.where((n) => selected.contains(n.id)), cmd);
+    return _dispatchToNodes(
+      state.where((n) => selected.contains(n.id)),
+      cmd,
+      source: source,
+    );
   }
 
-  /// Sends [cmd] to the projectors with [ids] (the Web API's targets).
-  /// [source] is appended to the Event Log lines, e.g. "Web · 10.0.0.5 ·
-  /// operator", so remote commands are told apart from the app's own.
+  /// Sends [cmd] to the projectors with [ids] (the Web API's targets, a
+  /// retry's failed projectors); ids no longer in the workspace are left
+  /// out.
   Future<DispatchResult> sendCommandToNodes(
     Iterable<String> ids,
     String cmd, {
-    String? source,
+    required CommandSource source,
   }) {
     final wanted = ids.toSet();
     return _dispatchToNodes(
@@ -913,6 +924,21 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
       source: source,
     );
   }
+
+  /// *Retry failed* on a batch row: [cmd] again to [failedIds] only, by id
+  /// since an IP can change; a projector removed since is skipped.
+  Future<DispatchResult> retryFailed(Iterable<String> failedIds, String cmd) =>
+      sendCommandToNodes(
+        retryTargets(failedIds, state.map((n) => n.id)),
+        cmd,
+        source: CommandSource.retry,
+      );
+
+  // Makes batch ids unique across notifier rebuilds too: the log outlives
+  // the workspace notifier.
+  int _batchSeq = 0;
+  String _nextBatchId() =>
+      '${DateTime.now().microsecondsSinceEpoch}-${_batchSeq++}';
 
   // Caps how many TCP connections _dispatchToNodes and _pollAllProjectors
   // open at once. Firing every node in one Future.wait would open one socket
@@ -925,15 +951,15 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
 
   /// Sends [cmd] to every reachable node in [nodes] concurrently in batches
   /// of [_networkBatchSize], rather than awaiting each one's TCP round-trip
-  /// in sequence. With more than one node, a summary line goes to the Event
-  /// Log after the last reply so a 30-projector command is readable at a
-  /// glance instead of only as 30 per-node entries.
+  /// in sequence. With more than one node the Event Log gets one batch
+  /// (plan §7k.3): a line per projector as it answers, all with the same
+  /// batch id so the log shows one row from the first of them, and a
+  /// summary after the last reply that closes the row.
   Future<DispatchResult> _dispatchToNodes(
     Iterable<ProjectorNode> nodes,
     String cmd, {
-    String? source,
+    required CommandSource source,
   }) async {
-    final from = source == null ? '' : ' ($source)';
     final all = nodes.toList();
     final targets = <ProjectorNode>[];
     final skipped = <ProjectorNode>[];
@@ -946,6 +972,68 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
       }
     }
     final failedIds = <String>{};
+    final batch = all.length > 1
+        ? CommandBatch(
+            id: _nextBatchId(),
+            command: cmd,
+            source: source,
+            target: batchTargetLabel(all, _groups),
+            nodeIds: [
+              for (final n in [...targets, ...skipped]) n.id,
+            ],
+          )
+        : null;
+
+    void logLine(ProjectorNode node, CommandOutcome outcome) {
+      if (batch == null) {
+        // A single projector keeps one row; one that wasn't sent to logs
+        // nothing, as before.
+        if (outcome == CommandOutcome.skipped) return;
+        final success = outcome == CommandOutcome.sent;
+        _logEvent(
+          LogEvent(
+            severity: success ? LogSeverity.info : LogSeverity.error,
+            type: LogEventType.command,
+            message: singleCommandMessage(cmd, success: success),
+            projectorIp: node.ipAddress,
+            projectorName: node.name,
+            source: source,
+            outcome: outcome,
+            nodeId: node.id,
+          ),
+        );
+        return;
+      }
+      _logEvent(
+        LogEvent(
+          severity: switch (outcome) {
+            CommandOutcome.sent => LogSeverity.success,
+            CommandOutcome.failed => LogSeverity.error,
+            CommandOutcome.skipped => LogSeverity.info,
+          },
+          type: LogEventType.command,
+          message: batchLineMessage(
+            outcome,
+            reason: switch (outcome) {
+              CommandOutcome.sent => null,
+              CommandOutcome.failed => commandFailedReason,
+              CommandOutcome.skipped => commandSkipReason(
+                node.connectionStatus,
+              ),
+            },
+          ),
+          projectorIp: node.ipAddress,
+          projectorName: node.name,
+          batch: batch,
+          outcome: outcome,
+          nodeId: node.id,
+        ),
+      );
+    }
+
+    for (final n in skipped) {
+      logLine(n, CommandOutcome.skipped);
+    }
 
     for (var start = 0; start < targets.length; start += _networkBatchSize) {
       final batch = targets.sublist(
@@ -967,17 +1055,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
           } finally {
             _dispatching.remove(node.id);
           }
-          _logEvent(
-            LogEvent(
-              severity: success ? LogSeverity.info : LogSeverity.error,
-              type: LogEventType.command,
-              message: success
-                  ? 'Sent: ${commandLabel(cmd)}$from'
-                  : 'Failed: ${commandLabel(cmd)}$from',
-              projectorIp: node.ipAddress,
-              projectorName: node.name,
-            ),
-          );
+          logLine(node, success ? CommandOutcome.sent : CommandOutcome.failed);
           if (success) {
             _applyOptimisticUpdate(node.id, cmd);
           } else {
@@ -998,12 +1076,14 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
       ],
       skipped: skipped,
     );
-    if (all.length > 1) {
+    if (batch != null) {
       _logEvent(
         LogEvent(
           severity: result.allOk ? LogSeverity.info : LogSeverity.warning,
           type: LogEventType.command,
-          message: '${dispatchSummary(result)}$from',
+          message: commandLabel(cmd),
+          source: source,
+          batch: batch,
         ),
       );
     }
@@ -1069,18 +1149,32 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     return response;
   }
 
-  Future<DispatchResult> sendCommandToGroup(String groupId, String cmd) =>
-      _dispatchToNodes(state.where((n) => n.groupId == groupId), cmd);
+  Future<DispatchResult> sendCommandToGroup(
+    String groupId,
+    String cmd, {
+    required CommandSource source,
+  }) => _dispatchToNodes(
+    state.where((n) => n.groupId == groupId),
+    cmd,
+    source: source,
+  );
 
   /// One dispatch to the projectors of all [groupIds], so the concurrency
   /// cap spans them rather than applying per group.
   Future<DispatchResult> sendCommandToGroups(
     Set<String> groupIds,
-    String cmd,
-  ) => _dispatchToNodes(state.where((n) => groupIds.contains(n.groupId)), cmd);
+    String cmd, {
+    required CommandSource source,
+  }) => _dispatchToNodes(
+    state.where((n) => groupIds.contains(n.groupId)),
+    cmd,
+    source: source,
+  );
 
-  Future<DispatchResult> sendCommandToAll(String cmd) =>
-      _dispatchToNodes(state, cmd);
+  Future<DispatchResult> sendCommandToAll(
+    String cmd, {
+    required CommandSource source,
+  }) => _dispatchToNodes(state, cmd, source: source);
 
   // How long a power-transition tracking loop (below) may keep polling
   // before giving up and leaving the node on the regular poll cycle — well

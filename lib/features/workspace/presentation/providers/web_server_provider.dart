@@ -286,7 +286,10 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
         .read(alertsProvider.notifier)
         .acknowledgeWhere(
           test,
-          source: 'Web · ${session.ip} · ${session.role.name}',
+          source: CommandSource.web(
+            ip: session.ip,
+            role: session.role.name,
+          ).webText,
         );
     return {'acknowledged': count};
   }
@@ -454,7 +457,7 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
           .sendCommandToNodes(
             ids,
             request.action.command,
-            source: 'Web · ${session.ip} · ${session.role.name}',
+            source: CommandSource.web(ip: session.ip, role: session.role.name),
           );
       return dispatchResultJson(result);
     } finally {

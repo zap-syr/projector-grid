@@ -1,3 +1,4 @@
+import 'event_log_rows.dart';
 import 'log_event.dart';
 
 /// The event log's filter chips (plan §7k.1).
@@ -14,47 +15,85 @@ extension EventLogFilterLabel on EventLogFilter {
   };
 }
 
-/// Whether [e] shows under [filter]. *Alerts* takes every error and warning
-/// of any type and every alert event, the info ones too, so an alert's
-/// history (raised, acknowledged, cleared) reads in one place.
-bool eventMatchesFilter(LogEvent e, EventLogFilter filter) => switch (filter) {
+/// Whether [row] shows under [filter]. *Alerts* takes every error and
+/// warning of any type and every alert event, the info ones too, so an
+/// alert's history (raised, acknowledged, cleared) reads in one place.
+/// *Web* takes the web server's events and the commands sent from the Web
+/// page.
+bool rowMatchesFilter(LogRow row, EventLogFilter filter) => switch (filter) {
   EventLogFilter.all => true,
   EventLogFilter.alerts =>
-    e.type == LogEventType.alert ||
-        e.severity == LogSeverity.error ||
-        e.severity == LogSeverity.warning,
-  EventLogFilter.commands => e.type == LogEventType.command,
-  EventLogFilter.connection => e.type == LogEventType.connectivity,
-  EventLogFilter.osc => e.type == LogEventType.osc,
-  EventLogFilter.web => e.type == LogEventType.web,
+    row.type == LogEventType.alert ||
+        row.severity == LogSeverity.error ||
+        row.severity == LogSeverity.warning,
+  EventLogFilter.commands => row.type == LogEventType.command,
+  EventLogFilter.connection => row.type == LogEventType.connectivity,
+  EventLogFilter.osc => row.type == LogEventType.osc,
+  EventLogFilter.web =>
+    row.type == LogEventType.web ||
+        (row.type == LogEventType.command &&
+            row.source?.kind == CommandSourceKind.web),
 };
 
-/// Whether [e]'s IP, model or message contains [query] (any case). An empty
-/// query matches everything.
+bool _has(String? text, String q) => text?.toLowerCase().contains(q) ?? false;
+
+/// Whether [e]'s IP, model, message or source contains [query] (any case).
+/// An empty query matches everything.
 bool eventMatchesSearch(LogEvent e, String query) {
   if (query.isEmpty) return true;
   final q = query.toLowerCase();
-  return (e.projectorIp?.toLowerCase().contains(q) ?? false) ||
-      (e.projectorName?.toLowerCase().contains(q) ?? false) ||
-      e.message.toLowerCase().contains(q);
+  return _has(e.projectorIp, q) ||
+      _has(e.projectorName, q) ||
+      _has(e.message, q) ||
+      _has(e.source?.label, q);
+}
+
+/// Whether a projector line of [row] matches [query]: the row then opens,
+/// so a search for an IP shows it inside its batch.
+bool batchOpenedBySearch(BatchLogRow row, String query) =>
+    query.isNotEmpty && row.lines.any((l) => eventMatchesSearch(l, query));
+
+/// Whether [row] matches [query]: its own text, or for a batch any of its
+/// projector lines.
+bool rowMatchesSearch(LogRow row, String query) {
+  if (query.isEmpty) return true;
+  switch (row) {
+    case SingleLogRow(:final event):
+      return eventMatchesSearch(event, query);
+    case BatchLogRow():
+      final q = query.toLowerCase();
+      return _has(row.commandName, q) ||
+          _has(row.batch.target, q) ||
+          _has(row.source.label, q) ||
+          batchOpenedBySearch(row, query);
+  }
 }
 
 /// The rows the log shows: [filter] and [query] applied, order kept.
-List<LogEvent> visibleEvents(
-  List<LogEvent> events,
+List<LogRow> visibleRows(
+  List<LogRow> rows,
   EventLogFilter filter,
   String query,
 ) => [
-  for (final e in events)
-    if (eventMatchesFilter(e, filter) && eventMatchesSearch(e, query)) e,
+  for (final r in rows)
+    if (rowMatchesFilter(r, filter) && rowMatchesSearch(r, query)) r,
 ];
 
-/// Each chip's count. The search doesn't change them: they say what each
-/// filter holds, not what the current search finds in it.
-Map<EventLogFilter, int> eventFilterCounts(List<LogEvent> events) => {
+/// Each chip's count, in rows: a batch counts once. The search doesn't
+/// change them: they say what each filter holds, not what the current
+/// search finds in it.
+Map<EventLogFilter, int> rowFilterCounts(List<LogRow> rows) => {
   for (final f in EventLogFilter.values)
-    f: events.where((e) => eventMatchesFilter(e, f)).length,
+    f: rows.where((r) => rowMatchesFilter(r, f)).length,
 };
+
+/// A batch row's pills, in order, those at zero left out:
+/// `4 sent`, `1 failed`, `1 skipped`.
+List<(CommandOutcome, String)> batchPills(BatchLogRow row) => [
+  if (row.sent > 0) (CommandOutcome.sent, '${row.sent} sent'),
+  if (row.failed > 0) (CommandOutcome.failed, '${row.failed} failed'),
+  if (row.skipped > 0) (CommandOutcome.skipped, '${row.skipped} skipped'),
+];
 
 /// Where [query] occurs in [text], any case, as `(start, end)` pairs that
 /// don't overlap. Empty for an empty query.
@@ -119,6 +158,12 @@ String logProjectorText(LogEvent e) {
   return model == null || model.isEmpty ? ip : '$ip $model';
 }
 
+/// The Event column as text: the message, and where a command came from.
+String logEventText(LogEvent e) {
+  final source = e.source;
+  return source == null ? e.message : '${e.message} ${source.label}';
+}
+
 /// One copied row:
 /// `21:04:12  error  10.0.1.33 PT-RZ120  Projector  Error F305: exhaust fan stopped`.
 String logCopyLine(LogEvent e, DateTime now) => [
@@ -126,12 +171,35 @@ String logCopyLine(LogEvent e, DateTime now) => [
   e.severity.name,
   logProjectorText(e),
   logSourceLabel(e.type),
-  e.message,
+  logEventText(e),
 ].join('  ');
 
-/// What Copy puts on the clipboard: one line per row shown.
-String logCopyText(List<LogEvent> events, DateTime now) =>
-    events.map((e) => logCopyLine(e, now)).join('\n');
+/// A batch copied: its summary line, then each projector line indented
+/// under it.
+String logBatchCopyText(BatchLogRow row, DateTime now) => [
+  [
+    formatLogTime(row.timestamp, now),
+    row.severity.name,
+    row.batch.target,
+    logSourceLabel(LogEventType.command),
+    [
+      '${row.commandName} ${row.source.label}',
+      ...batchPills(row).map((p) => p.$2),
+    ].join(', '),
+  ].join('  '),
+  for (final l in row.lines) '  ${logCopyLine(l, now)}',
+].join('\n');
+
+/// What Copy puts on the clipboard: every row shown, a batch with its
+/// projector lines.
+String logCopyText(List<LogRow> rows, DateTime now) => rows
+    .map(
+      (r) => switch (r) {
+        SingleLogRow(:final event) => logCopyLine(event, now),
+        BatchLogRow() => logBatchCopyText(r, now),
+      },
+    )
+    .join('\n');
 
 /// The line under *No events match*: what hides the rows, e.g.
 /// `OSC, search "10.0.9.99"`.

@@ -21,7 +21,8 @@ class DispatchResult {
   bool get allOk => failed.isEmpty && skipped.isEmpty;
 }
 
-/// Summary line for the Event Log, e.g.
+/// Summary line of the Web API's dispatch response (the Event Log shows a
+/// batch row instead, `event_log_rows.dart`), e.g.
 /// `Power On — 28/30 OK · 2 failed · 1 skipped. Failed: A, B. Skipped: C`.
 String dispatchSummary(DispatchResult r) {
   final counts = [

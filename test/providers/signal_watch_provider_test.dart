@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:projector_grid/core/services/panasonic_protocol_service.dart';
 import 'package:projector_grid/features/workspace/domain/alert_rule.dart';
+import 'package:projector_grid/features/workspace/domain/command_source.dart';
 import 'package:projector_grid/features/workspace/domain/projector_node.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/alerts_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/app_settings_provider.dart';
@@ -144,7 +145,13 @@ void main() {
       async.elapse(const Duration(seconds: 2));
       reply('10.0.0.1', 'QVX:NSGS1', noSignal);
       reply('10.0.0.1', 'QVX:POWI1', powerOn);
-      c.read(workspaceProvider.notifier).sendCommandToNodes(['1'], 'IIS:HD2');
+      c
+          .read(workspaceProvider.notifier)
+          .sendCommandToNodes(
+            ['1'],
+            'IIS:HD2',
+            source: CommandSource.controlBar,
+          );
       async.elapse(const Duration(seconds: 6));
       expect(c.read(alertsProvider), isEmpty);
     });
@@ -160,7 +167,13 @@ void main() {
       async.elapse(const Duration(seconds: 2));
       reply('10.0.0.1', 'QVX:NSGS1', 'ER401');
       reply('10.0.0.1', 'QVX:POWI1', powerOn);
-      c.read(workspaceProvider.notifier).sendCommandToNodes(['1'], 'IIS:HD2');
+      c
+          .read(workspaceProvider.notifier)
+          .sendCommandToNodes(
+            ['1'],
+            'IIS:HD2',
+            source: CommandSource.controlBar,
+          );
       async.flushMicrotasks();
       fake.holdQueries.remove('10.0.0.1');
       hold.complete();
@@ -179,7 +192,13 @@ void main() {
       async.elapse(const Duration(seconds: 2));
       expect(c.read(alertsProvider).values.single.restoredAt, isNull);
 
-      c.read(workspaceProvider.notifier).sendCommandToNodes(['1'], 'IIS:HD2');
+      c
+          .read(workspaceProvider.notifier)
+          .sendCommandToNodes(
+            ['1'],
+            'IIS:HD2',
+            source: CommandSource.controlBar,
+          );
       reply('10.0.0.1', 'QVX:NSGS1', signal);
       async.elapse(const Duration(seconds: 2));
       expect(c.read(alertsProvider).values.single.restoredAt, isNotNull);

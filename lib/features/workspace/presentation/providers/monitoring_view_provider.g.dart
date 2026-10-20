@@ -48,7 +48,7 @@ final class MonitoringViewNotifierProvider
 }
 
 String _$monitoringViewNotifierHash() =>
-    r'ff747cf64a88f20b6fd1f61f644420cbae8bcaf5';
+    r'70fe9547699866f01333339093329d0b4119f7e7';
 
 /// The Monitoring view's layout ([MonitoringViewSettings]), saved to
 /// `monitoring_view.json` on every change.

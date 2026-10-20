@@ -99,9 +99,16 @@ class OscNotifier extends _$OscNotifier {
               );
 
           if (all) {
-            await wsNotifier.sendCommandToAll(ntcontrolCmd);
+            await wsNotifier.sendCommandToAll(
+              ntcontrolCmd,
+              source: CommandSource.osc,
+            );
           } else if (groupId != null) {
-            await wsNotifier.sendCommandToGroup(groupId, ntcontrolCmd);
+            await wsNotifier.sendCommandToGroup(
+              groupId,
+              ntcontrolCmd,
+              source: CommandSource.osc,
+            );
           }
         };
 

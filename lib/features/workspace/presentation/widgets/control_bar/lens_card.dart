@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../../core/theme/app_theme.dart';
+import '../../../domain/command_source.dart';
 import '../../../domain/control_options.dart';
 import '../../../domain/lens_commands.dart';
 import '../../providers/workspace_provider.dart';
@@ -52,7 +53,9 @@ class _LensCardState extends ConsumerState<LensCard> {
     if (_isSending) return;
     setState(() => _isSending = true);
     try {
-      await ref.read(workspaceProvider.notifier).sendCommandToSelected(cmd);
+      await ref
+          .read(workspaceProvider.notifier)
+          .sendCommandToSelected(cmd, source: CommandSource.controlBar);
     } finally {
       if (mounted) setState(() => _isSending = false);
     }

@@ -142,4 +142,4 @@ final class ScheduledTasksSummaryProvider
 }
 
 String _$scheduledTasksSummaryHash() =>
-    r'0cf48bc75074b6bb8aaf34b3de86f9dba91e6395';
+    r'b997087825bdfc0edf6a812358fdf744290300e9';

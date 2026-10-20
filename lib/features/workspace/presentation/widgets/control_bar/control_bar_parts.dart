@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../../core/theme/app_theme.dart';
+import '../../../domain/command_source.dart';
 import '../../providers/workspace_provider.dart';
 import '../common/app_dropdown.dart';
 import '../common/dialog_parts.dart';
@@ -37,8 +38,9 @@ abstract final class ControlBarMetrics {
 /// Every command goes to the selected projectors. The buttons stay enabled
 /// without a selection and then send nothing, so the bar doesn't rebuild on
 /// every selection change.
-void sendToSelected(WidgetRef ref, String cmd) =>
-    ref.read(workspaceProvider.notifier).sendCommandToSelected(cmd);
+void sendToSelected(WidgetRef ref, String cmd) => ref
+    .read(workspaceProvider.notifier)
+    .sendCommandToSelected(cmd, source: CommandSource.controlBar);
 
 /// A card of the control bar: [DialogCard] with an optional header (30 px
 /// icon tile, sentence-case title, [trailing] on the right).
