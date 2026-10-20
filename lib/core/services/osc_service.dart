@@ -237,7 +237,11 @@ class OscService {
   // toggling, a Preferences save racing app init) can't leak a socket.
   int _startGeneration = 0;
 
-  Future<void> start({
+  /// Binds the receive socket; [isActive] then says whether it worked.
+  /// Returns false when a newer start()/stop() superseded this call while
+  /// the bind was pending, so the caller doesn't report its outcome (a
+  /// superseded bind is neither listening nor a failure).
+  Future<bool> start({
     required String networkDevice,
     required int receivePort,
     required String sendIp,
@@ -264,7 +268,7 @@ class OscService {
       if (generation != _startGeneration) {
         // Superseded by a newer start()/stop() while the bind was pending.
         socket.close();
-        return;
+        return false;
       }
 
       _socket = socket;
@@ -284,8 +288,10 @@ class OscService {
       );
     } catch (e) {
       debugPrint('OSC: Failed to start — $e');
+      if (generation != _startGeneration) return false;
       _isActive = false;
     }
+    return true;
   }
 
   Future<void> stop() async {

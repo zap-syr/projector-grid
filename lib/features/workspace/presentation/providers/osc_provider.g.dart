@@ -12,7 +12,8 @@ part of 'osc_provider.dart';
 @ProviderFor(OscNotifier)
 final oscProvider = OscNotifierProvider._();
 
-final class OscNotifierProvider extends $NotifierProvider<OscNotifier, bool> {
+final class OscNotifierProvider
+    extends $NotifierProvider<OscNotifier, OscStatus> {
   OscNotifierProvider._()
     : super(
         from: null,
@@ -32,27 +33,27 @@ final class OscNotifierProvider extends $NotifierProvider<OscNotifier, bool> {
   OscNotifier create() => OscNotifier();
 
   /// {@macro riverpod.override_with_value}
-  Override overrideWithValue(bool value) {
+  Override overrideWithValue(OscStatus value) {
     return $ProviderOverride(
       origin: this,
-      providerOverride: $SyncValueProvider<bool>(value),
+      providerOverride: $SyncValueProvider<OscStatus>(value),
     );
   }
 }
 
-String _$oscNotifierHash() => r'9b57c54e13d1fbea9a89f5e29596adb507b98dce';
+String _$oscNotifierHash() => r'0fa4bc20a8507e9f20397e486014d955b1015c45';
 
-abstract class _$OscNotifier extends $Notifier<bool> {
-  bool build();
+abstract class _$OscNotifier extends $Notifier<OscStatus> {
+  OscStatus build();
   @$mustCallSuper
   @override
   void runBuild() {
-    final ref = this.ref as $Ref<bool, bool>;
+    final ref = this.ref as $Ref<OscStatus, OscStatus>;
     final element =
         ref.element
             as $ClassProviderElement<
-              AnyNotifier<bool, bool>,
-              bool,
+              AnyNotifier<OscStatus, OscStatus>,
+              OscStatus,
               Object?,
               Object?
             >;

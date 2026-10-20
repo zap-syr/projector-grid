@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/services/web_auth.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../domain/alert_rule.dart';
+import '../../domain/osc_status.dart';
 import '../../domain/web_clients.dart';
 import '../../domain/web_pins.dart';
 import '../providers/alert_delivery_providers.dart';
@@ -20,30 +21,36 @@ import 'settings_dropdown.dart';
 import 'settings_rows.dart';
 import 'settings_value_field.dart';
 
-enum _Section {
+enum PreferencesSection {
   general('General', Icons.tune),
   alerts('Alerts', Icons.notifications_outlined),
   osc('OSC', Icons.sensors),
   web('Web Access', Icons.language);
 
-  const _Section(this.label, this.icon);
+  const PreferencesSection(this.label, this.icon);
 
   final String label;
   final IconData icon;
 }
 
-class PreferencesDialog extends ConsumerStatefulWidget {
-  const PreferencesDialog({super.key, this.openWebAccess = false});
+typedef _Section = PreferencesSection;
 
-  /// Opens on the Web Access tab (the status bar's web clients item).
-  final bool openWebAccess;
+class PreferencesDialog extends ConsumerStatefulWidget {
+  const PreferencesDialog({
+    super.key,
+    this.section = PreferencesSection.general,
+  });
+
+  /// The section it opens on (the status bar's OSC and Web items pass
+  /// theirs).
+  final PreferencesSection section;
 
   @override
   ConsumerState<PreferencesDialog> createState() => _PreferencesDialogState();
 }
 
 class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
-  late var _section = widget.openWebAccess ? _Section.web : _Section.general;
+  late var _section = widget.section;
 
   // General
   late final TextEditingController _intervalController;
@@ -570,14 +577,23 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
     ],
   );
 
-  Widget _buildOsc(bool running, int listeningPort) => Column(
+  Widget _buildOsc(OscStatus status) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     spacing: 20,
     children: [
       _ServiceCard(
         title: 'OSC server',
-        running: running,
-        status: running ? 'Listening on UDP $listeningPort' : 'Stopped',
+        running: status is OscListening,
+        status: switch (status) {
+          OscListening(:final port) => 'Listening on UDP $port',
+          _ => 'Stopped',
+        },
+        // The switch that turned itself off says why.
+        error: switch (status) {
+          OscBindFailed(:final port) =>
+            'Port $port is in use. Choose another port',
+          _ => null,
+        },
         value: _oscActive,
         onChanged: (value) => setState(() => _oscActive = value),
       ),
@@ -792,14 +808,18 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final settings = ref.watch(appSettingsProvider);
-    final oscRunning = ref.watch(oscProvider);
+    final oscStatus = ref.watch(oscProvider);
     final webRunning = ref.watch(webServerProvider);
     final saveError = _saveError;
 
     Color? dotFor(_Section section) => switch (section) {
       _Section.general => null,
       _Section.alerts => _alertsHaveError ? theme.colorScheme.error : null,
-      _Section.osc => oscRunning ? Colors.green : theme.colorScheme.outline,
+      _Section.osc => switch (oscStatus) {
+        OscListening() => Colors.green,
+        OscBindFailed() => theme.colorScheme.error,
+        OscOff() => theme.colorScheme.outline,
+      },
       _Section.web =>
         _webHasError
             ? theme.colorScheme.error
@@ -869,10 +889,7 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
                           switch (_section) {
                             _Section.general => _buildGeneral(),
                             _Section.alerts => _buildAlerts(),
-                            _Section.osc => _buildOsc(
-                              oscRunning,
-                              settings.oscReceivePort,
-                            ),
+                            _Section.osc => _buildOsc(oscStatus),
                             _Section.web => _buildWeb(webRunning, settings),
                           },
                         ],
@@ -1052,6 +1069,7 @@ class _ServiceCard extends StatelessWidget {
     required this.status,
     required this.value,
     required this.onChanged,
+    this.error,
   });
 
   final String title;
@@ -1060,46 +1078,69 @@ class _ServiceCard extends StatelessWidget {
   final bool value;
   final ValueChanged<bool> onChanged;
 
+  /// Why the service isn't running (OSC's port in use), under the switch.
+  final String? error;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final error = this.error;
     return SettingsPanel(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        spacing: 8,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              spacing: 2,
-              children: [
-                Text(
-                  title,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Row(
-                  spacing: 6,
-                  children: [
-                    StatusDot(
-                      color: running ? Colors.green : theme.colorScheme.outline,
-                    ),
-                    Text(
-                      status,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+          _row(theme, error != null),
+          if (error != null)
+            Text(
+              error,
+              key: const ValueKey('service-error'),
+              style: AppText.of(context).description
+                  .copyWith(color: theme.colorScheme.error),
             ),
-          ),
-          Switch(value: value, onChanged: onChanged),
         ],
       ),
     );
   }
+
+  Widget _row(ThemeData theme, bool failed) => Row(
+    children: [
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          spacing: 2,
+          children: [
+            Text(
+              title,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            Row(
+              spacing: 6,
+              children: [
+                StatusDot(
+                  color: running
+                      ? Colors.green
+                      : failed
+                      ? theme.colorScheme.error
+                      : theme.colorScheme.outline,
+                ),
+                Text(
+                  status,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+      Switch(value: value, onChanged: onChanged),
+    ],
+  );
 }
 
 class _PlainHttpNote extends StatelessWidget {

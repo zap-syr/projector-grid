@@ -2,76 +2,75 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/services/web_auth.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../providers/web_clients_provider.dart';
 import '../providers/web_server_provider.dart';
+import 'custom_tooltip.dart';
 import 'preferences_dialog.dart';
+import 'status_bar_item.dart';
 
-/// The status bar's Web Access item, shown while the server runs: how many
-/// browsers have the page open and how many of them are operators. Only
-/// open pages count; a session whose page is closed is in Preferences.
-/// Clicking opens Preferences on Web Access.
+/// The status bar's Web Access item (plan §7l.4), shown while the server
+/// runs: a green globe and how many browsers have the page open, with the
+/// operators among them; *Web 0* with a grey globe when none is. Only open
+/// pages count; a session whose page is closed is in Preferences. Clicking
+/// opens Preferences on Web Access.
 class StatusBarWebClients extends ConsumerWidget {
-  const StatusBarWebClients({super.key});
+  const StatusBarWebClients({super.key, this.narrow = false});
+
+  /// The globe and the count only.
+  final bool narrow;
+
+  static String _role(WebRole role) =>
+      role == WebRole.operator ? 'Operator' : 'Viewer';
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (!ref.watch(webServerProvider)) return const SizedBox.shrink();
-    final theme = Theme.of(context);
-    final style = theme.textTheme.bodySmall;
+    final t = AppText.of(context);
     final online = [
       for (final c in ref.watch(webClientsProvider))
         if (c.online) c,
     ];
     final operators = online.where((c) => c.role == WebRole.operator).length;
-    final label = online.isEmpty
-        ? 'Web: no clients'
-        : operators == 0
-        ? 'Web: ${online.length}'
-        : 'Web: ${online.length} ($operators '
-              '${operators == 1 ? 'operator' : 'operators'})';
-    final muted = theme.colorScheme.onSurfaceVariant;
-
-    final item = Tooltip(
-      message: online.isEmpty
-          ? 'Web access on, no page open'
-          : [
-              for (final c in online)
-                '${c.ip}  ${c.role == WebRole.operator ? 'Operator' : 'Viewer'}',
-            ].join('\n'),
-      // Its own Material, as for the Alerts button: the status bar's
-      // coloured container would otherwise hide the hover.
-      child: Material(
-        type: MaterialType.transparency,
-        child: InkWell(
-          onTap: () => showDialog<void>(
-            context: context,
-            builder: (_) => const PreferencesDialog(openWebAccess: true),
-          ),
-          borderRadius: BorderRadius.circular(6),
-          hoverColor: theme.colorScheme.onSurface.withValues(alpha: 0.08),
-          child: Container(
-            height: 24,
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Row(
+    final pages = online.length;
+    return StatusBarItem(
+      key: const ValueKey('status-web'),
+      narrow: narrow,
+      onTap: () => showDialog<void>(
+        context: context,
+        builder: (_) =>
+            const PreferencesDialog(section: PreferencesSection.web),
+      ),
+      tooltip: switch (pages) {
+        0 => 'Web access, no page open',
+        1 => 'Web access, 1 page open',
+        _ => 'Web access, $pages pages open',
+      },
+      tooltipBody: pages == 0
+          ? null
+          : (_) => Column(
               mainAxisSize: MainAxisSize.min,
-              spacing: 6,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  Icons.language,
-                  size: 14,
-                  color: online.isEmpty ? muted : Colors.green,
-                ),
-                Text(
-                  label,
-                  style: online.isEmpty ? style?.copyWith(color: muted) : style,
-                ),
+                for (final c in online)
+                  TooltipRow(mono: c.ip, text: _role(c.role)),
               ],
             ),
-          ),
+      semanticLabel: 'Web $pages',
+      children: [
+        Icon(
+          Icons.language,
+          size: 14,
+          color: pages == 0 ? t.tertiary : AppStatusColors.of(context).success,
         ),
-      ),
+        if (!narrow) const Text('Web'),
+        StatusBarCount(pages),
+        if (!narrow && operators > 0)
+          Text(
+            '($operators ${operators == 1 ? 'operator' : 'operators'})',
+            style: TextStyle(color: t.tertiary),
+          ),
+      ],
     );
-    // The gap to Last refresh lives here so it goes when the item does.
-    return Padding(padding: const EdgeInsets.only(right: 12), child: item);
   }
 }

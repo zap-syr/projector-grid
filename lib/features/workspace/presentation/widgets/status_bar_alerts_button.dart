@@ -2,20 +2,25 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../domain/alert_rule.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../providers/active_alerts_request_provider.dart';
 import '../providers/alert_counts_provider.dart';
 import 'active_alerts_panel.dart';
-import 'alert_row.dart';
 import 'anchored_panel_layout.dart';
+import 'common/severity_pill.dart';
+import 'status_bar_item.dart';
 
-/// The status bar's Alerts counter: per severity, the unacknowledged count
-/// with a filled icon, or once all are acknowledged the active total with
-/// an outlined one; a filled green check with the alerts that are over but
-/// unacknowledged; an outlined green check when nothing is active. Clicking
-/// opens Active alerts.
+/// The status bar's Alerts item (plan §7l.3): a [SeverityPill] per
+/// severity, filled with the unacknowledged count or, once all are
+/// acknowledged, outlined with the active total; a green pill for the
+/// alerts that are over but unacknowledged; *None* with an outlined green
+/// check when nothing is active. Clicking opens Active alerts, and the item
+/// stays pressed while it is open.
 class StatusBarAlertsButton extends ConsumerStatefulWidget {
-  const StatusBarAlertsButton({super.key});
+  const StatusBarAlertsButton({super.key, this.narrow = false});
+
+  /// Pills only, without the word *Alerts*.
+  final bool narrow;
 
   @override
   ConsumerState<StatusBarAlertsButton> createState() =>
@@ -50,37 +55,24 @@ class _StatusBarAlertsButtonState extends ConsumerState<StatusBarAlertsButton> {
   Widget build(BuildContext context) {
     // A clicked desktop notification opens the panel.
     ref.listen(activeAlertsRequestProvider, (_, _) => _show());
-    final theme = Theme.of(context);
+    final t = AppText.of(context);
     final counts = ref.watch(alertCountsProvider);
-    final style = theme.textTheme.bodySmall;
 
-    // Null rather than an empty box: Row.spacing also pads zero-width
-    // children, which shifted the icons depending on which severities exist.
-    Widget? count(AlertSeverity s, int open, int total) {
+    // Unacknowledged ones filled with their count; once all are
+    // acknowledged, outlined with the active total.
+    Widget? pill(SeverityPillKind kind, int open, int total) {
       if (total == 0) return null;
       final fresh = open > 0;
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        spacing: 3,
-        children: [
-          Icon(
-            AlertPalette.iconData(s, filled: fresh),
-            size: 14,
-            color: AlertPalette.icon(s),
-          ),
-          Text(
-            '${fresh ? open : total}',
-            style: style?.copyWith(
-              fontWeight: fresh ? FontWeight.w600 : null,
-              fontFeatures: const [FontFeature.tabularFigures()],
-            ),
-          ),
-        ],
+      return SeverityPill(
+        kind: kind,
+        count: fresh ? open : total,
+        filled: fresh,
       );
     }
 
     final none =
         counts.criticalTotal + counts.warningTotal + counts.recovered == 0;
+    final narrow = widget.narrow;
 
     return OverlayPortal.overlayChildLayoutBuilder(
       controller: _portal,
@@ -112,89 +104,64 @@ class _StatusBarAlertsButtonState extends ConsumerState<StatusBarAlertsButton> {
       ),
       child: TapRegion(
         groupId: _tapGroup,
-        child: Semantics(
-          button: true,
-          label: 'Alerts',
-          // Its own Material: the status bar's coloured container would
-          // otherwise hide the hover, which the InkWell paints on the
-          // nearest Material below it.
-          child: Material(
-            type: MaterialType.transparency,
-            child: InkWell(
-              onTap: _toggle,
-              borderRadius: BorderRadius.circular(6),
-              hoverColor: theme.colorScheme.onSurface.withValues(alpha: 0.08),
-              child: Container(
-                height: 24,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                decoration: BoxDecoration(
-                  color: _portal.isShowing
-                      ? theme.colorScheme.onSurface.withValues(alpha: 0.08)
-                      : null,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  spacing: 10,
-                  children: [
-                    Text('Alerts', style: style),
-                    if (none)
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        spacing: 3,
-                        children: [
-                          const Icon(
-                            Icons.check_circle_outline,
-                            size: 14,
-                            color: Colors.green,
-                          ),
-                          Text(
-                            '0',
-                            style: style?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      )
-                    else ...[
-                      ?count(
-                        AlertSeverity.critical,
-                        counts.critical,
-                        counts.criticalTotal,
+        child: StatusBarItem(
+          key: const ValueKey('status-alerts'),
+          narrow: narrow,
+          onTap: _toggle,
+          pressed: _portal.isShowing,
+          tooltip: narrow ? (none ? 'No active alerts' : 'Alerts') : null,
+          semanticLabel: 'Alerts',
+          children: [
+            if (!narrow) const Text('Alerts'),
+            if (none)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                spacing: 4,
+                children: [
+                  Icon(
+                    Icons.check_circle_outline,
+                    size: 14,
+                    color: SeverityPill.colorOf(
+                      context,
+                      SeverityPillKind.recovered,
+                    ),
+                  ),
+                  if (!narrow)
+                    Text(
+                      'None',
+                      style: t.description.copyWith(
+                        color: t.tertiary,
+                        fontWeight: FontWeight.w500,
                       ),
-                      ?count(
-                        AlertSeverity.warning,
-                        counts.warning,
-                        counts.warningTotal,
-                      ),
-                      // Over, waiting to be acknowledged.
-                      if (counts.recovered > 0)
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          spacing: 3,
-                          children: [
-                            const Icon(
-                              Icons.check_circle,
-                              size: 14,
-                              color: AlertPalette.recoveredIcon,
-                            ),
-                            Text(
-                              '${counts.recovered}',
-                              style: style?.copyWith(
-                                fontWeight: FontWeight.w600,
-                                fontFeatures: const [
-                                  FontFeature.tabularFigures(),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                    ],
-                  ],
-                ),
+                    ),
+                ],
+              )
+            else
+              // Null rather than an empty box: Row.spacing also pads
+              // zero-width children, which would shift the pills.
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                spacing: 4,
+                children: [
+                  ?pill(
+                    SeverityPillKind.critical,
+                    counts.critical,
+                    counts.criticalTotal,
+                  ),
+                  ?pill(
+                    SeverityPillKind.warning,
+                    counts.warning,
+                    counts.warningTotal,
+                  ),
+                  // Over, waiting to be acknowledged.
+                  if (counts.recovered > 0)
+                    SeverityPill(
+                      kind: SeverityPillKind.recovered,
+                      count: counts.recovered,
+                    ),
+                ],
               ),
-            ),
-          ),
+          ],
         ),
       ),
     );

@@ -86,6 +86,28 @@ void showInMonitoring(ProviderContainer container, ProjectorNode node) {
   container.read(appSettingsProvider.notifier).setMonitoringView(true);
 }
 
+/// Switches to Monitoring with the quick filter [quick] (the status bar's
+/// Online and Offline counts). The search is cleared and the groups that
+/// hold a matching projector are expanded, so every one of them is in view.
+void showQuickFilterInMonitoring(
+  ProviderContainer container,
+  MonitoringQuickFilter quick,
+) {
+  final filter = container.read(monitoringFilterProvider.notifier)..clear();
+  filter.setQuick(quick);
+  final ids = quickFilterIds(container.read(monitoringStatusProvider), quick);
+  final ws = container.read(workspaceProvider.notifier);
+  final known = {for (final g in ws.groups) g.id};
+  final view = container.read(monitoringViewProvider.notifier);
+  for (final key in {
+    for (final n in container.read(workspaceProvider))
+      if (ids.contains(n.id)) known.contains(n.groupId) ? n.groupId! : '',
+  }) {
+    view.expand(key);
+  }
+  container.read(appSettingsProvider.notifier).setMonitoringView(true);
+}
+
 /// A table row's actions, shown on hover: Remote Preview and a ⋮ menu.
 /// [onMenuOpenChanged] keeps them shown while the menu is open, after the
 /// pointer has left the row for it.

@@ -9,17 +9,27 @@ part 'status_summary_provider.g.dart';
 /// structural equality, so this only triggers a `StatusBar` rebuild when one
 /// of the counts actually changes — not on every single-node telemetry tick
 /// that leaves them all the same. Alert counts are `alertCountsProvider`'s.
+/// [wrongLogin] is only for the health meter's amber part.
 @riverpod
-({int total, int online, int offline}) statusSummary(Ref ref) {
+({int total, int online, int offline, int wrongLogin}) statusSummary(Ref ref) {
   final nodes = ref.watch(workspaceProvider);
   var online = 0;
   var offline = 0;
+  var wrongLogin = 0;
   for (final n in nodes) {
-    if (n.connectionStatus == ConnectionStatus.connected ||
-        n.connectionStatus == ConnectionStatus.unprotected) {
-      online++;
+    switch (n.connectionStatus) {
+      case ConnectionStatus.connected || ConnectionStatus.unprotected:
+        online++;
+      case ConnectionStatus.offline:
+        offline++;
+      case ConnectionStatus.unauthorized:
+        wrongLogin++;
     }
-    if (n.connectionStatus == ConnectionStatus.offline) offline++;
   }
-  return (total: nodes.length, online: online, offline: offline);
+  return (
+    total: nodes.length,
+    online: online,
+    offline: offline,
+    wrongLogin: wrongLogin,
+  );
 }

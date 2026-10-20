@@ -38,7 +38,12 @@ void main() {
         node('4', status: ConnectionStatus.unauthorized),
         node('5').copyWith(errors: 'U200'),
       ]);
-      expect(c.read(statusSummaryProvider), (total: 5, online: 3, offline: 1));
+      expect(c.read(statusSummaryProvider), (
+        total: 5,
+        online: 3,
+        offline: 1,
+        wrongLogin: 1,
+      ));
     });
 
     test('does not notify when the counts are unchanged', () {

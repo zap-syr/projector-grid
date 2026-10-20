@@ -2,6 +2,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../../core/services/osc_service.dart';
 import '../../domain/alerts.dart';
+import '../../domain/osc_status.dart';
 import '../../domain/projector_node.dart';
 import '../../domain/log_event.dart';
 import 'alert_counts_provider.dart';
@@ -18,18 +19,18 @@ class OscNotifier extends _$OscNotifier {
   final OscService _service = OscService();
 
   @override
-  bool build() {
+  OscStatus build() {
     ref.onDispose(() {
       _service.stop();
     });
 
-    // Restore a persisted "OSC enabled" setting on launch. `start()` is
+    // Restore a persisted "OSC enabled" setting on launch. `_start()` is
     // fire-and-forget here (not awaited) — its state mutations all happen
     // after the socket bind's `await`, so they land safely after this
     // synchronous build() phase, same pattern as WorkspaceNotifier.build()
     // calling _startPolling().
     if (ref.read(appSettingsProvider).oscActive) {
-      start();
+      _start();
     }
 
     // Acknowledging changes the counts without touching the workspace, so
@@ -41,7 +42,7 @@ class OscNotifier extends _$OscNotifier {
         .listen(_sendAlert);
     ref.onDispose(alertEvents.cancel);
 
-    return false; // real state syncs shortly after via start(), if active
+    return const OscOff(); // real state syncs shortly after via _start()
   }
 
   /// One message per alert change, never repeated while nothing changes;
@@ -141,20 +142,34 @@ class OscNotifier extends _$OscNotifier {
         ref.read(customCommandsProvider.notifier).resolveBySlug(slug);
   }
 
-  Future<void> start() async {
+  Future<void> start() {
+    // A new attempt (often on another port) must not show the old failure
+    // while its bind is pending.
+    if (state is OscBindFailed) state = const OscOff();
+    return _start();
+  }
+
+  Future<void> _start() async {
     final settings = ref.read(appSettingsProvider);
     _wireCallbacks();
-    await _service.start(
+    final current = await _service.start(
       networkDevice: settings.oscNetworkDevice,
       receivePort: settings.oscReceivePort,
       sendIp: settings.oscSendIp,
       sendPort: settings.oscSendPort,
     );
-    state = _service.isActive;
+    // A newer start or stop owns the state now.
+    if (!current) return;
+    // Only an explicit bind result sets the failure, so "on in the settings
+    // but not listening yet" (launch, restart) never reads as port busy.
+    state = _service.isActive
+        ? OscListening(settings.oscReceivePort)
+        : OscBindFailed(settings.oscReceivePort);
     // Persist what actually happened, not the request. A failed bind (receive
     // port in use, bad network device) leaves the service inactive; recording
     // it as enabled would show the Preferences switch on with nothing
-    // listening and re-attempt the same doomed bind on every launch.
+    // listening and re-attempt the same doomed bind on every launch. The
+    // failure itself stays in [state] for this session.
     ref.read(appSettingsProvider.notifier).setOscActive(_service.isActive);
     if (!_service.isActive) {
       ref
@@ -178,13 +193,13 @@ class OscNotifier extends _$OscNotifier {
 
   Future<void> stop() async {
     await _service.stop();
-    state = false;
+    state = const OscOff();
     ref.read(appSettingsProvider.notifier).setOscActive(false);
     ref.read(workspaceProvider.notifier).onStateChanged = null;
   }
 
   Future<void> toggle() async {
-    if (state) {
+    if (state is OscListening) {
       await stop();
     } else {
       await start();

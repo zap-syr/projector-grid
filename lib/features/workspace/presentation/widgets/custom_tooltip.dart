@@ -22,6 +22,11 @@ class CustomTooltip extends StatefulWidget {
   final Widget child;
   final TooltipPlacement placement;
 
+  /// Lines under [detail] (a list of projectors, a footer), built only
+  /// while the tooltip is shown: a `Consumer` in it watches its providers
+  /// only then.
+  final WidgetBuilder? body;
+
   const CustomTooltip({
     super.key,
     required this.message,
@@ -30,6 +35,7 @@ class CustomTooltip extends StatefulWidget {
     this.shortcut,
     this.warning = false,
     this.placement = TooltipPlacement.top,
+    this.body,
   });
 
   @override
@@ -63,6 +69,7 @@ class _CustomTooltipState extends State<CustomTooltip> {
                 detail: widget.detail,
                 shortcut: widget.shortcut,
                 warning: widget.warning,
+                body: widget.body,
               ),
             ),
           ),
@@ -131,12 +138,14 @@ class TooltipBubble extends StatelessWidget {
     this.detail,
     this.shortcut,
     this.warning = false,
+    this.body,
   });
 
   final String message;
   final String? detail;
   final List<String>? shortcut;
   final bool warning;
+  final WidgetBuilder? body;
 
   @override
   Widget build(BuildContext context) {
@@ -206,9 +215,54 @@ class TooltipBubble extends StatelessWidget {
                 ),
               ),
             ],
+            if (body case final body?) ...[
+              const SizedBox(height: 2),
+              Builder(builder: body),
+            ],
           ],
         ),
       ),
+    );
+  }
+}
+
+/// A tooltip line with a value in mono and its name: `10.0.1.13  PT-RQ35K`
+/// in the Offline list, `10.0.0.31  Operator` in the Web one.
+class TooltipRow extends StatelessWidget {
+  const TooltipRow({super.key, required this.mono, required this.text});
+
+  final String mono;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppText.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: 1),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        spacing: 14,
+        children: [
+          Text(mono, style: t.monoSmall.copyWith(color: t.primary)),
+          Flexible(child: Text(text, style: t.description)),
+        ],
+      ),
+    );
+  }
+}
+
+/// A tooltip's quiet last line, such as what a click does.
+class TooltipFooter extends StatelessWidget {
+  const TooltipFooter(this.text, {super.key});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppText.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Text(text, style: t.description.copyWith(color: t.tertiary)),
     );
   }
 }
