@@ -183,6 +183,17 @@ void main() {
       expect(group.severity, LogSeverity.success);
     });
 
+    test('opened, the lines go by IP, not by reply order', () {
+      final rows = _rows([
+        _conn('4', LogGroupKind.offline),
+        _conn('11', LogGroupKind.offline, ms: 10),
+        _conn('1', LogGroupKind.offline, ms: 20),
+        _conn('2', LogGroupKind.offline, ms: 30),
+      ]);
+      final group = rows.single as GroupLogRow;
+      expect(group.lines.map((e) => e.nodeId), ['1', '2', '4', '11']);
+    });
+
     test('N projectors when they are not all in one group', () {
       final rows = _rows([
         _conn('1', LogGroupKind.online, group: 'Stage'),

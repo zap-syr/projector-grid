@@ -1571,10 +1571,26 @@ dialogs' type, fields, chips and icons (`projector-grid-visual-rules`).
     cap counts a group as one row.
   - Repeats and groups combine: repeats fold one projector over time, groups fold many
     projectors at one moment.
-- **Lens nudges fold** (wave 3, 2026-10-20): consecutive *Lens Shift* (H and V, any
-  source) and other step commands to the same projector, with nothing else from it in
-  between and less than 3 s apart, become one row: *Lens Shift, 8 steps, last 16:39:17*.
-  Today every arrow press is a row.
+- **Lens nudges fold** (wave 3, 2026-10-20): consecutive *Lens Shift* steps (H and V,
+  either direction) to the same target from the same source, less than 3 s after the
+  previous step, become one row: *Lens Shift, 8 steps, last 16:39:17*. Today every
+  arrow press or held-button repeat is a row.
+  - **Target**: one projector, or a **batch** with the same set of projectors
+    (*Lens Shift, 13 steps, 4 projectors, last 17:08:43*; the Web page and the control
+    bar step a selection as one batch per press). Its pills sum the steps' outcomes
+    (*52 sent*, *1 failed*); opened, it lists each projector once with its totals.
+  - **Source** must match: the control bar, a keyboard shortcut, Web (same client) and
+    OSC (same sender) each make their own run; a step from another source, or any
+    other command or event for that target, ends the run.
+  - **OSC**: the command row folds as above, and the OSC address lines that came with
+    it fold too, by address and sender: `/pgrid/all/lens/shift/up`, *13 times, last
+    17:08:43, from 10.0.0.20*.
+  - **When it folds**: at once, from the second step. Grouping is done in the view over
+    the stored events: each new event is checked against the newest row; a step that
+    continues a run joins it, so press 1 shows *Lens Shift V*, press 2 turns that same
+    row into *Lens Shift, 2 steps*, press 10 into *10 steps*. The row stays in place
+    (it is the newest row), only its text, count and time change. A step more than
+    3 s later starts a new row.
 - **Hover actions** on the right of the row: *Locate*, the short text button as in the
   Monitoring panel (`findOnCanvas`: switches to Controls if needed, selects the card and
   scrolls to it, no glow). The row knows the IP, not the id, so the node is looked up
@@ -1625,6 +1641,8 @@ dialogs' type, fields, chips and icons (`projector-grid-visual-rules`).
 - **Scrolling down** to older events turns it off, so the list doesn't move under the
   reader; new events then wait in a *5 new events* pill at the top of the list.
 - A click on *Follow* or on the pill goes back to the newest event and turns it on again.
+- **Scrolling back to the top** turns it on again by itself (owner, 2026-10-20): a
+  reader back at the newest expects to see what comes next.
 
 ### 7k.5 States, size and Clear
 - **Empty**: the tile, *No events yet* and *Commands, connection changes, OSC and alerts
@@ -1688,6 +1706,13 @@ dialogs' type, fields, chips and icons (`projector-grid-visual-rules`).
     shows only once every reply is in.
   - Wave 3 grows: repeats, **groups across projectors** and **lens nudges** (§7k.2),
     hover actions, Follow.
+- After the wave 3 check (2026-10-20): scrolling back to the top turns Follow on; a
+  lens run to one projector shows pills only when a step failed or was skipped
+  (*8 steps* says the rest); a repeat or group row moves to the top as it grows (its
+  time is the newest event's); a group at the far end of the 5000-row cap may fold a
+  little differently, accepted. An opened group lists its projectors by IP. OSC lines
+  show the address in mono and *from 10.0.0.20*, OSC command rows *from OSC,
+  10.0.0.20*; batch pills sit right after the source text, as the mockup.
 
 ---
 
@@ -1978,7 +2003,9 @@ tests below, then a GUI check in both themes (`flutter-windows-gui-check`).
   tests for the repeat folding, the batch grouping and the row cap dropping a batch
   whole, the groups across projectors (same kind with different text groups, the 2 s
   window, another kind in between splits, a group of one is a plain row, search opens
-  a group) and the lens nudge folding (pure functions in `domain/`);
+  a group) and the lens nudge folding (one projector and a batch with the same
+  projectors, folds from the second step, another source or a 3 s gap starts a new
+  row, OSC address lines fold by address and sender) (pure functions in `domain/`);
   status bar: the meter's parts follow online / wrong login / offline and the amber part
   is absent without a failed login, a count at 0 stays in place dimmed, a click on
   Offline opens Monitoring with the Offline filter, the Offline tooltip shows 5 rows and

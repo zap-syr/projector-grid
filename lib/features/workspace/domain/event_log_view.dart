@@ -315,7 +315,7 @@ String logGroupCopyText(GroupLogRow row, DateTime now) => [
     row.kind.title,
     now,
   ),
-  for (final e in row.members) '  ${logCopyLine(e, now)}',
+  for (final e in row.lines) '  ${logCopyLine(e, now)}',
 ].join('\n');
 
 /// A lens run copied: the run line and, for a batch run, each projector's

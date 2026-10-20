@@ -1,5 +1,6 @@
 import 'command_log.dart';
 import 'event_log_fold.dart';
+import 'ip_sort.dart';
 import 'log_event.dart';
 
 /// One row of the event log: a single event, a command sent to several
@@ -127,6 +128,15 @@ class GroupLogRow extends LogRow {
 
   /// One event per projector, in the order they came; two or more.
   final List<LogEvent> members;
+
+  /// [members] by IP, as the opened row and Copy list them: replies come
+  /// in any order, and *.4, .11, .19, .1* is hard to scan.
+  List<LogEvent> get lines => [...members]
+    ..sort(
+      (a, b) =>
+          ipSortKey(a.projectorIp ?? '')
+              .compareTo(ipSortKey(b.projectorIp ?? '')),
+    );
 
   /// The Projector column: the project group when every projector is in
   /// it, else *N projectors*.

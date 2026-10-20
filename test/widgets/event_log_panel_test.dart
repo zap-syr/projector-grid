@@ -758,6 +758,23 @@ void main() {
       expect(following(tester), isTrue);
       expect(find.text('event 40'), findsOneWidget);
     });
+
+    testWidgets('scrolling back to the top turns it on again', (tester) async {
+      final c = await pumpPanel(tester, events: many(40));
+      final list = find.byKey(const ValueKey('event-log-list'));
+      await tester.drag(list, const Offset(0, -200));
+      await tester.pumpAndSettle();
+      c.read(eventLogProvider.notifier).log(many(1, from: 40).single);
+      await tester.pumpAndSettle();
+      expect(following(tester), isFalse);
+      expect(find.text('1 new event'), findsOneWidget);
+
+      await tester.drag(list, const Offset(0, 400));
+      await tester.pumpAndSettle();
+      expect(following(tester), isTrue);
+      expect(find.text('1 new event'), findsNothing);
+      expect(find.text('event 40'), findsOneWidget);
+    });
   });
 
   testWidgets('the 800 px window: narrow header, no Source column', (

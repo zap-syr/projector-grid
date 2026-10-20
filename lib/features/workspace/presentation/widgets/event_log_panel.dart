@@ -86,7 +86,7 @@ class _EventLogPanelState extends ConsumerState<EventLogPanel> {
   /// Follow (plan §7k.4): on, the list stays at the newest event (the
   /// top). Scrolling down turns it off and holds the list as it was in
   /// [_frozen], so new events wait in a pill instead of moving the rows
-  /// under the reader.
+  /// under the reader; scrolling back to the top turns it on again.
   bool _follow = true;
   List<LogEvent>? _frozen;
 
@@ -101,14 +101,25 @@ class _EventLogPanelState extends ConsumerState<EventLogPanel> {
   /// Back to the newest event, following again.
   void _followNow() {
     if (_scroll.hasClients) _scroll.jumpTo(0);
-    setState(() {
-      _follow = true;
-      _frozen = null;
-    });
+    _resumeFollowing();
   }
 
+  void _resumeFollowing() => setState(() {
+    _follow = true;
+    _frozen = null;
+  });
+
   bool _onScroll(ScrollUpdateNotification n) {
-    if (n.depth == 0 && _follow && n.metrics.pixels > 0) _stopFollowing();
+    if (n.depth != 0) return false;
+    if (_follow && n.metrics.pixels > 0) {
+      _stopFollowing();
+    } else if (!_follow && n.metrics.pixels <= n.metrics.minScrollExtent) {
+      // Scrolled back to the top: the reader is looking at the newest
+      // again, so the held rows give way to the live ones (owner,
+      // 2026-10-20), as the pill or the button would. No jump: the list is
+      // already there, and a jump mid-drag would cut the drag off.
+      _resumeFollowing();
+    }
     return false;
   }
 
@@ -205,8 +216,8 @@ class _EventLogPanelState extends ConsumerState<EventLogPanel> {
       BatchLogRow(:final lines) => [
         for (final l in lines) (last) => _BatchLineItem(l, last: last),
       ],
-      GroupLogRow(:final members) => [
-        for (final m in members) (last) => _GroupLineItem(m, last: last),
+      GroupLogRow(:final lines) => [
+        for (final m in lines) (last) => _GroupLineItem(m, last: last),
       ],
       LensRunLogRow() => [
         for (final t in row.totals) (last) => _LensLineItem(t, last: last),
