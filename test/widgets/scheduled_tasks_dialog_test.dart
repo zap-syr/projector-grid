@@ -9,6 +9,7 @@ import 'package:projector_grid/features/workspace/presentation/providers/protoco
 import 'package:projector_grid/features/workspace/presentation/providers/scheduled_tasks_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/workspace_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/scheduled_tasks/scheduled_tasks_dialog.dart';
+import 'package:projector_grid/features/workspace/presentation/widgets/scheduled_tasks/task_list.dart';
 
 import '../helpers/fake_protocol_service.dart';
 import '../helpers/provider_harness.dart';
@@ -693,6 +694,25 @@ void main() {
       );
       expect(tester.takeException(), isNull);
 
+      // The list is sorted by next run, so late in the day the weekly task
+      // sits below the fold of the lazy list.
+      await tester.scrollUntilVisible(
+        _card('w'),
+        80,
+        scrollable: find
+            .descendant(
+              of: find.byType(TaskList),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      // Centred: just scrolled into view, the card's middle is still under
+      // the dialog's footer.
+      await Scrollable.ensureVisible(
+        tester.element(_card('w')),
+        alignment: 0.5,
+      );
+      await tester.pumpAndSettle();
       await tester.tap(_card('w'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);

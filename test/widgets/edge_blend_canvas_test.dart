@@ -8,12 +8,12 @@ import 'package:projector_grid/features/workspace/presentation/widgets/edge_blen
 import 'package:projector_grid/features/workspace/presentation/widgets/edge_blending/edge_blend_canvas.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/edge_blending/edge_blend_state.dart';
 
-// WUXGA raster in a 520×340 canvas with the 16 px margin: 488×305 at
-// (16, 17.5), 0.2542 px per unit.
+// WUXGA raster in a 600×340 canvas with the 56 px side and 16 px top and
+// bottom margins: 488×305 at (56, 17.5), 0.2542 px per unit.
 const _raster = (h: 1920, v: 1200);
-const _canvasSize = Size(520, 340);
+const _canvasSize = Size(600, 340);
 const _scale = 488 / 1920;
-const _rasterLeft = 16.0;
+const _rasterLeft = 56.0;
 const _rasterTop = 17.5;
 const _rasterHeight = 305.0;
 
@@ -346,13 +346,13 @@ void main() {
   });
 
   group('pair, side by side', () {
-    // Same 520×340 canvas, 36 px pill band on top: each raster 244×152.5,
-    // the 488 px extent from x 16, y 111.75. Facing widths 192 (0.1 of the
-    // raster) overlap the pair by 24.4 px, centred: A at 16 + 12.2, B at
-    // 16 + 244 − 12.2.
+    // Same 600×340 canvas, 36 px pill band on top: each raster 244×152.5,
+    // the 488 px extent from x 56, y 111.75. Facing widths 192 (0.1 of the
+    // raster) overlap the pair by 24.4 px, centred: A at 56 + 12.2, B at
+    // 56 + 244 − 12.2.
     const unit = 244 / 1920;
-    const aRight = 16 + 12.2 + 244;
-    const bLeft = 16 + 244 - 12.2;
+    const aRight = 56 + 12.2 + 244;
+    const bLeft = 56 + 244 - 12.2;
     const midY = 111.75 + 152.5 / 2;
     const facing = EdgeSettings(enabled: true, start: 0, width: 192);
 
