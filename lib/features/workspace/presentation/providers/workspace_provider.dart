@@ -483,7 +483,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     _startPolling(seconds: seconds);
   }
 
-  /// Caps how many of a single node's 12 telemetry queries run concurrently
+  /// Caps how many of a single node's telemetry queries run concurrently
   /// (see [PanasonicProtocolService.pollProjectorTelemetry]). A flagship
   /// PT-RQ25KE sustains 2-3 concurrent NTCONTROL cycles indefinitely but at 5
   /// its throughput halves and p95 latency jumps ~10x; weaker models fare
@@ -607,6 +607,16 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
   }) async {
     final oldStatus = previousStatus ?? node.connectionStatus;
 
+    // The serial never changes, so it's asked for only when the projector
+    // behind the address may be a different one: first poll (added, project
+    // opened, Edit Projector resets `polled`), back from Offline or a rejected
+    // login, or the last QSN didn't get through.
+    final withSerial =
+        !node.polled ||
+        oldStatus == ConnectionStatus.offline ||
+        oldStatus == ConnectionStatus.unauthorized ||
+        node.serialNumber == '-';
+
     // pollProjectorTelemetry folds in what used to be a separate
     // probeProjector() call — both started with the same QID query, so this
     // avoids sending QID to the same projector twice per poll cycle.
@@ -616,6 +626,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
       node.login,
       node.password,
       concurrency: telemetryConcurrency,
+      withSerial: withSerial,
     );
 
     if (probe == ProbeResult.unauthorized) {
@@ -1404,11 +1415,13 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
           connectionStatus: ConnectionStatus.offline,
           polled: false,
           lastSeen: null,
+          serialNumber: '-',
         );
       }
       return node;
     }).toList();
-    // A new address is a new projector as far as "last seen" goes.
+    // A new address is a new projector as far as "last seen" and the serial
+    // go.
     _lastAnswer.remove(id);
     _notifyStateChanged();
     _checkAndSetNodeStatus(id, ip, port);

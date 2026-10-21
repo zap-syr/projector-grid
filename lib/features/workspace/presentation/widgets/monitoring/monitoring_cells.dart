@@ -66,7 +66,6 @@ Widget monitoringCell(BuildContext context, String id, MonitoringCellData d) {
     ),
     'errors' => ProblemBadge(problems: projectorErrorsOf(d.status)),
     'connection' => ConnectionStatusBadge(status: n.connectionStatus),
-    'serial' => TruncatedText(n.serialNumber),
     'testPattern' => TestPatternName(node: n),
     _ => const SizedBox.shrink(),
   };
@@ -87,7 +86,6 @@ List<String> monitoringCellTexts(String id, MonitoringCellData d) {
     'voltage' => [withUnit(n.acVoltage)],
     'errors' => [projectorErrorsOf(d.status).firstOrNull?.badge ?? 'Unknown'],
     'connection' => ['Wrong login'],
-    'serial' => [n.serialNumber],
     'testPattern' => [
       n.testPattern == null ? '-' : testPatternLabel(n.testPattern!),
     ],

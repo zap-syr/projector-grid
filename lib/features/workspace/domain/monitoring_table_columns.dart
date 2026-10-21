@@ -2,7 +2,8 @@
 /// plan): the two-line columns shown by default, then the fields none of
 /// them shows. The old single columns a two-line one replaces (Model, IP,
 /// Input, Signal, the runtimes, the temperatures, Error codes) are gone, and
-/// so is Preview, which the row's own Remote Preview button replaces.
+/// so is Preview, which the row's own Remote Preview button replaces. Serial
+/// number went too: the projector panel's header shows it.
 ///
 /// Separate from `monitoring_columns.dart`, which is the Web UI's catalogue
 /// (sent in `/api/config`): the two-line columns exist on the desktop only,
@@ -30,7 +31,6 @@ const List<MonitoringTableColumn> kMonitoringTableColumns = [
   MonitoringTableColumn('voltage', 'AC', 80),
   MonitoringTableColumn('errors', 'Errors', 160),
   MonitoringTableColumn('connection', 'Connection', 130),
-  MonitoringTableColumn('serial', 'Serial number', 150),
   MonitoringTableColumn('testPattern', 'Test pattern', 160),
 ];
 

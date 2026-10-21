@@ -46,7 +46,13 @@ void main() {
       expect(resolveMonitoringTableColumns(['nope']), [
         ...kMonitoringTableDefaultColumns,
       ]);
-      expect(resolveMonitoringTableColumns(['serial', 'nope']), ['serial']);
+      expect(resolveMonitoringTableColumns(['testPattern', 'nope']), [
+        'testPattern',
+      ]);
+      // Serial number left the table; a layout that saved it drops it.
+      expect(resolveMonitoringTableColumns(['projector', 'serial']), [
+        'projector',
+      ]);
     });
 
     test('a shown column goes back to its canonical place', () {
@@ -298,9 +304,9 @@ void main() {
       mode: MonitoringViewMode.cards,
       cardDensity: MonitoringCardDensity.compact,
       groupByGroup: false,
-      columns: ['projector', 'serial'],
-      columnWidths: {'serial': 200},
-      sortColumnId: 'serial',
+      columns: ['projector', 'testPattern'],
+      columnWidths: {'testPattern': 200},
+      sortColumnId: 'testPattern',
       sortAscending: false,
       collapsed: {'g1', kUngroupedSectionKey},
     );
@@ -310,9 +316,17 @@ void main() {
     expect(back.groupByGroup, isFalse);
     expect(back.columns, s.columns);
     expect(back.columnWidths, s.columnWidths);
-    expect(back.sortColumnId, 'serial');
+    expect(back.sortColumnId, 'testPattern');
     expect(back.sortAscending, isFalse);
     expect(back.collapsed, s.collapsed);
     expect(MonitoringViewSettings.fromJson(const {}).groupByGroup, isTrue);
+  });
+
+  test('a saved sort by a column that left the table sorts by Projector', () {
+    expect(
+      MonitoringViewSettings.fromJson(const {'sortColumnId': 'serial'})
+          .sortColumnId,
+      'projector',
+    );
   });
 }

@@ -439,6 +439,68 @@ void main() {
       expect(n.errors, 'NO ERRORS');
     });
 
+    test('the serial is asked for on the first poll only', () async {
+      final c = makeContainer(fake);
+      final ws = c.read(workspaceProvider.notifier);
+      fake.pollResults['10.0.0.1'] = (ProbeResult.online, telemetry());
+      ws.setNodes([node('1')]);
+      await ws.refreshAll();
+      await ws.refreshAll();
+      expect(fake.polls, [('10.0.0.1', true), ('10.0.0.1', false)]);
+      expect(c.read(workspaceProvider).single.serialNumber, 'SN123');
+    });
+
+    test('back from Offline the serial is asked for again', () async {
+      final c = makeContainer(fake);
+      final ws = c.read(workspaceProvider.notifier);
+      fake.pollResults['10.0.0.1'] = (ProbeResult.online, telemetry());
+      ws.setNodes([node('1')]);
+      await ws.refreshAll();
+      fake.pollResults['10.0.0.1'] = (ProbeResult.offline, null);
+      await ws.refreshAll();
+      // An offline node gets a TCP check before its full poll.
+      fake.reachable['10.0.0.1'] = true;
+      fake.pollResults['10.0.0.1'] = (
+        ProbeResult.online,
+        telemetry(serialNumber: 'SN999'),
+      );
+      await ws.refreshAll();
+      expect(fake.polls.last, ('10.0.0.1', true));
+      expect(c.read(workspaceProvider).single.serialNumber, 'SN999');
+    });
+
+    test('a serial that did not arrive is asked for again', () async {
+      final c = makeContainer(fake);
+      final ws = c.read(workspaceProvider.notifier);
+      fake.pollResults['10.0.0.1'] = (
+        ProbeResult.online,
+        telemetry(serialNumber: null),
+      );
+      ws.setNodes([node('1')]);
+      await ws.refreshAll();
+      fake.pollResults['10.0.0.1'] = (ProbeResult.online, telemetry());
+      await ws.refreshAll();
+      expect(fake.polls, [('10.0.0.1', true), ('10.0.0.1', true)]);
+      expect(c.read(workspaceProvider).single.serialNumber, 'SN123');
+    });
+
+    test('Edit Projector asks the new address for its serial', () async {
+      final c = makeContainer(fake);
+      final ws = c.read(workspaceProvider.notifier);
+      fake.pollResults['10.0.0.1'] = (ProbeResult.online, telemetry());
+      ws.setNodes([node('1')]);
+      await ws.refreshAll();
+      fake.reachable['10.0.0.9'] = true;
+      fake.pollResults['10.0.0.9'] = (
+        ProbeResult.online,
+        telemetry(serialNumber: 'SN9'),
+      );
+      ws.updateNode('1', '10.0.0.9', 1024, '', '');
+      await pumpEventQueue();
+      expect(fake.polls.last, ('10.0.0.9', true));
+      expect(c.read(workspaceProvider).single.serialNumber, 'SN9');
+    });
+
     test('a field whose query failed keeps its last known value', () async {
       final c = makeContainer(fake);
       final ws = c.read(workspaceProvider.notifier);

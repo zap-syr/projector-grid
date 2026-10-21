@@ -104,10 +104,18 @@ class FakeProtocolService extends PanasonicProtocolService {
     String login,
     String password, {
     int concurrency = 2,
+    bool withSerial = true,
   }) async {
     pollCount++;
-    return pollResults[ip] ?? (ProbeResult.offline, null);
+    polls.add((ip, withSerial));
+    final (probe, t) = pollResults[ip] ?? (ProbeResult.offline, null);
+    // Like the real service: no QSN, no `serialNumber` key.
+    if (t == null || withSerial) return (probe, t);
+    return (probe, {...t}..remove('serialNumber'));
   }
+
+  /// `(ip, withSerial)` of every `pollProjectorTelemetry` call.
+  final List<(String ip, bool withSerial)> polls = [];
 
   /// What `scanNetwork` yields, in order (`{ip, name, status}`).
   final List<Map<String, dynamic>> scanResults = [];

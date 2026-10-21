@@ -223,6 +223,25 @@ void main() {
       });
     });
 
+    test('without withSerial QSN is not sent', () async {
+      projector.responses.addAll({
+        'QID': 'PT-RQ25K',
+        'QSN': 'SN123',
+        'QSH': '0',
+      });
+      final (probe, t) = await service.pollProjectorTelemetry(
+        projector.host,
+        projector.port,
+        '',
+        '',
+        withSerial: false,
+      );
+      expect(probe, ProbeResult.unprotected);
+      expect(t!.containsKey('serialNumber'), isFalse);
+      expect(t['shutter'], '0');
+      expect(projector.received.any((c) => c.endsWith('QSN')), isFalse);
+    });
+
     test('protected projector reports online', () async {
       projector.greeting = 'NTCONTROL 1 0badf00d';
       projector.responses.addAll({'QID': 'PT-RQ25K', 'QSH': '1'});

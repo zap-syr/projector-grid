@@ -31,6 +31,18 @@ void main() {
     expect(t!['modelName'], 'PT-RQ25K');
     expect(t['shutter'], '1');
     expect(t['signal'], 'ER401');
+    expect(t.containsKey('serialNumber'), isTrue);
+  });
+
+  test('pollProjectorTelemetry passes withSerial to the worker', () async {
+    final (_, t) = await service.pollProjectorTelemetry(
+      projector.host,
+      projector.port,
+      '',
+      '',
+      withSerial: false,
+    );
+    expect(t!.containsKey('serialNumber'), isFalse);
   });
 
   test('raw commands and their error-code handling', () async {

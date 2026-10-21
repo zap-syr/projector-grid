@@ -52,7 +52,6 @@ Comparable monitoringSortKey(
     ConnectionStatus.unauthorized => 2,
     ConnectionStatus.offline => 3,
   },
-  'serial' => n.serialNumber.toLowerCase(),
   'testPattern' =>
     (n.testPattern == null ? '-' : testPatternLabel(n.testPattern!))
         .toLowerCase(),

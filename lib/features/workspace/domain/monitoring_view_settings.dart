@@ -5,6 +5,8 @@
 /// layout and use the Web UI's column ids.
 library;
 
+import 'monitoring_table_columns.dart';
+
 enum MonitoringViewMode { table, cards }
 
 enum MonitoringCardDensity { compact, extended }
@@ -89,7 +91,12 @@ class MonitoringViewSettings {
               (k, v) => MapEntry(k as String, (v as num).toDouble()),
             ) ??
             const {},
-        sortColumnId: (json['sortColumnId'] as String?) ?? 'projector',
+        // A column that has since left the catalogue (Serial number) would
+        // leave the table sorted by nothing and no header with an arrow.
+        sortColumnId: switch (json['sortColumnId']) {
+          final String id when monitoringTableColumn(id) != null => id,
+          _ => 'projector',
+        },
         sortAscending: (json['sortAscending'] as bool?) ?? true,
         collapsed: {...?(json['collapsed'] as List?)?.cast<String>()},
       );

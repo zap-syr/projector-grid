@@ -115,12 +115,14 @@ class IsolateProtocolService extends PanasonicProtocolService {
     String login,
     String password, {
     int concurrency = 2,
+    bool withSerial = true,
   }) => _call(_Op.pollProjectorTelemetry, [
     ip,
     port,
     login,
     password,
     concurrency,
+    withSerial,
   ]);
 
   static void _workerMain(SendPort replies) {
@@ -160,6 +162,7 @@ class IsolateProtocolService extends PanasonicProtocolService {
         str(2),
         str(3),
         concurrency: a[4] as int,
+        withSerial: a[5] as bool,
       ),
     };
   }

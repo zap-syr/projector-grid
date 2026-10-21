@@ -349,6 +349,11 @@ class PanasonicProtocolService {
     String login,
     String password, {
     int concurrency = 2,
+    // The serial never changes, so the caller asks for it only when the
+    // projector behind the address may be a different one (see
+    // WorkspaceNotifier._pollSingleProjector); without it the map has no
+    // `serialNumber` key and the node keeps the value it has.
+    bool withSerial = true,
   }) async {
     final (modelResponse, isProtected) = await _sendSingleCommandEx(
       ip,
@@ -376,28 +381,32 @@ class PanasonicProtocolService {
     final Map<String, dynamic> telemetry = {};
     telemetry['modelName'] = modelResponse;
 
-    // Run the 12 remaining telemetry queries with bounded concurrency rather
-    // than one at a time (which would pay every round-trip's latency 12
-    // times over per node, per poll cycle) or all 12 at once (which used to
+    // Run the remaining telemetry queries with bounded concurrency rather
+    // than one at a time (which would pay every round-trip's latency a dozen
+    // times over per node, per poll cycle) or all at once (which used to
     // open up to 12 simultaneous TCP connections to the same projector —
     // this device class's embedded TCP/IP stack commonly supports only a
     // handful of connections total, shared across its web UI, control port,
     // etc., so a 10-wide burst risked ERR3 ["busy"] and false-offline
     // classifications; see OPTIMIZATION_PLAN.md item 3.1). [concurrency] is
     // chosen by the caller based on how many nodes are being polled overall.
+    final queries = <(String, String)>[
+      if (withSerial) ('serialNumber', 'QSN'),
+      ('power', 'QVX:POWI1'),
+      ('shutter', 'QSH'),
+      ('input', 'QIN'),
+      ('signal', 'QVX:NSGS1'),
+      ('runtime', 'QVX:RTMS1'),
+      ('lightRuntime', 'QVX:LRTS3=00'),
+      ('intakeTemp', 'QTM:0'),
+      ('exhaustTemp', 'QTM:1'),
+      ('acVoltage', 'QVX:VMOI2'),
+      ('errors', 'QVX:ERRS2'),
+      ('testPattern', 'QTS'),
+    ];
     final results = await _runBounded<String>([
-      () => _sendSingleCommand(ip, port, login, password, 'QSN'),
-      () => _sendSingleCommand(ip, port, login, password, 'QVX:POWI1'),
-      () => _sendSingleCommand(ip, port, login, password, 'QSH'),
-      () => _sendSingleCommand(ip, port, login, password, 'QIN'),
-      () => _sendSingleCommand(ip, port, login, password, 'QVX:NSGS1'),
-      () => _sendSingleCommand(ip, port, login, password, 'QVX:RTMS1'),
-      () => _sendSingleCommand(ip, port, login, password, 'QVX:LRTS3=00'),
-      () => _sendSingleCommand(ip, port, login, password, 'QTM:0'),
-      () => _sendSingleCommand(ip, port, login, password, 'QTM:1'),
-      () => _sendSingleCommand(ip, port, login, password, 'QVX:VMOI2'),
-      () => _sendSingleCommand(ip, port, login, password, 'QVX:ERRS2'),
-      () => _sendSingleCommand(ip, port, login, password, 'QTS'),
+      for (final (_, cmd) in queries)
+        () => _sendSingleCommand(ip, port, login, password, cmd),
     ], concurrency);
 
     // QID succeeding while every follow-up query fails means the projector
@@ -420,18 +429,9 @@ class PanasonicProtocolService {
     // real telemetry.
     String? valueOrNull(String r) => _isTransportFailure(r) ? null : r;
 
-    telemetry['serialNumber'] = valueOrNull(results[0]);
-    telemetry['power'] = valueOrNull(results[1]);
-    telemetry['shutter'] = valueOrNull(results[2]);
-    telemetry['input'] = valueOrNull(results[3]);
-    telemetry['signal'] = valueOrNull(results[4]);
-    telemetry['runtime'] = valueOrNull(results[5]);
-    telemetry['lightRuntime'] = valueOrNull(results[6]);
-    telemetry['intakeTemp'] = valueOrNull(results[7]);
-    telemetry['exhaustTemp'] = valueOrNull(results[8]);
-    telemetry['acVoltage'] = valueOrNull(results[9]);
-    telemetry['errors'] = valueOrNull(results[10]);
-    telemetry['testPattern'] = valueOrNull(results[11]);
+    for (var i = 0; i < queries.length; i++) {
+      telemetry[queries[i].$1] = valueOrNull(results[i]);
+    }
 
     final status = isProtected ? ProbeResult.online : ProbeResult.unprotected;
     return (status, telemetry);
