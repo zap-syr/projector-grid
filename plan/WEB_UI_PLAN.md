@@ -430,6 +430,161 @@ Then the existing `build_runner → format → analyze → flutter test`. The re
     in Chrome with `dev:mock` on desktop and at 360 / 390 px phone width; not yet against
     the real app.
 
+13. `[ ]` **Redesign to the app's look** (owner, 2026-10-21). After the app's dialog and
+    Monitoring redesign (`DIALOG_REDESIGN_PLAN.md`) the page no longer matches it. The
+    boards are in the *Web Access page* section of the design canvas
+    https://claude.ai/artifact/AL2c8Kh9aoXrrv2eUmVdcJ; each phase names the boards it
+    follows. The `projector-grid-visual-rules` skill applies to the page as it does to
+    the app (UI text without `·` or dashes, projectors named by IP or model + IP, status
+    colours only for status). This step supersedes these older notes: the step 8 note
+    "the operator taps a card to select it, the viewer to open its details, the chevron
+    does it for both… details as a full-width strip", the step 10 *Preview* column, and
+    the step 7 note on the card summary.
+
+    **Phase 1: shared foundation.** Nothing changes in behaviour; every later phase
+    builds on it.
+    - Fonts Inter + IBM Plex Mono (self-hosted `@fontsource`, replacing Geist), tokens
+      in `tokens.css` from the app's theme (dark values as on the boards: window
+      `#191C20`, bar `#1D2024`, card `#212429`, primary `#AAC7FF`, …; light from
+      `app_theme.dart`).
+    - `lib/logic/labels.ts`, one module for every status word, mirroring
+      `monitoring_format.dart` / `ProjectorStatusStyle`: power *On / Warming up / Cooling /
+      Standby*, shutter *Open / Closed*, errors *None* (*Unknown* while offline),
+      connection *Online / No login / Wrong login / Offline*, group *None*. Replaces the
+      upper-case words, `Auth Error` and `—` in `logic/cells.ts`.
+    - `lib/logic/signal.ts`: a port of `signalStateOf` (`domain/signal_state.dart`):
+      green with the resolution; red *No signal* only while the projector is on; grey
+      *No signal* / *Unknown* otherwise. Unit tests with the Dart cases.
+    - Temperature colour **by reading** against `/api/config.thresholds` (amber over warm,
+      red over hot), as the app's temperature bars, not by the active alert.
+    - Shared components (`components/status/`), used by the table, cards, details and Map
+      alike, never re-drawn per view:
+      - `StatusPill` (22 px, fully rounded, 14 % fill, 35 % border, as `status_pill.dart`);
+      - `SignalPill`, `ConnectionBadge` (Online green dot, No login blue unlock, Wrong
+        login amber lock, Offline red), `GroupPill`;
+      - `ProblemBadge`: the projector's codes only, amber *Warning H001*;
+      - `PowerState`, `ShutterState`: the closed shutter has its own crossed-eye icon, the
+        shutter is grey in standby, standby is red;
+      - `TestPatternThumb` (+ name where the app shows it), `TemperatureLine` (value + bar
+        with the threshold mark), `TemperatureText` (coloured value only).
+
+    **Phase 2: API.**
+    - The column catalogue becomes the app's two-line one
+      (`monitoring_table_columns.dart`): Projector (IP, model under it), Group, Power,
+      Shutter, Input and signal, Temperature, Runtime, AC, Errors, Connection, Test
+      pattern. No Serial number column (the details show the serial), no Preview column
+      (a row action now). `/api/config` columns, presets and defaults come from it; the
+      old web catalogue (`monitoring_columns.dart`) goes. The table layout key moves to
+      `pg.table.v2`, so stored v1 layouts are dropped, not migrated.
+    - `lastSeen` on projectors (ISO, null while answering), for *RQ25K, last seen 16:41*.
+    - `openapi.yaml`, `npm run gen:api`, golden fixtures, mocks.
+
+    **Phase 3: desktop table and Control panel** (boards *Web: desktop 1440, table…*,
+    *…table without groups, Columns menu open*, *Control panel states…*).
+    - Data bar: bulk selector, search *Search IP, model, serial*, quick filters *All /
+      Online / Attention / Offline / Standby* with counts (an empty one stays, dimmed), the
+      view switch as icons, Columns, the Control toggle.
+    - Two-line rows, grouped or flat; the Columns menu with *Group by*, presets, column
+      checkboxes and *Fit to width*. A row's left edge carries a 3 px stripe by level
+      (amber warning, red error, grey offline); an offline row dims every cell but
+      Projector and Errors. Temperature with bars on the desktop table only.
+    - Row actions at the row's end: *Remote Preview*, then *Details* (ⓘ).
+    - The column header row has no select-all checkbox: the bulk selector in the data
+      bar does that (and the group headers' boxes for a group). A group header's box sits
+      in the rows' checkbox column, right above the row boxes, as on the page today.
+    - Selection as now (click, sweep, Shift range). A selected row: 8 % primary fill and the
+      ticked box. The row whose details are open: 16 % fill and a filled ⓘ, **no
+      outline**. Both can be true at once.
+    - Control panel restyled as the app's control bar: Power / Shutter / OSD rows of
+      outlined buttons (green icon for what turns the picture on, red for off); Input +
+      *Set*; Lens shift cross with Home in the card header, Focus / Zoom; Lens setup
+      folded; Test pattern: *Off*, thumbnails, dropdown + *Show*. Controls 36 px; with
+      nothing selected they stay enabled and send nothing.
+    - Control header in two lines (board *Web: Control header…*): *No projectors
+      selected* / `RZ34K (192.168.0.44)` with ⓘ that opens its details / *3 selected*. The
+      ⓘ keeps its place when hidden, so ✕ never moves.
+    - Alerts rail: the bell with its badge, the ticks and the vertical *Alerts*.
+
+    **Phase 4: one details panel for every view** (boards *…projector panel with the
+    serial*, *…3 selected, details of .44 in place of Control*, *…viewer, a row click
+    opens the details*, *Phone: the info button opens the details sheet*, *Tablet
+    portrait 820: the info button opens the details sheet*).
+    - `ProjectorDetails`, one component: header (status dot, IP in mono, `GroupPill`, then
+      *RZ34K, serial SH4110044*, ✕); sections *Needs attention* (reading, limit, since),
+      *Status* (power, shutter, input, signal pill, test pattern with thumbnail and
+      name), *Temperature* (bars with the threshold mark), *Runtime and power*
+      (projector, light source, AC, errors); *Preview* and *Web UI* (opens
+      `http://<ip>`) as two tonal buttons of equal width. No *Find on canvas*.
+    - **Desktop and tablet sideways:** the panel takes the Control panel's place at the
+      same width, so the table doesn't reflow. The operator opens it with ⓘ (row, card,
+      or the Control header with one projector selected); a strip *‹ Control, 3 selected*
+      above it, ✕, Esc and ‹ bring Control back with the selection untouched; ⓘ on
+      another projector switches the panel. The Control toggle stays on meanwhile.
+    - **Viewer:** no Control and no strip; a click on a row or card opens the panel.
+    - **Phone and tablet upright:** a bottom sheet (variant A, owner 2026-10-21; the inline
+      strip of variant B was not chosen): one column on the phone, two on the tablet
+      (*Needs attention* + *Status* | *Temperature* + *Runtime and power*). ⓘ on the
+      card opens it; *Control* (the phone's bottom bar, the tablet's top bar) opens the
+      Control sheet as now.
+    - **Map:** the popover beside the tile keeps its place and triggers (operator: right
+      click or long press; viewer: click) and shows the same sections.
+    - `CardDetails.svelte` and the strip logic (`withDetails`) go.
+
+    **Phase 5: tablet sideways table** (board *Web: tablet landscape 1180, touch, a row
+    tap opens the details, the checkbox selects*).
+    - A tap on the row opens the details in the Control's place; the checkbox column
+      (52 px, set off by a hairline) is the only selection target. No ⓘ and no action
+      column on touch rows; Preview is in the details.
+    - Temperatures as coloured text, no bars.
+    - **Large tablets** (owner, 2026-10-21; boards *iPad Pro 13 landscape 1366…*,
+      *iPad Pro 13 portrait 1024…*): the touch table is offered wherever the screen is
+      ≥ 1024 px wide, so on an iPad Pro 13" either way up. Sideways it is the table
+      above with more columns. **Upright** (touch and `orientation: portrait`), the
+      Control panel and the details open as bottom sheets whatever the width, so the
+      table keeps the full width (a 340 px side panel would leave it ~630 px).
+      `controlPlacement` in `device.svelte.ts` gains that rule. Upright screens under
+      1024 px (iPad Pro 11", iPad Air) stay cards only.
+
+    **Phase 6: cards** (boards *Web: desktop 1440, cards with the info button…*, *Phone:
+    cards, the info button and the Control button*, the tablet boards).
+    - Card: checkbox; IP in mono with the alert badge; model under it (*, last seen 16:41*
+      while offline); power and shutter states; input + `SignalPill` (ellipsized when
+      narrow); then *In 25 °C   Ex 39 °C* on its own line, coloured by reading. Two lines
+      for input / signal and temperatures, so nothing overflows; the card grows taller.
+    - ⓘ in the top-right corner (32 px with a mouse, 44 px on touch) replaces the chevron.
+      Operator: a tap on the card or the checkbox selects, ⓘ opens the details. Viewer:
+      no ⓘ, a tap on the card opens the details.
+    - Selected: 2 px primary border and tint. Open: a brighter fill and a filled ⓘ.
+    - Offline (as the app's compact tile): dashed border, grey IP, no power / shutter, a
+      grey *Offline* pill where the signal goes.
+    - The test-pattern thumbnail stays as it is (no name; the app's Monitoring cards show
+      none).
+    - Touch Control sheets keep their big buttons; the app's control bar layout is for
+      the desktop panel only, with one exception, the test pattern:
+      - **Tablets** (upright and sideways; boards *Tablet landscape 1180: test pattern as
+        on the desktop…*, the tablet upright Control sheet) take the desktop layout at
+        44 px: *Off* (red crossed icon), four quick swatches (Color Bar Vert, Cross
+        Hatch, White, Black), then a native `<select>` of every pattern (as `OptionRow`;
+        the closed field shows the current swatch beside the name, the list itself is
+        the system's: names only, the current one ticked) and *Show*. The tile grid made the upright sheet's
+        left column far taller than the lens column (owner, 2026-10-21).
+      - **Phone** (board *Phone: test pattern in the Control sheet…*): a full-width *Off*
+        (52 px), 74 px tiles in 4 columns with the swatch and the name, the current
+        pattern framed in primary when one projector is selected, *More patterns* /
+        *Fewer patterns* under the grid.
+
+    **Phase 7: Map tiles** (board *Web: desktop 1440, Map tiles as the app canvas card…*).
+    - Tile drawn like `projector_card.dart`: the header tinted by `cardHeaderTone` (green
+      on, amber warming / cooling / login failed, red standby; offline a stronger red with
+      *Offline*, login failure with *Login failed*), power and shutter icons in
+      `ProjectorStatusStyle` colours, the alert badge; model, IP, pattern thumbnail; the
+      group as a band inside the tile (group colour mixed 55 % into the card, text colour
+      by the band's brightness) instead of the chip below and the 15 % tint.
+
+    **Phase 8: checks.** `dev:mock` in Chrome at the widths of step 4 in both themes;
+    the real app with the simulator; then the owner's review. Update §8 and ROADMAP §5
+    where they describe the old behaviour.
+
 ## 11. Open points
 
 - ~~TanStack Table adapter~~ — not used; see §4.

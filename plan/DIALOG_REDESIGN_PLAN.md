@@ -1205,8 +1205,8 @@ Differs from the text below:
   type" hints, no OSC hint under the custom commands (it is in the OSC reference).
 - Lens buttons 38 px in the cross, 36 px in Focus and Zoom, 20 px chevrons; Lens setup
   opens and closes in 150 ms.
-- `[later]`: sentence-case test pattern and calibration names in the shared option maps
-  (the Web API uses them too).
+- `[dropped]` (owner, 2026-10-21): test pattern and lens calibration names keep their
+  current case (`Reversed Window`, `Shift/Focus`); they are exceptions to sentence case.
 
 Boards (dark only): *Control bar: General / Lens setup open, scrolled / System / Custom*,
 each 320×970. Approved 2026-10-14. Today (`control_bar.dart`) it is the 320 px right-hand
