@@ -40,6 +40,11 @@
 // While the signal is gone a powered-on projector answers ER401 for the
 // first ~1.5 s (re-locking), then NSGS1=NO SIGNAL.
 //
+// The network link, for Offline cards:
+//   net 3 off | net 3 on   network cable out / back in on projector 3
+// While offline the listener is closed, so even the app's bare TCP
+// reachability check fails, as with a pulled cable.
+//
 // Windows routes the whole 127.0.0.0/8 range to loopback out of the box;
 // macOS only has 127.0.0.1 — add aliases first:
 //   for i in $(seq 2 6); do sudo ifconfig lo0 alias 127.0.0.$i up; done
@@ -82,6 +87,22 @@ class SimProjector {
 
   /// When the source signal went, or null while it is there.
   DateTime? signalLostAt;
+
+  /// The NTCONTROL listener, null while the network cable is out.
+  ServerSocket? server;
+  bool get offline => server == null;
+
+  Future<void> goOnline() async {
+    if (server != null) return;
+    server = await ServerSocket.bind(ip, port);
+    server!.listen((socket) => _serve(socket, this));
+  }
+
+  Future<void> goOffline() async {
+    final s = server;
+    server = null;
+    await s?.close();
+  }
 
   void setSignal(bool present) =>
       signalLostAt = present ? null : (signalLostAt ?? DateTime.now());
@@ -419,8 +440,7 @@ Future<void> main(List<String> args) async {
   }
 
   for (final p in projectors) {
-    final server = await ServerSocket.bind(p.ip, port);
-    server.listen((socket) => _serve(socket, p));
+    await p.goOnline();
   }
 
   final project = File(
@@ -433,7 +453,7 @@ Future<void> main(List<String> args) async {
     // ASCII only: the Windows console mangles ×, – and →.
     ..writeln('Simulating $count x $model on 127.0.0.1-$count, port $port.')
     ..writeln('Open in the app: ${project.path}')
-    ..writeln('Type "help" for error-code commands. Ctrl+C to stop.\n');
+    ..writeln('Type "help" for console commands. Ctrl+C to stop.\n');
   _listErrors(projectors);
 
   stdin
@@ -446,12 +466,16 @@ const _help = '''
   err <n|all> <codes...>   set self-diagnosis codes, e.g. err 3 F305 U200
   clear <n|all>            remove them
   list                     who reports what
-  sig <n|all> off|on|blip  input signal gone, back, or gone for ~3.5 s''';
+  sig <n|all> off|on|blip  input signal gone, back, or gone for ~3.5 s
+  net <n|all> off|on       network link down (no replies) or back''';
 
-void _command(String line, List<SimProjector> projectors) {
+Future<void> _command(String line, List<SimProjector> projectors) async {
   final parts = line.split(RegExp(r'\s+'));
   if (line.isEmpty) return;
-  if (parts.first == 'list') return _listErrors(projectors);
+  if (parts.first == 'list') {
+    _listErrors(projectors);
+    return _listOffline(projectors);
+  }
   if (parts.first == 'help' || parts.length < 2) return stdout.writeln(_help);
 
   final List<SimProjector> targets;
@@ -492,6 +516,13 @@ void _command(String line, List<SimProjector> projectors) {
         '${parts[1] == 'all' ? 'All projectors' : targets.single.ip}: '
         'signal $how.',
       );
+    case 'net' when parts.length > 2:
+      final how = parts[2];
+      if (how != 'off' && how != 'on') return stdout.writeln(_help);
+      await Future.wait([
+        for (final p in targets) how == 'off' ? p.goOffline() : p.goOnline(),
+      ]);
+      return _listOffline(projectors);
     default:
       return stdout.writeln(_help);
   }
@@ -508,6 +539,13 @@ void _listErrors(List<SimProjector> projectors) {
     stdout.writeln('${p.ip}  ERRS2=${p.errors.join(' ')}');
   }
   stdout.writeln('The app picks these up on its next poll.');
+}
+
+void _listOffline(List<SimProjector> projectors) {
+  final down = [for (final p in projectors.where((p) => p.offline)) p.ip];
+  stdout.writeln(
+    down.isEmpty ? 'All projectors online.' : 'Offline: ${down.join(', ')}',
+  );
 }
 
 void _serve(Socket socket, SimProjector p) {
