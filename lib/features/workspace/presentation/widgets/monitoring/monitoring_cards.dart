@@ -379,11 +379,8 @@ class _ExtendedCard extends ConsumerWidget {
                   value: withUnit(node.intakeTemp),
                   color: temperatureColor(context, status.intake),
                   bar: TemperatureBar(
-                    fraction: temperatureFraction(
-                      node.intakeTemp,
-                      alerts.intake,
-                    ),
-                    severity: status.intake,
+                    display: node.intakeTemp,
+                    threshold: alerts.intake,
                   ),
                 ),
               ),
@@ -393,11 +390,8 @@ class _ExtendedCard extends ConsumerWidget {
                   value: withUnit(node.exhaustTemp),
                   color: temperatureColor(context, status.exhaust),
                   bar: TemperatureBar(
-                    fraction: temperatureFraction(
-                      node.exhaustTemp,
-                      alerts.exhaust,
-                    ),
-                    severity: status.exhaust,
+                    display: node.exhaustTemp,
+                    threshold: alerts.exhaust,
                   ),
                 ),
               ),

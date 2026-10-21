@@ -199,33 +199,37 @@ class GroupSwatch extends StatelessWidget {
   }
 }
 
-/// A thin bar for a temperature: grey, amber or red with its alert.
+/// A thin bar for a temperature reading [display]: green below the warning
+/// threshold of [threshold], amber from it, red from the critical one.
 /// [mark] draws the warning threshold as a tick across it.
 class TemperatureBar extends StatelessWidget {
   const TemperatureBar({
     super.key,
-    required this.fraction,
-    required this.severity,
+    required this.display,
+    required this.threshold,
     this.width,
     this.height = 4,
-    this.mark,
+    this.mark = false,
   });
 
-  final double? fraction;
-  final AlertSeverity? severity;
+  final String display;
+  final TempThreshold threshold;
   final double? width;
   final double height;
-  final double? mark;
+  final bool mark;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final fill = switch (severity) {
+    final status = AppStatusColors.of(context);
+    final fraction = temperatureFraction(display, threshold);
+    final mark = this.mark ? thresholdFraction(threshold) : null;
+    final fill = switch (temperatureBarLevel(display, threshold)) {
       AlertSeverity.critical => cs.error,
-      AlertSeverity.warning => AppStatusColors.of(context).warning,
-      null => cs.outline,
+      AlertSeverity.warning => status.warning,
+      null => status.success,
     };
-    final markColor = AppStatusColors.of(context).warning;
+    final markColor = status.warning;
     return SizedBox(
       width: width,
       height: mark == null ? height : height + 6,
@@ -328,11 +332,7 @@ class TemperatureLine extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 6),
-        TemperatureBar(
-          width: 40,
-          fraction: temperatureFraction(display, threshold),
-          severity: severity,
-        ),
+        TemperatureBar(width: 40, display: display, threshold: threshold),
       ],
     );
   }

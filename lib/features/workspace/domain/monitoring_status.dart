@@ -30,7 +30,8 @@ class MonitoringProblem {
   /// The panel's row label: `Exhaust temperature`, `Fan error`.
   final String title;
 
-  /// The panel's row value: `52 °C, above 50 °C`, `F305`.
+  /// The panel's row value: `52 °C, limit 50 °C`, `F305`. *Limit*, not
+  /// *above*: the rule trips at the threshold itself, as in Active alerts.
   final String value;
 
   /// Shortest, for the corner of a compact tile: `52 °C`, `F305`.
@@ -207,7 +208,7 @@ MonitoringStatus monitoringStatusOf(
             kind: ProblemKind.temperature,
             badge: isIntake ? 'Intake hot' : 'Exhaust hot',
             title: a.rule.label,
-            value: '${a.value}, above ${formatCelsius(limit)}',
+            value: '${a.value}, limit ${formatCelsius(limit)}',
             flag: a.value,
             since: a.since,
           ),

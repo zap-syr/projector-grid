@@ -200,7 +200,7 @@ class _NodeAlerts {
   int get hashCode => Object.hashAll(list);
 }
 
-/// What the popover shows: model, IP, group; power, shutter, input with the
+/// What the popover shows: model, IP and group; power, shutter, input with the
 /// signal pill, temperatures and the active alerts. Watches only its own
 /// node, so a polling tick elsewhere doesn't rebuild it.
 class QuickStatusContent extends ConsumerWidget {
@@ -252,30 +252,45 @@ class QuickStatusContent extends ConsumerWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // One line: model and IP, the group in the top right corner
+        // (owner, 2026-10-21); none without a group.
         Padding(
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            spacing: 4,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
-                children: [
-                  Flexible(
-                    child: Text(
-                      node.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: t.body.copyWith(fontWeight: FontWeight.w700),
+          child: SizedBox(
+            height: 22,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          node.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: t.body.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(node.ipAddress, style: t.monoSmall),
+                    ],
+                  ),
+                ),
+                if (data.groupName case final name?) ...[
+                  const SizedBox(width: 8),
+                  // Narrower than its own cap, so the model keeps room.
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 120),
+                    child: GroupPill(
+                      name: name,
+                      color: Color(data.groupColor!),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Text(node.ipAddress, style: t.monoSmall),
                 ],
-              ),
-              _GroupLine(name: data.groupName, color: data.groupColor),
-            ],
+              ],
+            ),
           ),
         ),
         divider,
@@ -422,43 +437,6 @@ class _Action extends StatelessWidget {
       child: tooltip == null
           ? button
           : CustomTooltip(message: tooltip!, child: button),
-    );
-  }
-}
-
-class _GroupLine extends StatelessWidget {
-  const _GroupLine({required this.name, required this.color});
-
-  final String? name;
-  final int? color;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = AppText.of(context);
-    final name = this.name;
-    if (name == null) {
-      return Text('No group', style: t.description.copyWith(color: t.tertiary));
-    }
-    return Row(
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(
-            color: Color(color!),
-            shape: BoxShape.circle,
-          ),
-        ),
-        const SizedBox(width: 6),
-        Flexible(
-          child: Text(
-            name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: t.description,
-          ),
-        ),
-      ],
     );
   }
 }

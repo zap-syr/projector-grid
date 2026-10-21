@@ -209,7 +209,7 @@ void main() {
       expect(s.exhaust, AlertSeverity.warning);
       final p = s.problems.single;
       expect(p.badge, 'Exhaust hot');
-      expect(p.value, '58 °C, above 55 °C');
+      expect(p.value, '58 °C, limit 55 °C');
       expect(p.flag, '58 °C');
       expect(p.since, since);
     });
@@ -279,6 +279,17 @@ void main() {
       expect(thresholdFraction(t), closeTo(40 / 56.25, 1e-9));
       expect(temperatureFraction('-', t), isNull);
       expect(temperatureFraction('99°C', t), 1);
+    });
+
+    test('the bar colour follows the reading, not the alert', () {
+      const t = (warm: 40.0, hot: 45.0);
+      expect(temperatureBarLevel('-', t), isNull);
+      expect(temperatureBarLevel('39°C', t), isNull);
+      expect(temperatureBarLevel('40°C', t), AlertSeverity.warning);
+      expect(temperatureBarLevel('45°C', t), AlertSeverity.critical);
+      // No hysteresis: just under the threshold is green again.
+      expect(temperatureBarLevel('44.5°C', t), AlertSeverity.warning);
+      expect(temperatureBarLevel('39.5°C', t), isNull);
     });
   });
 

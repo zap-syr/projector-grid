@@ -2,6 +2,7 @@
 library;
 
 import '../../../core/theme/status_thresholds.dart';
+import 'alert_rule.dart';
 import 'alerts.dart';
 import 'projector_node.dart';
 
@@ -45,6 +46,15 @@ double? temperatureFraction(String display, TempThreshold t) {
   final c = parseCelsius(display);
   if (c == null) return null;
   return (c / temperatureScaleMax(t)).clamp(0.0, 1.0);
+}
+
+/// A temperature bar's colour level: [display] against the thresholds alone,
+/// without the alert's hysteresis, so the bar follows the reading, also with
+/// the rule off (owner, 2026-10-21). Null below the warning threshold or
+/// without a reading.
+AlertSeverity? temperatureBarLevel(String display, TempThreshold t) {
+  final c = parseCelsius(display);
+  return c == null ? null : temperatureSeverity(c, t, null);
 }
 
 /// Where the warning threshold mark sits on the bar.

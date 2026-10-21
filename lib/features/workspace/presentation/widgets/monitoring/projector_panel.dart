@@ -82,9 +82,26 @@ class ProjectorPanel extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       spacing: 4,
                       children: [
-                        Text(
-                          node.ipAddress,
-                          style: t.cardTitle.merge(AppTheme.monoStyle),
+                        // The group beside the IP, not a line of its own,
+                        // so the header is two lines with or without one
+                        // (owner, 2026-10-21). The pill gives way, so the
+                        // IP stays whole.
+                        Row(
+                          children: [
+                            Text(
+                              node.ipAddress,
+                              style: t.cardTitle.merge(AppTheme.monoStyle),
+                            ),
+                            if (groupName != null) ...[
+                              const SizedBox(width: 10),
+                              Flexible(
+                                child: GroupPill(
+                                  name: groupName.name,
+                                  color: Color(groupName.color),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                         Text(
                           node.serialNumber == '-'
@@ -94,11 +111,6 @@ class ProjectorPanel extends ConsumerWidget {
                           overflow: TextOverflow.ellipsis,
                           style: t.description,
                         ),
-                        if (groupName != null)
-                          GroupPill(
-                            name: groupName.name,
-                            color: Color(groupName.color),
-                          ),
                       ],
                     ),
                   ),
@@ -179,7 +191,7 @@ class ProjectorPanel extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
               child: Row(
-                spacing: 6,
+                spacing: 8,
                 children: [
                   _Action(
                     icon: Icons.monitor_outlined,
@@ -212,7 +224,7 @@ class ProjectorPanel extends ConsumerWidget {
 }
 
 /// Tonal (owner, 2026-10-17); the label stays on one line and the three
-/// share the row by their own widths.
+/// share the row's width equally (owner, 2026-10-21).
 class _Action extends StatelessWidget {
   const _Action({
     required this.icon,
@@ -242,7 +254,7 @@ class _Action extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
       ),
     );
-    return Flexible(
+    return Expanded(
       child: tooltip == null
           ? button
           : CustomTooltip(message: tooltip!, child: button),
@@ -400,10 +412,10 @@ class _Gauge extends StatelessWidget {
           ),
           TemperatureBar(
             key: ValueKey('gauge-$label'),
-            fraction: temperatureFraction(display, threshold),
-            severity: severity,
+            display: display,
+            threshold: threshold,
             height: 6,
-            mark: thresholdFraction(threshold),
+            mark: true,
           ),
         ],
       ),
