@@ -259,6 +259,7 @@ class _ExtendedCard extends ConsumerWidget {
     final t = AppText.of(context);
     final group = groups[node.groupId];
     final level = status.level;
+    final cardProblems = cardProblemsOf(status);
     final border = switch (level) {
       ProblemLevel.warning || ProblemLevel.error => problemColor(
         context,
@@ -354,11 +355,11 @@ class _ExtendedCard extends ConsumerWidget {
           const SizedBox(height: 8),
           SizedBox(
             height: 22,
-            child: status.problems.isEmpty
+            child: cardProblems.isEmpty
                 ? null
                 : Align(
                     alignment: Alignment.centerLeft,
-                    child: ProblemBadge(problems: status.problems),
+                    child: ProblemBadge(problems: cardProblems),
                   ),
           ),
           const SizedBox(height: 10),
@@ -493,6 +494,7 @@ class _CompactTile extends ConsumerWidget {
     };
     final style = ProjectorStatusStyle.of(context);
     final radius = BorderRadius.circular(12);
+    final flag = cardProblemsOf(status).firstOrNull?.flag;
 
     final content = Padding(
       padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
@@ -512,9 +514,9 @@ class _CompactTile extends ConsumerWidget {
                   ),
                 ),
               ),
-              if (tone != null) ...[
+              if (tone != null && flag != null) ...[
                 Text(
-                  status.problems.first.flag,
+                  flag,
                   style: t.caption.copyWith(
                     color: tone,
                     fontWeight: FontWeight.w700,

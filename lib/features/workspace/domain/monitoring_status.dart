@@ -251,6 +251,14 @@ List<MonitoringProblem> projectorErrorsOf(MonitoringStatus status) => [
     if (p.kind == ProblemKind.projectorError) p,
 ];
 
+/// The Cards view's problem badge and a compact tile's corner: all but
+/// Signal lost, which the card's input block already shows as its red
+/// *No signal* pill.
+List<MonitoringProblem> cardProblemsOf(MonitoringStatus status) => [
+  for (final p in status.problems)
+    if (p.kind != ProblemKind.signal) p,
+];
+
 ProblemLevel _levelOf(AlertSeverity s) =>
     s == AlertSeverity.critical ? ProblemLevel.error : ProblemLevel.warning;
 

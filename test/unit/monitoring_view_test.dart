@@ -187,6 +187,11 @@ void main() {
         ]),
       );
       expect(projectorErrorsOf(s).map((p) => p.badge), ['Error F305']);
+      // The card's input block shows No signal itself.
+      expect(
+        cardProblemsOf(s).map((p) => p.kind),
+        unorderedEquals([ProblemKind.projectorError, ProblemKind.temperature]),
+      );
     });
 
     test('a hot exhaust needs attention, with value and threshold', () {
