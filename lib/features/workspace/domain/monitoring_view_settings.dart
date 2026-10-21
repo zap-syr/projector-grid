@@ -1,8 +1,8 @@
 /// How the Monitoring view is laid out (§7i of the redesign plan): Table or
 /// Cards, the cards' density, Group by, the table's columns and sort, and
-/// the collapsed groups. Remembered between sessions in its own file, apart
-/// from `AppSettings`, whose `monitoring*` fields are the Web UI's starting
-/// layout and use the Web UI's column ids.
+/// the collapsed groups. Remembered between sessions in its own file; the
+/// table's density and fit-to-width are in `AppSettings`. It also seeds a
+/// browser's first visit to the Web UI.
 library;
 
 import 'monitoring_table_columns.dart';

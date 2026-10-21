@@ -1,12 +1,21 @@
-<!-- One table cell, drawn like the app's Monitoring cell builders. -->
+<!--
+  One cell of the app's two-line Monitoring columns (`monitoringCell`), from
+  the shared status pieces, so the table, the details and the cards read the
+  same. Phase 3 of the redesign restyles the row around them.
+-->
 <script lang="ts">
-  import type { DataColumn, Group, Projector } from '../../api/types';
-  import { alertTint, signalLost } from '../../logic/alerts';
-  import { cellText } from '../../logic/cells';
-  import { isPatternActive, patternSwatch } from '../../logic/patterns';
+  import type { ColumnId, Group, Projector } from '../../api/types';
+  import { cellText, modelLine } from '../../logic/cells';
+  import { withUnit } from '../../logic/labels';
   import { alerts } from '../../state/alerts.svelte';
+  import { config } from '../../state/config.svelte';
   import ErrorTags from '../alerts/ErrorTags.svelte';
-  import Icon from '../Icon.svelte';
+  import ConnectionBadge from '../status/ConnectionBadge.svelte';
+  import PowerState from '../status/PowerState.svelte';
+  import ShutterState from '../status/ShutterState.svelte';
+  import SignalPill from '../status/SignalPill.svelte';
+  import TemperatureLine from '../status/TemperatureLine.svelte';
+  import TestPatternThumb from '../status/TestPatternThumb.svelte';
 
   let {
     column,
@@ -14,57 +23,68 @@
     groups,
     patternLabel,
   }: {
-    column: DataColumn;
+    column: ColumnId;
     p: Projector;
     groups: ReadonlyMap<string, Group>;
     patternLabel: (code: string) => string;
   } = $props();
 
   const text = $derived(cellText(column, p, groups, patternLabel));
-  const own = $derived(alerts.of(p.id));
   const group = $derived(p.groupId ? groups.get(p.groupId) : undefined);
-  const online = $derived(p.connection === 'connected' || p.connection === 'unprotected');
+  const thresholds = $derived(config.value?.thresholds);
 </script>
 
 <span class="cv" title={text}>
-  {#if column === 'connection'}
-    <span class="dot" class:ok={online} class:warn={p.connection === 'unauthorized'}></span>
-    <span
-      class="t"
-      class:ok={online}
-      class:warn={p.connection === 'unauthorized'}
-      class:err={p.connection === 'offline'}>{text}</span
-    >
-    {#if p.connection === 'unauthorized'}
-      <span class="warn"><Icon name="lock" size={13} /></span>
-    {:else if p.connection === 'unprotected'}
-      <span class="acc"><Icon name="unlock" size={13} /></span>
+  {#if column === 'projector'}
+    <span class="two">
+      <span class="ipl"><i class="dot {p.connection}"></i><span class="ip">{p.ip}</span></span>
+      <small class="ind">{modelLine(p, alerts.now)}</small>
+    </span>
+  {:else if column === 'group'}
+    {#if group}
+      <span class="gdot" style:background={group.color}></span>
+      <span class="t">{group.name}</span>
+    {:else}
+      <span class="t quiet">None</span>
     {/if}
   {:else if column === 'power'}
-    {@const tone = p.power === 'on' ? 'ok' : p.power === 'standby' ? 'err' : 'warn'}
-    <span class={tone}><Icon name="power" size={15} /></span>
-    <span class="t {tone}">{text}</span>
+    <PowerState power={p.power} />
   {:else if column === 'shutter'}
-    {@const tone = p.shutter === 'open' ? 'ok' : 'err'}
-    <span class={tone}><Icon name="eye" size={15} /></span>
-    <span class="t {tone}">{text}</span>
-  {:else if column === 'group' && group}
-    <span class="gdot" style:background={group.color}></span>
-    <span class="t">{text}</span>
-  {:else if column === 'testPattern' && isPatternActive(p.testPattern)}
-    <span class="sw" style:background={patternSwatch(p.testPattern) ?? 'var(--hover)'}></span>
-    <span class="t">{text}</span>
-  {:else if column === 'intake' || column === 'exhaust'}
-    <!-- Tinted by the active alert, so hysteresis and a switched-off rule follow the app. -->
-    {@const tint = alertTint(own, column === 'intake' ? 'intake-temp' : 'exhaust-temp')}
-    <span class="t" class:warm={tint === 'warm'} class:hot={tint === 'hot'}>{text}</span>
-  {:else if column === 'signal' && signalLost(own)}
-    <span class="t hot">{text}</span>
+    <ShutterState {p} />
+  {:else if column === 'inputSignal'}
+    <span class="two">
+      <span class="t">{p.input}</span>
+      <SignalPill {p} />
+    </span>
+  {:else if column === 'temperature' && thresholds}
+    <span class="two">
+      <TemperatureLine
+        label="In"
+        display={p.intakeTemp}
+        threshold={thresholds.intake}
+        level={p.status.intake ?? null}
+      />
+      <TemperatureLine
+        label="Ex"
+        display={p.exhaustTemp}
+        threshold={thresholds.exhaust}
+        level={p.status.exhaust ?? null}
+      />
+    </span>
+  {:else if column === 'runtimes'}
+    <span class="two">
+      <span class="t">{withUnit(p.runtime)}</span>
+      <small>Light {withUnit(p.lightRuntime)}</small>
+    </span>
   {:else if column === 'errors' && p.errorItems.length > 0 && p.connection !== 'offline'}
     <ErrorTags {p} />
   {:else if column === 'errors'}
     <!-- None, or Unknown while offline: its codes are the last it sent. -->
     <span class="t quiet">{text}</span>
+  {:else if column === 'connection'}
+    <ConnectionBadge connection={p.connection} />
+  {:else if column === 'testPattern'}
+    <TestPatternThumb code={p.testPattern} label={text} />
   {:else}
     <span class="t">{text}</span>
   {/if}
@@ -80,75 +100,69 @@
     vertical-align: middle;
   }
 
+  .two {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    min-width: 0;
+    line-height: 1.3;
+  }
+
+  .ipl {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .ip {
+    font-family: var(--mono);
+    letter-spacing: 0;
+    font-weight: 500;
+  }
+
+  small {
+    color: var(--muted);
+    font-size: 11.5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+  }
+
+  .ind {
+    margin-left: 16px;
+  }
+
   .t {
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  .ok {
-    color: var(--ok);
-  }
-
-  .warn {
-    color: var(--warn);
-  }
-
-  .err {
-    color: var(--err);
-  }
-
-  .acc {
-    color: var(--accent);
   }
 
   .quiet {
     color: var(--faint);
   }
 
-  .t.ok,
-  .t.warn,
-  .t.err {
-    font-weight: 550;
-  }
-
-  .warm {
-    color: var(--warn);
-    font-weight: 600;
-  }
-
-  .hot {
-    color: var(--err);
-    font-weight: 700;
-  }
-
   .dot {
-    width: 9px;
-    height: 9px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
     flex: none;
-    background: var(--err);
-  }
-
-  .dot.ok {
     background: var(--ok);
   }
 
-  .dot.warn {
+  .dot.unauthorized {
     background: var(--warn);
+  }
+
+  .dot.offline {
+    background: var(--faint);
   }
 
   .gdot {
     width: 10px;
     height: 10px;
-    border-radius: 50%;
-    flex: none;
-  }
-
-  .sw {
-    width: 20px;
-    height: 13px;
-    border-radius: 2px;
-    box-shadow: inset 0 0 0 1px var(--line-strong);
+    border-radius: 3px;
     flex: none;
   }
 </style>

@@ -1091,6 +1091,51 @@ export interface components {
             errors: string;
             /** @description `errors` decoded by the app's code table, in reply order; empty when healthy. */
             errorItems: components["schemas"]["ErrorItem"][];
+            /**
+             * Format: date-time
+             * @description When an offline projector last answered this session (UTC); null while it answers.
+             */
+            lastSeen: string | null;
+            status: components["schemas"]["MonitoringStatus"];
+        };
+        /**
+         * @description What the app's Monitoring view says about the projector (`monitoringStatusOf`):
+         *     the row stripe, the quick filters, *Needs attention* and the group summaries.
+         */
+        MonitoringStatus: {
+            level: components["schemas"]["ProblemLevel"];
+            /** @description Answers polls with a working login. */
+            online: boolean;
+            /** @description Online and in standby. */
+            standby: boolean;
+            /** @description The intake temperature alert's severity, which colours the value; null without one. */
+            intake: components["schemas"]["AlertSeverity"] | null;
+            exhaust: components["schemas"]["AlertSeverity"] | null;
+            /** @description Worst first. */
+            problems: components["schemas"]["Problem"][];
+        };
+        /** @enum {string} */
+        ProblemLevel: "none" | "warning" | "error" | "offline";
+        Problem: {
+            level: components["schemas"]["ProblemLevel"];
+            /**
+             * @description Only `projectorError` is the projector's own fault (the Errors column).
+             * @enum {string}
+             */
+            kind: "offline" | "login" | "projectorError" | "temperature" | "signal";
+            /** @description Short, for a badge: `Exhaust hot`, `Error F305`, `Warning H001`, `Offline`. */
+            badge: string;
+            /** @description The details row's label: `Exhaust temperature`, `Fan error`. */
+            title: string;
+            /** @description The details row's value: `52 °C, limit 50 °C`, `F305`. */
+            value: string;
+            /** @description Shortest, for a tile's corner: `52 °C`, `F305`. */
+            flag: string;
+            /**
+             * Format: date-time
+             * @description When the alert behind it started (UTC); null without one (the rule is off).
+             */
+            since: string | null;
         };
         ErrorItem: {
             /** @description `F305`, or the whole reply when it holds no code. */
@@ -1113,8 +1158,11 @@ export interface components {
             warm: number;
             hot: number;
         };
-        /** @enum {string} */
-        ColumnId: "connection" | "model" | "serial" | "preview" | "group" | "ip" | "power" | "shutter" | "input" | "signal" | "testPattern" | "runtime" | "lightRuntime" | "intake" | "exhaust" | "voltage" | "errors";
+        /**
+         * @description The app's Monitoring table columns (`monitoring_table_columns.dart`).
+         * @enum {string}
+         */
+        ColumnId: "projector" | "group" | "power" | "shutter" | "inputSignal" | "temperature" | "runtimes" | "voltage" | "errors" | "connection" | "testPattern";
         /** @enum {string} */
         Density: "compact" | "standard" | "comfortable";
         TableLayout: {

@@ -33,8 +33,6 @@ export type ErrorItem = Schemas['ErrorItem'];
 export type AcknowledgeRequest = Schemas['AcknowledgeRequest'];
 export type AcknowledgeResult = Schemas['AcknowledgeResult'];
 export type RefreshResult = Schemas['RefreshResult'];
-/** Columns with a value per projector: all but Preview's button. */
-export type DataColumn = Exclude<ColumnId, 'preview'>;
 export type AlignmentOp =
   | 'enter'
   | 'exit'
@@ -47,3 +45,6 @@ export type AlignmentOp =
   | 'preset'
   | 'focusedPattern'
   | 'othersPattern';
+export type MonitoringStatus = Schemas['MonitoringStatus'];
+export type Problem = Schemas['Problem'];
+export type ProblemLevel = Schemas['ProblemLevel'];

@@ -31,6 +31,15 @@ const pj = (id: string, over: Partial<Projector> = {}): Projector => ({
   acVoltage: '-',
   errors: 'NO ERRORS',
   errorItems: [],
+  lastSeen: null,
+  status: {
+    level: 'none',
+    online: true,
+    standby: false,
+    intake: null,
+    exhaust: null,
+    problems: [],
+  },
   ...over,
 });
 

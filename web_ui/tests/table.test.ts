@@ -12,10 +12,10 @@ import { sortByIp, sortProjectors } from '../src/lib/logic/sort';
 import { autoFitWidth, layoutWidths, resizeBase } from '../src/lib/logic/widths';
 
 const CATALOGUE: ColumnId[] = [
-  'connection', 'model', 'serial', 'group', 'ip', 'power', 'shutter', 'input', 'signal',
-  'testPattern', 'runtime', 'lightRuntime', 'intake', 'exhaust', 'voltage', 'errors',
+  'projector', 'group', 'power', 'shutter', 'inputSignal', 'temperature', 'runtimes', 'voltage',
+  'errors', 'connection', 'testPattern',
 ]; // prettier-ignore
-const DEFAULTS = CATALOGUE.filter((c) => c !== 'group' && c !== 'testPattern');
+const DEFAULTS = CATALOGUE.filter((c) => c !== 'connection' && c !== 'testPattern');
 
 const pj = (id: string, over: Partial<Projector> = {}): Projector => ({
   id,
@@ -38,6 +38,15 @@ const pj = (id: string, over: Partial<Projector> = {}): Projector => ({
   acVoltage: '230V',
   errors: 'NO ERRORS',
   errorItems: [],
+  lastSeen: null,
+  status: {
+    level: 'none',
+    online: true,
+    standby: false,
+    intake: null,
+    exhaust: null,
+    problems: [],
+  },
   ...over,
 });
 
@@ -45,40 +54,57 @@ describe('columns', () => {
   test('empty or unknown saved columns fall back to the defaults', () => {
     expect(resolveColumns([], CATALOGUE, DEFAULTS)).toEqual(DEFAULTS);
     expect(resolveColumns(['nope'], CATALOGUE, DEFAULTS)).toEqual(DEFAULTS);
-    expect(resolveColumns(['ip', 'nope', 'model'], CATALOGUE, DEFAULTS)).toEqual(['ip', 'model']);
+    expect(resolveColumns(['power', 'nope', 'projector'], CATALOGUE, DEFAULTS)).toEqual([
+      'power',
+      'projector',
+    ]);
   });
 
   test('hiding, and never the last column', () => {
-    expect(toggledColumn(['model', 'ip'], 'ip', CATALOGUE)).toEqual(['model']);
-    expect(toggledColumn(['ip'], 'ip', CATALOGUE)).toBeNull();
+    expect(toggledColumn(['projector', 'power'], 'power', CATALOGUE)).toEqual(['projector']);
+    expect(toggledColumn(['power'], 'power', CATALOGUE)).toBeNull();
   });
 
   test('a re-shown column returns to its canonical slot', () => {
-    expect(toggledColumn(['connection', 'ip', 'errors'], 'serial', CATALOGUE)).toEqual([
-      'connection',
-      'serial',
-      'ip',
+    expect(toggledColumn(['projector', 'power', 'errors'], 'group', CATALOGUE)).toEqual([
+      'projector',
+      'group',
+      'power',
       'errors',
     ]);
     // Canonical slot is relative to what's visible, even after a reorder.
-    expect(toggledColumn(['errors', 'connection'], 'ip', CATALOGUE)).toEqual([
-      'ip',
+    expect(toggledColumn(['errors', 'projector'], 'power', CATALOGUE)).toEqual([
+      'power',
       'errors',
-      'connection',
+      'projector',
     ]);
-    expect(toggledColumn(['model'], 'errors', CATALOGUE)).toEqual(['model', 'errors']);
+    expect(toggledColumn(['projector'], 'errors', CATALOGUE)).toEqual(['projector', 'errors']);
   });
 
   test('reorder: left→right lands after the target, right→left before it', () => {
-    const cols: ColumnId[] = ['connection', 'model', 'ip', 'power'];
-    expect(reorderColumn(cols, 'connection', 'ip')).toEqual(['model', 'ip', 'connection', 'power']);
-    expect(reorderColumn(cols, 'power', 'model')).toEqual(['connection', 'power', 'model', 'ip']);
-    expect(reorderColumn(cols, 'ip', 'ip')).toEqual(cols);
+    const cols: ColumnId[] = ['projector', 'group', 'power', 'shutter'];
+    expect(reorderColumn(cols, 'projector', 'power')).toEqual([
+      'group',
+      'power',
+      'projector',
+      'shutter',
+    ]);
+    expect(reorderColumn(cols, 'shutter', 'group')).toEqual([
+      'projector',
+      'shutter',
+      'group',
+      'power',
+    ]);
+    expect(reorderColumn(cols, 'power', 'power')).toEqual(cols);
   });
 
   test('group-by hides Group, but never the only column', () => {
-    expect(renderedColumns(['model', 'group', 'ip'], true)).toEqual(['model', 'ip']);
-    expect(renderedColumns(['model', 'group', 'ip'], false)).toEqual(['model', 'group', 'ip']);
+    expect(renderedColumns(['projector', 'group', 'power'], true)).toEqual(['projector', 'power']);
+    expect(renderedColumns(['projector', 'group', 'power'], false)).toEqual([
+      'projector',
+      'group',
+      'power',
+    ]);
     expect(renderedColumns(['group'], true)).toEqual(['group']);
   });
 });
@@ -90,18 +116,28 @@ describe('sort', () => {
 
   test('IPs sort numerically', () => {
     const list = [pj('1', { ip: '10.0.0.20' }), pj('2', { ip: '10.0.0.3' })];
-    expect(ids(sortProjectors(list, 'ip', true, groups, text))).toEqual(['2', '1']);
-    expect(ids(sortProjectors(list, 'ip', false, groups, text))).toEqual(['1', '2']);
+    expect(ids(sortProjectors(list, 'projector', true, groups, text))).toEqual(['2', '1']);
+    expect(ids(sortProjectors(list, 'projector', false, groups, text))).toEqual(['1', '2']);
     expect(ids(sortByIp(list))).toEqual(['2', '1']);
   });
 
   test('numbers from display strings; "-" first ascending', () => {
     const list = [
-      pj('1', { intakeTemp: '41°C' }),
-      pj('2', { intakeTemp: '-' }),
-      pj('3', { intakeTemp: '9°C' }),
+      pj('1', { runtime: '1,644H' }),
+      pj('2', { runtime: '-' }),
+      pj('3', { runtime: '900H' }),
     ];
-    expect(ids(sortProjectors(list, 'intake', true, groups, text))).toEqual(['2', '3', '1']);
+    expect(ids(sortProjectors(list, 'runtimes', true, groups, text))).toEqual(['2', '3', '1']);
+  });
+
+  test('temperature sorts by the hotter reading; ties keep IP order', () => {
+    const list = [
+      pj('9', { intakeTemp: '30°C', exhaustTemp: '50°C' }),
+      pj('1', { intakeTemp: '55°C', exhaustTemp: '40°C' }),
+      pj('2', { intakeTemp: '30°C', exhaustTemp: '50°C' }),
+    ];
+    expect(ids(sortProjectors(list, 'temperature', true, groups, text))).toEqual(['2', '9', '1']);
+    expect(ids(sortProjectors(list, 'temperature', false, groups, text))).toEqual(['1', '2', '9']);
   });
 
   test('status order: connection, power', () => {
@@ -116,7 +152,7 @@ describe('sort', () => {
 
   test('errors first, unpolled with healthy; ungrouped last', () => {
     const list = [pj('1'), pj('2', { errors: '0001' }), pj('3', { errors: '-', groupId: 'g' })];
-    expect(ids(sortProjectors(list, 'errors', true, groups, text))).toEqual(['2', '3', '1']);
+    expect(ids(sortProjectors(list, 'errors', true, groups, text))).toEqual(['2', '1', '3']);
     expect(ids(sortProjectors(list, 'group', true, groups, text))[0]).toBe('3');
   });
 });

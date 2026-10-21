@@ -4,7 +4,7 @@
   The operator taps the card to select it, the viewer to open the details.
 -->
 <script lang="ts">
-  import type { AlignmentRole, DataColumn, Group, Projector } from '../../api/types';
+  import type { AlignmentRole, ColumnId, Group, Projector } from '../../api/types';
   import { signalLost } from '../../logic/alerts';
   import { cellText } from '../../logic/cells';
   import { isPatternActive, patternSwatch } from '../../logic/patterns';
@@ -15,6 +15,7 @@
   import Cell from '../table/Cell.svelte';
   import Checkbox from '../Checkbox.svelte';
   import Icon from '../Icon.svelte';
+  import TemperatureText from '../status/TemperatureText.svelte';
 
   let {
     p,
@@ -50,7 +51,7 @@
   const online = $derived(p.connection === 'connected' || p.connection === 'unprotected');
   const hasErrors = $derived(p.errorItems.length > 0);
   const lost = $derived(signalLost(alerts.of(p.id)));
-  const cell = (column: DataColumn) => cellText(column, p, groups, patternLabel);
+  const cell = (column: ColumnId) => cellText(column, p, groups, patternLabel);
   // Shown behind a closed shutter too (owner, 2026-09-30; the app card follows).
   const showPattern = $derived(online && isPatternActive(p.testPattern));
 
@@ -62,7 +63,7 @@
   }
 </script>
 
-{#snippet value(column: DataColumn)}
+{#snippet value(column: ColumnId)}
   <Cell {column} {p} {groups} {patternLabel} />
 {/snippet}
 
@@ -117,9 +118,11 @@
             {/if}
           </span>
           <span class="l2">
-            <span class="sig" class:lost title={cell('signal')}>{cell('signal')}</span>
+            <span class="sig" class:lost title={p.signal}>{p.signal}</span>
             <span class="temps">
-              {@render value('intake')}<span class="sep">/</span>{@render value('exhaust')}
+              <TemperatureText display={p.intakeTemp} level={p.status.intake ?? null} /><span
+                class="sep">/</span
+              ><TemperatureText display={p.exhaustTemp} level={p.status.exhaust ?? null} />
             </span>
           </span>
         </span>

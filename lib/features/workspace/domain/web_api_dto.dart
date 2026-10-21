@@ -19,7 +19,8 @@ import 'card_layout.dart';
 import 'control_options.dart';
 import 'dispatch_result.dart';
 import 'log_event.dart';
-import 'monitoring_columns.dart';
+import 'monitoring_status.dart';
+import 'monitoring_table_columns.dart';
 import 'pre_show.dart';
 import 'projector_errors.dart';
 import 'projector_group.dart';
@@ -60,8 +61,31 @@ String webProjectName(String? filePath) {
       : name;
 }
 
+/// What the Monitoring view says about a projector, computed by the app so
+/// the page's row stripes, quick filters, *Needs attention* and group
+/// summaries can't drift from it.
+Json monitoringStatusJson(MonitoringStatus s) => {
+  'level': s.level.name,
+  'online': s.online,
+  'standby': s.standby,
+  'intake': s.intake?.name,
+  'exhaust': s.exhaust?.name,
+  'problems': [
+    for (final p in s.problems)
+      {
+        'level': p.level.name,
+        'kind': p.kind.name,
+        'badge': p.badge,
+        'title': p.title,
+        'value': p.value,
+        'flag': p.flag,
+        'since': p.since?.toUtc().toIso8601String(),
+      },
+  ],
+};
+
 /// Everything the page shows; never the NTCONTROL login or password.
-Json projectorJson(ProjectorNode n) => {
+Json projectorJson(ProjectorNode n, MonitoringStatus status) => {
   'id': n.id,
   'name': n.name,
   'ip': n.ipAddress,
@@ -86,6 +110,9 @@ Json projectorJson(ProjectorNode n) => {
     for (final e in decodeProjectorErrors(n.errors))
       {'code': e.id, 'name': e.name, 'severity': e.severity.name},
   ],
+  // Set only while offline, for *RQ25K, last seen 16:41*.
+  'lastSeen': n.lastSeen?.toUtc().toIso8601String(),
+  'status': monitoringStatusJson(status),
 };
 
 /// An alert's id on the API: stable while the alert lasts, unique in the
@@ -143,9 +170,12 @@ bool Function(ActiveAlert)? parseAlertAcknowledge(Object? body) {
   };
 }
 
-/// All projectors in layout order (left→right, top→bottom).
-List<Json> projectorsJson(Iterable<ProjectorNode> nodes) =>
-    layoutOrder(nodes).map(projectorJson).toList();
+/// All projectors in layout order (left→right, top→bottom), each with its
+/// entry of [statuses] (`monitoringStatusProvider`).
+List<Json> projectorsJson(
+  Iterable<ProjectorNode> nodes,
+  Map<String, MonitoringStatus> statuses,
+) => [for (final n in layoutOrder(nodes)) projectorJson(n, statuses[n.id]!)];
 
 Json groupJson(ProjectorGroup g) => {
   'id': g.id,
@@ -166,22 +196,23 @@ Json configJson({
 }) => {
   'projectName': projectName,
   'role': role.name,
+  // The app's own Monitoring catalogue, so the page's table is the app's.
   'columns': [
-    for (final c in kMonitoringColumns)
+    for (final c in kMonitoringTableColumns)
       {'id': c.id, 'label': c.label, 'defaultWidth': c.defaultWidth},
   ],
-  'defaultColumns': kMonitoringDefaultColumns,
+  'defaultColumns': kMonitoringTableDefaultColumns,
   'presets': [
-    for (final e in kMonitoringPresets.entries)
+    for (final e in kMonitoringTablePresets.entries)
       {'name': e.key, 'columns': e.value},
     {
       'name': 'Show all',
-      'columns': [for (final c in kMonitoringColumns) c.id],
+      'columns': [for (final c in kMonitoringTableColumns) c.id],
     },
   ],
-  'minColumnWidth': kMonitoringMinColumnWidth,
+  'minColumnWidth': kMonitoringTableMinColumnWidth,
   'layout': {
-    'columns': resolveMonitoringColumns(layout.columns),
+    'columns': resolveMonitoringTableColumns(layout.columns),
     'widths': layout.widths,
     'sortColumn': layout.sortColumn,
     'sortAscending': layout.sortAscending,

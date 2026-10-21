@@ -15,9 +15,8 @@ export interface StoredLayout {
   collapsed: string[];
 }
 
-const KEY = 'pg.table.v2';
-/** Before the Preview column: read once, Preview added at the end. */
-const V1 = 'pg.table.v1';
+/** v3: the app's two-line columns; v1 and v2 layouts used the old ids and are dropped. */
+const KEY = 'pg.table.v3';
 
 function isStoredLayout(v: unknown): v is StoredLayout {
   if (typeof v !== 'object' || v === null) return false;
@@ -46,15 +45,14 @@ function readKey(key: string): StoredLayout | null {
 }
 
 function read(): StoredLayout | null {
-  const current = readKey(KEY);
-  if (current) return current;
-  const old = readKey(V1);
-  return old && { ...old, columns: withPreviewColumn(old.columns) };
+  try {
+    localStorage.removeItem('pg.table.v1');
+    localStorage.removeItem('pg.table.v2');
+  } catch {
+    // Blocked storage: nothing to clean up either.
+  }
+  return readKey(KEY);
 }
-
-/** Empty means the default set, which already has Preview. */
-const withPreviewColumn = (columns: ColumnId[]): ColumnId[] =>
-  columns.length === 0 ? [] : [...columns, 'preview'];
 
 function write(layout: StoredLayout): void {
   try {

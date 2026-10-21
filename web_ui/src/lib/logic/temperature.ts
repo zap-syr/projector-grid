@@ -1,5 +1,4 @@
-import type { Alert, AlertRule, AlertSeverity, Config } from '../api/types';
-import { isRecovered } from './alerts';
+import type { AlertSeverity, Config } from '../api/types';
 
 /** One rule's thresholds from `/api/config` (`TempThreshold`). */
 export type TempThreshold = Config['thresholds']['intake'];
@@ -34,16 +33,4 @@ export function temperatureBarLevel(display: string, t: TempThreshold): AlertSev
   if (c === null) return null;
   if (c >= t.hot) return 'critical';
   return c >= t.warm ? 'warning' : null;
-}
-
-/**
- * The value's colour follows the rule's active alert, as the app's
- * (`MonitoringStatus.intake` / `exhaust`): its hysteresis and a switched-off
- * rule carry over. An alert that is over colours nothing.
- */
-export function temperatureTextLevel(
-  alerts: readonly Alert[],
-  rule: Extract<AlertRule, 'intake-temp' | 'exhaust-temp'>,
-): AlertSeverity | null {
-  return alerts.find((a) => a.rule === rule && !isRecovered(a))?.severity ?? null;
 }

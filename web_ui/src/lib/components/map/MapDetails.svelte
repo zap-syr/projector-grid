@@ -84,7 +84,7 @@
       <Icon name="close" size={16} />
     </button>
   </header>
-  <DetailFields {p} {config} {groups} {patternLabel} skip={['model']} min={130} />
+  <DetailFields {p} {config} {groups} {patternLabel} skip={['projector']} min={130} />
 </div>
 
 <style>

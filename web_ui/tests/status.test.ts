@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
-import type { Alert, Projector } from '../src/lib/api/types';
+import type { Projector } from '../src/lib/api/types';
 import { errorBadge, sortedErrors } from '../src/lib/logic/cells';
 import { connectionLabel, powerLabel, shutterLabel, withUnit } from '../src/lib/logic/labels';
 import { signalState } from '../src/lib/logic/signal';
@@ -8,7 +8,6 @@ import {
   parseCelsius,
   temperatureBarLevel,
   temperatureFraction,
-  temperatureTextLevel,
   thresholdFraction,
 } from '../src/lib/logic/temperature';
 
@@ -99,15 +98,5 @@ describe('temperature', () => {
     expect(temperatureFraction('Timeout', t)).toBeNull();
     expect(thresholdFraction(t)).toBeCloseTo(50 / 68.75);
     expect(parseCelsius('41.5°C')).toBe(41.5);
-  });
-
-  test("the value follows the rule's active alert, not one that is over", () => {
-    const alert = (o: Partial<Alert>): Alert =>
-      ({ rule: 'exhaust-temp', severity: 'warning', restoredAt: null, ...o }) as Alert;
-    expect(temperatureTextLevel([alert({})], 'exhaust-temp')).toBe('warning');
-    expect(temperatureTextLevel([alert({})], 'intake-temp')).toBeNull();
-    expect(
-      temperatureTextLevel([alert({ restoredAt: '2026-10-21T21:03:00Z' })], 'exhaust-temp'),
-    ).toBeNull();
   });
 });

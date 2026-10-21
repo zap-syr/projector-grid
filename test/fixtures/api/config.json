@@ -3,24 +3,9 @@
   "role": "viewer",
   "columns": [
     {
-      "id": "connection",
-      "label": "Connection",
-      "defaultWidth": 130.0
-    },
-    {
-      "id": "model",
-      "label": "Model",
-      "defaultWidth": 160.0
-    },
-    {
-      "id": "serial",
-      "label": "Serial Number",
-      "defaultWidth": 160.0
-    },
-    {
-      "id": "preview",
-      "label": "Preview",
-      "defaultWidth": 92.0
+      "id": "projector",
+      "label": "Projector",
+      "defaultWidth": 190.0
     },
     {
       "id": "group",
@@ -28,14 +13,9 @@
       "defaultWidth": 150.0
     },
     {
-      "id": "ip",
-      "label": "IP Address",
-      "defaultWidth": 130.0
-    },
-    {
       "id": "power",
       "label": "Power",
-      "defaultWidth": 130.0
+      "defaultWidth": 120.0
     },
     {
       "id": "shutter",
@@ -43,152 +23,132 @@
       "defaultWidth": 110.0
     },
     {
-      "id": "input",
-      "label": "Input",
-      "defaultWidth": 90.0
+      "id": "inputSignal",
+      "label": "Input, signal",
+      "defaultWidth": 180.0
     },
     {
-      "id": "signal",
-      "label": "Signal",
-      "defaultWidth": 140.0
-    },
-    {
-      "id": "testPattern",
-      "label": "Test Pattern",
-      "defaultWidth": 170.0
-    },
-    {
-      "id": "runtime",
-      "label": "Projector Runtime",
+      "id": "temperature",
+      "label": "Temperature",
       "defaultWidth": 150.0
     },
     {
-      "id": "lightRuntime",
-      "label": "Light Runtime",
+      "id": "runtimes",
+      "label": "Runtime",
       "defaultWidth": 130.0
-    },
-    {
-      "id": "intake",
-      "label": "Intake Temp",
-      "defaultWidth": 130.0
-    },
-    {
-      "id": "exhaust",
-      "label": "Exhaust Temp",
-      "defaultWidth": 150.0
     },
     {
       "id": "voltage",
-      "label": "AC Voltage",
-      "defaultWidth": 130.0
+      "label": "AC",
+      "defaultWidth": 80.0
     },
     {
       "id": "errors",
       "label": "Errors",
-      "defaultWidth": 140.0
+      "defaultWidth": 160.0
+    },
+    {
+      "id": "connection",
+      "label": "Connection",
+      "defaultWidth": 130.0
+    },
+    {
+      "id": "testPattern",
+      "label": "Test pattern",
+      "defaultWidth": 160.0
     }
   ],
   "defaultColumns": [
-    "connection",
-    "model",
-    "serial",
-    "preview",
-    "ip",
+    "projector",
+    "group",
     "power",
     "shutter",
-    "input",
-    "signal",
-    "runtime",
-    "lightRuntime",
-    "intake",
-    "exhaust",
+    "inputSignal",
+    "temperature",
+    "runtimes",
     "voltage",
     "errors"
   ],
   "presets": [
     {
-      "name": "Essentials",
+      "name": "Default",
       "columns": [
-        "connection",
-        "model",
-        "ip",
+        "projector",
+        "group",
         "power",
         "shutter",
-        "input",
+        "inputSignal",
+        "temperature",
+        "runtimes",
+        "voltage",
+        "errors"
+      ]
+    },
+    {
+      "name": "Essentials",
+      "columns": [
+        "projector",
+        "group",
+        "power",
+        "shutter",
         "errors"
       ]
     },
     {
       "name": "Thermal",
       "columns": [
-        "connection",
-        "model",
-        "ip",
-        "intake",
-        "exhaust",
-        "runtime",
-        "voltage"
+        "projector",
+        "group",
+        "temperature",
+        "runtimes",
+        "voltage",
+        "errors"
       ]
     },
     {
       "name": "Signal",
       "columns": [
-        "connection",
-        "model",
-        "ip",
-        "input",
-        "signal",
-        "preview",
+        "projector",
+        "group",
         "power",
-        "shutter"
+        "shutter",
+        "inputSignal"
       ]
     },
     {
       "name": "Show all",
       "columns": [
-        "connection",
-        "model",
-        "serial",
-        "preview",
+        "projector",
         "group",
-        "ip",
         "power",
         "shutter",
-        "input",
-        "signal",
-        "testPattern",
-        "runtime",
-        "lightRuntime",
-        "intake",
-        "exhaust",
+        "inputSignal",
+        "temperature",
+        "runtimes",
         "voltage",
-        "errors"
+        "errors",
+        "connection",
+        "testPattern"
       ]
     }
   ],
   "minColumnWidth": 60.0,
   "layout": {
     "columns": [
-      "connection",
-      "model",
-      "serial",
-      "preview",
-      "ip",
+      "projector",
+      "group",
       "power",
       "shutter",
-      "input",
-      "signal",
-      "runtime",
-      "lightRuntime",
-      "intake",
-      "exhaust",
+      "inputSignal",
+      "temperature",
+      "runtimes",
       "voltage",
       "errors"
     ],
     "widths": {
-      "model": 180.0
+      "projector": 180.0
     },
-    "sortColumn": "ip",
+    "sortColumn": "projector",
     "sortAscending": true,
     "density": "standard",
     "fitToWidth": true,

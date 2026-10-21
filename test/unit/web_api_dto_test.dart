@@ -11,6 +11,7 @@ import 'package:projector_grid/features/workspace/domain/alert_rule.dart';
 import 'package:projector_grid/features/workspace/domain/alerts.dart';
 import 'package:projector_grid/features/workspace/domain/alignment.dart';
 import 'package:projector_grid/features/workspace/domain/dispatch_result.dart';
+import 'package:projector_grid/features/workspace/domain/monitoring_status.dart';
 import 'package:projector_grid/features/workspace/domain/projector_group.dart';
 import 'package:projector_grid/features/workspace/domain/projector_node.dart';
 import 'package:projector_grid/features/workspace/domain/web_api_dto.dart';
@@ -84,22 +85,86 @@ final _nodes = [
     connectionStatus: ConnectionStatus.unauthorized,
     groupId: 'g2',
   ),
-  const ProjectorNode(
+  ProjectorNode(
     id: 'n4',
     name: 'PJ-04',
     ipAddress: '192.168.0.131',
     x: 160,
     y: 180,
+    polled: true,
+    lastSeen: DateTime.utc(2026, 10, 6, 14, 1),
   ),
 ];
+
+/// n2 runs warm: its intake alert colours the value and makes it a problem.
+final _alerts = [
+  ActiveAlert(
+    nodeId: 'n2',
+    rule: AlertRule.intakeTemp,
+    severity: AlertSeverity.warning,
+    value: '41 °C',
+    since: DateTime.utc(2026, 10, 6, 14, 2),
+  ),
+];
+
+/// [projectorsJson] with each node's status as `monitoringStatusProvider`
+/// computes it.
+List<Json> _projectors(
+  List<ProjectorNode> nodes, [
+  List<ActiveAlert> alerts = const [],
+]) => projectorsJson(nodes, {
+  for (final n in nodes)
+    n.id: monitoringStatusOf(
+      n,
+      alerts.where((a) => a.nodeId == n.id),
+      const AlertSettings(),
+    ),
+});
 
 void main() {
   group('fixtures (contract with openapi.yaml)', () {
     test('projectors, in layout order and without credentials', () {
-      final json = projectorsJson(_nodes);
+      final json = _projectors(_nodes, _alerts);
       expect(json.map((p) => p['id']), ['n1', 'n2', 'n3', 'n4']);
       expect(jsonEncode(json), isNot(contains('secret')));
       expectFixture('projectors', json);
+    });
+
+    test('status: level, problems and the alert-coloured temperature', () {
+      final byId = {for (final p in _projectors(_nodes, _alerts)) p['id']: p};
+      Json status(String id) => byId[id]!['status']! as Json;
+      expect(status('n2'), {
+        'level': 'warning',
+        'online': true,
+        'standby': false,
+        'intake': 'warning',
+        'exhaust': null,
+        'problems': [
+          {
+            'level': 'warning',
+            'kind': 'temperature',
+            'badge': 'Intake hot',
+            'title': 'Intake temperature',
+            'value': '41 °C, limit 40 °C',
+            'flag': '41 °C',
+            'since': '2026-10-06T14:02:00.000Z',
+          },
+        ],
+      });
+      expect(status('n1')['level'], 'error');
+      expect(status('n3')['problems'], [containsPair('badge', 'Wrong login')]);
+      expect(status('n4')['level'], 'offline');
+      expect(byId['n4']!['lastSeen'], '2026-10-06T14:01:00.000Z');
+      expect(byId['n2']!['lastSeen'], isNull);
+    });
+
+    test('an alert alone changes the status and sends the projector', () {
+      final events = projectorEvents(
+        _projectors(_nodes),
+        _projectors(_nodes, _alerts),
+      );
+      expect(events.single.name, WebEvents.projector);
+      expect((events.single.data! as Map)['id'], 'n2');
     });
 
     test('groups', () {
@@ -114,8 +179,8 @@ void main() {
           role: WebRole.viewer,
           layout: (
             columns: const [],
-            widths: const {'model': 180},
-            sortColumn: 'ip',
+            widths: const {'projector': 180},
+            sortColumn: 'projector',
             sortAscending: true,
             density: 'standard',
             fitToWidth: true,
@@ -163,7 +228,7 @@ void main() {
         'event-snapshot',
         snapshotJson(
           projectName: 'Main Hall',
-          projectors: projectorsJson(_nodes),
+          projectors: _projectors(_nodes),
           groups: groupsJson([_stage]),
         ),
       );
@@ -288,16 +353,16 @@ void main() {
   });
 
   group('projectorEvents', () {
-    final before = projectorsJson(_nodes);
+    final before = _projectors(_nodes);
 
     test('nothing changed → no events', () {
-      expect(projectorEvents(before, projectorsJson(_nodes)), isEmpty);
+      expect(projectorEvents(before, _projectors(_nodes)), isEmpty);
     });
 
     test('a telemetry change sends only that projector', () {
       final next = [..._nodes];
       next[0] = next[0].copyWith(intakeTemp: '42°C');
-      final events = projectorEvents(before, projectorsJson(next));
+      final events = projectorEvents(before, _projectors(next));
       expect(events, hasLength(1));
       expect(events.single.name, WebEvents.projector);
       expect((events.single.data! as Map)['intakeTemp'], '42°C');
@@ -306,7 +371,7 @@ void main() {
     test('credential-only changes send nothing', () {
       final next = [..._nodes];
       next[0] = next[0].copyWith(password: 'changed');
-      expect(projectorEvents(before, projectorsJson(next)), isEmpty);
+      expect(projectorEvents(before, _projectors(next)), isEmpty);
     });
 
     test('added, removed or reordered → the whole list', () {
@@ -316,7 +381,7 @@ void main() {
         // PJ-02 dragged below the second row.
         [_nodes[0].copyWith(y: 400), ..._nodes.sublist(1)],
       ]) {
-        final events = projectorEvents(before, projectorsJson(next));
+        final events = projectorEvents(before, _projectors(next));
         expect(events.single.name, WebEvents.projectors);
       }
     });
@@ -324,14 +389,14 @@ void main() {
 
   test('errorItems decode the codes; an unchanged list sends nothing', () {
     final node = _nodes[0].copyWith(errors: 'F011 F204');
-    expect(projectorJson(node)['errorItems'], [
+    expect(_projectors([node]).single['errorItems'], [
       {'code': 'F011', 'name': 'Shutter error', 'severity': 'critical'},
       {'code': 'F204', 'name': 'Fan warning', 'severity': 'warning'},
     ]);
-    final before = projectorsJson([node]);
-    expect(projectorEvents(before, projectorsJson([node])), isEmpty);
+    final before = _projectors([node]);
+    expect(projectorEvents(before, _projectors([node])), isEmpty);
     expect(
-      projectorEvents(before, projectorsJson([node.copyWith(errors: 'F011')])),
+      projectorEvents(before, _projectors([node.copyWith(errors: 'F011')])),
       hasLength(1),
     );
   });

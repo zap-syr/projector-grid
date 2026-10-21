@@ -11,7 +11,7 @@ import DataTable from '../src/lib/components/table/DataTable.svelte';
 import { cornerTag, frameColor, preShowReady, stepped } from '../src/lib/logic/preview';
 import { live } from '../src/lib/state/live.svelte';
 import { preview } from '../src/lib/state/preview.svelte';
-import { tableLayout, type StoredLayout } from '../src/lib/state/tableLayout.svelte';
+import { type StoredLayout } from '../src/lib/state/tableLayout.svelte';
 
 const fixture = <T>(name: string): T =>
   JSON.parse(
@@ -92,28 +92,7 @@ describe('preview logic', () => {
   });
 });
 
-describe('Preview column', () => {
-  test('comes from the app, on by default after Serial Number', () => {
-    const at = config.defaultColumns.indexOf('serial');
-    expect(config.defaultColumns[at + 1]).toBe('preview');
-    expect(config.columns.filter((c) => c.id === 'preview')).toHaveLength(1);
-    expect(config.presets.find((p) => p.name === 'Signal')?.columns).toContain('preview');
-  });
-
-  test('a layout saved before it gains it at the end', () => {
-    const old: StoredLayout = {
-      ...config.layout,
-      columns: ['model', 'ip'],
-      widths: {},
-      collapsed: [],
-    };
-    localStorage.removeItem('pg.table.v2');
-    localStorage.setItem('pg.table.v1', JSON.stringify(old));
-    tableLayout.init(config);
-    expect(tableLayout.value?.columns).toEqual(['model', 'ip', 'preview']);
-    localStorage.removeItem('pg.table.v1');
-  });
-
+describe('Preview row action', () => {
   test('its button opens the preview in the rows’ order', async () => {
     // bind:clientWidth needs it; jsdom has none.
     vi.stubGlobal(
@@ -127,15 +106,15 @@ describe('Preview column', () => {
     live.projectors = projectors;
     const layout: StoredLayout = {
       ...config.layout,
-      columns: ['model', 'preview'],
-      sortColumn: 'model',
+      columns: ['projector'],
+      sortColumn: 'projector',
       sortAscending: false,
       widths: {},
       groupBy: false,
       collapsed: [],
     };
     render(DataTable, { config, layout, operator: false });
-    await fireEvent.click(screen.getByRole('button', { name: 'Preview PJ-02' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Remote Preview of 192.168.0.112' }));
     expect(preview.order).toEqual(['n4', 'n3', 'n2', 'n1']);
     expect(preview.id).toBe('n2');
   });

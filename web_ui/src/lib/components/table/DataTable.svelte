@@ -4,8 +4,8 @@
   edge to auto-fit; fit-to-width, density and group-by from the Columns menu.
 -->
 <script lang="ts">
-  import type { ColumnId, Config, DataColumn, Density, Projector } from '../../api/types';
-  import { cellText, testPatternLabel } from '../../logic/cells';
+  import type { ColumnId, Config, Density, Projector } from '../../api/types';
+  import { cellLines, testPatternLabel } from '../../logic/cells';
   import { renderedColumns, reorderColumn, resolveColumns } from '../../logic/columns';
   import { groupPills } from '../../logic/alerts';
   import { buildEntries, matchesFilter, matchesSearch, UNGROUPED } from '../../logic/rows';
@@ -42,20 +42,24 @@
 
   /** The pinned checkbox column in operator mode. */
   const SELECT_W = 44;
+  /** The row actions at the row's end (Remote Preview), not a column of the menu. */
+  const ACT_W = 52;
 
   /** Row / header height and cell padding per density (`_densityMetrics`). */
   const DENSITY: Record<Density, { row: number; header: number; hpad: number }> = {
-    compact: { row: 32, header: 40, hpad: 10 },
-    standard: { row: 40, header: 48, hpad: 16 },
-    comfortable: { row: 52, header: 56, hpad: 20 },
+    compact: { row: 46, header: 36, hpad: 8 },
+    standard: { row: 52, header: 40, hpad: 12 },
+    comfortable: { row: 60, header: 44, hpad: 16 },
   };
 
   /** Width of what a cell draws before/after its text, for auto-fit (`iconPad`). */
   const ICON_PAD: Partial<Record<ColumnId, number>> = {
+    projector: 16,
     connection: 34,
-    power: 21,
-    shutter: 21,
-    group: 16,
+    power: 22,
+    shutter: 22,
+    group: 18,
+    inputSignal: 36,
     testPattern: 26,
     errors: 20,
   };
@@ -71,17 +75,9 @@
 
   const visible = $derived(resolveColumns(layout.columns, catalogue, config.defaultColumns));
   const groupBy = $derived(layout.groupBy && live.groups.length > 0);
-  // No Remote Preview in Alignment mode.
-  const cols = $derived(
-    renderedColumns(visible, groupBy).filter(
-      (c) => !alignment.active || c !== 'preview' || visible.length === 1,
-    ),
-  );
-  const sortable = (c: ColumnId): c is DataColumn => c !== 'preview';
+  const cols = $derived(renderedColumns(visible, groupBy));
   // A sort column that's hidden falls back to the first shown, like the app.
-  const sortColumn = $derived(
-    cols.filter(sortable).find((c) => c === layout.sortColumn) ?? cols.find(sortable),
-  );
+  const sortColumn = $derived(cols.find((c) => c === layout.sortColumn) ?? cols[0]);
 
   const shown = $derived(
     live.projectors.filter(
@@ -103,7 +99,7 @@
    */
   const lead = $derived(operator || alignment.active);
   /** What the data columns share once the lead column is taken out. */
-  const dataViewport = $derived(lead ? viewport - SELECT_W : viewport);
+  const dataViewport = $derived(viewport - ACT_W - (lead ? SELECT_W : 0));
 
   // ── Selection (operator) ────────────────────────────────────────────────
   const rowOrder = $derived(entries.flatMap((e) => (e.kind === 'row' ? [e.projector] : [])));
@@ -253,12 +249,12 @@
   function autoFit(col: ColumnId) {
     const th = table?.querySelector(`th[data-col="${col}"] .lbl`);
     const td = table?.querySelector('tbody td.dc') ?? th;
-    // Preview's cells are all one small button; its label decides.
-    const cells = sortable(col)
-      ? live.projectors.map(
-          (p) => textWidth(cellText(col, p, groupMap, patternLabel), td) + (ICON_PAD[col] ?? 0) + 1,
-        )
-      : [];
+    const cells = live.projectors.map(
+      (p) =>
+        Math.max(...cellLines(col, p, groupMap, patternLabel).map((t) => textWidth(t, td))) +
+        (ICON_PAD[col] ?? 0) +
+        1,
+    );
     tableLayout.setWidth(
       col,
       autoFitWidth(
@@ -309,7 +305,7 @@
   }
 
   function headerClick(col: ColumnId) {
-    if (!suppressClick && sortable(col)) tableLayout.sortBy(col);
+    if (!suppressClick) tableLayout.sortBy(col);
   }
 
   // ── Remote Preview ──────────────────────────────────────────────────────
@@ -330,7 +326,7 @@
     class={layout.density}
     class:resizing={resizing !== null}
     class:op={lead}
-    style:width="{sized.tableWidth + (lead ? SELECT_W : 0)}px"
+    style:width="{sized.tableWidth + ACT_W + (lead ? SELECT_W : 0)}px"
     style:--selw="{SELECT_W}px"
     style:--row="{metrics.row}px"
     style:--head="{metrics.header}px"
@@ -343,6 +339,7 @@
       {#each cols as col, i (col)}
         <col style:width="{sized.widths[i]}px" />
       {/each}
+      <col style:width="{ACT_W}px" />
     </colgroup>
     <thead>
       <tr>
@@ -389,6 +386,7 @@
             ></span>
           </th>
         {/each}
+        <th class="pvc"><span class="sr">Actions</span></th>
       </tr>
     </thead>
     <tbody {@attach rowPointer}>
@@ -397,7 +395,7 @@
           {@const open = !layout.collapsed.includes(entry.key)}
           {@const pills = groupPills(entry.members, alerts.list)}
           <tr class="grp" style:--gcolor={entry.group?.color ?? 'var(--line-strong)'}>
-            <td colspan={cols.length + (lead ? 1 : 0)}>
+            <td colspan={cols.length + (lead ? 2 : 1)}>
               <div class="grpcell">
                 {#if operator && !alignment.active}
                   <Checkbox
@@ -461,30 +459,28 @@
               </td>
             {/if}
             {#each cols as col (col)}
-              {#if sortable(col)}
-                <td class="dc">
-                  <Cell column={col} {p} groups={groupMap} {patternLabel} />
-                </td>
-              {:else}
-                <td class="pvc">
-                  {#if !alignment.active}
-                    <button
-                      class="pvb"
-                      aria-label="Preview {p.name}"
-                      title="Remote Preview"
-                      onclick={() => openPreview(p.id)}
-                    >
-                      <Icon name="preview" size={17} />
-                    </button>
-                  {/if}
-                </td>
-              {/if}
+              <td class="dc">
+                <Cell column={col} {p} groups={groupMap} {patternLabel} />
+              </td>
             {/each}
+            <!-- No Remote Preview in Alignment mode; the cell keeps its width. -->
+            <td class="pvc">
+              {#if !alignment.active}
+                <button
+                  class="pvb"
+                  aria-label="Remote Preview of {p.ip}"
+                  title="Remote Preview"
+                  onclick={() => openPreview(p.id)}
+                >
+                  <Icon name="preview" size={17} />
+                </button>
+              {/if}
+            </td>
           </tr>
         {/if}
       {:else}
         <tr>
-          <td class="empty" colspan={cols.length + (lead ? 1 : 0)}>
+          <td class="empty" colspan={cols.length + (lead ? 2 : 1)}>
             {live.projectors.length === 0 ? 'No projectors in this project' : 'No projectors match'}
           </td>
         </tr>

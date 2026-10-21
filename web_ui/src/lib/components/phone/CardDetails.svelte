@@ -35,7 +35,13 @@
   } = $props();
 
   /** Shown on the card itself (ProjectorCard's summary). */
-  const SUMMARY: readonly ColumnId[] = ['model', 'power', 'shutter', 'signal', 'intake', 'exhaust'];
+  const SUMMARY: readonly ColumnId[] = [
+    'projector',
+    'power',
+    'shutter',
+    'inputSignal',
+    'temperature',
+  ];
 
   /** The pointer sits under the middle of the card (grid gap 8 px). */
   const notch = $derived(

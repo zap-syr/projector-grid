@@ -5,9 +5,8 @@
 /// so is Preview, which the row's own Remote Preview button replaces. Serial
 /// number went too: the projector panel's header shows it.
 ///
-/// Separate from `monitoring_columns.dart`, which is the Web UI's catalogue
-/// (sent in `/api/config`): the two-line columns exist on the desktop only,
-/// so the Web UI never receives an id it can't render.
+/// The Web UI's table uses the same catalogue (sent in `/api/config`), so
+/// the page's columns are the app's.
 library;
 
 class MonitoringTableColumn {

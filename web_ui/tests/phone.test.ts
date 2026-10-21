@@ -167,7 +167,7 @@ describe('phone card', () => {
       columns: 3,
       onclose,
     });
-    for (const label of ['IP Address', 'Serial Number', 'Group', 'Errors']) {
+    for (const label of ['Group', 'Runtime', 'AC', 'Errors']) {
       expect(screen.getByText(label)).toBeTruthy();
     }
     expect(screen.queryByText('Power')).toBeNull();

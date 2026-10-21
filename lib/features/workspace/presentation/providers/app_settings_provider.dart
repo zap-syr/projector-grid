@@ -65,22 +65,10 @@ class AppSettings {
   final bool webAllowControl;
   final String? webOperatorPinHash;
 
-  /// Monitoring-table layout. `monitoringColumns` is the ordered list of
-  /// *visible* column ids (see `MonitoringTable` for the id set); an empty list
-  /// means "use the table's default set/order". `monitoringColumnWidths` holds
-  /// per-column pixel widths the user set via header auto-fit / drag; ids not
-  /// present fall back to the descriptor default. `monitoringFitToWidth`
-  /// toggles proportional scale-to-viewport vs. honoring pixel widths.
-  final List<String> monitoringColumns;
-  final Map<String, double> monitoringColumnWidths;
-  final String monitoringSortColumnId;
-  final bool monitoringSortAscending;
+  /// The Monitoring table's scale-to-viewport (vs. its pixel widths) and row
+  /// density; the rest of its layout is `MonitoringViewSettings`.
   final bool monitoringFitToWidth;
-
-  /// Row density preset, and whether rows are clustered under non-collapsing
-  /// group headers (the standalone Group column is hidden while this is on).
   final MonitoringDensity monitoringDensity;
-  final bool monitoringGroupBy;
 
   /// Alignment mode choices, remembered between sessions.
   /// [alignmentOthersPattern] null = same as focused.
@@ -119,13 +107,8 @@ class AppSettings {
     this.webViewerPinHash,
     this.webAllowControl = false,
     this.webOperatorPinHash,
-    this.monitoringColumns = const [],
-    this.monitoringColumnWidths = const {},
-    this.monitoringSortColumnId = 'ip',
-    this.monitoringSortAscending = true,
     this.monitoringFitToWidth = true,
     this.monitoringDensity = MonitoringDensity.standard,
-    this.monitoringGroupBy = false,
     this.alignmentPreset = AlignmentPreset.geometry,
     this.alignmentFocusedPattern = 'OTS:07',
     this.alignmentOthersPattern = 'OTS:70',
@@ -154,13 +137,8 @@ class AppSettings {
     String? webViewerPinHash,
     bool? webAllowControl,
     String? webOperatorPinHash,
-    List<String>? monitoringColumns,
-    Map<String, double>? monitoringColumnWidths,
-    String? monitoringSortColumnId,
-    bool? monitoringSortAscending,
     bool? monitoringFitToWidth,
     MonitoringDensity? monitoringDensity,
-    bool? monitoringGroupBy,
     AlignmentPreset? alignmentPreset,
     String? alignmentFocusedPattern,
     String? alignmentOthersPattern,
@@ -190,16 +168,8 @@ class AppSettings {
       webViewerPinHash: webViewerPinHash ?? this.webViewerPinHash,
       webAllowControl: webAllowControl ?? this.webAllowControl,
       webOperatorPinHash: webOperatorPinHash ?? this.webOperatorPinHash,
-      monitoringColumns: monitoringColumns ?? this.monitoringColumns,
-      monitoringColumnWidths:
-          monitoringColumnWidths ?? this.monitoringColumnWidths,
-      monitoringSortColumnId:
-          monitoringSortColumnId ?? this.monitoringSortColumnId,
-      monitoringSortAscending:
-          monitoringSortAscending ?? this.monitoringSortAscending,
       monitoringFitToWidth: monitoringFitToWidth ?? this.monitoringFitToWidth,
       monitoringDensity: monitoringDensity ?? this.monitoringDensity,
-      monitoringGroupBy: monitoringGroupBy ?? this.monitoringGroupBy,
       alignmentPreset: alignmentPreset ?? this.alignmentPreset,
       alignmentFocusedPattern:
           alignmentFocusedPattern ?? this.alignmentFocusedPattern,
@@ -234,13 +204,8 @@ class AppSettings {
     'webViewerPinHash': webViewerPinHash,
     'webAllowControl': webAllowControl,
     'webOperatorPinHash': webOperatorPinHash,
-    'monitoringColumns': monitoringColumns,
-    'monitoringColumnWidths': monitoringColumnWidths,
-    'monitoringSortColumnId': monitoringSortColumnId,
-    'monitoringSortAscending': monitoringSortAscending,
     'monitoringFitToWidth': monitoringFitToWidth,
     'monitoringDensity': monitoringDensity.name,
-    'monitoringGroupBy': monitoringGroupBy,
     'alignmentPreset': alignmentPreset.name,
     'alignmentFocusedPattern': alignmentFocusedPattern,
     'alignmentOthersPattern': alignmentOthersPattern,
@@ -279,21 +244,11 @@ class AppSettings {
     webViewerPinHash: json['webViewerPinHash'] as String?,
     webAllowControl: (json['webAllowControl'] as bool?) ?? false,
     webOperatorPinHash: json['webOperatorPinHash'] as String?,
-    monitoringColumns:
-        (json['monitoringColumns'] as List?)?.cast<String>() ?? const [],
-    monitoringColumnWidths:
-        (json['monitoringColumnWidths'] as Map?)?.map(
-          (k, v) => MapEntry(k as String, (v as num).toDouble()),
-        ) ??
-        const {},
-    monitoringSortColumnId: (json['monitoringSortColumnId'] as String?) ?? 'ip',
-    monitoringSortAscending: (json['monitoringSortAscending'] as bool?) ?? true,
     monitoringFitToWidth: (json['monitoringFitToWidth'] as bool?) ?? true,
     monitoringDensity: MonitoringDensity.values.firstWhere(
       (d) => d.name == json['monitoringDensity'],
       orElse: () => MonitoringDensity.standard,
     ),
-    monitoringGroupBy: (json['monitoringGroupBy'] as bool?) ?? false,
     alignmentPreset: AlignmentPreset.values.firstWhere(
       (p) => p.name == json['alignmentPreset'],
       orElse: () => AlignmentPreset.geometry,
@@ -434,26 +389,6 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
     _save(state);
   }
 
-  void setMonitoringColumns(List<String> columns) {
-    state = state.copyWith(monitoringColumns: List.unmodifiable(columns));
-    _save(state);
-  }
-
-  void setMonitoringColumnWidth(String id, double width) {
-    final next = Map<String, double>.of(state.monitoringColumnWidths);
-    next[id] = width;
-    state = state.copyWith(monitoringColumnWidths: Map.unmodifiable(next));
-    _save(state);
-  }
-
-  void setMonitoringSort(String columnId, bool ascending) {
-    state = state.copyWith(
-      monitoringSortColumnId: columnId,
-      monitoringSortAscending: ascending,
-    );
-    _save(state);
-  }
-
   void setMonitoringFitToWidth(bool fit) {
     state = state.copyWith(monitoringFitToWidth: fit);
     _save(state);
@@ -461,11 +396,6 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
 
   void setMonitoringDensity(MonitoringDensity density) {
     state = state.copyWith(monitoringDensity: density);
-    _save(state);
-  }
-
-  void setMonitoringGroupBy(bool groupBy) {
-    state = state.copyWith(monitoringGroupBy: groupBy);
     _save(state);
   }
 

@@ -22,8 +22,10 @@ import type {
   AlertSeverity,
   Alignment,
   AlignmentPresetId,
+  Config,
   ErrorItem,
   Group,
+  Problem,
   Projector,
   Role,
 } from '../src/lib/api/types.ts';
@@ -77,6 +79,110 @@ function alert(
     acknowledged: false,
     restoredAt: null,
     ...extra,
+  };
+}
+
+const THRESHOLDS = load<Config>('config').thresholds;
+const LEVEL_RANK: Record<Problem['level'], number> = { none: 0, warning: 1, error: 2, offline: 3 };
+
+/** `monitoringStatusOf`, enough of it for the mock wall. */
+function statusOf(p: Projector, alerts: Alert[]): Projector['status'] {
+  const own = alerts.filter((a) => a.projectorId === p.id);
+  const online = p.connection === 'connected' || p.connection === 'unprotected';
+  const problem = (o: Omit<Problem, 'since'> & { since?: string | null }): Problem => ({
+    since: null,
+    ...o,
+  });
+  if (p.connection === 'offline') {
+    const since = own.find((a) => a.rule === 'offline')?.since ?? null;
+    return {
+      level: 'offline',
+      online: false,
+      standby: false,
+      intake: null,
+      exhaust: null,
+      problems: [
+        problem({
+          level: 'offline',
+          kind: 'offline',
+          badge: 'Offline',
+          title: 'Offline',
+          value: 'No answer',
+          flag: 'Offline',
+          since,
+        }),
+      ],
+    };
+  }
+  const problems: Problem[] = [];
+  if (p.connection === 'unauthorized') {
+    problems.push(
+      problem({
+        level: 'warning',
+        kind: 'login',
+        badge: 'Wrong login',
+        title: 'Wrong login',
+        value: 'Check the login',
+        flag: 'Login',
+      }),
+    );
+  }
+  for (const e of p.errorItems) {
+    problems.push(
+      problem({
+        level: e.severity === 'critical' ? 'error' : 'warning',
+        kind: 'projectorError',
+        badge: `${e.severity === 'critical' ? 'Error' : 'Warning'} ${e.code}`,
+        title: e.name ?? 'Projector error',
+        value: e.code,
+        flag: e.code,
+        since: own.find((a) => a.rule === 'error' && a.item === e.code)?.since ?? null,
+      }),
+    );
+  }
+  let intake: Projector['status']['intake'] = null;
+  let exhaust: Projector['status']['exhaust'] = null;
+  for (const a of own) {
+    if (a.restoredAt !== null) continue;
+    const level = a.severity === 'critical' ? 'error' : 'warning';
+    if (a.rule === 'intake-temp' || a.rule === 'exhaust-temp') {
+      const isIntake = a.rule === 'intake-temp';
+      const t = isIntake ? THRESHOLDS.intake : THRESHOLDS.exhaust;
+      if (isIntake) intake = a.severity;
+      else exhaust = a.severity;
+      problems.push(
+        problem({
+          level,
+          kind: 'temperature',
+          badge: isIntake ? 'Intake hot' : 'Exhaust hot',
+          title: a.label,
+          value: `${a.value}, limit ${a.severity === 'critical' ? t.hot : t.warm} °C`,
+          flag: a.value,
+          since: a.since,
+        }),
+      );
+    } else if (a.rule === 'signal-lost') {
+      problems.push(
+        problem({
+          level,
+          kind: 'signal',
+          badge: 'Signal lost',
+          title: 'Signal lost',
+          value: a.value,
+          flag: 'No signal',
+          since: a.since,
+        }),
+      );
+    }
+  }
+  problems.sort((a, b) => LEVEL_RANK[b.level] - LEVEL_RANK[a.level]);
+  return {
+    level: problems[0]?.level ?? 'none',
+    online,
+    standby: online && p.power === 'standby',
+    intake,
+    exhaust,
+    problems,
   };
 }
 
@@ -158,6 +264,7 @@ function wall(): Projector[] {
         exhaustTemp: '-',
         acVoltage: '-',
         errors: '-',
+        lastSeen: new Date(Date.now() - 5 * 60_000).toISOString(),
       });
     }
     return p;
@@ -205,9 +312,20 @@ export function mockApi(): Plugin {
   const projectors = wall();
   const previews = mockPreview(projectors);
   let alertList = seedAlerts(projectors);
+  for (const p of projectors) p.status = statusOf(p, alertList);
   const alertsJson = () => ({ now: new Date().toISOString(), alerts: alertList });
+  /** A projector's event, with its status worked out again like the app's. */
+  const pushProjector = (p: Projector) => {
+    p.status = statusOf(p, alertList);
+    for (const s of streams) sse(s, 'projector', p);
+  };
   const pushAlerts = () => {
     for (const s of streams) sse(s, 'alerts', alertsJson());
+    // An alert alone changes a status, as `monitoringStatusProvider` does.
+    for (const p of projectors) {
+      const next = statusOf(p, alertList);
+      if (JSON.stringify(next) !== JSON.stringify(p.status)) pushProjector(p);
+    }
   };
 
   /** Like `parseAlertAcknowledge`; acknowledging a returned signal clears it. */
@@ -303,7 +421,7 @@ export function mockApi(): Plugin {
               ? alignment.focusedPattern
               : (alignment.othersPattern ?? alignment.focusedPattern);
         }
-        for (const s of streams) sse(s, 'projector', p);
+        pushProjector(p);
       }
     }
     for (const s of streams) sse(s, 'alignment', alignment);
@@ -340,7 +458,7 @@ export function mockApi(): Plugin {
           const s = saved.get(p.id);
           if (!s) continue;
           [p.shutter, p.testPattern] = s;
-          for (const st of streams) sse(st, 'projector', p);
+          pushProjector(p);
         }
         saved.clear();
         Object.assign(alignment, { busy: false, focusedId: null });
@@ -408,7 +526,7 @@ export function mockApi(): Plugin {
     const current = Number.parseInt(p.intakeTemp, 10);
     const base = Number.isNaN(current) ? 35 : current;
     p.intakeTemp = `${Math.max(28, Math.min(47, base + (Math.random() < 0.5 ? -1 : 1)))}°C`;
-    for (const s of streams) sse(s, 'projector', p);
+    pushProjector(p);
   }
 
   /** Changes the mock projectors like a real command would and reports like the app. */
@@ -440,7 +558,7 @@ export function mockApi(): Plugin {
       } else if (action.lens === 'home') {
         label = 'Lens Home';
       }
-      for (const s of streams) sse(s, 'projector', p);
+      pushProjector(p);
     }
     const ref = (p: Projector) => ({ id: p.id, name: p.name });
     const counts = [

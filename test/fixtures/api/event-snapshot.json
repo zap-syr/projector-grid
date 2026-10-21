@@ -27,7 +27,26 @@
           "name": null,
           "severity": "critical"
         }
-      ]
+      ],
+      "lastSeen": null,
+      "status": {
+        "level": "error",
+        "online": true,
+        "standby": false,
+        "intake": null,
+        "exhaust": null,
+        "problems": [
+          {
+            "level": "error",
+            "kind": "projectorError",
+            "badge": "Error 000100000000",
+            "title": "Projector error",
+            "value": "000100000000",
+            "flag": "000100000000",
+            "since": null
+          }
+        ]
+      }
     },
     {
       "id": "n2",
@@ -49,7 +68,16 @@
       "exhaustTemp": "47°C",
       "acVoltage": "230V",
       "errors": "NO ERRORS",
-      "errorItems": []
+      "errorItems": [],
+      "lastSeen": null,
+      "status": {
+        "level": "none",
+        "online": true,
+        "standby": false,
+        "intake": null,
+        "exhaust": null,
+        "problems": []
+      }
     },
     {
       "id": "n3",
@@ -71,7 +99,26 @@
       "exhaustTemp": "-",
       "acVoltage": "-",
       "errors": "-",
-      "errorItems": []
+      "errorItems": [],
+      "lastSeen": null,
+      "status": {
+        "level": "warning",
+        "online": false,
+        "standby": false,
+        "intake": null,
+        "exhaust": null,
+        "problems": [
+          {
+            "level": "warning",
+            "kind": "login",
+            "badge": "Wrong login",
+            "title": "Wrong login",
+            "value": "Check the login",
+            "flag": "Login",
+            "since": null
+          }
+        ]
+      }
     },
     {
       "id": "n4",
@@ -93,7 +140,26 @@
       "exhaustTemp": "-",
       "acVoltage": "-",
       "errors": "-",
-      "errorItems": []
+      "errorItems": [],
+      "lastSeen": "2026-10-06T14:01:00.000Z",
+      "status": {
+        "level": "offline",
+        "online": false,
+        "standby": false,
+        "intake": null,
+        "exhaust": null,
+        "problems": [
+          {
+            "level": "offline",
+            "kind": "offline",
+            "badge": "Offline",
+            "title": "Offline",
+            "value": "No answer",
+            "flag": "Offline",
+            "since": null
+          }
+        ]
+      }
     }
   ],
   "groups": [

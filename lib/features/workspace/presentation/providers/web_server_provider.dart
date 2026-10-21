@@ -21,6 +21,8 @@ import 'alerts_provider.dart';
 import 'alignment_provider.dart';
 import 'app_settings_provider.dart';
 import 'event_log_provider.dart';
+import 'monitoring_status_provider.dart';
+import 'monitoring_view_provider.dart';
 import 'poll_status_provider.dart';
 import 'pre_show_provider.dart';
 import 'project_provider.dart';
@@ -70,6 +72,8 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
       _pushWorkspace();
       _previews.refresh();
     });
+    // A projector's status also changes with its alerts, without a poll.
+    ref.listen(monitoringStatusProvider, (_, _) => _pushWorkspace());
     // Raised, cleared or acknowledged (in the app or on any page).
     ref.listen(alertsProvider, (_, _) {
       if (_hub.clientCount == 0) return;
@@ -229,17 +233,19 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
   @override
   Json config(WebRole role) {
     final s = ref.read(appSettingsProvider);
+    // The app's own Monitoring layout seeds a browser's first visit.
+    final view = ref.read(monitoringViewProvider);
     return configJson(
       projectName: projectName,
       role: role,
       layout: (
-        columns: s.monitoringColumns,
-        widths: s.monitoringColumnWidths,
-        sortColumn: s.monitoringSortColumnId,
-        sortAscending: s.monitoringSortAscending,
+        columns: view.columns,
+        widths: view.columnWidths,
+        sortColumn: view.sortColumnId,
+        sortAscending: view.sortAscending,
         density: s.monitoringDensity.name,
         fitToWidth: s.monitoringFitToWidth,
-        groupBy: s.monitoringGroupBy,
+        groupBy: view.groupByGroup,
       ),
       intakeThreshold: s.alerts.intake,
       exhaustThreshold: s.alerts.exhaust,
@@ -247,7 +253,10 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
   }
 
   @override
-  List<Json> projectors() => projectorsJson(ref.read(workspaceProvider));
+  List<Json> projectors() => projectorsJson(
+    ref.read(workspaceProvider),
+    ref.read(monitoringStatusProvider),
+  );
 
   @override
   List<Json> groups() =>

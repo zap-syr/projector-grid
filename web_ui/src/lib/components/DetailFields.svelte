@@ -1,6 +1,6 @@
 <!-- A projector's fields as label / value pairs, for the card and Map details. -->
 <script lang="ts">
-  import type { ColumnId, Config, DataColumn, Group, Projector } from '../api/types';
+  import type { ColumnId, Config, Group, Projector } from '../api/types';
   import Cell from './table/Cell.svelte';
 
   let {
@@ -21,12 +21,7 @@
     min?: number;
   } = $props();
 
-  // Preview has its own button in the details, not a field.
-  const fields = $derived(
-    config.columns.filter(
-      (c): c is typeof c & { id: DataColumn } => c.id !== 'preview' && !skip.includes(c.id),
-    ),
-  );
+  const fields = $derived(config.columns.filter((c) => !skip.includes(c.id)));
 </script>
 
 <dl style:--min="{min}px">

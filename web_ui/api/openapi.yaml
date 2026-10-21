@@ -118,6 +118,8 @@ components:
         - acVoltage
         - errors
         - errorItems
+        - lastSeen
+        - status
       description: |
         Display strings are exactly what the app shows ('-' = not polled yet).
       properties:
@@ -170,6 +172,75 @@ components:
           description: "`errors` decoded by the app's code table, in reply order; empty when healthy."
           items:
             $ref: '#/components/schemas/ErrorItem'
+        lastSeen:
+          type: [string, 'null']
+          format: date-time
+          description: When an offline projector last answered this session (UTC); null while it answers.
+        status:
+          $ref: '#/components/schemas/MonitoringStatus'
+
+    MonitoringStatus:
+      type: object
+      additionalProperties: false
+      required: [level, online, standby, intake, exhaust, problems]
+      description: |
+        What the app's Monitoring view says about the projector (`monitoringStatusOf`):
+        the row stripe, the quick filters, *Needs attention* and the group summaries.
+      properties:
+        level:
+          $ref: '#/components/schemas/ProblemLevel'
+        online:
+          type: boolean
+          description: Answers polls with a working login.
+        standby:
+          type: boolean
+          description: Online and in standby.
+        intake:
+          description: The intake temperature alert's severity, which colours the value; null without one.
+          oneOf:
+            - $ref: '#/components/schemas/AlertSeverity'
+            - type: 'null'
+        exhaust:
+          oneOf:
+            - $ref: '#/components/schemas/AlertSeverity'
+            - type: 'null'
+        problems:
+          type: array
+          description: Worst first.
+          items:
+            $ref: '#/components/schemas/Problem'
+
+    ProblemLevel:
+      type: string
+      enum: [none, warning, error, offline]
+
+    Problem:
+      type: object
+      additionalProperties: false
+      required: [level, kind, badge, title, value, flag, since]
+      properties:
+        level:
+          $ref: '#/components/schemas/ProblemLevel'
+        kind:
+          type: string
+          enum: [offline, login, projectorError, temperature, signal]
+          description: Only `projectorError` is the projector's own fault (the Errors column).
+        badge:
+          type: string
+          description: 'Short, for a badge: `Exhaust hot`, `Error F305`, `Warning H001`, `Offline`.'
+        title:
+          type: string
+          description: "The details row's label: `Exhaust temperature`, `Fan error`."
+        value:
+          type: string
+          description: "The details row's value: `52 °C, limit 50 °C`, `F305`."
+        flag:
+          type: string
+          description: "Shortest, for a tile's corner: `52 °C`, `F305`."
+        since:
+          type: [string, 'null']
+          format: date-time
+          description: When the alert behind it started (UTC); null without one (the rule is off).
 
     ErrorItem:
       type: object
@@ -225,24 +296,19 @@ components:
 
     ColumnId:
       type: string
+      description: The app's Monitoring table columns (`monitoring_table_columns.dart`).
       enum:
-        - connection
-        - model
-        - serial
-        - preview
+        - projector
         - group
-        - ip
         - power
         - shutter
-        - input
-        - signal
-        - testPattern
-        - runtime
-        - lightRuntime
-        - intake
-        - exhaust
+        - inputSignal
+        - temperature
+        - runtimes
         - voltage
         - errors
+        - connection
+        - testPattern
 
     Density:
       type: string
