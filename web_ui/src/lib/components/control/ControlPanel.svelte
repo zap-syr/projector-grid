@@ -12,6 +12,7 @@
   import { control } from '../../state/control.svelte';
   import { device } from '../../state/device.svelte';
   import { selection } from '../../state/selection.svelte';
+  import { view } from '../../state/view.svelte';
   import Icon from '../Icon.svelte';
   import HoldButton from './HoldButton.svelte';
   import LensIcon, { type LensDirection } from './LensIcon.svelte';
@@ -40,6 +41,8 @@
   const touchLens = $derived(device.phone || device.touch);
 
   const count = $derived(selection.projectors.length);
+  /** Lens steps go without a dialog, so the heading says when some targets are out of sight. */
+  const hiddenCount = $derived(view.hiddenSelected.length);
   const none = $derived(count === 0);
   const patternLabels = $derived(new Map(config.testPatterns.map((t) => [t.code, t.label])));
   /** Any code from the config lists → its label, for confirm titles. */
@@ -123,7 +126,7 @@
     <header>
       <!-- The toolbar's bulk selector shows the count. -->
       {#if lensOnly}
-        <h3 class="lens">Lens · {alignment.focused?.ip ?? '—'}</h3>
+        <h3 class="lens">Lens, {alignment.focused?.ip ?? ''}</h3>
       {:else}
         <h3>Control</h3>
       {/if}
@@ -245,7 +248,11 @@
   {:else}
     <!-- Desktop: the app's control bar — each arrow has fast / normal / slow. -->
     <section>
-      <h6>Lens shift</h6>
+      <h6>
+        Lens shift{#if hiddenCount > 0}<span class="lhid"
+            >{count} projectors, {hiddenCount} hidden</span
+          >{/if}
+      </h6>
       <div class="shift">
         {#each FAST_TO_SLOW as s (s)}
           <div class="lb">{@render lensButton('up', 'shiftV', true, s)}</div>
@@ -635,5 +642,13 @@
 
   .col {
     min-width: 0;
+  }
+
+  .lhid {
+    margin-left: 8px;
+    color: var(--muted);
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0;
   }
 </style>

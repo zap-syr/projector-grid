@@ -80,9 +80,7 @@
   const sortColumn = $derived(cols.find((c) => c === layout.sortColumn) ?? cols[0]);
 
   const shown = $derived(
-    live.projectors.filter(
-      (p) => matchesFilter(p, view.filter, alerts.byProjector) && matchesSearch(p, view.search),
-    ),
+    live.projectors.filter((p) => matchesFilter(p, view.filter) && matchesSearch(p, view.search)),
   );
   const sorted = $derived(
     sortColumn

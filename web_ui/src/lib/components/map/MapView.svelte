@@ -23,7 +23,6 @@
     ZOOM_STEP,
   } from '../../logic/map';
   import { matchesFilter, matchesSearch } from '../../logic/rows';
-  import { alerts } from '../../state/alerts.svelte';
   import { live } from '../../state/live.svelte';
   import { alignment } from '../../state/alignment.svelte';
   import { preview } from '../../state/preview.svelte';
@@ -39,9 +38,7 @@
   const patternLabel = (code: string) => testPatternLabel(code, patterns);
   const groupMap = $derived(new Map(live.groups.map((g) => [g.id, g])));
   const shown = $derived(
-    live.projectors.filter(
-      (p) => matchesFilter(p, view.filter, alerts.byProjector) && matchesSearch(p, view.search),
-    ),
+    live.projectors.filter((p) => matchesFilter(p, view.filter) && matchesSearch(p, view.search)),
   );
   const shownIds = $derived(new Set(shown.map((p) => p.id)));
 

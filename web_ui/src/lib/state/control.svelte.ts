@@ -2,6 +2,7 @@ import { api, ApiError } from '../api/client';
 import type { Action, DispatchResult } from '../api/types';
 import { type Confirmation, confirmationFor, isLensStep } from '../logic/actions';
 import { selection } from './selection.svelte';
+import { view } from './view.svelte';
 
 interface Pending {
   action: Action;
@@ -24,7 +25,8 @@ class ControlState {
   request(action: Action, codeLabel: (code: string) => string): void {
     const ids = selection.projectors.map((p) => p.id);
     if (ids.length === 0) return;
-    const confirmation = confirmationFor(action, ids.length, codeLabel);
+    const hidden = view.hiddenSelected.map((p) => p.ip);
+    const confirmation = confirmationFor(action, ids.length, codeLabel, hidden);
     if (confirmation) {
       this.pending = { action, ids, confirmation };
     } else {
@@ -50,7 +52,7 @@ class ControlState {
       if (!(e instanceof ApiError)) throw e;
       // 403/404: control was locked or switched off meanwhile; the access
       // event updates the page, this just explains why nothing happened.
-      this.notify({ text: 'Not sent — control is locked', ok: false });
+      this.notify({ text: 'Not sent, control is locked', ok: false });
       return;
     }
     const allOk = result.failed.length === 0 && result.skipped.length === 0;

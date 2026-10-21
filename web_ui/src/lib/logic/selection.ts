@@ -1,4 +1,5 @@
 import type { Group, Projector } from '../api/types';
+import { matchesFilter } from './rows';
 
 /** Only projectors that can take a command: offline / auth-error rows can't be selected. */
 export function isSelectable(p: Projector): boolean {
@@ -78,10 +79,11 @@ export function draggedSelection(
   return next;
 }
 
-/** The toolbar's Select ▾ menu (the app's own group entries follow the fixed ones). */
+/** The toolbar's Select ▾ menu: the box selects all shown, so no *All projectors* here. */
 export type SelectPreset =
-  | { kind: 'all' }
-  | { kind: 'alerts'; alerting: { has(id: string): boolean } }
+  | { kind: 'online' }
+  | { kind: 'attention' }
+  | { kind: 'standby' }
   | { kind: 'invert' }
   | { kind: 'group'; group: Group };
 
@@ -93,10 +95,11 @@ export function presetSelection(
   const pick = (test: (p: Projector) => boolean) =>
     new Set(projectors.filter((p) => isSelectable(p) && test(p)).map((p) => p.id));
   switch (preset.kind) {
-    case 'all':
-      return pick(() => true);
-    case 'alerts':
-      return pick((p) => preset.alerting.has(p.id));
+    case 'online':
+    case 'attention':
+    case 'standby':
+      // From every projector, not just the shown ones: a preset works without a filter.
+      return pick((p) => matchesFilter(p, preset.kind));
     case 'invert':
       return pick((p) => !selected.has(p.id));
     case 'group':

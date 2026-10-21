@@ -7,7 +7,13 @@ import {
   resolveColumns,
   toggledColumn,
 } from '../src/lib/logic/columns';
-import { buildEntries, matchesFilter, matchesSearch, UNGROUPED } from '../src/lib/logic/rows';
+import {
+  buildEntries,
+  filterCounts,
+  matchesFilter,
+  matchesSearch,
+  UNGROUPED,
+} from '../src/lib/logic/rows';
 import { sortByIp, sortProjectors } from '../src/lib/logic/sort';
 import { autoFitWidth, layoutWidths, resizeBase } from '../src/lib/logic/widths';
 
@@ -195,14 +201,22 @@ describe('widths', () => {
 });
 
 describe('rows', () => {
-  test('filters match the header counts', () => {
-    const offline = pj('1', { connection: 'offline', errors: '-' });
-    const faulty = pj('2', { connection: 'unprotected', errors: '0001' });
-    const alerting = new Set(['2']);
-    expect(matchesFilter(offline, 'offline', alerting)).toBe(true);
-    expect(matchesFilter(offline, 'alerts', alerting)).toBe(false);
-    expect(matchesFilter(faulty, 'online', alerting)).toBe(true);
-    expect(matchesFilter(faulty, 'alerts', alerting)).toBe(true);
+  test('quick filters read the app status and overlap', () => {
+    const base = pj('9').status;
+    const offline = pj('1', { status: { ...base, level: 'offline', online: false } });
+    const warmStandby = pj('2', { status: { ...base, level: 'warning', standby: true } });
+    expect(matchesFilter(offline, 'offline')).toBe(true);
+    expect(matchesFilter(offline, 'online')).toBe(false);
+    for (const f of ['online', 'attention', 'standby'] as const) {
+      expect(matchesFilter(warmStandby, f)).toBe(true);
+    }
+    expect(filterCounts([offline, warmStandby])).toEqual({
+      all: 2,
+      online: 1,
+      attention: 1,
+      offline: 1,
+      standby: 1,
+    });
   });
 
   test('search by name, IP or serial', () => {

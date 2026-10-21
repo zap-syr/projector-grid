@@ -76,12 +76,21 @@ describe('selection', () => {
     expect(ids(selectedRange(rows, 'gone', '3', new Set(['3'])))).toEqual([]);
   });
 
-  test('Select ▾ presets', () => {
+  test('Select ▾ presets pick from every projector, selectable only', () => {
     const group: Group = { id: 'g', name: 'Stage', color: '#000000' };
-    expect(ids(presetSelection({ kind: 'all' }, rows, new Set()))).toEqual(['1', '3', '5']);
-    // Only selectable ones: 2 is offline.
-    const alerting = new Set(['2', '3']);
-    expect(ids(presetSelection({ kind: 'alerts', alerting }, rows, new Set()))).toEqual(['3']);
+    const status = (o: Partial<Projector['status']>) => ({
+      ...(rows[0] as Projector).status,
+      ...o,
+    });
+    const all = [
+      pj('1', { status: status({ level: 'warning' }) }),
+      // Offline with a warning level would still not be selectable.
+      pj('2', { connection: 'offline', status: status({ level: 'error', online: false }) }),
+      pj('3', { status: status({ standby: true }) }),
+    ];
+    expect(ids(presetSelection({ kind: 'online' }, all, new Set()))).toEqual(['1', '3']);
+    expect(ids(presetSelection({ kind: 'attention' }, all, new Set()))).toEqual(['1']);
+    expect(ids(presetSelection({ kind: 'standby' }, all, new Set()))).toEqual(['3']);
     expect(ids(presetSelection({ kind: 'invert' }, rows, new Set(['1'])))).toEqual(['3', '5']);
     expect(ids(presetSelection({ kind: 'group', group }, rows, new Set()))).toEqual(['1', '3']);
   });
@@ -89,6 +98,21 @@ describe('selection', () => {
 
 describe('confirmation rules', () => {
   const label = (c: string) => (c === 'OTS:07' ? 'Cross Hatch' : c);
+
+  test('hidden targets: everything but lens steps asks and names them', () => {
+    const hidden = ['10.0.0.2', '10.0.0.4'];
+    for (const a of [
+      act.osd(true),
+      act.shutter(false),
+      act.testPattern('OTS:07'),
+      act.input('IIS:HD1'),
+    ]) {
+      expect(confirmationFor(a, 1, label, hidden)?.hidden).toEqual(hidden);
+    }
+    expect(confirmationFor(act.osd(true), 3, label)).toBeNull();
+    expect(confirmationFor(act.lensStep('focus', true, 'slow'), 3, label, hidden)).toBeNull();
+    expect(confirmationFor(act.power(true), 1, label)?.hidden).toEqual([]);
+  });
 
   test('power and lens home always ask; power off is red', () => {
     expect(confirmationFor(act.power(true), 1, label)).toMatchObject({ danger: false });

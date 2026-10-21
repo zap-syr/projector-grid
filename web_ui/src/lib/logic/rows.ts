@@ -1,23 +1,42 @@
 import type { Group, Projector } from '../api/types';
 
-export type StatusFilter = 'all' | 'online' | 'offline' | 'alerts';
+/** The quick filters, one at a time like the app's (`MonitoringQuickFilter`). */
+export type StatusFilter = 'all' | 'online' | 'attention' | 'offline' | 'standby';
 
-/** Same buckets as the header counts; [alerting] holds the projectors with an active alert. */
-export function matchesFilter(
-  p: Projector,
-  filter: StatusFilter,
-  alerting: { has(id: string): boolean },
-): boolean {
+export const QUICK_FILTERS: readonly StatusFilter[] = [
+  'all',
+  'online',
+  'attention',
+  'offline',
+  'standby',
+];
+
+/**
+ * `matchesQuickFilter`, from the app's status. They overlap: a projector in
+ * standby with a warning is Online, Attention and Standby.
+ */
+export function matchesFilter(p: Projector, filter: StatusFilter): boolean {
   switch (filter) {
     case 'all':
       return true;
     case 'online':
-      return p.connection === 'connected' || p.connection === 'unprotected';
+      return p.status.online;
+    case 'attention':
+      return p.status.level === 'warning' || p.status.level === 'error';
     case 'offline':
-      return p.connection === 'offline';
-    case 'alerts':
-      return alerting.has(p.id);
+      return p.status.level === 'offline';
+    case 'standby':
+      return p.status.standby;
   }
+}
+
+/** Each quick filter's count (`quickFilterCounts`). */
+export function filterCounts(projectors: readonly Projector[]): Record<StatusFilter, number> {
+  const counts = { all: 0, online: 0, attention: 0, offline: 0, standby: 0 };
+  for (const p of projectors) {
+    for (const f of QUICK_FILTERS) if (matchesFilter(p, f)) counts[f]++;
+  }
+  return counts;
 }
 
 /** Name, IP or serial contains [query], ignoring case. */

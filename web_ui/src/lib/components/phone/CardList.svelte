@@ -39,9 +39,7 @@
 
   const shown = $derived(
     sortByIp(
-      live.projectors.filter(
-        (p) => matchesFilter(p, view.filter, alerts.byProjector) && matchesSearch(p, view.search),
-      ),
+      live.projectors.filter((p) => matchesFilter(p, view.filter) && matchesSearch(p, view.search)),
     ),
   );
   /** One card's details are open at a time. */

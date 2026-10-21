@@ -1,15 +1,12 @@
 <script lang="ts">
   import { api, ApiError } from '../../api/client';
-  import { statusSummary } from '../../logic/status';
   import { control } from '../../state/control.svelte';
   import { alignment } from '../../state/alignment.svelte';
   import { live } from '../../state/live.svelte';
   import { session } from '../../state/session.svelte';
   import { device } from '../../state/device.svelte';
-  import { view } from '../../state/view.svelte';
   import { alerts } from '../../state/alerts.svelte';
   import AlertBell from '../alerts/AlertBell.svelte';
-  import AlertIcon, { severityIcon } from '../alerts/AlertIcon.svelte';
   import Icon from '../Icon.svelte';
   import AppLogo from './AppLogo.svelte';
   import UnlockDialog from './UnlockDialog.svelte';
@@ -42,7 +39,6 @@
   /** Phones and portrait tablets: short labels, icons for the rest. */
   const compact = $derived(device.cardsOnly);
 
-  const counts = $derived(statusSummary(live.projectors));
   const liveText = $derived(
     live.connection === 'live'
       ? 'Live'
@@ -50,30 +46,9 @@
         ? 'Reconnecting'
         : 'Connecting',
   );
-  const filters = [
-    { id: 'all', label: 'All', count: 'total', tone: '' },
-    { id: 'online', label: 'Online', count: 'online', tone: 'ok' },
-    { id: 'offline', label: 'Offline', count: 'offline', tone: 'err' },
-  ] as const;
-
-  // The app's status-bar Alerts button: per severity the unacknowledged count
-  // with a filled icon, or once all are acknowledged the active total outlined.
-  const ac = $derived(alerts.counts);
-  const none = $derived(ac.criticalTotal + ac.warningTotal + ac.recovered === 0);
   /** Touch layouts open the alerts from the header; others have the rail. */
   const bell = $derived(device.control !== 'side');
-  const iconSize = $derived(compact && !device.phone && !device.short ? 18 : 16);
 </script>
-
-{#snippet severityCount(severity: 'critical' | 'warning', open: number, total: number)}
-  {#if total > 0}
-    <span class="sc" class:fresh={open > 0}
-      ><span class={severity === 'critical' ? 'crit' : 'warn'}
-        ><AlertIcon name={severityIcon(severity, open > 0)} size={iconSize} /></span
-      >{open > 0 ? open : total}</span
-    >
-  {/if}
-{/snippet}
 
 <header
   class="hdr"
@@ -87,37 +62,6 @@
   <div class="proj">
     <b>{session.projectName}</b>
     <span>Projector Grid</span>
-  </div>
-  <div class="filters" role="group" aria-label="Filter">
-    {#each filters as f (f.id)}
-      <button
-        class="flt {f.tone}"
-        aria-pressed={view.filter === f.id}
-        onclick={() => view.toggleFilter(f.id)}>{f.label} <b>{counts[f.count]}</b></button
-      >
-    {/each}
-    <button
-      class="flt alerts"
-      aria-pressed={view.filter === 'alerts'}
-      aria-label="Alerts: {ac.critical} critical, {ac.warning} warning new"
-      onclick={() => view.toggleFilter('alerts')}
-    >
-      <span class="al">Alerts</span>
-      {#if none}
-        <span class="sc"
-          ><span class="ok"><AlertIcon name="checkCircleOutline" size={iconSize} /></span>0</span
-        >
-      {:else}
-        {@render severityCount('critical', ac.critical, ac.criticalTotal)}
-        {@render severityCount('warning', ac.warning, ac.warningTotal)}
-        {#if ac.recovered > 0}
-          <span class="sc fresh"
-            ><span class="ok"><AlertIcon name="checkCircle" size={iconSize} /></span
-            >{ac.recovered}</span
-          >
-        {/if}
-      {/if}
-    </button>
   </div>
   <div class="grow"></div>
   {#if operator}
@@ -186,7 +130,7 @@
     border-bottom: 1px solid var(--line);
   }
 
-  /* Phone: project, live, bell, role and sign-out in one row; the filters below. */
+  /* Phone: project, live, refresh, bell, role and sign-out in one row. */
   .hdr.phone {
     flex-wrap: wrap;
     gap: 8px;
@@ -199,15 +143,6 @@
     min-width: 0;
   }
 
-  .phone .filters {
-    order: 1;
-    flex-basis: 100%;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    margin: 0 -4px;
-    scrollbar-width: none;
-  }
-
   /* Phone held sideways: everything in one short row. */
   .hdr.compact:not(.phone) {
     flex-wrap: nowrap;
@@ -217,10 +152,6 @@
 
   .compact:not(.phone) .proj {
     min-width: 0;
-  }
-
-  .compact .flt {
-    flex: none;
   }
 
   .phone .grow,
@@ -315,15 +246,7 @@
     }
   }
 
-  /* Upright phone: the first row is full, so the button closes the filter
-     row instead, the filters scrolling sideways before it would wrap. */
-  .phone.op .filters {
-    flex: 1 1 calc(100% - 46px);
-    min-width: 0;
-  }
-
   .phone .refresh {
-    order: 2;
     width: 40px;
     height: 40px;
     border-radius: 10px;
@@ -358,168 +281,6 @@
   .proj span {
     font-size: 12px;
     color: var(--faint);
-  }
-
-  .filters {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-  }
-
-  .flt {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    height: 32px;
-    padding: 0 11px;
-    border: 0;
-    border-radius: 8px;
-    background: none;
-    color: var(--muted);
-    font-size: 13px;
-    font-weight: 550;
-    cursor: pointer;
-  }
-
-  .flt:hover {
-    background: var(--hover);
-    color: var(--text);
-  }
-
-  .flt b {
-    font-weight: 650;
-    color: var(--text);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .flt.ok b {
-    color: var(--ok);
-  }
-
-  .flt.err b {
-    color: var(--err);
-  }
-
-  .flt.warn b {
-    color: var(--warn);
-  }
-
-  .flt[aria-pressed='true'] {
-    background: var(--accent-soft);
-    color: var(--accent);
-  }
-
-  .flt.alerts {
-    gap: 9px;
-  }
-
-  .sc {
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-    color: var(--muted);
-    font-weight: 450;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .sc.fresh {
-    color: var(--text);
-    font-weight: 650;
-  }
-
-  .crit,
-  .warn,
-  .ok {
-    display: inline-flex;
-  }
-
-  .crit {
-    color: var(--sev-crit);
-  }
-
-  .warn {
-    color: var(--sev-warn);
-  }
-
-  .ok {
-    color: var(--sev-ok);
-  }
-
-  /* Touch: filters a finger-sized 40 px, as in the approved touch layout. */
-  .touch .flt {
-    height: 40px;
-    padding: 0 12px;
-    border-radius: 10px;
-    font-size: 14px;
-  }
-
-  /* A phone, either way up, fits all four filters in one row: tighter, and
-     the Alerts filter is its icons and counts (the bell beside it says "alerts"). */
-  .hdr.phone,
-  .hdr.short {
-    gap: 6px;
-  }
-
-  .short .filters {
-    flex-wrap: nowrap;
-  }
-
-  .phone .flt,
-  .short .flt {
-    gap: 5px;
-    padding: 0 8px;
-    font-size: 13.5px;
-  }
-
-  .phone .flt.alerts,
-  .short .flt.alerts {
-    gap: 7px;
-  }
-
-  .phone .al,
-  .short .al {
-    display: none;
-  }
-
-  /* Below 1280 px (where the toolbar drops its labels too) the header keeps
-     one row: the Alerts filter is its icons and counts. */
-  @media (max-width: 1279px) {
-    .hdr:not(.compact) {
-      column-gap: 10px;
-    }
-
-    .hdr:not(.compact) .al {
-      display: none;
-    }
-
-    .hdr:not(.compact) .flt.alerts {
-      gap: 7px;
-    }
-
-    /* A sideways tablet: still 40 px tall, a little narrower. */
-    .touch:not(.compact) .flt {
-      padding: 0 9px;
-    }
-  }
-
-  /* An upright tablet: the phone's two rows, the filters on their own row
-     at full size, so nothing wraps inside the header. */
-  .hdr.compact:not(.phone):not(.short) {
-    flex-wrap: wrap;
-  }
-
-  .compact:not(.phone):not(.short) .proj {
-    flex: 1;
-  }
-
-  .compact:not(.phone):not(.short) .filters {
-    order: 1;
-    flex-basis: 100%;
-    flex-wrap: nowrap;
-  }
-
-  .compact:not(.phone):not(.short) .grow {
-    display: none;
   }
 
   /* Lock / Unlock already says which role this is; the name gets the room. */

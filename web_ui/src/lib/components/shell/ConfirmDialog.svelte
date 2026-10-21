@@ -28,6 +28,13 @@
       </span>
       <h4 id="confirm-title">{p.confirmation.title}</h4>
       <p>{p.confirmation.question}</p>
+      {#if p.confirmation.hidden.length > 0}
+        {@const n = p.confirmation.hidden.length}
+        <div class="hidden">
+          <span>{n === 1 ? '1 of them is' : `${n} of them are`} hidden by the filter</span>
+          <span class="ips">{p.confirmation.hidden.join(', ')}</span>
+        </div>
+      {/if}
       <div class="row">
         <button class="btn" onclick={() => control.cancel()}>Cancel</button>
         <button
@@ -125,5 +132,25 @@
     background: var(--err);
     border-color: var(--err);
     color: #fff;
+  }
+
+  .hidden {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface-2);
+    color: var(--muted);
+    font-size: 12.5px;
+  }
+
+  .ips {
+    color: var(--text);
+    font-family: var(--mono);
+    letter-spacing: 0;
+    font-size: 12px;
+    word-break: break-word;
   }
 </style>

@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Config } from '../../api/types';
-  import { matchesFilter, matchesSearch } from '../../logic/rows';
+  import { filterCounts, QUICK_FILTERS, type StatusFilter } from '../../logic/rows';
   import {
     isSelectable,
     presetSelection,
@@ -8,7 +8,6 @@
     toggledAll,
     triState,
   } from '../../logic/selection';
-  import { alerts } from '../../state/alerts.svelte';
   import { alignment } from '../../state/alignment.svelte';
   import { control } from '../../state/control.svelte';
   import { device } from '../../state/device.svelte';
@@ -25,11 +24,18 @@
   let { config, layout, operator }: { config: Config; layout: StoredLayout; operator: boolean } =
     $props();
 
-  const shown = $derived(
-    live.projectors.filter(
-      (p) => matchesFilter(p, view.filter, alerts.byProjector) && matchesSearch(p, view.search),
-    ),
-  );
+  const shown = $derived(view.shown);
+  const counts = $derived(filterCounts(live.projectors));
+  /** Selected, but out of the list: they still get every command. */
+  const hidden = $derived(view.hiddenSelected);
+
+  const FILTER_LABELS: Record<StatusFilter, string> = {
+    all: 'All',
+    online: 'Online',
+    attention: 'Attention',
+    offline: 'Offline',
+    standby: 'Standby',
+  };
 
   /** Tablets: finger-sized controls in one row, matching the touch Alignment banner. */
   const touch = $derived(device.touch && !device.phone);
@@ -102,14 +108,23 @@
         <span class="blabel">{count > 0 ? `${count} selected` : 'Select'}</span>
         <Icon name="chevron" size={14} />
       </button>
+      {#if hidden.length > 0 && !device.phone}
+        <!-- Over the menu button, which keeps room for it: the bulk selector
+             never changes width. -->
+        <button
+          class="hid"
+          title="{hidden.length} selected {hidden.length === 1
+            ? 'projector is'
+            : 'projectors are'} hidden: {hidden.map((p) => p.ip).join(', ')}. Show all"
+          onclick={() => view.showAll()}
+          ><Icon name="eyeOff" size={14} />{hidden.length} hidden</button
+        >
+      {/if}
       {#if menu === 'select'}
         <div class="menu" role="menu">
-          <button role="menuitem" onclick={() => pick({ kind: 'all' })}>All projectors</button>
-          <button
-            role="menuitem"
-            onclick={() => pick({ kind: 'alerts', alerting: alerts.byProjector })}
-            >Only with alerts</button
-          >
+          <button role="menuitem" onclick={() => pick({ kind: 'online' })}>Online</button>
+          <button role="menuitem" onclick={() => pick({ kind: 'attention' })}>Attention</button>
+          <button role="menuitem" onclick={() => pick({ kind: 'standby' })}>Standby</button>
           <button role="menuitem" onclick={() => pick({ kind: 'invert' })}>Invert</button>
           {#if live.groups.length > 0}
             <hr />
@@ -134,13 +149,30 @@
   </label>
   {#if device.phone}
     <span class="count"><b>{shown.length}</b>/{live.projectors.length}</span>
-  {:else if touch}
-    <span class="count"><b>{shown.length}</b>/{live.projectors.length}</span>
-    {@render desktopTools()}
-  {:else}
-    <span class="count"
-      ><b>{shown.length}</b> of {live.projectors.length}<span class="sl">&nbsp;shown</span></span
-    >
+  {/if}
+  <!-- Always all five, an empty one dimmed: filters never come and go. -->
+  <div class="chips" role="group" aria-label="Filter">
+    {#each QUICK_FILTERS as f (f)}
+      <button
+        class="chip {f}"
+        aria-pressed={view.filter === f}
+        disabled={counts[f] === 0 && view.filter !== f}
+        onclick={() => view.toggleFilter(f)}
+      >
+        {#if f === 'standby'}<Icon name="moon" size={14} />{:else if f !== 'all'}<i></i>{/if}
+        {FILTER_LABELS[f]}<b>{counts[f]}</b>
+      </button>
+    {/each}
+  </div>
+  {#if device.phone && hidden.length > 0}
+    <div class="strip">
+      <Icon name="eyeOff" size={18} />
+      <span><b>{hidden.length}</b> selected {hidden.length === 1 ? 'is' : 'are'} hidden</span>
+      <span class="grow"></span>
+      <button onclick={() => view.showAll()}>Show all</button>
+    </div>
+  {/if}
+  {#if !device.phone}
     {@render desktopTools()}
   {/if}
 </div>
@@ -231,7 +263,7 @@
   }
 
   .phone {
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     padding: 8px 12px;
   }
 
@@ -491,12 +523,41 @@
     color: var(--accent);
   }
 
-  /* Wide enough for "999 selected", so the count never moves the search. */
+  /* The pill over the menu button's right end, left of the chevron. */
+  .hid {
+    position: absolute;
+    top: 50%;
+    right: 28px;
+    transform: translateY(-50%);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 22px;
+    padding: 0 8px 0 6px;
+    border: 0;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--on-pc) 14%, transparent);
+    color: var(--on-pc);
+    font-size: 11.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .hid:hover {
+    background: color-mix(in srgb, var(--on-pc) 24%, transparent);
+  }
+
+  /* Wide enough for "999 selected" and the hidden pill, so neither moves the search. */
   .blabel {
     min-width: 12ch;
     font-variant-numeric: tabular-nums;
     text-align: left;
     white-space: nowrap;
+  }
+
+  .toolbar:not(.phone) .bmenu {
+    width: 190px;
   }
 
   .phone .bulk {
@@ -552,6 +613,129 @@
     height: 10px;
     border-radius: 50%;
     flex: none;
+  }
+
+  .chips {
+    display: flex;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: none;
+    height: 30px;
+    padding: 0 10px;
+    border: 1px solid var(--line-strong);
+    border-radius: 999px;
+    background: none;
+    color: var(--muted);
+    font-size: 12.5px;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .chip b {
+    font-weight: 700;
+    color: var(--faint);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .chip i {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+  }
+
+  .chip.online i {
+    background: var(--ok);
+  }
+
+  .chip.attention i {
+    background: var(--warn);
+  }
+
+  .chip.offline i {
+    background: var(--faint);
+  }
+
+  .chip:hover:not(:disabled) {
+    background: var(--hover);
+  }
+
+  .chip[aria-pressed='true'],
+  .chip[aria-pressed='true']:hover {
+    border-color: var(--accent);
+    background: var(--pc);
+    color: var(--on-pc);
+  }
+
+  .chip[aria-pressed='true'] b {
+    color: var(--on-pc);
+  }
+
+  .chip:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+
+  /* Phones: the chips get a row of their own, scrolling sideways. */
+  .phone .chips {
+    order: 1;
+    flex-basis: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .phone .chip {
+    height: 40px;
+    padding: 0 14px;
+    font-size: 13.5px;
+  }
+
+  .touch .chips {
+    flex: 0 1 auto;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .touch .chip {
+    height: 40px;
+    padding: 0 12px;
+    font-size: 13.5px;
+  }
+
+  .strip {
+    order: 2;
+    flex-basis: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 48px;
+    padding: 0 6px 0 14px;
+    border-radius: 12px;
+    background: var(--soft);
+    color: var(--muted);
+    font-size: 13.5px;
+  }
+
+  .strip b {
+    color: var(--text);
+  }
+
+  .strip button {
+    height: 40px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 999px;
+    background: none;
+    color: var(--accent);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
   }
 
   .legend {
