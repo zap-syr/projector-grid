@@ -459,13 +459,22 @@ Then the existing `build_runner → format → analyze → flutter test`. The re
       selector (tooltip lists the IPs; a click clears search and filter, the selection
       stays); the Control header reads *5 selected, 4 hidden*. Phone: a line under the
       filters, *4 selected are hidden* with *Show all*. While any selected projector is
-      hidden, every command asks first, and the confirmation names the hidden ones.
+      hidden, every command asks first, and the confirmation names the hidden ones:
+      Power, Shutter, OSD, Input, Test pattern and Lens setup. Lens shift, Focus and Zoom
+      steps go without a dialog (a burst of steps can't stop for one); the Lens card's
+      header then reads *5 projectors, 4 hidden*. *Hidden* means removed from the table or
+      the cards by the search or a quick filter only: tiles the Map dims stay on screen,
+      and a collapsed group's box already shows its partial selection, so neither counts.
     - **Temperature text** follows the alert, as the app's; only the bars go by reading.
-    - **Density** stays on the web; the Projector column is always shown and pinned.
+    - **Density** stays on the web with the app's two-line metrics
+      (`monitoring_data_table.dart`): Compact row 46 / header 36 / group 38, Standard
+      52 / 40 / 40, Comfortable 60 / 44 / 44. The Projector column is always shown and
+      pinned.
     - **Errors column:** the first badge, *+N* and the popover of all codes.
     - **Viewer details:** the table keeps the full width while the details are closed and
       narrows by the 344 px panel when they open; a second click on the same row closes
-      them; the viewer's row action is Remote Preview only.
+      them (a card the same); the viewer's row action is Remote Preview only. The viewer's
+      table has no checkbox column, bulk selector or Control toggle, as today.
     - **Cards stay the default** on every touch screen until the user picks a view.
     - **Fonts:** latin and cyrillic subsets.
     - **Logo:** wherever a board draws the blue tile with a projector glyph (the header's
@@ -520,7 +529,9 @@ Then the existing `build_runner → format → analyze → flutter test`. The re
     *…table without groups, Columns menu open*, *Control panel states…*).
     - Data bar: bulk selector, search *Search IP, model, serial*, quick filters *All /
       Online / Attention / Offline / Standby* with counts (an empty one stays, dimmed), the
-      view switch as icons, Columns, the Control toggle.
+      view switch as icons, Columns, the Control toggle. The filters leave the header in
+      this phase (the header itself is restyled in Phase 8). The new Select ▾ presets and
+      the hidden selection (variant B, with its confirmations) land here too.
     - Two-line rows, grouped or flat; the Columns menu with *Group by*, presets, column
       checkboxes and *Fit to width*. A row's left edge carries a 3 px stripe by level
       (amber warning, red error, grey offline); an offline row dims every cell but
@@ -586,7 +597,7 @@ Then the existing `build_runner → format → analyze → flutter test`. The re
     cards, the info button and the Control button*, the tablet boards).
     - Card: checkbox; IP in mono with the alert badge; model under it (*, last seen 16:41*
       while offline); power and shutter states; input + `SignalPill` (ellipsized when
-      narrow); then *In 25 °C   Ex 39 °C* on its own line, coloured by reading. Two lines
+      narrow); then *In 25 °C   Ex 39 °C* on its own line, coloured by the alert. Two lines
       for input / signal and temperatures, so nothing overflows; the card grows taller.
     - ⓘ in the top-right corner (32 px with a mouse, 44 px on touch) replaces the chevron.
       Operator: a tap on the card or the checkbox selects, ⓘ opens the details. Viewer:
