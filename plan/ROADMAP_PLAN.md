@@ -33,7 +33,7 @@ accepted item so each can be picked up independently. Edge Blending has its own 
 | U4 | Side panel instead of modal dialogs | `[dropped]` | Doesn't fit the current layout; dialogs are open → adjust → close, rarely revisited |
 | U5 | Command palette (Ctrl+K) | **Accepted** → §11 | Owner asked for UX + code design |
 | U6 | Monitoring table keyboard/filter/export | `[later]` | Already tracked in `MONITORING_UI_PLAN.md` §5/§7/§9 |
-| U7 | Dialog redesign (Add / Edit Projector, Groups, Scheduled Tasks, Brightness Control, Color Correction, Geometry Correction, Edge Blending, Remote Preview, Custom Command, Keyboard Shortcuts, About; main toolbar; tooltip; control bar; Monitoring view; projector card; event log panel; status bar; alerts panels; icon title bar for all dialogs) | **Accepted** → §13 | Design approved 2026-10-13 from the mockups; full plan in `DIALOG_REDESIGN_PLAN.md` |
+| U7 | Dialog redesign (Add / Edit Projector, Groups, Scheduled Tasks, Brightness Control, Color Correction, Geometry Correction, Edge Blending, Remote Preview, Custom Command, Keyboard Shortcuts, About; main toolbar; tooltip; control bar; Monitoring view; projector card; event log panel; status bar; alerts panels; icon title bar for all dialogs) | **Done** 2026-10-21 → §13 | Design approved 2026-10-13 from the mockups; full plan in `DIALOG_REDESIGN_PLAN.md` |
 
 Suggested order (value ÷ effort, and what unblocks what):
 **U1 → U2 → (Edge Blending) → F1 → F4 → U3 → F5 → F3 → U5 → F7/§5 → R6 in parallel throughout.**
@@ -1601,7 +1601,7 @@ Today `_dispatchToNodes` logs one event per node and returns nothing; on a 30-pr
 
 ---
 
-## 13. `[ ]` U7 — Dialog Redesign
+## 13. `[x]` U7 — Dialog Redesign
 
 Approved 2026-10-13 from the mockups at https://claude.ai/artifact/AL2c8Kh9aoXrrv2eUmVdcJ.
 The design and the implementation steps live in their own plan, **`DIALOG_REDESIGN_PLAN.md`**,
@@ -1692,3 +1692,10 @@ Order: foundation (with the tooltip) → Groups → Add / Edit Projector → Bri
 Color Correction → Geometry Correction → Edge Blending → Remote Preview → Custom Command →
 Keyboard Shortcuts and About → main toolbar → control bar → projector card → Monitoring
 view → Scheduled Tasks → event log panel → status bar → alerts panels (plan §8).
+
+**Done 2026-10-21** (owner: the plan is complete). Last follow-ups: the dark theme's window,
+bars and Monitoring cards on the M3 container tones as in the mockups, temperature bars
+coloured by the reading, the group pill beside the IP in the Monitoring panel and in the
+corner of Quick status (plan §7f, §7i, §7j.6). The `[later]` items stay in the backlog:
+Missed runs (§4.8), the Monitoring group filter and CSV export, the `Ctrl+1` / `Ctrl+2`
+tooltip on the view switch.

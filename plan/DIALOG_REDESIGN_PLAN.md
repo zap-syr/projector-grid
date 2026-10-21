@@ -2,6 +2,10 @@
 
 Status: `[ ]` pending · `[~]` in progress · `[x]` done · `[dropped]` not doing · `[later]` deferred
 
+**Complete 2026-10-21** (owner): every part is `[x]`; the `[later]` items (Missed runs §4.8,
+the Monitoring group filter and CSV export, the view switch's `Ctrl+1` / `Ctrl+2` tooltip)
+are the backlog.
+
 Design approved by the owner on 2026-10-13. Mockups (light and dark for every board,
 Geometry Correction, Edge Blending, Remote Preview, Custom Command, Keyboard Shortcuts,
 About, the main toolbar, the tooltip, the control bar, the Monitoring view, the
@@ -1103,8 +1107,12 @@ Done 2026-10-17 (wave B). Differs from the text below: the badges take the visua
 rules' neutral colour and 11.5 px figures (the mockup had a lighter grey and 10 px); the
 Alignment icon is `center_focus_strong`, as in the banner; the tool buttons have tooltips
 in both modes. `[later]`: a tooltip with `Ctrl+1` / `Ctrl+2` on the view switch (needs a
-parameter in `SegmentedTabs`); the toolbar background a tone lighter, as in the mockup,
-if the owner wants it after a look. Counts come from `toolbar_counts_provider.dart`, the
+parameter in `SegmentedTabs`). ~~The toolbar background a tone lighter, as in the
+mockup~~ done 2026-10-21: in dark mode the window, the canvas and the lists take
+`surfaceContainerLow`, the menu bar, toolbar, status bar and the panel bars
+`surfaceContainer` (`AppTheme.windowBackground` / `chromeBackground`), and the Monitoring
+cards one step more (`surfaceContainerHigh`, the input block `surfaceContainerHighest`);
+the light theme is unchanged (owner compared both, 2026-10-21). Counts come from `toolbar_counts_provider.dart`, the
 next run from `domain/schedule_next_run.dart`.
 
 Boards (dark only): *Toolbar: wide window, 1600 / 1180 / Alignment on, a missed task /
@@ -1278,6 +1286,20 @@ Done 2026-10-19 (wave C, fixes after the owner's check). Differs from the text b
   to power, and power is red in standby and offline.
 - Cards' group rows are a filled band edge to edge, the same height as the table's.
 - The panel's Test pattern row has the pattern thumbnail (`TestPatternThumb`).
+- Follow-ups 2026-10-21 (owner's checks):
+  - the panel's Preview, Web UI and Locate share the panel's width equally;
+  - the group pill sits beside the IP in the panel header, so the header is two lines with
+    or without a group;
+  - temperature bars (panel, table row, Extended cards) are green below the warning
+    threshold, amber from it, red from the critical one, by the reading against the
+    Alerts thresholds, without hysteresis and also with the rule off
+    (`temperatureBarLevel`); the value's text still follows the alert;
+  - the cards' problem badge and a compact tile's corner leave Signal lost out, as the
+    table's Errors column does (`cardProblemsOf`): the input block shows *No signal*;
+  - in dark mode the cards are one step above the window (`surfaceContainerHigh`, the input
+    block `surfaceContainerHighest`), see §7f;
+  - the panel's temperature row reads `58 °C, limit 55 °C`, not *above*: the rule trips at
+    the threshold itself.
 
 Boards (dark only): *Monitoring: table, grouped / table with the projector panel / cards,
 extended / cards, compact, with the projector panel / table without groups*, each in the
@@ -1465,7 +1487,8 @@ Temperatures, signal details and errors stay in Monitoring (§7i).
   only).
 - **Discoverable**: a *Quick status* item with the `Space` key in the card context menu
   (§7j.5) and a row in Keyboard Shortcuts (§7d).
-- **Content**: model, IP, group dot + name; **Power**, **Shutter**, **Input** with the
+- **Content**: model and IP on one line, the group as a `GroupPill` in the top right corner
+  (none without a group; owner, 2026-10-21); **Power**, **Shutter**, **Input** with the
   signal pill as in Monitoring, **Temperature** (intake, exhaust, amber above the alert
   threshold) and the active alerts. All of it is already in `ProjectorNode` and
   `alertsProvider`, no new fields. "Updated 2 s ago" and "on for 2 h" from the mockup are
