@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/theme/app_theme.dart';
 import '../../domain/monitoring_table_columns.dart';
 import '../../domain/monitoring_view_settings.dart';
 import '../providers/monitoring_panel_provider.dart';
@@ -39,7 +40,7 @@ class MonitoringTable extends ConsumerWidget {
     final mode = ref.watch(monitoringViewProvider.select((s) => s.mode));
     final panelId = ref.watch(monitoringPanelProvider);
     return ColoredBox(
-      color: Theme.of(context).colorScheme.surface,
+      color: AppTheme.windowBackground(Theme.of(context).colorScheme),
       child: Column(
         children: [
           const MonitoringBar(),

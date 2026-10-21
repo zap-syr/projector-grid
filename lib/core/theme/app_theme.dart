@@ -291,6 +291,17 @@ class AppTheme {
   /// it the submenu covers the parent's edge.
   static const Offset submenuOffset = Offset(menuInset, 0);
 
+  /// The window behind the canvas and the lists. In dark mode `surface` is
+  /// the darkest tone of the ramp with next to no blue, so the window takes
+  /// the container ramp's low step, as in the redesign mockup.
+  static Color windowBackground(ColorScheme cs) =>
+      cs.brightness == Brightness.light ? cs.surface : cs.surfaceContainerLow;
+
+  /// The toolbar, the status bar and the bars and headers of the panels: one
+  /// step above [windowBackground] in dark mode.
+  static Color chromeBackground(ColorScheme cs) =>
+      cs.brightness == Brightness.light ? cs.surface : cs.surfaceContainer;
+
   static ThemeData get lightTheme => _base(Brightness.light);
 
   static ThemeData get darkTheme => _base(Brightness.dark);

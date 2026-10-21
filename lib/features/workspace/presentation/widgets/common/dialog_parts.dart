@@ -191,10 +191,15 @@ class DialogCard extends StatelessWidget {
     this.highlighted = false,
     this.muted = false,
     this.padding = EdgeInsets.zero,
+    this.color,
   });
 
   final Widget child;
   final Color? borderColor;
+
+  /// Overrides the card fill, for a card that sits on the window instead of
+  /// a dialog body.
+  final Color? color;
   final bool highlighted;
   final bool muted;
   final EdgeInsetsGeometry padding;
@@ -223,7 +228,7 @@ class DialogCard extends StatelessWidget {
         ),
       ),
       decoration: BoxDecoration(
-        color: muted ? surfaces.editor : surfaces.card,
+        color: color ?? (muted ? surfaces.editor : surfaces.card),
         borderRadius: radius,
       ),
       child: child,

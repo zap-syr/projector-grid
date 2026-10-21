@@ -33,6 +33,17 @@ const double _kExtendedCardMinWidth = 260;
 const Size kCompactTileSize = Size(176, 96);
 const double _kGap = 12;
 
+/// The cards sit on the window, which in dark mode is the dialog body's
+/// tone, so they take one step more than a dialog card to lift off it, and
+/// the input block inside one step more again.
+({Color card, Color inset}) _cardSurfaces(BuildContext context) {
+  final cs = Theme.of(context).colorScheme;
+  final surfaces = DialogSurfaces.of(context);
+  return cs.brightness == Brightness.light
+      ? (card: surfaces.card, inset: surfaces.editor)
+      : (card: cs.surfaceContainerHigh, inset: cs.surfaceContainerHighest);
+}
+
 /// The Cards view (§7i.3): Extended cards or Compact tiles, grouped like the
 /// table. A click opens the projector panel.
 class MonitoringCards extends ConsumerStatefulWidget {
@@ -256,7 +267,9 @@ class _ExtendedCard extends ConsumerWidget {
       _ => null,
     };
 
+    final surfaces = _cardSurfaces(context);
     final card = DialogCard(
+      color: surfaces.card,
       highlighted: selected,
       borderColor: border,
       padding: const EdgeInsets.all(14),
@@ -316,7 +329,7 @@ class _ExtendedCard extends ConsumerWidget {
             height: 44,
             padding: const EdgeInsets.symmetric(horizontal: 10),
             decoration: BoxDecoration(
-              color: DialogSurfaces.of(context).editor,
+              color: surfaces.inset,
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
                 color: Theme.of(context).colorScheme.outlineVariant,
@@ -560,10 +573,10 @@ class _CompactTile extends ConsumerWidget {
             height: kCompactTileSize.height,
             decoration: BoxDecoration(
               color: tone == null
-                  ? DialogSurfaces.of(context).card
+                  ? _cardSurfaces(context).card
                   : Color.alphaBlend(
                       tone.withValues(alpha: 0.10),
-                      DialogSurfaces.of(context).card,
+                      _cardSurfaces(context).card,
                     ),
               borderRadius: radius,
               border: Border.all(

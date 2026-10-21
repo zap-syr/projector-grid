@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../../../../core/theme/app_theme.dart';
 import '../providers/alert_notifications_provider.dart';
 import '../providers/alerts_provider.dart';
 import '../providers/alignment_provider.dart';
@@ -405,7 +406,9 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
             ),
           },
           child: Scaffold(
-            backgroundColor: Theme.of(context).colorScheme.surface,
+            backgroundColor: AppTheme.windowBackground(
+              Theme.of(context).colorScheme,
+            ),
             body: Column(
               children: [
                 // Isolated as defense-in-depth: editHistoryStatusProvider and

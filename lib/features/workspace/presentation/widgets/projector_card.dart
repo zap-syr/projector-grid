@@ -191,6 +191,8 @@ class _ProjectorCardState extends ConsumerState<ProjectorCard> {
     final group = widget.group;
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    // The gap between the card and its alignment ring shows the canvas.
+    final canvas = AppTheme.windowBackground(colorScheme);
     final isSelected = ref.watch(
       selectionProvider.select((ids) => ids.contains(node.id)),
     );
@@ -416,10 +418,10 @@ class _ProjectorCardState extends ConsumerState<ProjectorCard> {
                           color: alignmentAccent,
                           spreadRadius: _ringWidth,
                         ),
-                        BoxShadow(color: colorScheme.surface, spreadRadius: 2),
+                        BoxShadow(color: canvas, spreadRadius: 2),
                       ] else if (alignmentRole == AlignmentRole.shown) ...[
                         BoxShadow(color: alignmentNeighbour, spreadRadius: 4),
-                        BoxShadow(color: colorScheme.surface, spreadRadius: 2),
+                        BoxShadow(color: canvas, spreadRadius: 2),
                       ],
                     ],
                   ),

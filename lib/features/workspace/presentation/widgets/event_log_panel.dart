@@ -397,7 +397,7 @@ class _EventLogPanelState extends ConsumerState<EventLogPanel> {
           final narrow = _narrow = eventLogNarrow(width, wasNarrow: _narrow);
           final showSource = width >= eventLogSourceColumnBelow;
           return ColoredBox(
-            color: cs.surface,
+            color: AppTheme.windowBackground(cs),
             child: Column(
               children: [
                 _Grip(

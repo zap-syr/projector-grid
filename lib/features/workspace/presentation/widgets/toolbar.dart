@@ -67,7 +67,7 @@ class _MainToolbarState extends ConsumerState<MainToolbar> {
     final tasks = ref.watch(scheduledTasksSummaryProvider);
 
     final cs = Theme.of(context).colorScheme;
-    final background = cs.surface;
+    final background = AppTheme.chromeBackground(cs);
     final ctrl = Platform.isMacOS ? '⌘' : 'Ctrl';
 
     final tools = <Widget>[

@@ -66,7 +66,7 @@ class EventLogHeader extends StatelessWidget {
       height: height,
       padding: EdgeInsets.fromLTRB(narrow ? 12 : 16, 0, narrow ? 6 : 10, 0),
       decoration: BoxDecoration(
-        color: cs.surface,
+        color: AppTheme.chromeBackground(cs),
         border: Border(bottom: BorderSide(color: cs.outlineVariant)),
       ),
       child: Row(

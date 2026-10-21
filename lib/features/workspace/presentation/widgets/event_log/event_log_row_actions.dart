@@ -21,7 +21,7 @@ class EventLogRowActions extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: AppTheme.windowBackground(Theme.of(context).colorScheme),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(

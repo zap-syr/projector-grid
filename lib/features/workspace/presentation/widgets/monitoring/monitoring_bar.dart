@@ -102,7 +102,7 @@ class _MonitoringBarState extends ConsumerState<MonitoringBar> {
       height: MonitoringBar.height,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: cs.surface,
+        color: AppTheme.chromeBackground(cs),
         border: Border(bottom: BorderSide(color: cs.outlineVariant)),
       ),
       child: LayoutBuilder(builder: (context, c) => _row(context, c.maxWidth)),

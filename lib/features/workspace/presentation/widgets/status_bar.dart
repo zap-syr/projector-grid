@@ -67,7 +67,7 @@ class _StatusBarState extends ConsumerState<StatusBar> {
       height: StatusBar.height,
       padding: const EdgeInsets.only(left: 16, right: 10),
       decoration: BoxDecoration(
-        color: cs.surface,
+        color: AppTheme.chromeBackground(cs),
         border: Border(bottom: BorderSide(color: cs.outlineVariant)),
       ),
       child: DefaultTextStyle.merge(
