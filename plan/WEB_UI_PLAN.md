@@ -441,6 +441,40 @@ Then the existing `build_runner → format → analyze → flutter test`. The re
     does it for both… details as a full-width strip", the step 10 *Preview* column, and
     the step 7 note on the card summary.
 
+    The shell, Alerts and Remote Preview are drawn on a second canvas,
+    https://claude.ai/artifact/THMEEesSxnwzgrQVCYDwqi (*Projector Grid web redesign: shell*,
+    approved by the owner 2026-10-21).
+
+    **Decisions (owner, 2026-10-21), before implementation:**
+    - **Status from the app:** each projector's JSON carries `status: {level, problems[]}`
+      from `monitoringStatusOf` (`kind`, `level`, `badge`, `title`, `value`, `flag`,
+      `since`), so the row stripe, *Attention*, *Needs attention* and the group summary
+      can't drift from the app. No TS port of the status logic.
+    - **Quick filters** replace the header's *All / Online / Offline / Alerts*: the *Alerts*
+      filter goes. Select ▾ loses *All projectors* (the box does it) and becomes *Online*,
+      *Attention* (was *Only with alerts*), *Standby*, *Invert*, then the groups. Presets pick
+      from **all** projectors, not only the shown ones.
+    - **Hidden selection (variant B):** selected projectors a search or filter hides stay
+      selected and get every command. Desktop: a pill *4 hidden* inside the fixed-width bulk
+      selector (tooltip lists the IPs; a click clears search and filter, the selection
+      stays); the Control header reads *5 selected, 4 hidden*. Phone: a line under the
+      filters, *4 selected are hidden* with *Show all*. While any selected projector is
+      hidden, every command asks first, and the confirmation names the hidden ones.
+    - **Temperature text** follows the alert, as the app's; only the bars go by reading.
+    - **Density** stays on the web; the Projector column is always shown and pinned.
+    - **Errors column:** the first badge, *+N* and the popover of all codes.
+    - **Viewer details:** the table keeps the full width while the details are closed and
+      narrows by the 344 px panel when they open; a second click on the same row closes
+      them; the viewer's row action is Remote Preview only.
+    - **Cards stay the default** on every touch screen until the user picks a view.
+    - **Fonts:** latin and cyrillic subsets.
+    - **Logo:** wherever a board draws the blue tile with a projector glyph (the header's
+      left edge, the sign-in card, the PIN pad), the page shows the app's own icon
+      (`AppLogo`, `src/assets/app_icon.png`, §8), as it does today. The glyph is only a
+      placeholder on the boards (both canvases); they are not redrawn.
+    - **Theme switch:** System / Light / Dark (icon segmented control) in the role menu;
+      stored per browser, System by default.
+
     **Phase 1: shared foundation.** Nothing changes in behaviour; every later phase
     builds on it.
     - Fonts Inter + IBM Plex Mono (self-hosted `@fontsource`, replacing Geist), tokens
@@ -455,8 +489,9 @@ Then the existing `build_runner → format → analyze → flutter test`. The re
     - `lib/logic/signal.ts`: a port of `signalStateOf` (`domain/signal_state.dart`):
       green with the resolution; red *No signal* only while the projector is on; grey
       *No signal* / *Unknown* otherwise. Unit tests with the Dart cases.
-    - Temperature colour **by reading** against `/api/config.thresholds` (amber over warm,
-      red over hot), as the app's temperature bars, not by the active alert.
+    - Temperature **bars** by reading against `/api/config.thresholds` (amber over warm,
+      red over hot), as the app's; the **value's colour** follows the active alert, as the
+      app's (owner, 2026-10-21).
     - Shared components (`components/status/`), used by the table, cards, details and Map
       alike, never re-drawn per view:
       - `StatusPill` (22 px, fully rounded, 14 % fill, 35 % border, as `status_pill.dart`);
@@ -477,6 +512,8 @@ Then the existing `build_runner → format → analyze → flutter test`. The re
       old web catalogue (`monitoring_columns.dart`) goes. The table layout key moves to
       `pg.table.v2`, so stored v1 layouts are dropped, not migrated.
     - `lastSeen` on projectors (ISO, null while answering), for *RQ25K, last seen 16:41*.
+    - `status` on projectors (see the decisions above); a projector event is sent when its
+      status changes too.
     - `openapi.yaml`, `npm run gen:api`, golden fixtures, mocks.
 
     **Phase 3: desktop table and Control panel** (boards *Web: desktop 1440, table…*,
@@ -581,7 +618,47 @@ Then the existing `build_runner → format → analyze → flutter test`. The re
       group as a band inside the tile (group colour mixed 55 % into the card, text colour
       by the band's brightness) instead of the chip below and the 15 % tint.
 
-    **Phase 8: checks.** `dev:mock` in Chrome at the widths of step 4 in both themes;
+    **Phase 8: shell** (shell canvas: *Desktop header…*, *Phone header…*, *Alignment
+    banner…*, *Phone Alignment screen…*, *Sign in…*, *Phone: sign in…*).
+    - Header: logo, project name over *Projector Grid*, the *Live* pill (amber
+      *Reconnecting* / *Connecting*); operator: *Alignment* (a pressed `primaryContainer`
+      toggle while on) and Refresh, then the role pill *Operator ▾* with a menu: role line,
+      *Lock control*, *Theme*, *Sign out*. Viewer: *Unlock control* as a tonal button
+      (while *Allow control* is on), then *Viewer ▾* with *Theme* and *Sign out*. The bell
+      stays in the rail on side-panel layouts.
+    - Phone header: logo, name over *Live*, the Alignment icon (operator) or the *Unlock*
+      icon (viewer, `primaryContainer`), the bell, ⋮ with *Refresh status* and *Lock
+      control* (operator), *Theme*, *Sign out*. Refresh leaves the filter row.
+    - Banner: one 52 px row, `Alignment`, ◀ *3 of 24* ▶, the toggles (on:
+      `primaryContainer`), presets, Focused / Others swatches, *Exit alignment*. Viewer:
+      "Alignment, 192.168.0.43 focused (3 of 24), Geometry patterns" and "An operator
+      controls it". Busy: "Alignment, waiting for the projectors". No `·` or dashes.
+      AlignScreen on touch: pinned step bar with IP and model, cards *Wall*, *Patterns*,
+      *Lens, <IP>*.
+    - Sign in: card with the logo, project name, *PIN* field and help line (the error
+      replaces it), *Sign in*. The PIN pad keeps today's layout (round 66 px keys,
+      *Delete*, *OK*), restyled only. *Unlock control* stays the centred dialog, in the
+      app's title-bar frame. Lockout text "Too many attempts, try again in 30 s".
+    - ConfirmDialog as the app's (§1.2 of the dialog plan); toasts take the tokens.
+
+    **Phase 9: Alerts panel** (shell canvas: *Alerts on the desktop / phone / tablet…*),
+    the app's §7m look: 52 px header with *Active alerts*, the count, project groups,
+    *By projector* / *By alert*, *Fold all*, ✕ (labelled buttons on tablets); filter chips
+    *All / Critical / Warning*; rows with the white message, severity edge and icon, start
+    time (duration in the tooltip), quiet Acknowledge; *Acknowledged N* fold. Footer:
+    *Sound* on the left (the web has no event log), filled *Acknowledge all* on the right;
+    a viewer's footer is *Sound*, "Acknowledging needs control" and *Unlock*, on one line.
+    Desktop: a 420 px panel beside the rail; phone and tablet: the bottom sheets of step 4.
+    Severity colours from the status tokens (`--sev-*` goes).
+
+    **Phase 10: Remote Preview** (shell canvas: *Remote Preview on the desktop / phone /
+    tablet…*), the app's §7b look: title bar with the tile, *Remote Preview*, model + IP,
+    group pill and power badge (on the phone under the title bar); the plane with the
+    shutter frame and the app's tags; the *Pre-show mode* card (operators); footer with
+    ◀ *3 of 24* ▶ on the left and the frame colour legend on the right (in place of the
+    app's info line). Phone: full screen, big ◀ ▶ under the image, swipe kept.
+
+    **Phase 11: checks.** `dev:mock` in Chrome at the widths of step 4 in both themes;
     the real app with the simulator; then the owner's review. Update §8 and ROADMAP §5
     where they describe the old behaviour.
 
