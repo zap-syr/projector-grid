@@ -1,6 +1,14 @@
-import type { DataColumn, Group, Projector } from '../api/types';
+import type { DataColumn, ErrorItem, Group, Projector } from '../api/types';
+import {
+  connectionLabel,
+  groupLabel,
+  noErrorsLabel,
+  powerLabel,
+  shutterLabel,
+  withUnit,
+} from './labels';
 
-/** Plain cell text per column, as the app's Monitoring table shows it (`_Column.text`). */
+/** Plain cell text per column, as the app's Monitoring table shows it (`monitoringCellTexts`). */
 export function cellText(
   column: DataColumn,
   p: Projector,
@@ -9,24 +17,19 @@ export function cellText(
 ): string {
   switch (column) {
     case 'connection':
-      return {
-        connected: 'Online',
-        unprotected: 'Online',
-        unauthorized: 'Auth Error',
-        offline: 'Offline',
-      }[p.connection];
+      return connectionLabel(p.connection);
     case 'model':
       return p.name;
     case 'serial':
       return p.serial;
     case 'group':
-      return (p.groupId && groups.get(p.groupId)?.name) || '—';
+      return groupLabel(p.groupId ? groups.get(p.groupId) : undefined);
     case 'ip':
       return p.ip;
     case 'power':
-      return { on: 'ON', turningOn: 'TURNING ON', cooling: 'COOLING', standby: 'STANDBY' }[p.power];
+      return powerLabel(p.power);
     case 'shutter':
-      return p.shutter === 'open' ? 'OPEN' : 'CLOSED';
+      return shutterLabel(p.shutter);
     case 'input':
       return p.input;
     case 'signal':
@@ -34,19 +37,32 @@ export function cellText(
     case 'testPattern':
       return p.testPattern === null ? '-' : patternLabel(p.testPattern);
     case 'runtime':
-      return p.runtime;
+      return withUnit(p.runtime);
     case 'lightRuntime':
-      return p.lightRuntime;
+      return withUnit(p.lightRuntime);
     case 'intake':
-      return p.intakeTemp;
+      return withUnit(p.intakeTemp);
     case 'exhaust':
-      return p.exhaustTemp;
+      return withUnit(p.exhaustTemp);
     case 'voltage':
-      return p.acVoltage;
-    case 'errors':
-      if (p.errors === '-') return '-';
-      return p.errors === 'NO ERRORS' || p.errors === '' ? 'NO ERRORS' : p.errors;
+      return withUnit(p.acVoltage);
+    case 'errors': {
+      const first = p.connection === 'offline' ? undefined : sortedErrors(p.errorItems)[0];
+      return first ? errorBadge(first) : noErrorsLabel(p);
+    }
   }
+}
+
+/** Critical codes first, as the app's problem list. */
+export function sortedErrors(items: readonly ErrorItem[]): ErrorItem[] {
+  return [...items].sort(
+    (a, b) => (a.severity === 'critical' ? 0 : 1) - (b.severity === 'critical' ? 0 : 1),
+  );
+}
+
+/** An amber code is the projector's warning, not a fault: `Error F305`, `Warning H001`. */
+export function errorBadge(e: ErrorItem): string {
+  return `${e.severity === 'critical' ? 'Error' : 'Warning'} ${e.code}`;
 }
 
 /** Mirrors `testPatternLabel` in `domain/test_patterns.dart`. */

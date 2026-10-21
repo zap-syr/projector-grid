@@ -60,11 +60,11 @@
     <span class="t" class:warm={tint === 'warm'} class:hot={tint === 'hot'}>{text}</span>
   {:else if column === 'signal' && signalLost(own)}
     <span class="t hot">{text}</span>
-  {:else if column === 'errors' && p.errorItems.length > 0}
+  {:else if column === 'errors' && p.errorItems.length > 0 && p.connection !== 'offline'}
     <ErrorTags {p} />
-  {:else if column === 'errors' && p.errors !== '-'}
-    <span class="ok"><Icon name="check" size={14} /></span>
-    <span class="t ok">{text}</span>
+  {:else if column === 'errors'}
+    <!-- None, or Unknown while offline: its codes are the last it sent. -->
+    <span class="t quiet">{text}</span>
   {:else}
     <span class="t">{text}</span>
   {/if}
@@ -99,6 +99,10 @@
 
   .acc {
     color: var(--accent);
+  }
+
+  .quiet {
+    color: var(--faint);
   }
 
   .t.ok,

@@ -165,6 +165,7 @@
     padding: 1px 5px;
     border-radius: 4px;
     font-family: var(--mono);
+    letter-spacing: 0;
     font-size: 11.5px;
     font-weight: 600;
   }
@@ -258,6 +259,7 @@
     border-radius: 4px;
     background: var(--hover);
     font-family: var(--mono);
+    letter-spacing: 0;
     font-size: 11px;
     color: var(--muted);
   }

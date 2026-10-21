@@ -90,7 +90,7 @@ test/fixtures/api/              # golden JSON written by Dart tests, read by web
 | ~~TanStack Table~~ | dropped at step 3 (owner, 2026-09-30): the table must match the app's Dart logic exactly (sort keys, `_resizeBaseFor`, group sections, reorder rule), so it's ported as small pure functions in `lib/logic/` instead of wrapped in a table library |
 | Vitest + `@testing-library/svelte` | unit + component tests |
 | ESLint (`eslint-plugin-svelte`) + Prettier (`prettier-plugin-svelte`) | lint / format |
-| `@fontsource-variable/geist` + `geist-mono` | self-hosted fonts (bundled by Vite; no `src/fonts/`) |
+| `@fontsource-variable/inter` + `@fontsource/ibm-plex-mono` | self-hosted fonts, the app's (bundled by Vite; Inter latin + cyrillic in `styles/fonts.css`, Plex Mono latin) |
 | Playwright | later: e2e against the mock API |
 
 No CSS framework: port the mockup's CSS as component-scoped styles on top of `tokens.css`.

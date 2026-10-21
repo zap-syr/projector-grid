@@ -1,5 +1,7 @@
-import '@fontsource-variable/geist';
-import '@fontsource-variable/geist-mono';
+import '@fontsource/ibm-plex-mono/latin-400.css';
+import '@fontsource/ibm-plex-mono/latin-500.css';
+import '@fontsource/ibm-plex-mono/latin-600.css';
+import './styles/fonts.css';
 import './styles/tokens.css';
 
 import { mount } from 'svelte';

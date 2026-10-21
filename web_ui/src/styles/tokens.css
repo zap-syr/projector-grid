@@ -1,84 +1,72 @@
 /*
- * Design tokens from the Web Monitor mockup. Light by default; dark follows
+ * Design tokens from the app's theme (`app_theme.dart`: the colour scheme from
+ * seed #1A73E8 and `AppStatusColors`). Light by default; dark follows
  * prefers-color-scheme unless the page pins a theme via data-theme on <html>.
  * Status colours (ok / warn / err) are only ever taken from here.
+ *
+ * Each theme block sets the palette only; the roles the components use are
+ * derived from it once, in the last :root block.
  */
 :root {
   color-scheme: light;
-  --bg: #eef0f4;
-  --app: #f6f7f9;
-  --surface: #ffffff;
-  --surface-2: #f8f9fb;
-  --hover: #f1f3f7;
-  --line: #e4e7ed;
-  --line-strong: #d2d7e0;
-  --text: #101828;
-  --muted: #566175;
-  --faint: #8a93a6;
-  --accent: #1a73e8;
-  --accent-hover: #1765cc;
-  --accent-soft: #e8f0fe;
-  --accent-line: #aecbfa;
-  --on-accent: #ffffff;
-  --ok: #188038;
-  --ok-soft: #e6f4ea;
-  --warn: #b06000;
-  --warn-soft: #fef3e0;
-  --err: #c5221f;
-  --err-soft: #fce8e6;
+  /* Window (the scaffold), bars and panels (surface), cards (lowest). */
+  --win: #ececef;
+  --bar: #f6f5f7;
+  --card: #ffffff;
+  /* Menus and popovers (surfaceContainerHigh), fields (lowest), tiles and
+     neutral pills (surfaceContainerHighest). */
+  --menu: #e5e4e6;
+  --field: #ffffff;
+  --soft: #dfdee0;
+  /* onSurface, onSurfaceVariant, outline; outlineVariant for borders. */
+  --t1: #1b1b1d;
+  --t2: #474648;
+  --t3: #787778;
+  --outline-variant: #c8c6c7;
+  --primary: #435e91;
+  --on-primary: #ffffff;
+  --pc: #dee2f2;
+  --on-pc: #424753;
+  --ok: #1e7b3a;
+  --warn: #8a5300;
+  --err: #ba1a1a;
   /* Alignment mode (AppTheme.alignmentAccent / alignmentNeighbour). */
   --align: #e8710a;
   --align-2: #f7b77e;
-  --align-soft: rgba(232, 113, 10, 0.12);
-  --on-align: #231200;
   --scrim: rgba(16, 24, 40, 0.42);
-  /* Alert icons in the app's colours (AlertPalette: red, orange, green), the
-     same in both themes; text uses --err / --warn / --ok. --item is the
-     panel row surface. */
+  /* Alert icons in the app's former colours (AlertPalette); the Alerts panel
+     phase moves them to the status colours. */
   --sev-crit: #f44336;
   --sev-warn: #ff9800;
   --sev-ok: #4caf50;
-  --item: #f8f7f9;
   --sh-1: 0 1px 2px rgba(16, 24, 40, 0.06);
   --sh-2: 0 8px 24px -6px rgba(16, 24, 40, 0.18);
   --sh-3: 0 24px 56px -12px rgba(16, 24, 40, 0.32);
-
-  --r-lg: 14px;
-  --r: 10px;
-  --r-sm: 7px;
-  --sans: 'Geist Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --mono: 'Geist Mono Variable', ui-monospace, 'Cascadia Mono', Consolas, monospace;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     color-scheme: dark;
-    --bg: #08090c;
-    --app: #0d0f14;
-    --surface: #13161d;
-    --surface-2: #171b23;
-    --hover: #1b2029;
-    --line: #222733;
-    --line-strong: #2e3441;
-    --text: #e8ebf1;
-    --muted: #9aa3b5;
-    --faint: #6a7386;
-    --accent: #8ab4f8;
-    --accent-hover: #a8c7fa;
-    --accent-soft: rgba(138, 180, 248, 0.13);
-    --accent-line: rgba(138, 180, 248, 0.45);
-    --on-accent: #0a1a33;
-    --ok: #5bb974;
-    --ok-soft: rgba(91, 185, 116, 0.13);
-    --warn: #fbbc04;
-    --warn-soft: rgba(251, 188, 4, 0.12);
-    --err: #f28b82;
-    --err-soft: rgba(242, 139, 130, 0.13);
+    --win: #1a1b20;
+    --bar: #1e1f25;
+    --card: #282a2f;
+    --menu: #282a2f;
+    --field: #0c0e13;
+    --soft: #33353a;
+    --t1: #e2e2e9;
+    --t2: #c4c6d0;
+    --t3: #8e9099;
+    --outline-variant: #44474f;
+    --primary: #adc7ff;
+    --on-primary: #0f2f60;
+    --pc: #2a4678;
+    --on-pc: #d8e2ff;
+    --ok: #6dd58c;
+    --warn: #f5b544;
+    --err: #ffb4ab;
     --align: #ff9e40;
     --align-2: #ffddb3;
-    --align-soft: rgba(255, 158, 64, 0.14);
     --scrim: rgba(0, 0, 0, 0.6);
-    --item: #1d2129;
     --sh-1: 0 1px 2px rgba(0, 0, 0, 0.4);
     --sh-2: 0 8px 24px -6px rgba(0, 0, 0, 0.6);
     --sh-3: 0 24px 56px -12px rgba(0, 0, 0, 0.8);
@@ -87,35 +75,65 @@
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --bg: #08090c;
-  --app: #0d0f14;
-  --surface: #13161d;
-  --surface-2: #171b23;
-  --hover: #1b2029;
-  --line: #222733;
-  --line-strong: #2e3441;
-  --text: #e8ebf1;
-  --muted: #9aa3b5;
-  --faint: #6a7386;
-  --accent: #8ab4f8;
-  --accent-hover: #a8c7fa;
-  --accent-soft: rgba(138, 180, 248, 0.13);
-  --accent-line: rgba(138, 180, 248, 0.45);
-  --on-accent: #0a1a33;
-  --ok: #5bb974;
-  --ok-soft: rgba(91, 185, 116, 0.13);
-  --warn: #fbbc04;
-  --warn-soft: rgba(251, 188, 4, 0.12);
-  --err: #f28b82;
-  --err-soft: rgba(242, 139, 130, 0.13);
+  --win: #1a1b20;
+  --bar: #1e1f25;
+  --card: #282a2f;
+  --menu: #282a2f;
+  --field: #0c0e13;
+  --soft: #33353a;
+  --t1: #e2e2e9;
+  --t2: #c4c6d0;
+  --t3: #8e9099;
+  --outline-variant: #44474f;
+  --primary: #adc7ff;
+  --on-primary: #0f2f60;
+  --pc: #2a4678;
+  --on-pc: #d8e2ff;
+  --ok: #6dd58c;
+  --warn: #f5b544;
+  --err: #ffb4ab;
   --align: #ff9e40;
   --align-2: #ffddb3;
-  --align-soft: rgba(255, 158, 64, 0.14);
   --scrim: rgba(0, 0, 0, 0.6);
-  --item: #1d2129;
   --sh-1: 0 1px 2px rgba(0, 0, 0, 0.4);
   --sh-2: 0 8px 24px -6px rgba(0, 0, 0, 0.6);
   --sh-3: 0 24px 56px -12px rgba(0, 0, 0, 0.8);
+}
+
+/* Roles, from the palette above (same element, so they follow the theme). */
+:root {
+  /* Text: the visual rules' four colours; disabled only for disabled controls. */
+  --disabled: color-mix(in srgb, var(--t1) 38%, transparent);
+  /* Borders (outlineVariant) and the dividers inside a card (60 %). */
+  --line-strong: var(--outline-variant);
+  --line: color-mix(in srgb, var(--outline-variant) 60%, transparent);
+  --hover: color-mix(in srgb, var(--t1) 7%, transparent);
+  /* Status fills and borders as the app's StatusPill: 14 % and 35 %. */
+  --ok-soft: color-mix(in srgb, var(--ok) 14%, transparent);
+  --warn-soft: color-mix(in srgb, var(--warn) 14%, transparent);
+  --err-soft: color-mix(in srgb, var(--err) 14%, transparent);
+  --align-soft: color-mix(in srgb, var(--align) 14%, transparent);
+  --on-align: #231200;
+
+  /* The page's older names, kept so every component takes the app's colours. */
+  --app: var(--win);
+  --surface: var(--bar);
+  --surface-2: var(--card);
+  --item: var(--card);
+  --text: var(--t1);
+  --muted: var(--t2);
+  --faint: var(--t3);
+  --accent: var(--primary);
+  --accent-hover: color-mix(in srgb, var(--primary) 88%, var(--t1));
+  --accent-soft: color-mix(in srgb, var(--primary) 14%, transparent);
+  --accent-line: color-mix(in srgb, var(--primary) 45%, transparent);
+  --on-accent: var(--on-primary);
+
+  --r-lg: 14px;
+  --r: 10px;
+  --r-sm: 7px;
+  --sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
 }
 
 *,
@@ -137,6 +155,8 @@ body {
   font-family: var(--sans);
   font-size: 14px;
   line-height: 1.45;
+  /* The app's tracking for Inter: +1 % up to 14 px (AppTheme.tracking). */
+  letter-spacing: 0.01em;
   -webkit-font-smoothing: antialiased;
   /* The browser's own tap flash paints over everything, even a dialog the
      tap just opened; the page's controls show their own pressed state. */
@@ -147,6 +167,7 @@ button,
 input {
   font: inherit;
   color: inherit;
+  letter-spacing: inherit;
 }
 
 :focus-visible {

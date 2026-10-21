@@ -116,6 +116,7 @@
 
   .ip {
     font-family: var(--mono);
+    letter-spacing: 0;
     font-size: 12px;
     color: var(--faint);
   }

@@ -26,26 +26,27 @@ test('statusSummary counts like the app status bar', () => {
 
 describe('cellText', () => {
   test('connection', () => {
-    expect(text('connection', 'n1')).toBe('Online');
-    expect(text('connection', 'n3')).toBe('Auth Error');
+    expect(text('connection', 'n1')).toBe('No login');
+    expect(text('connection', 'n2')).toBe('Online');
+    expect(text('connection', 'n3')).toBe('Wrong login');
     expect(text('connection', 'n4')).toBe('Offline');
   });
 
   test('power, shutter, group', () => {
-    expect(text('power', 'n1')).toBe('COOLING');
-    expect(text('power', 'n2')).toBe('ON');
-    expect(text('shutter', 'n2')).toBe('OPEN');
+    expect(text('power', 'n1')).toBe('Cooling');
+    expect(text('power', 'n2')).toBe('On');
+    expect(text('shutter', 'n2')).toBe('Open');
     expect(text('group', 'n2')).toBe('Stage');
-    expect(text('group', 'n4')).toBe('—');
+    expect(text('group', 'n4')).toBe('None');
   });
 
   test('test pattern and errors', () => {
     expect(text('testPattern', 'n2')).toBe('Cross Hatch');
     expect(text('testPattern', 'n1')).toBe('Off');
     expect(text('testPattern', 'n3')).toBe('-');
-    expect(text('errors', 'n2')).toBe('NO ERRORS');
-    expect(text('errors', 'n1')).toBe('000100000000');
-    expect(text('errors', 'n4')).toBe('-');
+    expect(text('errors', 'n2')).toBe('None');
+    expect(text('errors', 'n1')).toBe('Error 000100000000');
+    expect(text('errors', 'n4')).toBe('Unknown');
   });
 
   test('unknown pattern codes fall back to the raw code', () => {

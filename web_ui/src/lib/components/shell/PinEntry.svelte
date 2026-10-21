@@ -79,6 +79,7 @@
     border: 1px solid var(--line-strong);
     background: var(--app);
     font-family: var(--mono);
+    letter-spacing: 0;
     font-size: 20px;
     letter-spacing: 0.3em;
     text-align: center;
