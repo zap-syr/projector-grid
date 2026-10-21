@@ -17,10 +17,18 @@ import 'status_bar_item.dart';
 /// check when nothing is active. Clicking opens Active alerts, and the item
 /// stays pressed while it is open.
 class StatusBarAlertsButton extends ConsumerStatefulWidget {
-  const StatusBarAlertsButton({super.key, this.narrow = false});
+  const StatusBarAlertsButton({
+    super.key,
+    this.narrow = false,
+    this.shown = true,
+  });
 
   /// Pills only, without the word *Alerts*.
   final bool narrow;
+
+  /// False in the status bar's hidden copy: only the copy on screen opens
+  /// the panel on a request, else both would.
+  final bool shown;
 
   @override
   ConsumerState<StatusBarAlertsButton> createState() =>
@@ -31,6 +39,19 @@ class _StatusBarAlertsButtonState extends ConsumerState<StatusBarAlertsButton> {
   final _portal = OverlayPortalController();
   final _panelFocus = FocusNode();
   final _tapGroup = Object();
+
+  @override
+  void didUpdateWidget(StatusBarAlertsButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // The bar stepped to the other copy: its panel goes with it. After the
+    // frame, as this rebuild can run during layout (under a LayoutBuilder),
+    // where an overlay can't change; until then the panel builds empty.
+    if (!widget.shown && _portal.isShowing) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !widget.shown) _hide();
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -54,7 +75,9 @@ class _StatusBarAlertsButtonState extends ConsumerState<StatusBarAlertsButton> {
   @override
   Widget build(BuildContext context) {
     // A clicked desktop notification opens the panel.
-    ref.listen(activeAlertsRequestProvider, (_, _) => _show());
+    ref.listen(activeAlertsRequestProvider, (_, _) {
+      if (widget.shown) _show();
+    });
     final t = AppText.of(context);
     final counts = ref.watch(alertCountsProvider);
 
@@ -76,32 +99,34 @@ class _StatusBarAlertsButtonState extends ConsumerState<StatusBarAlertsButton> {
 
     return OverlayPortal.overlayChildLayoutBuilder(
       controller: _portal,
-      overlayChildBuilder: (_, info) => CustomSingleChildLayout(
-        delegate: AnchoredPanelLayout(
-          anchor: MatrixUtils.transformRect(
-            info.childPaintTransform,
-            Offset.zero & info.childSize,
-          ),
-          width: ActiveAlertsPanel.width,
-          flip: false,
-        ),
-        child: TapRegion(
-          groupId: _tapGroup,
-          onTapOutside: (_) => _hide(),
-          child: Focus(
-            focusNode: _panelFocus,
-            onKeyEvent: (_, event) {
-              if (event is KeyDownEvent &&
-                  event.logicalKey == LogicalKeyboardKey.escape) {
-                _hide();
-                return KeyEventResult.handled;
-              }
-              return KeyEventResult.ignored;
-            },
-            child: const ActiveAlertsPanel(),
-          ),
-        ),
-      ),
+      overlayChildBuilder: (_, info) => !widget.shown
+          ? const SizedBox.shrink()
+          : CustomSingleChildLayout(
+              delegate: AnchoredPanelLayout(
+                anchor: MatrixUtils.transformRect(
+                  info.childPaintTransform,
+                  Offset.zero & info.childSize,
+                ),
+                width: ActiveAlertsPanel.width,
+                flip: false,
+              ),
+              child: TapRegion(
+                groupId: _tapGroup,
+                onTapOutside: (_) => _hide(),
+                child: Focus(
+                  focusNode: _panelFocus,
+                  onKeyEvent: (_, event) {
+                    if (event is KeyDownEvent &&
+                        event.logicalKey == LogicalKeyboardKey.escape) {
+                      _hide();
+                      return KeyEventResult.handled;
+                    }
+                    return KeyEventResult.ignored;
+                  },
+                  child: const ActiveAlertsPanel(),
+                ),
+              ),
+            ),
       child: TapRegion(
         groupId: _tapGroup,
         child: StatusBarItem(

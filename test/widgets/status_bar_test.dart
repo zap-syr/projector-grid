@@ -14,6 +14,7 @@ import 'package:projector_grid/features/workspace/domain/projector_group.dart';
 import 'package:projector_grid/features/workspace/domain/projector_node.dart';
 import 'package:projector_grid/features/workspace/domain/status_bar_view.dart';
 import 'package:projector_grid/features/workspace/domain/web_clients.dart';
+import 'package:projector_grid/features/workspace/presentation/providers/active_alerts_request_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/alert_counts_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/app_settings_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/monitoring_filter_provider.dart';
@@ -24,6 +25,7 @@ import 'package:projector_grid/features/workspace/presentation/providers/protoco
 import 'package:projector_grid/features/workspace/presentation/providers/web_clients_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/web_server_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/workspace_provider.dart';
+import 'package:projector_grid/features/workspace/presentation/widgets/active_alerts_panel.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/common/severity_pill.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/custom_tooltip.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/preferences_dialog.dart';
@@ -89,11 +91,12 @@ Future<ProviderContainer> _pump(
       ],
       child: MaterialApp(
         theme: theme ?? AppTheme.darkTheme,
-        home: const Scaffold(
+        home: Scaffold(
           body: Column(
             children: [
-              StatusBar(),
-              Expanded(child: SizedBox()),
+              // As in the app, so the bar rebuilds during layout.
+              LayoutBuilder(builder: (_, _) => const StatusBar()),
+              const Expanded(child: SizedBox()),
             ],
           ),
         ),
@@ -475,6 +478,47 @@ void main() {
       await _pump(tester, nodes: [_node(1)]);
       expect(find.text('None'), findsOneWidget);
       expect(find.byType(SeverityPill), findsNothing);
+    });
+
+    for (final width in [1600.0, 800.0]) {
+      testWidgets('a request opens one panel, from the bar on screen, '
+          '${width.toInt()} px', (tester) async {
+        final c = await _pump(tester, width: width, nodes: [_node(1)]);
+        c.read(activeAlertsRequestProvider.notifier).open();
+        await tester.pump();
+        await tester.pump();
+        // Counting the hidden bar's too, which finders otherwise skip.
+        expect(
+          find.byType(ActiveAlertsPanel, skipOffstage: false),
+          findsOneWidget,
+        );
+        // The mouse tracker hit tests every open popover.
+        await _hover(tester, find.byType(ActiveAlertsPanel));
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    testWidgets('the panel open while the bar steps narrow and back', (
+      tester,
+    ) async {
+      final c = await _pump(tester, nodes: [_node(1)]);
+      c.read(activeAlertsRequestProvider.notifier).open();
+      await tester.pump();
+      expect(find.byType(ActiveAlertsPanel), findsOneWidget);
+
+      tester.view.physicalSize = const Size(500, 600);
+      await tester.pump();
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(find.text('Projectors'), findsNothing);
+      // The hidden copy's panel closed, none left behind.
+      expect(find.byType(ActiveAlertsPanel, skipOffstage: false), findsNothing);
+
+      tester.view.physicalSize = const Size(1600, 600);
+      await tester.pump();
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(find.text('Projectors'), findsOneWidget);
     });
 
     testWidgets('a typical project stays full in a 1000 px window', (

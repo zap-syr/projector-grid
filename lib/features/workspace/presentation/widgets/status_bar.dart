@@ -50,7 +50,7 @@ class _StatusBarState extends ConsumerState<StatusBar> {
         const StatusBarDivider(),
         _CountButtons(narrow: narrow),
         const StatusBarDivider(),
-        StatusBarAlertsButton(narrow: narrow),
+        StatusBarAlertsButton(narrow: narrow, shown: narrow == _narrowShown),
         const Spacer(),
         StatusBarOsc(narrow: narrow),
         StatusBarWebClients(narrow: narrow),
@@ -163,6 +163,12 @@ class _RenderFullOrNarrow extends RenderBox
     );
     final child = _shown..layout(constraints, parentUsesSize: true);
     size = child.size;
+    // The hidden copy is laid out too, unpainted: an open popover of its
+    // own (the frame before it closes after a mode change) is laid out with
+    // its anchor, and the mouse tracker can't hit test one that never was.
+    // An overflow is only reported when painted.
+    childForSlot(shownSlot == _BarSlot.full ? _BarSlot.narrow : _BarSlot.full)!
+        .layout(constraints);
     if (narrow != (was ?? false)) {
       WidgetsBinding.instance.addPostFrameCallback((_) => onMode(narrow));
     }
