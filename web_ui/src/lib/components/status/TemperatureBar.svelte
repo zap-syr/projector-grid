@@ -15,14 +15,27 @@
     display,
     threshold,
     width,
+    height = 4,
     mark = false,
-  }: { display: string; threshold: TempThreshold; width?: number; mark?: boolean } = $props();
+  }: {
+    display: string;
+    threshold: TempThreshold;
+    width?: number;
+    /** The track's thickness: 4 in a table cell, 6 in the details' gauges. */
+    height?: number;
+    mark?: boolean;
+  } = $props();
 
   const fraction = $derived(temperatureFraction(display, threshold));
   const level = $derived(temperatureBarLevel(display, threshold));
 </script>
 
-<span class="bar" class:marked={mark} style:width={width === undefined ? '100%' : `${width}px`}>
+<span
+  class="bar"
+  class:marked={mark}
+  style:width={width === undefined ? '100%' : `${width}px`}
+  style:--h="{height}px"
+>
   <span class="track"></span>
   {#if fraction !== null}
     <span
@@ -45,19 +58,20 @@
     position: relative;
     display: inline-block;
     flex: none;
-    height: 4px;
+    height: var(--h);
   }
 
+  /* The mark stands 3 px out of the track on each side. */
   .bar.marked {
-    height: 10px;
+    height: calc(var(--h) + 6px);
   }
 
   .track,
   .fill {
     position: absolute;
     left: 0;
-    height: 4px;
-    border-radius: 2px;
+    height: var(--h);
+    border-radius: calc(var(--h) / 2);
   }
 
   .track {
@@ -74,7 +88,7 @@
     position: absolute;
     top: 0;
     width: 2px;
-    height: 10px;
+    height: 100%;
     border-radius: 1px;
     background: var(--warn);
   }

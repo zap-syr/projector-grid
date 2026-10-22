@@ -8,11 +8,10 @@
   import { groupPills } from '../../logic/alerts';
   import {
     buildEntries,
-    type CardEntry,
+    type Entry,
     matchesFilter,
     matchesSearch,
     UNGROUPED,
-    withDetails,
   } from '../../logic/rows';
   import { alerts } from '../../state/alerts.svelte';
   import { device } from '../../state/device.svelte';
@@ -20,14 +19,13 @@
   import { sortByIp } from '../../logic/sort';
   import { isSelectable, toggledAll, triState } from '../../logic/selection';
   import { alignment } from '../../state/alignment.svelte';
+  import { details } from '../../state/details.svelte';
   import { live } from '../../state/live.svelte';
-  import { preview } from '../../state/preview.svelte';
   import { selection } from '../../state/selection.svelte';
   import { tableLayout, type StoredLayout } from '../../state/tableLayout.svelte';
   import { view } from '../../state/view.svelte';
   import Checkbox from '../Checkbox.svelte';
   import Icon from '../Icon.svelte';
-  import CardDetails from './CardDetails.svelte';
   import ProjectorCard from './ProjectorCard.svelte';
 
   let { config, layout, operator }: { config: Config; layout: StoredLayout; operator: boolean } =
@@ -42,48 +40,17 @@
       live.projectors.filter((p) => matchesFilter(p, view.filter) && matchesSearch(p, view.search)),
     ),
   );
-  /** One card's details are open at a time. */
-  let openId = $state<string | null>(null);
-  const toggleOpen = (id: string) => (openId = openId === id ? null : id);
-
-  /** Grid columns right now — the details strip goes after the open card's row. */
-  let columns = $state(1);
-  function trackColumns(list: HTMLElement) {
-    const measure = () =>
-      (columns = Math.max(1, getComputedStyle(list).gridTemplateColumns.split(' ').length));
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(list);
-    return () => ro.disconnect();
-  }
-
   const entries = $derived(
-    withDetails(
-      buildEntries(shown, live.groups, live.groups.length > 0, new Set(layout.collapsed)),
-      openId,
-      columns,
-    ),
+    buildEntries(shown, live.groups, live.groups.length > 0, new Set(layout.collapsed)),
   );
-  /** Preview's ◀ ▶: the cards as shown (filtered, collapsed groups left out). */
+  /** Preview's ◀ ▶ from the details: the cards as shown (filtered, collapsed groups left out). */
   const order = $derived(entries.flatMap((e) => (e.kind === 'row' ? [e.projector.id] : [])));
-  const entryKey = (e: CardEntry) =>
-    e.kind === 'group' ? `g:${e.key}` : e.kind === 'details' ? e.key : e.projector.id;
+  const entryKey = (e: Entry) => (e.kind === 'group' ? `g:${e.key}` : e.projector.id);
 </script>
 
-<div class="list" {@attach trackColumns}>
+<div class="list">
   {#each entries as entry (entryKey(entry))}
-    {#if entry.kind === 'details'}
-      <CardDetails
-        p={entry.projector}
-        {config}
-        groups={groupMap}
-        {patternLabel}
-        column={entry.column}
-        {columns}
-        onclose={() => (openId = null)}
-        onpreview={alignment.active ? undefined : () => preview.open(order, entry.projector.id)}
-      />
-    {:else if entry.kind === 'group'}
+    {#if entry.kind === 'group'}
       {@const open = !layout.collapsed.includes(entry.key)}
       {@const pills = groupPills(entry.members, alerts.list)}
       {@const name = entry.group?.name ?? 'Ungrouped'}
@@ -134,9 +101,9 @@
         {patternLabel}
         {operator}
         selected={selection.ids.has(p.id)}
-        expanded={openId === p.id}
+        open={details.id === p.id}
         onselect={() => selection.toggle(p.id)}
-        onexpand={() => toggleOpen(p.id)}
+        ondetails={() => details.toggle(p.id, order)}
         role={alignment.role(p.id)}
         outside={alignment.active && !alignment.role(p.id)}
         onfocus={() => alignment.focus(p.id)}

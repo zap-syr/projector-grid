@@ -6,6 +6,8 @@
   import AlignScreen from './lib/components/alignment/AlignScreen.svelte';
   import Banner from './lib/components/alignment/Banner.svelte';
   import ControlPanel from './lib/components/control/ControlPanel.svelte';
+  import ProjectorDetails from './lib/components/details/ProjectorDetails.svelte';
+  import Icon from './lib/components/Icon.svelte';
   import MapView from './lib/components/map/MapView.svelte';
   import CardList from './lib/components/phone/CardList.svelte';
   import PreviewDialog from './lib/components/preview/PreviewDialog.svelte';
@@ -18,9 +20,11 @@
   import Toolbar from './lib/components/shell/Toolbar.svelte';
   import DataTable from './lib/components/table/DataTable.svelte';
   import { setFavicon } from './lib/favicon';
+  import { testPatternLabel } from './lib/logic/cells';
   import { alerts } from './lib/state/alerts.svelte';
   import { alignment } from './lib/state/alignment.svelte';
   import { config } from './lib/state/config.svelte';
+  import { details } from './lib/state/details.svelte';
   import { device } from './lib/state/device.svelte';
   import { listMode } from './lib/state/listMode.svelte';
   import { live } from './lib/state/live.svelte';
@@ -59,6 +63,17 @@
   });
 
   const aligning = $derived(alignment.active || alignment.busy);
+
+  // The Map has its own popover, and in Alignment mode the Control's place is the lens.
+  $effect(() => {
+    if (listMode.value === 'map' || aligning) details.close();
+  });
+
+  const groupMap = $derived(new Map(live.groups.map((g) => [g.id, g])));
+  const patternLabels = $derived(
+    new Map((config.value?.testPatterns ?? []).map((t) => [t.code, t.label])),
+  );
+  const patternLabel = (code: string) => testPatternLabel(code, patternLabels);
 
   // A sheet belongs to touch layouts; turning a tablet sideways hands over to the rail.
   $effect(() => {
@@ -116,7 +131,9 @@
       </div>
     {:else if config.value && tableLayout.value}
       {@const sheetLayout = device.control !== 'side'}
-      {@const sidePanel = operator && panel.open && !sheetLayout}
+      {@const control = operator && panel.open && !sheetLayout}
+      {@const sideDetails = details.projector && !sheetLayout ? details.projector : undefined}
+      {@const sidePanel = control || sideDetails !== undefined}
       <div class="work" class:op={sidePanel} class:rail={!sheetLayout}>
         <div class="main">
           <div class="top">
@@ -138,7 +155,33 @@
             <SelectBar />
           {/if}
         </div>
-        {#if sidePanel}
+        {#if sideDetails}
+          <!-- In the Control panel's place at its width, so the table doesn't reflow. -->
+          <aside class="slot" aria-label="Projector {sideDetails.ip}">
+            {#if control}
+              <div class="back">
+                <button onclick={() => details.close()}
+                  ><Icon name="left" size={18} />Control</button
+                >
+                <em
+                  >{selection.ids.size > 0
+                    ? `${selection.ids.size} selected`
+                    : 'No projectors selected'}</em
+                >
+              </div>
+            {/if}
+            <ProjectorDetails
+              p={sideDetails}
+              config={config.value}
+              groups={groupMap}
+              {patternLabel}
+              placement="panel"
+              touch={device.touch}
+              onclose={() => details.close()}
+              onpreview={() => preview.open(details.order, sideDetails.id)}
+            />
+          </aside>
+        {:else if sidePanel}
           <ControlPanel config={config.value} onclose={() => panel.toggle()} />
         {/if}
         {#if !sheetLayout}
@@ -162,6 +205,22 @@
             sheet
             columns={device.control === 'bottom' && !device.phone}
             onclose={() => (panel.sheet = false)}
+          />
+        </Sheet>
+      {/if}
+      {#if device.control !== 'side' && details.projector}
+        {@const p = details.projector}
+        <Sheet label="Projector {p.ip}" placement={device.control} onclose={() => details.close()}>
+          <ProjectorDetails
+            {p}
+            config={config.value}
+            groups={groupMap}
+            {patternLabel}
+            placement="sheet"
+            columns={device.control === 'bottom' && !device.phone}
+            touch
+            onclose={() => details.close()}
+            onpreview={() => preview.open(details.order, p.id)}
           />
         </Sheet>
       {/if}
@@ -216,7 +275,61 @@
   }
 
   .work.op {
-    grid-template-columns: minmax(0, 1fr) 340px;
+    grid-template-columns: minmax(0, 1fr) 344px;
+  }
+
+  .slot {
+    position: relative;
+    z-index: 5;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border-left: 1px solid var(--line);
+  }
+
+  /* ‹ Control: back to the panel, the selection untouched. */
+  .back {
+    height: 44px;
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px 0 8px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .back button {
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 10px 0 6px;
+    border: 0;
+    border-radius: 8px;
+    background: none;
+    color: var(--accent);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  @media (hover: hover) {
+    .back button:hover {
+      background: var(--accent-soft);
+    }
+  }
+
+  .back em {
+    margin-left: auto;
+    color: var(--faint);
+    font-size: 11.5px;
+    font-style: normal;
+    font-weight: 500;
+  }
+
+  .slot :global(.details) {
+    flex: 1;
   }
 
   /* The alerts rail at the far right; the drawer opens over everything left of it. */
@@ -226,7 +339,7 @@
   }
 
   .work.rail.op {
-    grid-template-columns: minmax(0, 1fr) 340px 52px;
+    grid-template-columns: minmax(0, 1fr) 344px 52px;
   }
 
   .drawer {

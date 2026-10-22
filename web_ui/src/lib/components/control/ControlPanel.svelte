@@ -10,6 +10,7 @@
   import { MAIN_PATTERNS, patternSwatch } from '../../logic/patterns';
   import { alignment } from '../../state/alignment.svelte';
   import { control } from '../../state/control.svelte';
+  import { details } from '../../state/details.svelte';
   import { device } from '../../state/device.svelte';
   import { selection } from '../../state/selection.svelte';
   import { view } from '../../state/view.svelte';
@@ -173,6 +174,25 @@
           {/if}
         {/if}
       </div>
+      {#if !sheet}
+        <!-- Only with one projector selected; hidden, it keeps its place so ✕ never moves. -->
+        <button
+          class="x info"
+          class:hid={!one || lensOnly}
+          aria-label="Details of {one?.ip ?? ''}"
+          title={touchLens ? undefined : 'Details'}
+          tabindex={one && !lensOnly ? undefined : -1}
+          onclick={() => {
+            if (one)
+              details.toggle(
+                one.id,
+                view.shown.map((p) => p.id),
+              );
+          }}
+        >
+          <Icon name="info" size={touchLens ? 22 : 18} />
+        </button>
+      {/if}
       <button
         class="x"
         aria-label={sheet ? 'Close' : 'Hide control panel'}
@@ -438,7 +458,7 @@
   .panel {
     position: relative;
     z-index: 5;
-    width: 340px;
+    width: 344px;
     min-height: 0;
     display: flex;
     flex-direction: column;
@@ -485,6 +505,14 @@
     margin: 0;
     font-size: 15px;
     font-weight: 650;
+  }
+
+  .x.info + .x {
+    margin-left: -6px;
+  }
+
+  .x.hid {
+    visibility: hidden;
   }
 
   .x {

@@ -14,6 +14,7 @@
   import PowerState from '../status/PowerState.svelte';
   import ShutterState from '../status/ShutterState.svelte';
   import SignalPill from '../status/SignalPill.svelte';
+  import StatusDot from '../status/StatusDot.svelte';
   import TemperatureLine from '../status/TemperatureLine.svelte';
   import TestPatternThumb from '../status/TestPatternThumb.svelte';
 
@@ -37,7 +38,7 @@
 <span class="cv" title={text}>
   {#if column === 'projector'}
     <span class="two">
-      <span class="ipl"><i class="dot {p.connection}"></i><span class="ip">{p.ip}</span></span>
+      <span class="ipl"><StatusDot connection={p.connection} /><span class="ip">{p.ip}</span></span>
       <small class="ind">{modelLine(p, alerts.now)}</small>
     </span>
   {:else if column === 'group'}
@@ -141,22 +142,6 @@
 
   .quiet {
     color: var(--faint);
-  }
-
-  .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    flex: none;
-    background: var(--ok);
-  }
-
-  .dot.unauthorized {
-    background: var(--warn);
-  }
-
-  .dot.offline {
-    background: var(--faint);
   }
 
   .gdot {

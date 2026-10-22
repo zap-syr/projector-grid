@@ -1,7 +1,7 @@
 <!--
-  One projector card: a fixed summary (power, shutter, signal, temps, errors);
-  the chevron opens the rest in a strip under the card's row (CardDetails).
-  The operator taps the card to select it, the viewer to open the details.
+  One projector card: a fixed summary (power, shutter, signal, temps, errors).
+  The operator taps the card to select it and ⓘ to open the details; the
+  viewer's tap opens them.
 -->
 <script lang="ts">
   import type { AlignmentRole, ColumnId, Group, Projector } from '../../api/types';
@@ -23,9 +23,9 @@
     patternLabel,
     operator,
     selected,
-    expanded,
+    open,
     onselect,
-    onexpand,
+    ondetails,
     role = null,
     outside = false,
     onfocus,
@@ -35,9 +35,10 @@
     patternLabel: (code: string) => string;
     operator: boolean;
     selected: boolean;
-    expanded: boolean;
+    /** Its details are open. */
+    open: boolean;
     onselect: () => void;
-    onexpand: () => void;
+    ondetails: () => void;
     /** Alignment mode: the card's ring or the closed scrim, as in the app. */
     role?: AlignmentRole | null;
     /** Alignment mode is on but this projector isn't in it. */
@@ -55,11 +56,12 @@
   // Shown behind a closed shutter too (owner, 2026-09-30; the app card follows).
   const showPattern = $derived(online && isPatternActive(p.testPattern));
 
+  /** No details in Alignment mode: the Control's place belongs to the lens. */
   function primary() {
-    if (!operator) onexpand();
-    else if (aligning) {
-      if (role) onfocus?.();
-    } else if (selectable) onselect();
+    if (aligning) {
+      if (operator && role) onfocus?.();
+    } else if (!operator) ondetails();
+    else if (selectable) onselect();
   }
 </script>
 
@@ -70,7 +72,7 @@
 <article
   class="card {role ?? ''}"
   class:sel={operator && selected && !aligning}
-  class:open={expanded}
+  class:open
   class:outside
   class:offline={p.connection === 'offline'}
 >
@@ -88,8 +90,13 @@
     <button
       class="main"
       disabled={operator && !selectable}
-      aria-pressed={operator ? (aligning ? role === 'focused' : selected) : undefined}
-      aria-expanded={operator ? undefined : expanded}
+      aria-pressed={operator
+        ? aligning
+          ? role === 'focused'
+          : selected
+        : aligning
+          ? undefined
+          : open}
       onclick={primary}
     >
       <span class="title">
@@ -137,15 +144,19 @@
         </span>
       {/if}
     </button>
-    <button
-      class="chev"
-      class:open={expanded}
-      aria-expanded={expanded}
-      aria-label="{expanded ? 'Hide' : 'Show'} details of {p.name}"
-      onclick={onexpand}
-    >
-      <Icon name="chevron" size={16} />
-    </button>
+    <!-- The operator's way to the details (a tap selects); a viewer's tap opens them. -->
+    {#if operator && !aligning}
+      <button
+        class="info"
+        class:on={open}
+        aria-pressed={open}
+        aria-label="Details of {p.ip}"
+        title={device.touch ? undefined : 'Details'}
+        onclick={ondetails}
+      >
+        <Icon name="info" size={device.touch ? 22 : 18} />
+      </button>
+    {/if}
   </div>
 </article>
 
@@ -158,15 +169,20 @@
     box-shadow: var(--sh-1);
   }
 
-  /* Ties the card to its details strip; selection still wins. */
+  /* Its details are open: a brighter fill; selection's border still shows. */
   .card.open {
     border-color: var(--accent-line);
+    background: color-mix(in srgb, var(--accent) 16%, var(--surface));
   }
 
   .card.sel {
     border-color: var(--accent);
     background: color-mix(in srgb, var(--accent) 10%, var(--surface));
     box-shadow: 0 0 0 1px var(--accent);
+  }
+
+  .card.sel.open {
+    background: color-mix(in srgb, var(--accent) 16%, var(--surface));
   }
 
   /* Alignment rings with a 2 px gap, like the app's canvas card. */
@@ -361,27 +377,43 @@
     font-size: 13px;
   }
 
-  .chev {
+  /* ⓘ in the top-right corner: 32 px with a mouse, 44 px for a finger. */
+  .info {
     position: absolute;
-    top: 1px;
-    right: 1px;
-    width: 44px;
-    height: 44px;
+    top: 7px;
+    right: 7px;
+    width: 32px;
+    height: 32px;
     display: flex;
     align-items: center;
     justify-content: center;
     border: 0;
-    border-radius: var(--r);
+    border-radius: 8px;
     background: none;
     color: var(--muted);
     cursor: pointer;
   }
 
-  .chev :global(svg) {
-    transition: transform 0.15s;
+  @media (hover: hover) {
+    .info:hover {
+      background: var(--hover);
+      color: var(--text);
+    }
   }
 
-  .chev.open :global(svg) {
-    transform: rotate(180deg);
+  .info.on,
+  .info.on:hover {
+    background: var(--pc);
+    color: var(--on-pc);
+  }
+
+  @media (pointer: coarse) {
+    .info {
+      top: 1px;
+      right: 1px;
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+    }
   }
 </style>

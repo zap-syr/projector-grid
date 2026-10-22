@@ -25,6 +25,7 @@
   import { matchesFilter, matchesSearch } from '../../logic/rows';
   import { live } from '../../state/live.svelte';
   import { alignment } from '../../state/alignment.svelte';
+  import { device } from '../../state/device.svelte';
   import { preview } from '../../state/preview.svelte';
   import { selection } from '../../state/selection.svelte';
   import { view } from '../../state/view.svelte';
@@ -385,6 +386,7 @@
       groups={groupMap}
       {patternLabel}
       {anchor}
+      touch={device.touch}
       onclose={closeDetails}
       onpreview={alignment.active ? undefined : openPreview}
     />

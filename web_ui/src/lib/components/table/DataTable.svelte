@@ -27,6 +27,8 @@
     triState,
   } from '../../logic/selection';
   import { alignment } from '../../state/alignment.svelte';
+  import { details } from '../../state/details.svelte';
+  import { device } from '../../state/device.svelte';
   import { preview } from '../../state/preview.svelte';
   import { selection } from '../../state/selection.svelte';
   import Checkbox from '../Checkbox.svelte';
@@ -46,8 +48,15 @@
 
   /** The pinned checkbox column in operator mode. */
   const SELECT_W = 44;
-  /** The row actions at the row's end (Remote Preview), not a column of the menu. */
-  const ACT_W = 52;
+  /**
+   * The row actions at the row's end, not a column of the menu: Remote
+   * Preview, then the operator's Details (a viewer's row click opens them).
+   */
+  const ACT_W = $derived.by(() => {
+    // `.pvb`: 30 px with a mouse, 44 px for a finger; 2 px between them.
+    const button = device.touch ? 44 : 30;
+    return (operator ? 2 * button + 2 : button) + 2 * (metrics.hpad - 8) + 6;
+  });
 
   /** Row / header height and cell padding per density (`_densityMetrics`). */
   const DENSITY: Record<Density, { row: number; header: number; hpad: number }> = {
@@ -182,14 +191,23 @@
     };
     const onTapCancel = () => (tap = null); // the finger scrolled instead
 
+    // A viewer selects nothing: a row click opens its details, a second one closes them.
+    const onViewerClick = (e: MouseEvent) => {
+      if (operator || alignment.active || (e.target as Element).closest('button')) return;
+      const id = (e.target as Element).closest<HTMLElement>('tr[data-id]')?.dataset.id;
+      if (id) openDetails(id);
+    };
+
     tbody.addEventListener('pointerdown', onDown);
     tbody.addEventListener('pointerup', onTapUp);
     tbody.addEventListener('pointercancel', onTapCancel);
+    tbody.addEventListener('click', onViewerClick);
     return () => {
       onUp();
       tbody.removeEventListener('pointerdown', onDown);
       tbody.removeEventListener('pointerup', onTapUp);
       tbody.removeEventListener('pointercancel', onTapCancel);
+      tbody.removeEventListener('click', onViewerClick);
     };
   }
 
@@ -318,6 +336,13 @@
       id,
     );
 
+  /** The details' Preview walks the rows as they were when the details opened. */
+  const openDetails = (id: string) =>
+    details.toggle(
+      id,
+      rowOrder.map((p) => p.id),
+    );
+
   const ariaSort = (col: ColumnId) =>
     col !== sortColumn ? undefined : layout.sortAscending ? 'ascending' : 'descending';
 </script>
@@ -436,7 +461,12 @@
             class:lv-offline={p.status.level === 'offline'}
             class:outside={alignment.active && !role}
             class:sel={operator && selected && !alignment.active}
-            class:pick={operator && (alignment.active ? role !== null : isSelectable(p))}
+            class:open={details.id === p.id && !alignment.active}
+            class:pick={operator
+              ? alignment.active
+                ? role !== null
+                : isSelectable(p)
+              : !alignment.active}
             data-id={p.id}
           >
             {#if alignment.active}
@@ -465,17 +495,31 @@
                 <Cell column={col} {p} groups={groupMap} {patternLabel} />
               </td>
             {/each}
-            <!-- No Remote Preview in Alignment mode; the cell keeps its width. -->
+            <!-- No row actions in Alignment mode; the cell keeps its width. -->
             <td class="pvc">
               {#if !alignment.active}
-                <button
-                  class="pvb"
-                  aria-label="Remote Preview of {p.ip}"
-                  title="Remote Preview"
-                  onclick={() => openPreview(p.id)}
-                >
-                  <Icon name="preview" size={17} />
-                </button>
+                <span class="racts">
+                  <button
+                    class="pvb"
+                    aria-label="Remote Preview of {p.ip}"
+                    title="Remote Preview"
+                    onclick={() => openPreview(p.id)}
+                  >
+                    <Icon name="preview" size={17} />
+                  </button>
+                  {#if operator}
+                    <button
+                      class="pvb"
+                      class:on={details.id === p.id}
+                      aria-pressed={details.id === p.id}
+                      aria-label="Details of {p.ip}"
+                      title="Details"
+                      onclick={() => openDetails(p.id)}
+                    >
+                      <Icon name="info" size={17} />
+                    </button>
+                  {/if}
+                </span>
               {/if}
             </td>
           </tr>
@@ -717,6 +761,12 @@
     --row-bg: color-mix(in srgb, var(--accent) 12%, var(--app));
   }
 
+  /* The row whose details are open: a stronger fill, no outline; selected or not. */
+  tr.row.open,
+  tr.row.open:hover {
+    --row-bg: color-mix(in srgb, var(--accent) 16%, var(--app));
+  }
+
   tr.row.offline td.dc:not(.keep) {
     opacity: 0.55;
   }
@@ -740,8 +790,14 @@
     padding: 0 calc(var(--hpad) - 8px);
   }
 
+  .racts {
+    display: inline-flex;
+    gap: 2px;
+    vertical-align: middle;
+  }
+
   .pvb {
-    width: 34px;
+    width: 30px;
     height: min(30px, var(--row) - 4px);
     display: inline-flex;
     align-items: center;
@@ -759,6 +815,12 @@
       background: var(--accent-soft);
       color: var(--accent);
     }
+  }
+
+  .pvb.on,
+  .pvb.on:hover {
+    background: var(--pc);
+    color: var(--on-pc);
   }
 
   @media (pointer: coarse) {

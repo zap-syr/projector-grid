@@ -10,6 +10,7 @@
   } from '../../logic/selection';
   import { alignment } from '../../state/alignment.svelte';
   import { control } from '../../state/control.svelte';
+  import { details } from '../../state/details.svelte';
   import { device } from '../../state/device.svelte';
   import { listMode } from '../../state/listMode.svelte';
   import { live } from '../../state/live.svelte';
@@ -72,9 +73,11 @@
   onpointerdown={onWindowPointer}
   onkeydown={(e) => {
     if (e.key === 'Escape' && !e.defaultPrevented) {
-      // Esc closes an open menu first, then clears the selection.
-      if (menu) menu = null;
-      else if (operator && !control.pending && !panel.sheet) selection.clear();
+      // Esc closes an open menu first, then the details, then clears the selection.
+      if (menu) {
+        menu = null;
+        e.preventDefault();
+      } else if (operator && !control.pending && !panel.sheet && !details.id) selection.clear();
     }
     // Ctrl/Cmd+A: every visible row, like the select-all box.
     if (operator && (e.ctrlKey || e.metaKey) && e.key === 'a' && !inField(e)) {
