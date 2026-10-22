@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { render, screen } from '@testing-library/svelte';
+import { cleanup, render, screen } from '@testing-library/svelte';
 import type { ComponentProps } from 'svelte';
 import { describe, expect, test } from 'vitest';
 
@@ -10,9 +10,8 @@ import MapTile from '../src/lib/components/map/MapTile.svelte';
 import {
   CARD_H,
   CARD_W,
-  CHIP_H,
-  chipText,
   clampZoom,
+  groupBand,
   fitZoom,
   mapBounds,
   marqueeSelection,
@@ -36,12 +35,12 @@ const byId = (id: string) => projectors.find((p) => p.id === id) as Projector;
 const at = (id: string, x: number, y: number): Projector => ({ ...byId(id), x, y });
 
 describe('map geometry', () => {
-  test('bounds cover every card and its group chip, padded', () => {
+  test('bounds cover every card, padded', () => {
     expect(mapBounds(projectors)).toEqual({
       x: 20 - PAD,
       y: 40 - PAD,
       w: 160 + CARD_W - 20 + 2 * PAD,
-      h: 180 + CARD_H + CHIP_H - 40 + 2 * PAD,
+      h: 180 + CARD_H - 40 + 2 * PAD,
     });
     expect(mapBounds([])).toEqual({ x: 0, y: 0, w: 0, h: 0 });
   });
@@ -123,15 +122,26 @@ describe('map tile', () => {
       selected: false,
       dim: false,
       compact: false,
+      ipChars: 13,
       ...over,
     });
 
-  test('shows the name, IP, test pattern and group chip, like the app card', () => {
+  test('shows the name, IP, test pattern and group band, like the app card', () => {
     show({ p: { ...byId('n2'), testPattern: 'OTS:07', shutter: 'closed' } });
     expect(screen.getByText(byId('n2').ip)).toBeTruthy();
     expect(screen.getByRole('img', { name: 'Test pattern: Cross Hatch' })).toBeTruthy();
     expect(screen.getByText('Stage')).toBeTruthy();
-    expect(screen.getByRole('button', { name: byId('n2').name, pressed: false })).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: `${byId('n2').ip}, ${byId('n2').name}`, pressed: false }),
+    ).toBeTruthy();
+  });
+
+  test('the header says Offline or Login failed instead of power and shutter', () => {
+    show({ p: byId('n4') });
+    expect(screen.getByText('Offline')).toBeTruthy();
+    cleanup();
+    show({ p: byId('n3') });
+    expect(screen.getByText('Login failed')).toBeTruthy();
   });
 
   test('compact keeps only the dot and name', () => {
@@ -140,9 +150,9 @@ describe('map tile', () => {
     expect(screen.queryByRole('img')).toBeNull();
   });
 
-  test('group chip text reads on its colour', () => {
-    expect(chipText('#FFEB3B')).toBe('#15171b');
-    expect(chipText('#9334E6')).toBe('#fff');
+  test('the group band mixes 55 % of the group into the card; its text reads on the mix', () => {
+    expect(groupBand('#9334E6', '#282a2f')).toEqual({ fill: '#633094', text: '#f4f5f8' });
+    expect(groupBand('#FFEB3B', '#ffffff')).toEqual({ fill: '#fff493', text: '#15171b' });
   });
 });
 

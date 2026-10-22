@@ -1,14 +1,18 @@
 <!--
   One projector on the Map, drawn like the app's canvas card (`projector_card.dart`):
-  status bar, name, IP with the test-pattern thumbnail, the group's tint and
-  chip. Sized in canvas px; MapView scales the whole wall.
+  a header tinted by its state (`cardHeaderTone`) with power, shutter and the
+  alert badge, then the model and the IP with the test-pattern thumbnail, and
+  the group as a band inside the tile. Sized in canvas px; MapView scales the
+  whole wall.
 -->
 <script lang="ts">
   import type { AlignmentRole, Group, Projector } from '../../api/types';
-  import { CARD_H, CARD_W, chipText } from '../../logic/map';
+  import { CARD_H, CARD_W, groupBand } from '../../logic/map';
   import { isPatternActive, patternSwatch } from '../../logic/patterns';
+  import { themeColors } from '../../state/themeColors.svelte';
   import AlertBadge from '../alerts/AlertBadge.svelte';
   import Icon from '../Icon.svelte';
+  import StatusDot from '../status/StatusDot.svelte';
 
   let {
     p,
@@ -19,6 +23,7 @@
     selected,
     dim,
     compact,
+    ipChars,
     role = null,
     outside = false,
   }: {
@@ -33,6 +38,8 @@
     dim: boolean;
     /** Zoomed far out: dot and name only. */
     compact: boolean;
+    /** The project's longest IP, so every tile's IP is one size. */
+    ipChars: number;
     /** Alignment mode: the app card's rings — focused, shown — or the closed scrim. */
     role?: AlignmentRole | null;
     /** Alignment mode is on but this projector isn't in it (offline on entry, or out of scope). */
@@ -41,8 +48,25 @@
 
   const aligning = $derived(role !== null || outside);
 
-  const online = $derived(p.connection === 'connected' || p.connection === 'unprotected');
-  const power = $derived(p.power === 'on' ? 'ok' : p.power === 'standby' ? 'err' : 'warn');
+  /** `cardHeaderTone`: the connection first, then the power. */
+  const tone = $derived(
+    p.connection === 'offline'
+      ? 'offline'
+      : p.connection === 'unauthorized'
+        ? 'login'
+        : p.power === 'on'
+          ? 'on'
+          : p.power === 'standby'
+            ? 'standby'
+            : 'transition',
+  );
+  /** `ProjectorStatusStyle`: green on, amber in transition, red standby. */
+  const powerColor = $derived(p.power === 'on' ? 'ok' : p.power === 'standby' ? 'err' : 'warn');
+  /** In standby the shutter decides nothing on screen, so it goes grey. */
+  const shutterColor = $derived(
+    p.power === 'standby' ? 'faint' : p.shutter === 'open' ? 'ok' : 'err',
+  );
+  const band = $derived(group ? groupBand(group.color, themeColors.card) : null);
 </script>
 
 <div
@@ -59,59 +83,57 @@
     class:compact
     data-id={p.id}
     style:height="{CARD_H}px"
-    style:--tint={group?.color}
-    aria-label={role ? `${p.name}, ${role}` : p.name}
+    aria-label={role ? `${p.ip}, ${p.name}, ${role}` : `${p.ip}, ${p.name}`}
     aria-pressed={operator ? (aligning ? role === 'focused' : selected) : undefined}
     aria-haspopup={operator ? undefined : 'dialog'}
   >
     {#if compact}
       <span class="cname">
-        <span class="dot" class:ok={online} class:warn={p.connection === 'unauthorized'}></span>
+        <StatusDot connection={p.connection} />
         <b>{p.name}</b>
       </span>
     {:else}
-      <span class="bar">
-        <span class={power}><Icon name="power" size={14} /></span>
-        <span class={p.shutter === 'open' ? 'ok' : 'err'}><Icon name="eye" size={14} /></span>
-        <AlertBadge id={p.id} size={15} />
+      <span class="head {tone}">
+        {#if tone === 'offline'}
+          <span class="lab err"><Icon name="power" size={13} />Offline</span>
+        {:else if tone === 'login'}
+          <span class="lab warn"><Icon name="lock" size={13} />Login failed</span>
+        {:else}
+          <span class="ic {powerColor}"><Icon name="power" size={15} /></span>
+          <span class="ic {shutterColor}"
+            ><Icon name={p.shutter === 'open' ? 'eye' : 'eyeOff'} size={15} /></span
+          >
+        {/if}
         <span class="grow"></span>
-        {#if p.connection === 'unauthorized'}
-          <span class="warn"><Icon name="lock" size={12} /></span>
-        {:else if p.connection === 'unprotected'}
-          <span class="acc"><Icon name="unlock" size={12} /></span>
+        {#if p.connection === 'unprotected'}
+          <span class="ic faint"><Icon name="unlock" size={13} /></span>
         {/if}
-        <span class="dot" class:ok={online} class:warn={p.connection === 'unauthorized'}></span>
+        <AlertBadge id={p.id} size={15} />
       </span>
-      <b class="name">{p.name}</b>
-      <span class="foot">
-        <span class="ip">{p.ip}</span>
-        {#if isPatternActive(p.testPattern)}
-          <span
-            class="tp"
-            role="img"
-            aria-label="Test pattern: {patternLabel(p.testPattern)}"
-            style:background={patternSwatch(p.testPattern) ?? 'var(--hover)'}
-          ></span>
-        {/if}
+      <span class="body">
+        <b class="name">{p.name}</b>
+        <span class="ipr">
+          <span class="ip" style:--n={ipChars}>{p.ip}</span>
+          {#if isPatternActive(p.testPattern)}
+            <span
+              class="tp"
+              role="img"
+              aria-label="Test pattern: {patternLabel(p.testPattern)}"
+              style:background={patternSwatch(p.testPattern) ?? 'var(--hover)'}
+            ></span>
+          {/if}
+        </span>
       </span>
+      {#if group && band}
+        <span class="band" style:background={band.fill} style:color={band.text}>{group.name}</span>
+      {/if}
     {/if}
   </button>
-  {#if group}
-    <span class="chip" style:background={group.color} style:color={chipText(group.color)}
-      >{group.name}</span
-    >
-  {/if}
 </div>
 
 <style>
-  /* The chip sits below the widest Alignment ring (3 + 5 px), as in the app,
-     so it never covers a ring and doesn't move when the mode starts. */
   .tile {
     position: absolute;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
   }
 
   .tile.dim {
@@ -126,10 +148,9 @@
     padding: 0;
     overflow: hidden;
     border: 1px solid var(--line-strong);
-    border-radius: 8px;
-    /* The app tints a grouped card with 15 % of the group's colour. */
-    background: color-mix(in srgb, var(--tint, transparent) 15%, var(--surface));
-    box-shadow: 0 2px 4px rgb(0 0 0 / 0.1);
+    border-radius: 10px;
+    background: var(--card);
+    box-shadow: 0 2px 4px rgb(0 0 0 / 0.25);
     color: var(--text);
     text-align: left;
     cursor: pointer;
@@ -141,7 +162,7 @@
   }
 
   /* The app's 2 px selection border: the border plus a 1 px ring inside it,
-     on a layer above the status bar so its background can't cover the ring. */
+     on a layer above the header so its background can't cover the ring. */
   .card.sel {
     border-color: var(--accent);
   }
@@ -150,7 +171,7 @@
     content: '';
     position: absolute;
     inset: 0;
-    border-radius: 7px;
+    border-radius: 9px;
     box-shadow: inset 0 0 0 1px var(--accent);
     pointer-events: none;
   }
@@ -185,21 +206,81 @@
     cursor: default;
   }
 
-  .bar {
+  /* The header band, tinted by the state so it reads from a distance:
+     16 % of the tone, 34 % for offline, its border 28 % / 50 %. */
+  .head {
+    --tone: var(--ok);
+    height: 26px;
+    flex: none;
     display: flex;
     align-items: center;
+    gap: 6px;
+    padding: 0 8px;
+    background: color-mix(in srgb, var(--tone) 16%, var(--card));
+    border-bottom: 1px solid color-mix(in srgb, var(--tone) 28%, var(--card));
+  }
+
+  .head.transition,
+  .head.login {
+    --tone: var(--warn);
+  }
+
+  .head.standby,
+  .head.offline {
+    --tone: var(--err);
+  }
+
+  .head.offline {
+    background: color-mix(in srgb, var(--tone) 34%, var(--card));
+    border-bottom-color: color-mix(in srgb, var(--tone) 50%, var(--card));
+  }
+
+  .lab {
+    display: inline-flex;
+    align-items: center;
     gap: 4px;
-    padding: 6px 8px;
-    background: var(--hover);
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .ic {
+    display: flex;
+  }
+
+  .ok {
+    color: var(--ok);
+  }
+
+  .warn {
+    color: var(--warn);
+  }
+
+  .err {
+    color: var(--err);
+  }
+
+  .faint {
+    color: var(--faint);
   }
 
   .grow {
     flex: 1;
   }
 
+  .body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    /* Model and IP at the card's bottom, as the app's; with no group band
+       nothing is kept for one. */
+    justify-content: flex-end;
+    gap: 1px;
+    padding: 0 8px 7px;
+  }
+
   .name {
-    margin-top: auto;
-    padding: 4px 8px;
     overflow: hidden;
     font-size: 14px;
     font-weight: 700;
@@ -207,19 +288,25 @@
     white-space: nowrap;
   }
 
-  .foot {
+  .ipr {
+    height: 16px;
     display: flex;
     align-items: center;
     gap: 4px;
-    padding: 0 8px 8px;
+    container-type: inline-size;
   }
 
+  /* Scaled down rather than cut, as the app's FittedBox: the IP is what tells
+     two cards of the same model apart. One size on every tile (owner,
+     2026-10-22): the project's longest IP beside a thumbnail's room (20 px),
+     whether or not this tile shows one. A mono glyph is 0.6 em wide. */
   .ip {
     flex: 1;
     overflow: hidden;
-    font-size: 12px;
+    font-family: var(--mono);
+    letter-spacing: 0;
+    font-size: min(12px, (100cqw - 20px) / (var(--n) * 0.6));
     color: var(--muted);
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -229,6 +316,19 @@
     height: 10px;
     flex: none;
     box-shadow: inset 0 0 0 0.5px var(--line-strong);
+  }
+
+  /* The group on a band inside the card's bottom (the app's 18 px `_GroupBand`). */
+  .band {
+    height: 18px;
+    flex: none;
+    padding: 0 8px;
+    overflow: hidden;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   /* Far out the name is all that reads, so it grows to fill the tile. */
@@ -250,56 +350,8 @@
     white-space: nowrap;
   }
 
-  .compact .dot {
+  .compact :global(.dot) {
     width: 16px;
     height: 16px;
-  }
-
-  .dot {
-    width: 8px;
-    height: 8px;
-    flex: none;
-    border-radius: 50%;
-    background: var(--err);
-  }
-
-  .dot.ok {
-    background: var(--ok);
-  }
-
-  .dot.warn {
-    background: var(--warn);
-  }
-
-  .ok {
-    display: flex;
-    color: var(--ok);
-  }
-
-  .err {
-    display: flex;
-    color: var(--err);
-  }
-
-  .warn {
-    display: flex;
-    color: var(--warn);
-  }
-
-  .acc {
-    display: flex;
-    color: var(--accent);
-  }
-
-  .chip {
-    max-width: 100%;
-    padding: 3px 8px;
-    overflow: hidden;
-    border-radius: 9px;
-    font-size: 9px;
-    font-weight: 600;
-    line-height: 1;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 </style>

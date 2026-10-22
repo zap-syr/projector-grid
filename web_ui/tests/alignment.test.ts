@@ -102,6 +102,7 @@ describe('map tile roles', () => {
       selected: true,
       dim: false,
       compact: false,
+      ipChars: 13,
       ...over,
     });
 

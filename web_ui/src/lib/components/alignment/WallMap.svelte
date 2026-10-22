@@ -46,6 +46,7 @@
         {p}
         group={p.groupId ? groupMap.get(p.groupId) : undefined}
         origin={bounds}
+        ipChars={p.ip.length}
         {patternLabel}
         {operator}
         selected={false}

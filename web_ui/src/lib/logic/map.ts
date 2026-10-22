@@ -4,8 +4,6 @@ import { isSelectable } from './selection';
 /** The app's card size on the Controls canvas (`card_layout.dart`). */
 export const CARD_W = 120;
 export const CARD_H = 100;
-/** Room under a card for its group chip (below the Alignment ring). */
-export const CHIP_H = 26;
 /** Margin around the wall, in canvas px. */
 export const PAD = 20;
 /** The app's canvas zooms 0.5–2; fitting a big wall may go below. */
@@ -26,7 +24,7 @@ export function mapBounds(projectors: readonly Projector[]): Rect {
   const x0 = Math.min(...projectors.map((p) => p.x));
   const y0 = Math.min(...projectors.map((p) => p.y));
   const x1 = Math.max(...projectors.map((p) => p.x + CARD_W));
-  const y1 = Math.max(...projectors.map((p) => p.y + CARD_H + CHIP_H));
+  const y1 = Math.max(...projectors.map((p) => p.y + CARD_H));
   return { x: x0 - PAD, y: y0 - PAD, w: x1 - x0 + 2 * PAD, h: y1 - y0 + 2 * PAD };
 }
 
@@ -112,14 +110,30 @@ export function tileSelection(
   return next;
 }
 
-/** Black or white group-chip text, whichever reads on the colour (`estimateBrightnessForColor`). */
-export function chipText(hex: string): string {
-  const n = Number.parseInt(hex.slice(1, 7), 16);
+const channels = (hex: string): [number, number, number] => {
+  const n = Number.parseInt(hex.trim().slice(1, 7), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+};
+
+/** Flutter's `estimateBrightnessForColor`: light when (L + 0.05)² > 0.15. */
+function isLight([r, g, b]: [number, number, number]): boolean {
   const lin = (c: number) => {
     const s = c / 255;
     return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
   };
-  const l = 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
-  // Flutter: light when (L + 0.05)^2 > 0.15.
-  return (l + 0.05) ** 2 > 0.15 ? '#15171b' : '#fff';
+  const l = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  return (l + 0.05) ** 2 > 0.15;
+}
+
+/**
+ * A tile's group band (`groupBandColor`, `groupBandTextColor`): the group
+ * colour mixed 55 % into the card, so a red group doesn't read as a fault,
+ * and the text chosen from that mix, not from the group colour.
+ */
+export function groupBand(group: string, card: string): { fill: string; text: string } {
+  const c = channels(card);
+  const g = channels(group);
+  const mix = c.map((v, i) => Math.round(v + ((g[i] ?? v) - v) * 0.55)) as [number, number, number];
+  const fill = `#${mix.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+  return { fill, text: isLight(mix) ? '#15171b' : '#f4f5f8' };
 }

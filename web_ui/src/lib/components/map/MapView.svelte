@@ -42,6 +42,7 @@
     live.projectors.filter((p) => matchesFilter(p, view.filter) && matchesSearch(p, view.search)),
   );
   const shownIds = $derived(new Set(shown.map((p) => p.id)));
+  const ipChars = $derived(Math.max(7, ...live.projectors.map((p) => p.ip.length)));
 
   /** Below this the tile text is too small to read, so tiles go compact. */
   const COMPACT_BELOW = 0.6;
@@ -351,6 +352,7 @@
               selected={selection.ids.has(p.id)}
               dim={!shownIds.has(p.id)}
               compact={zoom < COMPACT_BELOW}
+              {ipChars}
               role={alignment.role(p.id)}
               outside={alignment.active && !alignment.role(p.id)}
             />
