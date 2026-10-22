@@ -185,9 +185,21 @@ Vite copies `public/` into the output on every build, and the committed copies i
 - **Logo:** the app's own icon (`src/assets/app_icon.png`, copied from the macOS
   AppIcon set; favicon `public/favicon.png`), not a generic projector glyph (owner,
   2026-09-29).
-- **Theming:** `tokens.css` defines light and dark tokens. It follows
-  `prefers-color-scheme` with a manual override stored locally. Status colours come only
-  from tokens.
+- **Theming:** `tokens.css` holds the app's palette (`app_theme.dart`) for light and dark:
+  `--win --bar --card --menu --field --soft`, text `--t1..3`, `--primary --pc`, status
+  `--ok --warn --err`, `--align`; the older names (`--surface`, `--muted`, `--accent`, …)
+  are aliases of them. It follows `prefers-color-scheme` unless the role menu's *Theme*
+  pins one (`state/theme.svelte.ts`, `pg.theme.v1`, `data-theme` on `<html>`). Status
+  colours come only from tokens, and only for status. Colours a canvas paints in JS read
+  the tokens through `state/themeColors.svelte.ts`.
+- **UI text** follows the app's visual rules (`projector-grid-visual-rules`): no `·` or
+  dashes (commas, colons, parentheses), sentence case, projectors named by IP or
+  model + IP (`RZ34K (192.168.0.41)`), never the model alone.
+- **Layout stability:** buttons, cards and rows keep their size and place across states
+  and roles: reserved slots (the card's error line, the Pre-show spinner), panels under
+  the full-width toolbar, overlays instead of reflow. The bulk selector is sized
+  for "999 selected" and grows only for the hidden count, with no room reserved for it
+  (owner, 2026-10-22).
 - **Accessibility:**
   - real `<button>`s;
   - `aria-sort` on sorted headers;
@@ -529,7 +541,9 @@ Then the existing `build_runner → format → analyze → flutter test`. The re
     **Phase 3: desktop table and Control panel** (boards *Web: desktop 1440, table…*,
     *…table without groups, Columns menu open*, *Control panel states…*).
     - Data bar: bulk selector, search *Search IP, model, serial*, quick filters *All /
-      Online / Attention / Offline / Standby* with counts (an empty one stays, dimmed), the
+      Online / Attention / Offline / Standby* with counts (an empty one stays, dimmed;
+      on phones and tablets the app's compact step, the mark and the count with the
+      word in the tooltip, so all five fit without scrolling), the
       view switch as icons, Columns, the Control toggle. The filters leave the header in
       this phase (the header itself is restyled in Phase 8). The new Select ▾ presets and
       the hidden selection (variant B, with its confirmations) land here too.
@@ -607,7 +621,8 @@ Then the existing `build_runner → format → analyze → flutter test`. The re
       - Cards are all one height (the error line is always reserved) and the whole card
         answers a click; a viewer's card has no room kept for ⓘ.
       - The bulk selector's hidden count is an amber eye-off icon with the number, no
-        word; the selector is sized for *999 selected* plus it.
+        word. (Later the same day: the selector is sized for *999 selected* only, and
+        the count widens it while selected projectors are hidden; no room reserved.)
       - On touch layouts the *Control* bar lies over the Map, so its tiles don't move;
         only the zoom buttons step up.
       - The Map's Phase 4 popover, the touch tables' Preview in the details and the
@@ -627,8 +642,14 @@ Then the existing `build_runner → format → analyze → flutter test`. The re
       grey *Offline* pill where the signal goes.
     - The test-pattern thumbnail stays as it is (no name; the app's Monitoring cards show
       none).
-    - Touch Control sheets keep their big buttons; the app's control bar layout is for
-      the desktop panel only, with one exception, the test pattern:
+    - Touch Control sheets (and the sideways tablet's touch side panel) take the
+      desktop panel's cards at finger size (boards *Phone: Control sheet*, *Tablet
+      portrait 820*; done after the owner's review, 2026-10-22): Power / Shutter / OSD
+      as 60 px rows with 44 px green / red icon buttons; Input card; Lens card with
+      Home as a 44 px round button in its header, the speed switch, 64 px shift
+      arrows, *Focus* / *Zoom* rows with 56 px buttons, *Lens setup* folded last (the
+      phone's Alignment screen keeps a full-width *Home position* above it). The
+      test pattern:
       - **Tablets** (upright and sideways; boards *Tablet landscape 1180: test pattern as
         on the desktop…*, the tablet upright Control sheet) take the desktop layout at
         44 px: *Off* (red crossed icon), four quick swatches (Color Bar Vert, Cross
@@ -692,6 +713,17 @@ Then the existing `build_runner → format → analyze → flutter test`. The re
     **Phase 11: checks.** `dev:mock` in Chrome at the widths of step 4 in both themes;
     the real app with the simulator; then the owner's review. Update §8 and ROADMAP §5
     where they describe the old behaviour.
+
+    **Progress (2026-10-22):** phases 1 to 10 done, each checked in Chrome with
+    `dev:mock` and committed after the owner's look. Phase 10 also: an unreachable
+    projector shows its connection badge in the preview's title bar instead of its stale
+    power; closing the window with Pre-show on says it stays on, as the app does. §8 and
+    ROADMAP §5 updated. Width pass (phone 360 / 390 / 844 sideways, tablet 820 / 1180,
+    desktop 1024 / 1440; dark everywhere, light on desktop and phones) found three things,
+    fixed: the tablet's sideways alerts drawer keeps icon buttons (labels only in the
+    upright sheet the board draws), the view switch drops its words below 1600 px so the
+    1440 toolbar stays one row, and the alert toast names the projector by IP. Left: the
+    real app with the simulator, the owner's review.
 
 ## 11. Open points
 

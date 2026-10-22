@@ -7,7 +7,8 @@
   holds Sound on the left (the web has no event log) and Acknowledge all on
   the right; a viewer's says acknowledging needs control, with Unlock.
   `touch` is the tablet / phone sheet: 44 px+ targets, labelled buttons on a
-  tablet; `narrow` (a phone held sideways) keeps the icons.
+  tablet's bottom sheet; `narrow` (a phone held sideways, the 440 px drawer
+  of a tablet held sideways) keeps the icons.
 -->
 <script lang="ts">
   import type { Alert, AlertSeverity } from '../../api/types';

@@ -41,6 +41,7 @@
   /** Tablets: finger-sized controls in one row, matching the touch Alignment banner. */
   const touch = $derived(device.touch && !device.phone);
   const iconSize = $derived(touch ? 18 : 15);
+  const compactChips = $derived(device.phone || touch);
 
   let menu = $state<'columns' | 'select' | null>(null);
   let chipsRow = $state<HTMLElement>();
@@ -99,7 +100,7 @@
   {:else if operator}
     <!-- The bulk selector (PatternFly): the box selects all shown, or clears
          any selection with one tap; the count and the Select ▾ presets share
-         one fixed-width control, so nothing beside it moves. -->
+         one control, wide enough for "999 selected". -->
     {@const tri = triState(shown, selection.ids)}
     {@const count = selection.ids.size}
     <div class="bulk" class:on={count > 0} bind:this={selectWrap}>
@@ -117,12 +118,14 @@
         aria-expanded={menu === 'select'}
         onclick={() => (menu = menu === 'select' ? null : 'select')}
       >
-        <span class="blabel">{count > 0 ? `${count} selected` : 'Select'}</span>
+        <span class="blabel"
+          ><span class="sizer" aria-hidden="true">999 selected</span><span
+            >{count > 0 ? `${count} selected` : 'Select'}</span
+          ></span
+        >
         <span class="bchev"><Icon name="chevron" size={14} /></span>
       </button>
       {#if hidden.length > 0 && !device.phone}
-        <!-- Over the menu button, which keeps room for it: the bulk selector
-             never changes width. -->
         <button
           class="hid"
           aria-label="{hidden.length} hidden, show all"
@@ -162,17 +165,22 @@
   {#if device.phone}
     <span class="count"><b>{shown.length}</b>/{live.projectors.length}</span>
   {/if}
-  <!-- Always all five, an empty one dimmed: filters never come and go. -->
+  <!-- Always all five, an empty one dimmed: filters never come and go. Phones
+       and tablets show the app's compact step: the mark and the count, the
+       word in the tooltip, so all five fit without scrolling. -->
   <div class="chips" role="group" aria-label="Filter" bind:this={chipsRow}>
     {#each QUICK_FILTERS as f (f)}
       <button
         class="chip {f}"
         aria-pressed={view.filter === f}
+        aria-label={compactChips ? `${FILTER_LABELS[f]}, ${counts[f]}` : undefined}
+        title={compactChips ? FILTER_LABELS[f] : undefined}
         disabled={counts[f] === 0 && view.filter !== f}
         onclick={() => view.toggleFilter(f)}
       >
-        {#if f === 'standby'}<Icon name="moon" size={14} />{:else if f !== 'all'}<i></i>{/if}
-        {FILTER_LABELS[f]}<b>{counts[f]}</b>
+        {#if f === 'standby'}<Icon name="moon" size={14} />{:else if f !== 'all'}<i
+          ></i>{:else if compactChips}<Icon name="apps" size={14} />{/if}
+        {#if !compactChips}{FILTER_LABELS[f]}{/if}<b>{counts[f]}</b>
       </button>
     {/each}
   </div>
@@ -402,8 +410,9 @@
     cursor: pointer;
   }
 
-  /* Beside the Control panel on a sideways tablet the short forms fit one row. */
-  @media (max-width: 1279px) {
+  /* The view switch's words go first, so the bar keeps one row on a 1440
+     desktop and beside the Control panel on a sideways tablet. */
+  @media (max-width: 1599px) {
     .sl {
       display: none;
     }
@@ -565,14 +574,11 @@
     color: var(--accent);
   }
 
-  /* ⊘16: a compact amber button between the label and the chevron, over
-     room the menu button keeps for it, so "999 selected" never runs under it
-     (owner, 2026-10-22). */
+  /* ⊘16: a compact amber button after the menu, only while selected
+     projectors are hidden; the selector grows for it (owner, 2026-10-22). */
   .hid {
-    position: absolute;
-    top: 50%;
-    right: 30px;
-    transform: translateY(-50%);
+    align-self: center;
+    margin-right: 5px;
     display: inline-flex;
     align-items: center;
     gap: 3px;
@@ -601,24 +607,26 @@
     white-space: nowrap;
   }
 
-  /* Fixed, so the search never moves: room for "999 selected", then the
-     hidden icon and its number (no word), then the chevron (owner, 2026-10-22). */
-  .toolbar:not(.phone) .bmenu {
-    width: 176px;
+  /* Sized by an invisible "999 selected", so the count never moves the search;
+     only the hidden count widens the selector (owner, 2026-10-22). */
+  .blabel {
+    display: grid;
   }
 
-  /* The chevron at the selector's right edge, whatever the label's width. */
+  .blabel > span {
+    grid-area: 1 / 1;
+  }
+
+  .sizer {
+    visibility: hidden;
+  }
+
   .bchev {
     display: flex;
-    margin-left: auto;
   }
 
   .phone .bulk {
     height: 38px;
-  }
-
-  .phone .blabel {
-    min-width: 10ch;
   }
 
   .menu {
@@ -743,9 +751,12 @@
     scrollbar-width: none;
   }
 
+  /* Compact chips share the phone's row evenly. */
   .phone .chip {
+    flex: 1 0 auto;
+    justify-content: center;
     height: 40px;
-    padding: 0 14px;
+    padding: 0 10px;
     font-size: 13.5px;
   }
 

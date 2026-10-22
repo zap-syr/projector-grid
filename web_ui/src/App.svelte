@@ -190,6 +190,7 @@
               <AlertsPanel
                 {operator}
                 touch={device.touch}
+                narrow
                 onclose={() => alerts.setPref('drawer', false)}
               />
             </aside>

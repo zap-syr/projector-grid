@@ -56,12 +56,15 @@
   );
   const codeLabel = (code: string) => codeLabels.get(code) ?? testPatternLabel(code, patternLabels);
   const morePatterns = $derived(
-    config.testPatterns.map((t) => t.code).filter((c) => !MAIN_PATTERNS.includes(c)),
+    config.testPatterns
+      .map((t) => t.code)
+      .filter((c) => c !== 'OTS:00' && !MAIN_PATTERNS.includes(c)),
   );
   // With one projector selected its pattern is highlighted.
   const current = $derived(count === 1 ? (selection.projectors[0]?.testPattern ?? null) : null);
 
   let showMore = $state(false);
+  const phoneTiles = $derived(showMore ? [...MAIN_PATTERNS, ...morePatterns] : MAIN_PATTERNS);
   /** Desktop: Lens setup (calibration, lens type) folds away, closed by default. */
   let setupOpen = $state(false);
   /** The app's four quick patterns beside *Off*. */
@@ -128,26 +131,6 @@
   >
     <LensIcon {dir} speed={s} />
   </HoldButton>
-{/snippet}
-
-{#snippet lensSettings()}
-  <button class="btn wide" disabled={false} onclick={() => send(act.lensHome())}>
-    <Icon name="home" size={15} /> Home position
-  </button>
-  <OptionRow
-    label="Lens calibration"
-    showLabel
-    options={config.lensCalibrations}
-    disabled={false}
-    onset={(code) => send(act.lensCalibration(code))}
-  />
-  <OptionRow
-    label="Lens type"
-    showLabel
-    options={config.lensTypes}
-    disabled={false}
-    onset={(code) => send(act.lensType(code))}
-  />
 {/snippet}
 
 <aside
@@ -337,98 +320,130 @@
 {/snippet}
 
 {#snippet basics()}
-  <section>
-    <h6>Power</h6>
-    <div class="pair">
-      <button class="btn" disabled={false} onclick={() => send(act.power(true))}>On</button>
-      <button class="btn" disabled={false} onclick={() => send(act.power(false))}>Standby</button>
-    </div>
-  </section>
-
-  <section>
-    <h6>Shutter</h6>
-    <div class="pair">
-      <button class="btn" disabled={false} onclick={() => send(act.shutter(true))}>Open</button>
-      <button class="btn" disabled={false} onclick={() => send(act.shutter(false))}>Close</button>
-    </div>
-  </section>
-
-  <section>
-    <h6>OSD</h6>
-    <div class="pair">
-      <button class="btn" disabled={false} onclick={() => send(act.osd(true))}>On</button>
-      <button class="btn" disabled={false} onclick={() => send(act.osd(false))}>Off</button>
-    </div>
-  </section>
-
-  <section>
-    <h6>Input</h6>
+  <!-- Touch: the desktop's cards at finger size (boards *Phone: Control sheet*,
+       *Tablet portrait 820*): 60 px rows, 44 px buttons. -->
+  <div class="card rows">
+    {#each STATE_ROWS as r (r.label)}
+      <div class="srow">
+        <span class="l">{r.label}</span>
+        <button class="ab g" onclick={() => send(r.on)}
+          ><Icon name={r.onIcon} size={18} />{r.onLabel}</button
+        >
+        <button class="ab r" onclick={() => send(r.off)}
+          ><Icon name={r.offIcon} size={18} />{r.offLabel}</button
+        >
+      </div>
+    {/each}
+  </div>
+  <div class="card">
+    <div class="ch"><Icon name="input" size={16} />Input</div>
     <OptionRow
       label="Input"
       options={config.inputs}
-      disabled={false}
+      touch
       onset={(code) => send(act.input(code))}
     />
-  </section>
+  </div>
 {/snippet}
 
 {#snippet lens()}
-  {#if touchLens}
-    <!-- Touch: one speed switch and big single-step buttons, well apart, so
-           a finger can't hit Focus for Zoom. The rarely used settings go last. -->
-    <section>
-      <h6>Lens</h6>
-      <div class="seg" role="group" aria-label="Lens speed">
-        {#each speeds as s (s)}
-          <button aria-pressed={speed === s} onclick={() => (speed = s)}>{cap(s)}</button>
-        {/each}
+  {#if embedded}
+    <!-- The Alignment screen's own card names the lens: no header, Home with the setup. -->
+    {@render touchLensBody()}
+    <button class="tbtn" onclick={() => send(act.lensHome())}>
+      <Icon name="home" size={18} />Home position
+    </button>
+    {@render touchSetup()}
+  {:else}
+    <div class="card">
+      <div class="ch tall">
+        <Icon name="lens" size={16} />Lens
+        {#if hiddenCount > 0}<span class="lhid">{count} projectors, {hiddenCount} hidden</span>{/if}
+        <button class="hbtn" aria-label="Home position" onclick={() => send(act.lensHome())}
+          ><Icon name="home" size={20} /></button
+        >
       </div>
-      <div class="dpad">
-        <span></span>
-        <HoldButton label="Shift up" disabled={false} onstep={step('shiftV', true, speed)}
-          ><Icon name="up" size={24} /></HoldButton
-        >
-        <span></span>
-        <HoldButton label="Shift left" disabled={false} onstep={step('shiftH', false, speed)}
-          ><Icon name="left" size={24} /></HoldButton
-        >
-        <span class="hub">SHIFT</span>
-        <HoldButton label="Shift right" disabled={false} onstep={step('shiftH', true, speed)}
-          ><Icon name="right" size={24} /></HoldButton
-        >
-        <span></span>
-        <HoldButton label="Shift down" disabled={false} onstep={step('shiftV', false, speed)}
-          ><Icon name="down" size={24} /></HoldButton
-        >
-        <span></span>
-      </div>
-    </section>
-    {#each axes as a (a.axis)}
-      <section>
-        <h6>{a.label}</h6>
-        <div class="big">
-          <HoldButton
-            label="{a.label} {a.minus}"
-            disabled={false}
-            onstep={step(a.axis, false, speed)}
-            ><span class="bl"><Icon name="left" size={20} />{a.minus}</span></HoldButton
-          >
-          <HoldButton label="{a.label} {a.plus}" disabled={false} onstep={step(a.axis, true, speed)}
-            ><span class="bl">{a.plus}<Icon name="right" size={20} /></span></HoldButton
-          >
-        </div>
-      </section>
+      {@render touchLensBody()}
+      {@render touchSetup()}
+    </div>
+  {/if}
+{/snippet}
+
+{#snippet touchLensBody()}
+  <!-- One speed switch and big single-step buttons, well apart, so a finger
+       can't hit Focus for Zoom. -->
+  <div class="seg" role="group" aria-label="Lens speed">
+    {#each speeds as s (s)}
+      <button aria-pressed={speed === s} onclick={() => (speed = s)}>{cap(s)}</button>
     {/each}
-    <section>
-      <h6>Lens settings</h6>
-      {@render lensSettings()}
-    </section>
+  </div>
+  <div class="dpad">
+    <span></span>
+    <HoldButton label="Shift up" onstep={step('shiftV', true, speed)}
+      ><Icon name="up" size={26} /></HoldButton
+    >
+    <span></span>
+    <HoldButton label="Shift left" onstep={step('shiftH', false, speed)}
+      ><Icon name="left" size={26} /></HoldButton
+    >
+    <span class="hub">Shift</span>
+    <HoldButton label="Shift right" onstep={step('shiftH', true, speed)}
+      ><Icon name="right" size={26} /></HoldButton
+    >
+    <span></span>
+    <HoldButton label="Shift down" onstep={step('shiftV', false, speed)}
+      ><Icon name="down" size={26} /></HoldButton
+    >
+    <span></span>
+  </div>
+  {#each axes as a (a.axis)}
+    <div class="big">
+      <span class="l">{a.label}</span>
+      <HoldButton label="{a.label} {a.minus}" onstep={step(a.axis, false, speed)}
+        ><span class="bl"><Icon name="left" size={20} />{a.minus}</span></HoldButton
+      >
+      <HoldButton label="{a.label} {a.plus}" onstep={step(a.axis, true, speed)}
+        ><span class="bl">{a.plus}<Icon name="right" size={20} /></span></HoldButton
+      >
+    </div>
+  {/each}
+{/snippet}
+
+{#snippet touchSetup()}
+  <!-- Calibration and lens type are rare: folded, as on the desktop. -->
+  <button class="disc" aria-expanded={setupOpen} onclick={() => (setupOpen = !setupOpen)}>
+    <Icon name="tune" size={18} />Lens setup<span class="cv" class:open={setupOpen}
+      ><Icon name="right" size={18} /></span
+    >
+  </button>
+  {#if setupOpen}
+    <div class="setup">
+      <OptionRow
+        label="Calibration"
+        showLabel
+        touch
+        options={config.lensCalibrations}
+        onset={(code) => send(act.lensCalibration(code))}
+      />
+      <OptionRow
+        label="Lens type"
+        showLabel
+        touch
+        options={config.lensTypes}
+        onset={(code) => send(act.lensType(code))}
+      />
+    </div>
   {/if}
 {/snippet}
 
 {#snippet patterns()}
-  <section>
-    <h6>Test pattern</h6>
+  <div class="card">
+    <div class="ch">
+      <Icon name="grid" size={16} />Test pattern
+      {#if device.phone}<em class="cnt"
+          >{phoneTiles.length} of {MAIN_PATTERNS.length + morePatterns.length}</em
+        >{/if}
+    </div>
     {#if device.phone}
       <!-- Phone: a full-width Off, then 74 px tiles with the name, four a row. -->
       <button
@@ -437,7 +452,7 @@
         onclick={() => send(act.testPattern('OTS:00'))}><Icon name="gridOff" size={20} />Off</button
       >
       <div class="tpgrid">
-        {#each showMore ? [...MAIN_PATTERNS, ...morePatterns] : MAIN_PATTERNS as code (code)}
+        {#each phoneTiles as code (code)}
           <button
             class="tp"
             class:cur={current === code}
@@ -483,7 +498,7 @@
         onset={(code) => send(act.testPattern(code))}
       />
     {/if}
-  </section>
+  </div>
 {/snippet}
 
 <style>
@@ -517,8 +532,13 @@
   }
 
   .embedded .body {
+    display: block;
     overflow: visible;
     padding: 0;
+  }
+
+  .embedded .tbtn {
+    width: 100%;
   }
 
   h3.lens {
@@ -588,65 +608,73 @@
   .body {
     flex: 1;
     overflow: auto;
-    padding: 4px 18px 18px;
-  }
-
-  section {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    padding: 14px 0 4px;
+    padding: 0 12px 12px;
   }
 
-  /* Block titles like the app's control bar: accent, bold, with a rule. */
-  h6 {
+  /* ── Touch: the same cards at finger size ─────────────────────────────── */
+  .touch .srow {
+    gap: 8px;
+    height: 60px;
+  }
+
+  .touch .srow .l {
+    font-size: 14px;
+  }
+
+  .touch .ab {
+    height: 44px;
+    border-radius: 12px;
+    font-size: 14px;
+  }
+
+  .touch .ch {
+    font-size: 13px;
+  }
+
+  .ch.tall {
+    height: 44px;
+  }
+
+  .touch .hbtn {
+    width: 44px;
+    height: 44px;
+    color: var(--text);
+  }
+
+  .cnt {
+    margin-left: auto;
+    font-style: normal;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--faint);
+  }
+
+  .tbtn {
+    height: 44px;
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin: 0;
-    font-size: 11.5px;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--accent);
-  }
-
-  h6::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: color-mix(in srgb, var(--accent) 40%, transparent);
-  }
-
-  .pair {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-  }
-
-  .btn {
-    display: inline-flex;
-    align-items: center;
     justify-content: center;
-    gap: 7px;
-    height: 34px;
-    padding: 0 12px;
-    border-radius: var(--r-sm);
+    gap: 8px;
+    margin-top: 12px;
     border: 1px solid var(--line-strong);
-    background: var(--surface);
-    font-size: 13.5px;
-    font-weight: 550;
+    border-radius: 12px;
+    background: none;
+    font-size: 14px;
+    font-weight: 600;
     cursor: pointer;
   }
 
-  .btn:hover {
-    background: var(--hover);
+  .touch .disc {
+    height: 52px;
+    margin-top: 4px;
+    font-size: 14px;
   }
 
-  .btn:disabled,
-  .tp:disabled {
-    opacity: 0.45;
-    cursor: default;
+  .touch .setup {
+    padding: 2px 0 4px;
   }
 
   /* ── Phone: test pattern tiles (board *Phone: test pattern…*) ─────────── */
@@ -657,6 +685,7 @@
     align-items: center;
     justify-content: center;
     gap: 8px;
+    margin-bottom: 10px;
     border: 1px solid var(--line-strong);
     border-radius: 12px;
     background: none;
@@ -721,8 +750,8 @@
   }
 
   .link {
-    align-self: flex-start;
     height: 44px;
+    margin-top: 6px;
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -774,14 +803,27 @@
     box-shadow: var(--sh-1);
   }
 
+  .seg {
+    margin-bottom: 14px;
+  }
+
   /* Touch lens block: 64 px arrows 10 px apart, an inert centre. */
   .dpad {
-    align-self: center;
     display: grid;
     grid-template-columns: repeat(3, 64px);
     grid-template-rows: repeat(3, 64px);
     gap: 10px;
-    margin-top: 4px;
+    justify-content: center;
+    margin-bottom: 10px;
+  }
+
+  .dpad :global(button),
+  .big :global(button) {
+    background: none;
+  }
+
+  .dpad :global(button) {
+    border-radius: 16px;
   }
 
   .hub {
@@ -789,25 +831,37 @@
     align-items: center;
     justify-content: center;
     border: 1px dashed var(--line-strong);
-    border-radius: 9px;
+    border-radius: 16px;
     color: var(--faint);
-    font-size: 10.5px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
+    font-size: 11.5px;
+    font-weight: 600;
   }
 
+  /* Focus / Zoom: the label, then 56 px Near / Far, Out / In. */
   .big {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
+    grid-template-columns: 56px 1fr 1fr;
+    align-items: center;
+    gap: 8px;
+    height: 64px;
+    border-top: 1px solid var(--line);
+  }
+
+  .big .l {
+    color: var(--muted);
+    font-size: 14px;
+  }
+
+  .big :global(button) {
     height: 56px;
+    border-radius: 12px;
   }
 
   .bl {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 15px;
+    gap: 6px;
+    font-size: 14px;
     font-weight: 600;
   }
 
@@ -816,11 +870,14 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     align-items: start;
-    gap: 0 28px;
+    gap: 12px;
   }
 
   .col {
     min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
   }
 
   .lhid {
@@ -862,13 +919,6 @@
     height: 60px;
     padding: 0 8px 0 16px;
     border-bottom: 0;
-  }
-
-  .panel:not(.touch) .body {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    padding: 0 12px 12px;
   }
 
   .card {

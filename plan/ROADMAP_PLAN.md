@@ -1013,9 +1013,15 @@ Two roles, each with its own PIN:
 - **Web page** (served by the app, responsive). Mockup: artifact *Projector Grid Web Monitor*
   (https://claude.ai/artifact/W5t59BABLdayaHUmaVkZu5). It has desktop and phone views, a
   Viewer/Operator switch and a With/No groups switch.
+  - **Redesigned to the app's look** (2026-10-22, `WEB_UI_PLAN.md` step 13, boards on
+    https://claude.ai/artifact/AL2c8Kh9aoXrrv2eUmVdcJ and
+    https://claude.ai/artifact/THMEEesSxnwzgrQVCYDwqi). Where this section and step 13
+    differ, step 13 describes the page as built.
   - Login: PIN pad on phones, single field on desktop; shows the project name.
-  - Top bar: project name, online / offline / warnings counts, live indicator, role chip
-    (*Viewer* / *Operator*), *Unlock control* / *Lock*; operator also gets **Alignment**.
+  - Top bar: logo, project name, *Live* pill; operator *Alignment* and Refresh; the role
+    pill *Operator ▾* / *Viewer ▾* with *Lock control*, *Theme* (System / Light / Dark)
+    and *Sign out*; a viewer gets *Unlock control* beside it. The status counts moved to
+    the toolbar's quick filters.
 
 #### Layout with and without groups
 - **With groups:** one section per group (name, count, *Select* for operators), projectors in
@@ -1042,9 +1048,10 @@ The thresholds are served by the API (`/api/config`), not hard-coded in the page
 change in the app (or the §4 alert thresholds) applies to both.
 
 #### Desktop layout
-Header (project, status filters *All / Online / Offline / Warnings* with counts — clicking one
-filters the table, live indicator, *Alignment* for operators, role + *Unlock control* / *Lock*)
-→ toolbar (selection, search by name / IP / serial, "N of M shown", **Columns**) → table.
+Header (see above) → toolbar across the full width (bulk selector *Select ▾*, search by
+name / IP / serial, quick filters *All / Online / Attention / Offline / Standby* with counts,
+*Groups*, **Columns**, the view switch, *Control*) → the table, with the Control panel or a
+projector's details beside it under the toolbar, so opening either never moves its buttons.
 
 #### Table — the app's Monitoring table, feature for feature
 The web table is a port of `monitoring_table.dart`, not a simplified list. **Same columns, same
@@ -1069,8 +1076,8 @@ describe what the column shows.
 | Drag a header to reorder | Same: drag the header, the target header highlights, same landing rule (`_reorderColumn`). No drag list in the popover (owner, 2026-09-30) |
 | Drag a header's right edge to resize; double-click it to auto-fit | Same; the edge shows a hairline on hover. Auto-fit measures the widest cell, like `onAutoFit` |
 | Fit to width (`monitoringFitToWidth`), with the `_resizeBaseFor` maths so a resized column lands where dragged | Same switch and the same formula; floor 60 px (`_minColWidth`); sideways scroll only when floors push past the viewport |
-| Density compact / standard / comfortable (row 32 / 40 / 52 px) | Same three options |
-| Group-by (`monitoringGroupBy`); the Group column is hidden while grouping | Same switch (disabled when the project has no groups); group sections like the app's (count + worst-status pill), plus collapsible |
+| Density compact / standard / comfortable | Same three options with the app's two-line metrics: row 46 / 52 / 60 px |
+| Group-by (`monitoringGroupBy`); the Group column is hidden while grouping | The toolbar's *Groups* toggle, shared with the cards (disabled when the project has no groups); one group line for both (box, chevron, colour, name, the app's summary), a click anywhere on it folds the group |
 
 - **Where the layout is saved:** per browser (`localStorage`), not in the app's settings, so a
   phone and a booth laptop can differ. The first visit starts from the app's current layout
@@ -1080,8 +1087,10 @@ describe what the column shows.
 - **Operator width:** in operator mode the control panel takes 340 px. With all 14 default
   columns the table then hits the 60 px floors, the same as the app in a narrow window;
   *Essentials* fits cleanly.
-- **Phone:** cards show a fixed summary (power, shutter, signal, temps, errors). Tapping a card
-  expands it to every field (IP, serial, runtimes, voltage, test pattern, group).
+- **Cards** (every touch screen by default, and on desktop by choice): IP with the alert
+  badge, model, power and shutter, input with the signal pill, *In / Ex* temperatures, the
+  error line; all one height. ⓘ (operator) or a tap (viewer) opens the projector's details:
+  over the list when no Control is beside it, a sheet on phones.
 
 #### Map — the project's card layout (owner, 2026-09-30)
 A third view beside Table and Cards that draws the projectors where they sit on the app's
@@ -1094,10 +1103,12 @@ Controls canvas, so the page reads like the wall.
   layout is edited only in the app.
 - **View:** fit to the area on open, then *− / + / Fit*. Touch pans and zooms with two
   fingers. The mouse zooms with Ctrl + wheel and scrolls with the wheel.
-- **Tile:** a copy of the app's card.
-  - The status bar has power, shutter, the warning triangle, the lock and the connection dot.
-  - Below it are the name and the IP, with the test-pattern thumbnail.
-  - A group tints the tile's background and adds its chip under the tile.
+- **Tile:** a copy of the app's canvas card.
+  - The header is tinted by the card's state (on, standby, warming / cooling, *Offline*,
+    *Login failed*), with power, shutter, the lock and the alert badge.
+  - The model and the IP sit at the bottom, the IP the same size on every tile, with the
+    test-pattern thumbnail.
+  - A group is a coloured band inside the tile, as in the app (no chip, no tint).
 
   Zoomed far out, a tile keeps only the dot and name.
 - **Filters and search** dim the tiles that don't match rather than hiding them, so the wall
@@ -1126,7 +1137,7 @@ no rule engine in the browser.
 - **Where the panel opens** follows the Control panel's placement (`device.control`):
   | Screen | Entry | Panel |
   |---|---|---|
-  | Desktop, tablet sideways | 52 px **rail** at the far right: bell (colour of the worst unacknowledged alert, count), one tick per alert in its severity colour (acknowledged faint, a returned signal green) | **drawer over the content**, 404 px (the app's panel width, not the 360 px first planned), so table and Control panel don't reflow |
+  | Desktop, tablet sideways | 52 px **rail** at the far right: bell (colour of the worst unacknowledged alert, count), one tick per alert in its severity colour (acknowledged faint, a returned signal green) | **drawer over the content**, a floating 420 px card (redesign; was 404 px), so table and Control panel don't reflow |
   | Tablet upright, phone upright | bell in the header + an alert pill above the cards ("4 new alerts, 1 signal back") | bottom sheet |
   | Phone sideways | same | right-hand sheet |
 - **The panel is the app's Active alerts** (`active_alerts_panel.dart`), for both roles:
@@ -1145,12 +1156,16 @@ no rule engine in the browser.
   share one row with icons and counts only, sheet 470 px wide. Header filters 40 px, bell
   44 px, alert pill 56 px, larger card badges and tags; error tags open on tap. Tablet
   sideways: the drawer is 440 px with the touch layout.
-- **Viewer:** everything but the *Acknowledge* buttons; a line "Viewers see alerts;
-  acknowledging needs control" with *Unlock control*.
+- **Redesign (2026-10-22):** the rows read as the app's §7m (the message, the kind under
+  it, the start time with the duration in its tooltip); the footer has *Sound* on the left
+  and a filled *Acknowledge all* on the right.
+- **Viewer:** everything but the *Acknowledge* buttons; the footer reads *Sound*,
+  "Acknowledging needs control" and *Unlock*.
 - **Elsewhere on the page:**
-  - The header filter *Warnings* becomes **Alerts**: projectors with an active alert, with
-    the counts of the app's status-bar button (filled icon + unacknowledged count,
-    outlined + total once acknowledged, green check for returned signals).
+  - The *Alerts* header filter went with the redesign; the quick filter *Attention*
+    (projectors the app's status marks) took its place. The bell carries the counts of the
+    app's status-bar button (filled icon + unacknowledged count, outlined + total once
+    acknowledged, green check for returned signals).
   - Cards and Map tiles: the app's card badge replaces the orange triangle (`alertBadge`:
     colour of the worst unacknowledged alert, filled / outlined, a number from two up,
     green check while only a returned signal waits).
@@ -1160,7 +1175,7 @@ no rule engine in the browser.
     off rule follow the app); group rows and card group headers count unacknowledged
     alerts.
 - **New-alert cues:** the tab title gets the unacknowledged count ("(5) Main Hall") and the
-  favicon a dot; a toast "Signal lost on PJ-08: No signal on SDI 2" with *Show*; the
+  favicon a dot; a toast "Signal lost on 192.168.0.43: No signal on SDI 2" with *Show*; the
   rail's new tick pulses. **Sound** (approved): a speaker button in the panel header, off
   by default, per browser; the app's two sounds, one per batch of alerts raised within 2 s,
   none for a returned signal. A browser plays sound only after a tap on the page, which
@@ -1180,21 +1195,23 @@ no rule engine in the browser.
   - **Select all:** tri-state checkbox in the toolbar (selects every visible row, so it
     respects the filter/search), `Ctrl+A`.
   - **Group:** tri-state checkbox on each group row.
-  - **Select ▾ menu:** All projectors, All online, Only with warnings, Invert, one entry per
-    group, Clear (`Esc`).
+  - **Select ▾ menu:** Online, Attention, Standby, Invert, one entry per group; presets pick
+    from all projectors, not only the shown ones. Selected projectors a search or filter
+    hides stay selected; the selector shows their number beside an eye-off icon, and every
+    command but the lens steps asks first, naming them.
   - **Rows:** click toggles, **Shift-click** selects a range.
-  - **Phone:** a *Select all* bar above the list, a checkbox per group header, tap cards;
-    bottom bar *"N selected · Clear · Control"*.
-- **Desktop:** right-hand **Control** panel (340 px). Header: just *Control* + "N selected".
+  - **Phone:** a checkbox per group header, tap cards; the bottom bar shows the count,
+    *Clear* and *Control*.
+- **Desktop:** right-hand **Control** panel (344 px). Header: just *Control* + "N selected".
   No name chips or empty-state text, because the selection is already visible in the table.
   With nothing selected the controls are shown disabled, like the app's control bar. Blocks
   top to bottom, in the control bar's order:
   - *Power* On / Standby
   - *Shutter* Open / Close
-  - *Test pattern* — full-width *Off*, then a 4-column swatch grid (White, Black, Red, Green,
-    Blue, Cross Hatch, CH Red / Green / Blue, Colour bars, Window, Circle), *More patterns*
-    expands the rest of `_testPatternOptions`; the current pattern is highlighted when one
-    projector is selected
+  - *Test pattern* — as the app's control bar: *Off*, four quick swatches, then a drop-down
+    of every pattern with its swatch in the closed field (tablets the same at 44 px). The
+    phone keeps the full-width *Off* and a 4-column swatch grid with *More patterns*; the
+    current pattern is highlighted when one projector is selected
   - *Lens* — **one column**: "moves N lenses" warning (when N > 1) → speed Slow / Normal /
     Fast → shift D-pad → *Home position* → Focus −/+ → Zoom −/+. Same `VXX:LNSI2…5` commands
     as the control bar; holding a button repeats with the control bar's throttle.
@@ -1213,9 +1230,9 @@ presets follow the app: Geometry / Color / Custom (no Blend, §3 deviations).
 `alignmentProvider` stays the single source of truth; the web page shows its state via SSE and
 sends actions to it. Entering from the phone shows the banner in the app too, and vice versa.
 Only one alignment session exists at a time; a second client entering joins the same session.
-- **Desktop:** the app's banner across the page, in one row: *◀ name n of N ▶ · Neighbours ·
-  Show all · Preset [Geometry | Color | Custom] · Focused ▾ · Others ▾ ·
-  Exit*.
+- **Desktop:** the app's banner across the page, in one 52 px row: *Alignment*, ◀ *n of N*
+  ▶, the *Neighbours* / *Show all* toggles, the presets *Geometry | Color | Custom*, the
+  *Focused* / *Others* fields, *Exit alignment*.
   - The presets are the app's §3.2 table, including **Custom**.
   - *Focused ▾* / *Others ▾* open a swatch popover filtered by the preset: Geometry → cross
     hatches, Color → solid colours, **Custom → every test pattern**. *Others* also has
@@ -1228,8 +1245,8 @@ Only one alignment session exists at a time; a second client entering joins the 
   - Shutter-closed rows are dimmed; clicking a row focuses it; `,` / `.` step.
   - The control panel becomes *Lens · PJ-xx*, acting on the focused projector only.
 - **Viewer during alignment:** the session is shared, so a viewer sees a read-only banner
-  (*"Alignment in progress · PJ-03 focused · 3 of 7 · Geometry — controlled by an
-  operator"*) and the role markers, but no controls. Row clicks do nothing.
+  ("Alignment, 192.168.0.43 focused (3 of 7), Geometry patterns" and "An operator
+  controls it") and the role markers, but no controls. Row clicks do nothing.
 - **Phone** (the main use case — walking the room with a phone):
   - big ◀ ▶ with the focused name and *n / total*;
   - Neighbours / Show All toggles;
@@ -1255,13 +1272,16 @@ may come later as a separate step.
     and the app's own preview window.
   - The socket opens when the first watcher arrives and closes a few seconds after the last
     one leaves.
-- **Where** (owner, 2026-10-01): a *Preview* button in the details (card strip, Map popover,
-  which right-click and long press also open) and a *Preview* column in the table (hideable
-  and draggable like the rest). Not in the Control panel and not in Alignment mode.
+- **Where** (owner, 2026-10-01; redesign 2026-10-22): a *Preview* button in the projector's
+  details (and the Map popover, which right-click and long press also open) and a row
+  action at the end of each table row on desktop (the *Preview* column went). Not in the
+  Control panel and not in Alignment mode.
 - **◀ ▶** step to the neighbouring projector in the order of the view it was opened from
   (sort, filters, search; the Map in reading order), frozen when the window opens, wrapping
-  at the ends ("3 / 24"). Selection isn't touched; ← → keys, a swipe on phones.
-- **Window:** a dialog on desktop and a full-screen sheet on phones.
+  at the ends ("3 of 24"). Selection isn't touched; ← → keys, a swipe on phones.
+- **Window:** the app's dialog frame (title bar with model + IP, group and power; the
+  *Pre-show mode* card; ◀ ▶ and the frame colour legend in the footer) on desktop and
+  tablets; the whole screen on phones, with big ◀ ▶ under the image.
   - The 16:9 image sits in a frame coloured by the shutter, as in the app.
   - The same overlays as the app: *No signal*, *Preview not available*, the signal tag and
     `PRE-SHOW`.

@@ -1,5 +1,5 @@
 <!--
-  A new alert (or a batch of them, raised within 2 s): "Signal lost on PJ-08:
+  A new alert (or a batch of them, raised within 2 s): "Signal lost on 192.168.0.43:
   No signal on SDI 2" with Show, which opens the panel wherever this screen
   keeps it. Sits above the command toast's spot.
 -->
@@ -22,7 +22,7 @@
       ><AlertIcon name={severityIcon(a.severity)} size={device.touch ? 22 : 18} /></span
     >
     <span class="t"
-      >{a.label} on {a.projector}: {a.value}{#if alerts.toast.more > 0}, and {alerts.toast.more} more{/if}</span
+      >{a.label} on {a.ip}: {a.value}{#if alerts.toast.more > 0}, and {alerts.toast.more} more{/if}</span
     >
     <button onclick={show}>Show</button>
   </div>
