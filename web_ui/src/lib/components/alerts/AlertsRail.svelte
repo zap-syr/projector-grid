@@ -70,15 +70,15 @@
   }
 
   i.crit {
-    background: var(--sev-crit);
+    background: var(--err);
   }
 
   i.warn {
-    background: var(--sev-warn);
+    background: var(--warn);
   }
 
   i.ok {
-    background: var(--sev-ok);
+    background: var(--ok);
   }
 
   i.ack {

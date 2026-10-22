@@ -58,15 +58,15 @@
   }
 
   .bell.crit {
-    color: var(--sev-crit);
+    color: var(--err);
   }
 
   .bell.warn {
-    color: var(--sev-warn);
+    color: var(--warn);
   }
 
   .bell.ok {
-    color: var(--sev-ok);
+    color: var(--ok);
   }
 
   .bdg {
@@ -88,15 +88,18 @@
   }
 
   .crit .bdg {
-    background: var(--sev-crit);
+    background: var(--err);
+    color: var(--on-err);
   }
 
   .warn .bdg {
-    background: var(--sev-warn);
+    background: var(--warn);
+    color: var(--app);
   }
 
   .ok .bdg {
-    background: var(--sev-ok);
+    background: var(--ok);
+    color: var(--app);
   }
 
   .touch {

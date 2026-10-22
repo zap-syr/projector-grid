@@ -59,12 +59,12 @@
 
   .crit {
     display: flex;
-    color: var(--sev-crit);
+    color: var(--err);
   }
 
   .warn {
     display: flex;
-    color: var(--sev-warn);
+    color: var(--warn);
   }
 
   button {

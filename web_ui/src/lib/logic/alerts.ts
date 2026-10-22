@@ -170,6 +170,55 @@ export function formatStart(since: Date, now: Date): string {
   return sameDay ? hhmm : `${MONTHS[since.getMonth()]} ${since.getDate()} ${hhmm}`;
 }
 
+/** `formatAlertStarted`: the start time's tooltip, `Started 21:04, 6 min ago`. */
+export function formatStarted(since: Date, now: Date): string {
+  const ms = now.getTime() - since.getTime();
+  const ago = ms < 60_000 ? 'just now' : `${formatDuration(ms)} ago`;
+  return `Started ${formatStart(since, now)}, ${ago}`;
+}
+
+const isTemperature = (rule: AlertRule) => rule === 'intake-temp' || rule === 'exhaust-temp';
+
+/**
+ * What an alert row says (`alertMessage`): a temperature with its name
+ * (`Exhaust temperature 52 °C`), otherwise the value itself (`Fan error
+ * (F305)`, `No signal on HDMI 1`). Under an alert group's header, which
+ * already names the rule, just the value.
+ */
+export function alertMessage(a: Alert, inAlertGroup = false): string {
+  return isTemperature(a.rule) && !inAlertGroup ? `${a.label} ${a.value}` : a.value;
+}
+
+/** The kind under the message (`alertKind`): both temperatures read *Temperature*. */
+export function alertKind(a: Alert): string {
+  return isTemperature(a.rule) ? 'Temperature' : a.label;
+}
+
+/** The green tail of an alert that is over (`alertOverAt`): `over at 21:03`. */
+export function alertOverAt(a: Alert, now: Date): string | null {
+  return a.restoredAt ? `over at ${formatStart(new Date(a.restoredAt), now)}` : null;
+}
+
+/** The panel's title when the severity filter hides everything (`alertFilterEmptyTitle`). */
+export function filterEmptyTitle(filter: AlertSeverity): string {
+  return filter === 'critical' ? 'No critical alerts' : 'No warnings';
+}
+
+/** The line under it (`alertsHiddenByFilter`): what the filter hides, by kind when all one. */
+export function hiddenByFilter(unacknowledged: readonly Alert[], filter: AlertSeverity): string {
+  const hidden = unacknowledged.filter((a) => isRecovered(a) || a.severity !== filter);
+  const n = hidden.length;
+  const one = n === 1;
+  let what: string;
+  if (hidden.every(isRecovered)) what = one ? 'alert that is over' : 'alerts that are over';
+  else if (hidden.every((a) => !isRecovered(a) && a.severity === 'critical'))
+    what = one ? 'critical alert' : 'critical alerts';
+  else if (hidden.every((a) => !isRecovered(a) && a.severity === 'warning'))
+    what = one ? 'warning' : 'warnings';
+  else what = one ? 'alert' : 'alerts';
+  return `${n} ${what} ${one ? 'is' : 'are'} hidden by the filter`;
+}
+
 /**
  * Alerts in [next] the operator has to notice anew: new ones, ones that came
  * back after being acknowledged (a warning escalating, a new dropout).

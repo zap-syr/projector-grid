@@ -1,27 +1,37 @@
 <!--
-  Active alerts, the app's panel (`active_alerts_panel.dart`): severity
-  filter, grouping by projector or by alert, the project-groups toggle (by
-  projector: sections; by alert: subsections inside each rule), acknowledged
-  ones folded at the bottom. `touch` is the tablet / phone layout: labelled
-  segments, 44 px+ targets, Sound and Acknowledge all in a footer at the
-  bottom edge; `narrow` (a phone held sideways) puts the segments in one row.
+  Active alerts, the app's panel (`active_alerts_panel.dart`, plan §7m;
+  shell canvas, *Alerts on the desktop / phone / tablet…*): a 52 px header
+  with the count, project groups, By projector / By alert, Fold all and ✕;
+  the severity chips; rows with the white message, a severity edge and icon,
+  the start time and a quiet Acknowledge; the Acknowledged fold. The footer
+  holds Sound on the left (the web has no event log) and Acknowledge all on
+  the right; a viewer's says acknowledging needs control, with Unlock.
+  `touch` is the tablet / phone sheet: 44 px+ targets, labelled buttons on a
+  tablet; `narrow` (a phone held sideways) keeps the icons.
 -->
 <script lang="ts">
   import type { Alert, AlertSeverity } from '../../api/types';
   import {
+    alertKind,
+    alertMessage,
+    alertOverAt,
     alertsInSections,
     byProjectGroup,
     countAlerts,
-    formatDuration,
+    filterEmptyTitle,
     formatStart,
+    formatStarted,
     groupAlerts,
+    hiddenByFilter,
     isRecovered,
     sortAlerts,
     type AlertGroup,
   } from '../../logic/alerts';
   import { alerts } from '../../state/alerts.svelte';
+  import { device } from '../../state/device.svelte';
   import { live } from '../../state/live.svelte';
   import { session } from '../../state/session.svelte';
+  import Icon from '../Icon.svelte';
   import UnlockDialog from '../shell/UnlockDialog.svelte';
   import AlertIcon, { severityIcon } from './AlertIcon.svelte';
 
@@ -41,8 +51,13 @@
   let ackedOpen = $state<boolean | null>(null);
   let unlocking = $state(false);
 
+  /** A tablet's sheet has room for labelled buttons; a phone keeps the icons. */
+  const labelled = $derived(touch && !narrow && !device.phone);
+  /** A phone's rows put the start time in the line under the message. */
+  const timeInSub = $derived(touch && !labelled);
+
   const projectors = $derived(new Map(live.projectors.map((p) => [p.id, p])));
-  const nameOf = (a: Alert) =>
+  const modelOf = (a: Alert) =>
     projectors.get(a.projectorId)?.name ?? (a.projector || 'Removed projector');
   const ipOf = (a: Alert) => projectors.get(a.projectorId)?.ip ?? a.ip;
   const groupOf = (id: string) => projectors.get(id)?.groupId;
@@ -108,65 +123,62 @@
   const projectorCount = (list: readonly Alert[]) =>
     plural(new Set(list.map((a) => a.projectorId)).size, 'projector');
   const kind = (a: Alert) => (isRecovered(a) ? 'recovered' : a.severity);
+  const icon = (a: Alert) => (isRecovered(a) ? 'checkCircle' : severityIcon(a.severity));
   const since = (a: Alert) => new Date(a.since);
+  const sz = (mouse: number, finger: number) => (touch ? finger : mouse);
 </script>
 
-{#snippet countIcons(list: readonly Alert[])}
+{#snippet pills(list: readonly Alert[])}
   {@const c = countAlerts(list)}
-  {#if c.critical > 0}<span class="sc crit"
-      ><AlertIcon name="error" size={touch ? 19 : 14} />{c.critical}</span
-    >{/if}
-  {#if c.warning > 0}<span class="sc warn"
-      ><AlertIcon name="warning" size={touch ? 19 : 14} />{c.warning}</span
-    >{/if}
-  {#if c.recovered > 0}<span class="sc ok"
-      ><AlertIcon name="checkCircle" size={touch ? 19 : 14} />{c.recovered}</span
-    >{/if}
+  <span class="pills">
+    {#if c.critical > 0}<span class="pl crit"
+        ><AlertIcon name="error" size={sz(13, 14)} />{c.critical}</span
+      >{/if}
+    {#if c.warning > 0}<span class="pl warn"
+        ><AlertIcon name="warning" size={sz(13, 14)} />{c.warning}</span
+      >{/if}
+    {#if c.recovered > 0}<span class="pl ok"
+        ><AlertIcon name="checkCircle" size={sz(13, 14)} />{c.recovered}</span
+      >{/if}
+  </span>
 {/snippet}
 
 {#snippet ackButton(list: readonly Alert[], label: string, many: boolean)}
   {#if operator}
     <button
       class="ack"
-      class:many
       aria-label={label}
       title={touch ? undefined : label}
       onclick={() => ack(list)}
     >
-      <AlertIcon name={many ? 'doneAll' : 'check'} size={touch ? (many ? 24 : 26) : 16} />
+      <AlertIcon name={many ? 'doneAll' : 'check'} size={sz(18, 22)} />
     </button>
   {/if}
 {/snippet}
 
 {#snippet row(a: Alert, byRule: boolean)}
-  <div class="row {kind(a)}">
-    <span class="chip {kind(a)}"
-      ><AlertIcon
-        name={isRecovered(a) ? 'checkCircle' : severityIcon(a.severity)}
-        size={touch ? 22 : 16}
-      /></span
-    >
-    <span class="mid">
-      {#if byRule}
-        <span class="rl subj">{nameOf(a)}<span>{ipOf(a)}</span></span>
-      {:else}
-        <span class="rl">{a.label}</span>
-      {/if}
-      <span class="val {kind(a)}">{a.value}</span>
-      {#if touch}
-        <span class="tm"
-          ><b>{formatDuration(alerts.now.getTime() - Date.parse(a.since))}</b>, since {formatStart(
-            since(a),
-            alerts.now,
-          )}</span
-        >
-      {/if}
-    </span>
-    {#if !touch}
-      <span class="tm">
-        <b>{formatDuration(alerts.now.getTime() - Date.parse(a.since))}</b>
-        <span>{formatStart(since(a), alerts.now)}</span>
+  {@const over = alertOverAt(a, alerts.now)}
+  {@const start = formatStart(since(a), alerts.now)}
+  <div class="ar {kind(a)}">
+    {#if !byRule || !touch}
+      <span class="sic {kind(a)}"><AlertIcon name={icon(a)} size={sz(18, 20)} /></span>
+    {/if}
+    <span class="tx">
+      <span class="msg"
+        >{alertMessage(a, byRule)}{#if over},
+          <span class="okc">{over}</span>{/if}</span
+      >
+      <span class="sub">
+        {#if byRule}
+          <span class="mono">{ipOf(a)}</span> {modelOf(a)}
+        {:else}
+          {alertKind(a)}
+        {/if}
+        {#if timeInSub}, {start}{/if}
       </span>
+    </span>
+    {#if !timeInSub}
+      <span class="tm" title={formatStarted(since(a), alerts.now)}>{start}</span>
     {/if}
     {@render ackButton([a], 'Acknowledge', false)}
   </div>
@@ -179,18 +191,20 @@
   projectorsText: string,
 )}
   {@const isOpenNow = sectionOpen(key)}
-  <div class="sec">
+  <div class="gh">
     <button class="fold" aria-expanded={isOpenNow} onclick={() => toggle(key, isOpenNow)}>
       <span class="chev" class:open={isOpenNow}
-        ><AlertIcon name="chevronRight" size={touch ? 22 : 16} /></span
+        ><AlertIcon name="chevronRight" size={sz(16, 20)} /></span
       >
       <span
-        class="gdot"
+        class="sq"
         class:none={!groupId}
         style:background={groupId ? groupById.get(groupId)?.color : undefined}
       ></span>
-      <span class="nm">{sectionName(groupId)}<span>{projectorsText}</span></span>
-      {@render countIcons(list)}
+      <span class="nm">{sectionName(groupId)}</span>
+      <span class="md">{projectorsText}</span>
+      <span class="sp"></span>
+      {@render pills(list)}
     </button>
     {@render ackButton(list, `Acknowledge ${sectionName(groupId)}`, true)}
   </div>
@@ -202,35 +216,18 @@
   <div class="gh">
     <button class="fold" aria-expanded={isOpenNow} onclick={() => toggle(groupKey(g), isOpenNow)}>
       <span class="chev" class:open={isOpenNow}
-        ><AlertIcon name="chevronRight" size={touch ? 22 : 16} /></span
+        ><AlertIcon name="chevronRight" size={sz(16, 20)} /></span
       >
       {#if byProjector}
-        <span class="ttl">{nameOf(top)}<span>{ipOf(top)}</span></span>
-        {@render countIcons(g.alerts)}
+        <span class="ip">{ipOf(top)}</span>
+        <span class="md">{modelOf(top)}</span>
       {:else}
-        {#if !touch}
-          <span class="chip sm {kind(top)}"
-            ><AlertIcon
-              name={isRecovered(top) ? 'checkCircle' : severityIcon(top.severity)}
-              size={14}
-            /></span
-          >
-        {/if}
-        <span class="ttl"
-          >{top.label}<span
-            >{projectorCount(g.alerts)}, since {formatStart(
-              new Date(Math.min(...g.alerts.map((a) => Date.parse(a.since)))),
-              alerts.now,
-            )}</span
-          ></span
-        >
-        <span class="sc {isRecovered(top) ? 'ok' : top.severity === 'critical' ? 'crit' : 'warn'}"
-          >{#if touch}<AlertIcon
-              name={isRecovered(top) ? 'checkCircle' : severityIcon(top.severity)}
-              size={19}
-            />{/if}{g.alerts.length}</span
-        >
+        <span class="sic {kind(top)}"><AlertIcon name={icon(top)} size={sz(16, 18)} /></span>
+        <span class="nm">{alertKind(top) === 'Temperature' ? top.label : alertKind(top)}</span>
+        <span class="md">{projectorCount(g.alerts)}</span>
       {/if}
+      <span class="sp"></span>
+      {@render pills(g.alerts)}
     </button>
     {@render ackButton(
       g.alerts,
@@ -257,134 +254,107 @@
   {/if}
 {/snippet}
 
-<div class="panel" class:touch class:narrow role="region" aria-label="Active alerts">
-  <div class="head">
-    <div class="title">
-      <h2>Active alerts</h2>
-      {#if touch}
-        <span class="sub"
-          >{all.length ? `${unacked.length} new, ${all.length} active` : 'Nothing active'}</span
-        >
-      {:else if all.length}
-        <span class="sub">{all.length} total</span>
-      {/if}
-    </div>
-    {#if foldable.length > 0}
-      <button
-        class="ib"
-        class:text={touch && !narrow}
-        aria-label={allOpen ? 'Fold all' : 'Unfold all'}
-        title={touch ? undefined : allOpen ? 'Fold all' : 'Unfold all'}
-        onclick={foldAll}
+<section class="panel" class:touch class:labelled aria-label="Active alerts">
+  <div class="hd">
+    <div class="g">
+      <b>Active alerts</b>
+      <small
+        >{all.length === 0
+          ? 'Nothing active'
+          : touch
+            ? `${unacked.length} new, ${all.length} active`
+            : `${all.length} active`}</small
       >
-        <AlertIcon name={allOpen ? 'unfoldLess' : 'unfoldMore'} size={touch ? 22 : 18} />
-        {#if touch && !narrow}<span>{allOpen ? 'Collapse' : 'Expand'}</span>{/if}
-      </button>
-    {/if}
-    {#if !touch}
-      {#if operator && unacked.length > 0}
+    </div>
+    {#if all.length > 0}
+      {#if canSection}
         <button
-          class="ib"
-          aria-label="Acknowledge all"
-          title="Acknowledge all"
-          onclick={() => ack(unacked)}
+          class="ab"
+          class:tb={labelled}
+          aria-pressed={alerts.prefs.byProjectGroups}
+          aria-label="Sort into project groups"
+          title={touch ? undefined : 'Sort into project groups'}
+          onclick={() => alerts.setPref('byProjectGroups', !alerts.prefs.byProjectGroups)}
         >
-          <AlertIcon name="doneAll" size={18} />
+          <AlertIcon name="workspaces" size={sz(18, 20)} />{#if labelled}Groups{/if}
         </button>
       {/if}
-      <button
-        class="ib"
-        aria-pressed={alerts.prefs.sound}
-        class:locked={alerts.soundLocked}
-        aria-label="Sound"
-        title={alerts.soundLocked
-          ? 'Sound blocked by the browser, click to enable'
-          : alerts.prefs.sound
-            ? 'Sound on in this browser'
-            : 'Sound off'}
-        onclick={() => alerts.toggleSound()}
-      >
-        <AlertIcon name={alerts.prefs.sound ? 'volumeOn' : 'volumeOff'} size={18} />
-      </button>
+      <span class="seg" role="group" aria-label="Group by">
+        <button
+          aria-pressed={byProjector}
+          aria-label="By projector"
+          title={touch ? undefined : 'By projector'}
+          onclick={() => alerts.setPref('grouping', 'projector')}
+          ><AlertIcon name="videocam" size={sz(16, 20)} />{#if labelled}By projector{/if}</button
+        >
+        <button
+          aria-pressed={!byProjector}
+          aria-label="By alert"
+          title={touch ? undefined : 'By alert'}
+          onclick={() => alerts.setPref('grouping', 'alert')}
+          ><AlertIcon name="category" size={sz(16, 20)} />{#if labelled}By alert{/if}</button
+        >
+      </span>
+      {#if foldable.length > 0 && !(touch && !labelled)}
+        <button
+          class="ab"
+          class:tb={labelled}
+          aria-label={allOpen ? 'Fold all' : 'Unfold all'}
+          title={touch ? undefined : allOpen ? 'Fold all' : 'Unfold all'}
+          onclick={foldAll}
+        >
+          <AlertIcon
+            name={allOpen ? 'unfoldLess' : 'unfoldMore'}
+            size={sz(18, 20)}
+          />{#if labelled}{allOpen ? 'Collapse' : 'Expand'}{/if}
+        </button>
+      {/if}
     {/if}
     <button
-      class="ib close"
+      class="ab x"
       aria-label="Close alerts"
       title={touch ? undefined : 'Close'}
       onclick={onclose}
     >
-      <AlertIcon name="close" size={touch ? 24 : 18} />
+      <AlertIcon name="close" size={sz(18, 22)} />
     </button>
   </div>
 
   {#if all.length === 0}
     <div class="empty">
-      <span class="ok"><AlertIcon name="checkCircle" size={touch ? 44 : 30} /></span>
+      <span class="okc"><AlertIcon name="checkCircle" size={sz(30, 44)} /></span>
       <b>No active alerts</b>
       <span>Everything is within limits. Past alerts are in the app's event log.</span>
     </div>
   {:else}
-    <div class="tools">
-      <div class="seg sev" role="group" aria-label="Severity">
-        <button aria-pressed={filter === null} onclick={() => (filter = null)}
-          >All <b>{counts.critical + counts.warning + counts.recovered}</b></button
-        >
-        <button
-          aria-pressed={filter === 'critical'}
-          aria-label="Critical"
-          onclick={() => (filter = 'critical')}
-          ><span class="crit"><AlertIcon name="error" size={touch ? 20 : 13} /></span
-          >{#if touch && !narrow}Critical{/if}
-          <b>{counts.critical}</b></button
-        >
-        <button
-          aria-pressed={filter === 'warning'}
-          aria-label="Warning"
-          onclick={() => (filter = 'warning')}
-          ><span class="warn"><AlertIcon name="warning" size={touch ? 20 : 13} /></span
-          >{#if touch && !narrow}Warning{/if}
-          <b>{counts.warning}</b></button
-        >
-      </div>
-      <div class="opts">
-        {#if canSection}
-          <button
-            class="pg"
-            aria-pressed={alerts.prefs.byProjectGroups}
-            aria-label="Sort into project groups"
-            title={touch ? undefined : 'Sort into project groups'}
-            onclick={() => alerts.setPref('byProjectGroups', !alerts.prefs.byProjectGroups)}
-          >
-            <AlertIcon name="workspaces" size={touch ? 22 : 15} />{#if touch && !narrow}<span
-                >Groups</span
-              >{/if}
-          </button>
-        {/if}
-        <div class="seg grp" role="group" aria-label="Group by">
-          <button aria-pressed={byProjector} onclick={() => alerts.setPref('grouping', 'projector')}
-            ><AlertIcon name="videocam" size={touch ? 20 : 14} />{touch
-              ? narrow
-                ? 'Projector'
-                : 'By projector'
-              : 'Projector'}</button
-          >
-          <button aria-pressed={!byProjector} onclick={() => alerts.setPref('grouping', 'alert')}
-            ><AlertIcon name="category" size={touch ? 20 : 14} />{touch
-              ? narrow
-                ? 'Alert'
-                : 'By alert'
-              : 'Alert'}</button
-          >
-        </div>
-      </div>
+    <div class="chips" role="group" aria-label="Severity">
+      <button class="chip" aria-pressed={filter === null} onclick={() => (filter = null)}
+        >All <b>{counts.critical + counts.warning + counts.recovered}</b></button
+      >
+      <button
+        class="chip"
+        aria-pressed={filter === 'critical'}
+        onclick={() => (filter = 'critical')}
+        ><span class="crit"><AlertIcon name="error" size={sz(14, 16)} /></span>Critical
+        <b>{counts.critical}</b></button
+      >
+      <button class="chip" aria-pressed={filter === 'warning'} onclick={() => (filter = 'warning')}
+        ><span class="warn"><AlertIcon name="warning" size={sz(14, 16)} /></span>Warning
+        <b>{counts.warning}</b></button
+      >
     </div>
 
     <div class="list">
       {#if unacked.length === 0}
         <div class="empty">
-          <span class="ok"><AlertIcon name="doneAll" size={touch ? 44 : 30} /></span>
+          <span class="okc"><AlertIcon name="doneAll" size={sz(30, 44)} /></span>
           <b>All acknowledged</b>
           <span>These alerts are still active; they leave the list when the condition clears.</span>
+        </div>
+      {:else if groups.length === 0 && filter}
+        <div class="empty">
+          <b>{filterEmptyTitle(filter)}</b>
+          <span>{hiddenByFilter(unacked, filter)}</span>
         </div>
       {/if}
       {#if byProjector && sectioned}
@@ -405,27 +375,24 @@
       {:else}
         {#each groups as g (g.key)}{@render group(g)}{/each}
       {/if}
-      {#if unacked.length > 0 && groups.length === 0}
-        <p class="nothing">Nothing at this severity</p>
-      {/if}
       {#if acked.length > 0}
-        <button class="ackh" aria-expanded={showAcked} onclick={() => (ackedOpen = !showAcked)}>
+        <button class="ak" aria-expanded={showAcked} onclick={() => (ackedOpen = !showAcked)}>
           <span class="chev" class:open={showAcked}
-            ><AlertIcon name="chevronRight" size={touch ? 22 : 16} /></span
+            ><AlertIcon name="chevronRight" size={sz(16, 20)} /></span
           >
-          Acknowledged ({acked.length})
+          Acknowledged <b>{acked.length}</b>
         </button>
         {#if showAcked}
           {#each acked as a (a.id)}
             <div class="ackl">
-              <span class={a.severity === 'critical' ? 'crit' : 'warn'}
-                ><AlertIcon name={severityIcon(a.severity)} size={touch ? 20 : 15} /></span
+              <span class="sic {a.severity}"
+                ><AlertIcon name={severityIcon(a.severity)} size={sz(15, 18)} /></span
               >
               <!-- One quiet line, as in the app; the mouse gets the rest on hover. -->
-              <span class="tx" title="{nameOf(a)} {a.label}: {a.value}"
-                ><b>{nameOf(a)} {a.label}:</b> {a.value}</span
+              <span class="tx" title="{ipOf(a)} {alertMessage(a)}"
+                ><span class="mono">{ipOf(a)}</span> {alertMessage(a)}</span
               >
-              <span class="d">{formatDuration(alerts.now.getTime() - Date.parse(a.since))}</span>
+              <span class="tm">{formatStart(since(a), alerts.now)}</span>
             </div>
           {/each}
         {/if}
@@ -433,84 +400,99 @@
     </div>
   {/if}
 
-  {#if touch}
-    <!-- Thumb zone: the actions sit on the bottom edge. -->
-    <div class="foot">
-      <button
-        class="fbtn"
-        class:locked={alerts.soundLocked}
-        aria-pressed={alerts.prefs.sound}
-        onclick={() => alerts.toggleSound()}
-      >
-        <AlertIcon name={alerts.prefs.sound ? 'volumeOn' : 'volumeOff'} size={22} />
-        {alerts.soundLocked ? 'Tap for sound' : 'Sound'}
-      </button>
-      {#if operator}
-        {#if unacked.length > 0}
-          <button class="fbtn primary" onclick={() => ack(unacked)}>
-            <AlertIcon name="doneAll" size={22} />Acknowledge all ({unacked.length})
-          </button>
-        {/if}
-      {:else}
-        <span class="vtext">Acknowledging needs control.</span>
-        {#if session.controlAllowed && unacked.length > 0}
-          <button class="fbtn primary short" onclick={() => (unlocking = true)}>Unlock</button>
-        {/if}
+  <!-- Sound on the left, where the app has the Event log; the main action on the right. -->
+  <div class="ft">
+    <button
+      class="btn-t"
+      class:locked={alerts.soundLocked}
+      aria-pressed={alerts.prefs.sound}
+      title={alerts.soundLocked ? 'Sound blocked by the browser, click to enable' : undefined}
+      onclick={() => alerts.toggleSound()}
+    >
+      <AlertIcon
+        name={alerts.prefs.sound ? 'volumeOn' : 'volumeOff'}
+        size={sz(18, 22)}
+      />{alerts.soundLocked
+        ? 'Tap for sound'
+        : touch && !labelled
+          ? 'Sound'
+          : alerts.prefs.sound
+            ? 'Sound on'
+            : 'Sound off'}
+    </button>
+    {#if operator}
+      <!-- A phone's Acknowledge all takes the rest of the row. -->
+      {#if labelled || !touch}<span class="sp"></span>{/if}
+      {#if unacked.length > 0}
+        <button class="btn-f" class:grow={touch && !labelled} onclick={() => ack(unacked)}>
+          <AlertIcon name="doneAll" size={sz(18, 22)} />Acknowledge all
+        </button>
       {/if}
-    </div>
-  {:else if !operator && unacked.length > 0}
-    <div class="vnote">
-      <span>Viewers see alerts; acknowledging needs control.</span>
+    {:else}
+      <span class="vn">Acknowledging needs control</span>
       {#if session.controlAllowed}
-        <button class="small" onclick={() => (unlocking = true)}>Unlock control</button>
+        <button
+          class="btn-u"
+          class:ic={touch && !labelled}
+          aria-label="Unlock control"
+          onclick={() => (unlocking = true)}
+          >{#if touch && !labelled}<Icon name="unlock" size={22} />{:else}Unlock{/if}</button
+        >
       {/if}
-    </div>
-  {/if}
-</div>
+    {/if}
+  </div>
+</section>
 
 {#if unlocking}
   <UnlockDialog onclose={() => (unlocking = false)} />
 {/if}
 
 <style>
-  /* Fills the drawer; in a sheet, takes what the sheet's max height leaves. */
   .panel {
-    display: flex;
-    flex-direction: column;
-    flex: 1 1 auto;
-    gap: 6px;
     height: 100%;
     min-height: 0;
-    padding: 10px 10px 12px;
-    background: var(--surface);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--menu);
+    color: var(--text);
+  }
+
+  button {
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+  }
+
+  .mono {
+    font-family: var(--mono);
+    letter-spacing: 0;
   }
 
   .crit {
-    color: var(--sev-crit);
-    display: inline-flex;
+    color: var(--err);
   }
 
   .warn {
-    color: var(--sev-warn);
-    display: inline-flex;
+    color: var(--warn);
   }
 
+  .okc,
   .ok {
-    color: var(--sev-ok);
-    display: inline-flex;
+    color: var(--ok);
   }
 
-  /* ── header ── */
-  .head {
+  /* ── Header ─────────────────────────────────────────────────────────── */
+  .hd {
+    height: 52px;
+    flex: none;
     display: flex;
     align-items: center;
-    gap: 2px;
-    min-height: 34px;
-    padding-left: 8px;
-    flex: none;
+    gap: 8px;
+    padding: 0 8px 0 16px;
   }
 
-  .title {
+  .hd .g {
     flex: 1;
     min-width: 0;
     display: flex;
@@ -518,215 +500,174 @@
     gap: 8px;
   }
 
-  h2 {
-    margin: 0;
-    font-size: 14px;
-    font-weight: 650;
+  .hd b {
+    font-size: 15px;
+    font-weight: 600;
     white-space: nowrap;
   }
 
-  .sub {
-    font-size: 12px;
-    color: var(--faint);
+  .hd small {
+    color: var(--muted);
+    font-size: 12.5px;
     white-space: nowrap;
   }
 
-  .ib {
+  .ab {
+    width: 32px;
+    height: 32px;
     display: inline-flex;
+    flex: none;
     align-items: center;
     justify-content: center;
-    gap: 6px;
-    min-width: 30px;
-    height: 30px;
+    gap: 8px;
     padding: 0;
     border: 0;
-    border-radius: 7px;
+    border-radius: 9px;
     background: none;
     color: var(--muted);
-    cursor: pointer;
   }
 
-  .ib:hover {
-    background: var(--hover);
-    color: var(--text);
-  }
-
-  .ib[aria-pressed='true'] {
-    background: var(--accent-soft);
-    color: var(--accent);
-  }
-
-  /* Sound on but not yet allowed by the browser: needs a tap. */
-  .ib.locked,
-  .fbtn.locked {
-    background: var(--warn-soft);
-    color: var(--warn);
-  }
-
-  /* ── tools ── */
-  .tools {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    gap: 6px;
-    padding: 0 2px 4px 4px;
-    flex: none;
-  }
-
-  .opts {
-    display: flex;
-    align-items: center;
-    gap: 6px;
+  .ab[aria-pressed='true'] {
+    background: var(--pc);
+    color: var(--on-pc);
   }
 
   .seg {
     display: flex;
-    align-items: center;
+    flex: none;
+    gap: 2px;
+    padding: 2px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--hover);
   }
 
-  .seg.sev {
-    gap: 6px;
-  }
-
-  .seg.sev button {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    height: 24px;
-    padding: 0 9px;
-    border: 1px solid var(--line-strong);
-    border-radius: 12px;
-    background: none;
-    font-size: 12px;
-    color: var(--text);
-    cursor: pointer;
-    white-space: nowrap;
-  }
-
-  .seg.sev b {
-    font-weight: 600;
-    color: var(--faint);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .seg.sev button[aria-pressed='true'] {
-    border-color: transparent;
-    background: var(--accent-soft);
-    color: var(--accent);
-  }
-
-  .seg.sev button[aria-pressed='true'] b {
-    color: var(--accent);
-  }
-
-  .seg.grp {
-    border: 1px solid var(--line-strong);
-    border-radius: 12px;
-    overflow: hidden;
-  }
-
-  .seg.grp button {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    height: 22px;
-    padding: 0 8px;
-    border: 0;
-    background: none;
-    font-size: 11.5px;
-    color: var(--muted);
-    cursor: pointer;
-    white-space: nowrap;
-  }
-
-  .seg.grp button + button {
-    border-left: 1px solid var(--line-strong);
-  }
-
-  .seg.grp button[aria-pressed='true'] {
-    background: var(--accent-soft);
-    color: var(--accent);
-  }
-
-  .pg {
+  .seg button {
+    width: 30px;
+    height: 26px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
-    width: 24px;
-    height: 24px;
+    gap: 7px;
     padding: 0;
-    border: 1px solid var(--line-strong);
-    border-radius: 6px;
+    border: 0;
+    border-radius: 8px;
     background: none;
     color: var(--muted);
-    cursor: pointer;
   }
 
-  .pg[aria-pressed='true'] {
-    border-color: transparent;
-    background: var(--accent-soft);
-    color: var(--accent);
+  .seg button[aria-pressed='true'] {
+    background: var(--card);
+    color: var(--text);
+    box-shadow: var(--sh-1);
   }
 
-  /* ── list ── */
+  @media (hover: hover) {
+    .ab:not([aria-pressed='true']):hover,
+    .ack:hover {
+      background: var(--hover);
+      color: var(--text);
+    }
+  }
+
+  /* ── Severity chips ─────────────────────────────────────────────────── */
+  .chips {
+    flex: none;
+    display: flex;
+    gap: 6px;
+    padding: 0 12px 10px;
+  }
+
+  .chip {
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 11px;
+    border: 1px solid var(--line-strong);
+    border-radius: 999px;
+    background: none;
+    color: var(--muted);
+    font-size: 12.5px;
+    font-weight: 500;
+  }
+
+  .chip span {
+    display: flex;
+  }
+
+  .chip b {
+    color: var(--faint);
+    font-weight: 600;
+  }
+
+  .chip[aria-pressed='true'] {
+    border-color: var(--accent);
+    background: var(--pc);
+    color: var(--on-pc);
+  }
+
+  .chip[aria-pressed='true'] b {
+    color: var(--on-pc);
+  }
+
+  /* ── List ───────────────────────────────────────────────────────────── */
   .list {
     flex: 1;
     min-height: 0;
     overflow: auto;
     display: flex;
     flex-direction: column;
-    gap: 3px;
-    padding-right: 2px;
+    gap: 4px;
+    padding: 8px;
+    border-top: 1px solid var(--line);
     overscroll-behavior: contain;
+  }
+
+  .list > :global(*),
+  .ind > :global(*) {
+    flex: none;
   }
 
   .ind {
     display: flex;
     flex-direction: column;
-    gap: 3px;
-    padding-left: 12px;
-  }
-
-  .gh,
-  .sec {
-    display: flex;
-    align-items: center;
     gap: 4px;
-    flex: none;
+    margin-left: 12px;
   }
 
   .gh {
-    min-height: 34px;
-  }
-
-  .sec {
-    min-height: 30px;
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
   }
 
   .fold {
     flex: 1;
     min-width: 0;
-    align-self: stretch;
+    min-height: 36px;
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 0 4px;
+    padding: 0 4px 0 6px;
     border: 0;
-    border-radius: 8px;
+    border-radius: 9px;
     background: none;
-    color: var(--text);
     text-align: left;
-    cursor: pointer;
   }
 
-  .fold:hover {
-    background: var(--hover);
+  @media (hover: hover) {
+    .fold:hover,
+    .ak:hover {
+      background: var(--hover);
+    }
   }
 
   .chev {
-    display: inline-flex;
-    color: var(--faint);
+    display: flex;
+    flex: none;
+    color: var(--muted);
     transition: transform 0.12s;
   }
 
@@ -734,269 +675,206 @@
     transform: rotate(90deg);
   }
 
-  .ttl {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .ip {
+    flex: none;
+    font-family: var(--mono);
+    letter-spacing: 0;
     font-size: 13px;
-    font-weight: 600;
-  }
-
-  .ttl span {
-    margin-left: 8px;
-    font-size: 11.5px;
-    font-weight: 400;
-    color: var(--faint);
-    font-variant-numeric: tabular-nums;
   }
 
   .nm {
-    flex: 1;
+    flex: none;
+    font-size: 13.5px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .md {
     min-width: 0;
     overflow: hidden;
+    color: var(--muted);
+    font-size: 12.5px;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--muted);
   }
 
-  .nm span {
-    margin-left: 8px;
-    font-weight: 400;
-    letter-spacing: 0;
-    text-transform: none;
-    color: var(--faint);
+  .sp {
+    flex: 1;
   }
 
-  .gdot {
-    width: 10px;
-    height: 10px;
+  .sq {
+    width: 12px;
+    height: 12px;
     flex: none;
     border-radius: 3px;
   }
 
-  .gdot.none {
+  .sq.none {
     border: 1.5px solid var(--line-strong);
   }
 
-  .sc {
+  .pills {
+    display: inline-flex;
+    flex: none;
+    gap: 4px;
+  }
+
+  .pl {
+    height: 20px;
     display: inline-flex;
     align-items: center;
-    gap: 3px;
-    flex: none;
-    font-size: 12px;
-    font-weight: 650;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .sc.crit {
-    color: var(--err);
-  }
-
-  .sc.warn {
-    color: var(--warn);
-  }
-
-  .sc.ok {
-    color: var(--ok);
-  }
-
-  .sc :global(svg) {
-    color: var(--sev-crit);
-  }
-
-  .sc.warn :global(svg) {
-    color: var(--sev-warn);
-  }
-
-  .sc.ok :global(svg) {
-    color: var(--sev-ok);
-  }
-
-  .row {
-    position: relative;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-height: 46px;
-    padding: 0 6px 0 7px;
-    border-radius: 8px;
-    background: var(--item);
-    flex: none;
-  }
-
-  .chip {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 26px;
-    height: 26px;
-    flex: none;
-    border-radius: 7px;
-  }
-
-  .chip.sm {
-    width: 22px;
-    height: 22px;
-    border-radius: 6px;
-  }
-
-  .chip.critical {
-    background: color-mix(in srgb, var(--sev-crit) 17%, var(--item));
-    color: var(--sev-crit);
-  }
-
-  .chip.warning {
-    background: color-mix(in srgb, var(--sev-warn) 17%, var(--item));
-    color: var(--sev-warn);
-  }
-
-  .chip.recovered {
-    background: color-mix(in srgb, var(--sev-ok) 17%, var(--item));
-    color: var(--sev-ok);
-  }
-
-  .mid {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    line-height: 1.2;
-  }
-
-  .rl {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    gap: 4px;
+    padding: 0 7px 0 5px;
+    border-radius: 999px;
     font-size: 11.5px;
-    font-weight: 500;
-    color: var(--muted);
-  }
-
-  .rl.subj {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text);
-  }
-
-  .rl.subj span {
-    margin-left: 6px;
-    font-size: 11px;
-    font-weight: 400;
-    color: var(--faint);
-  }
-
-  .val {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 14px;
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .val.critical {
-    color: var(--err);
-  }
-
-  .val.warning {
-    color: var(--warn);
-  }
-
-  .val.recovered {
-    color: var(--ok);
-  }
-
-  .tm {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 2px;
-    flex: none;
-    line-height: 1.2;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .tm b {
-    font-size: 12px;
     font-weight: 600;
   }
 
-  .tm span {
-    font-size: 11px;
-    color: var(--faint);
+  .pl.crit {
+    background: color-mix(in srgb, var(--err) 18%, transparent);
+  }
+
+  .pl.warn {
+    background: color-mix(in srgb, var(--warn) 16%, transparent);
+  }
+
+  .pl.ok {
+    background: color-mix(in srgb, var(--ok) 15%, transparent);
   }
 
   .ack {
+    width: 30px;
+    height: 30px;
     display: inline-flex;
+    flex: none;
     align-items: center;
     justify-content: center;
-    width: 26px;
-    height: 26px;
-    flex: none;
     padding: 0;
-    border: 1px solid var(--accent-line);
-    border-radius: 7px;
-    background: none;
-    color: var(--accent);
-    cursor: pointer;
-  }
-
-  .ack:hover {
-    background: var(--accent-soft);
-  }
-
-  .ackh {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-height: 30px;
-    margin-top: 6px;
-    padding: 0 4px;
     border: 0;
-    border-top: 1px solid var(--line);
+    border-radius: 9px;
     background: none;
-    font-size: 12px;
-    font-weight: 600;
     color: var(--muted);
-    text-align: left;
-    cursor: pointer;
-    flex: none;
   }
 
-  .ackl {
+  /* A row: the white message, a severity edge and icon, the start time. */
+  .ar {
+    --edge: var(--err);
+    position: relative;
+    min-height: 52px;
     display: flex;
     align-items: center;
-    gap: 8px;
-    min-height: 22px;
-    padding: 0 8px;
-    font-size: 12px;
-    color: var(--muted);
+    gap: 10px;
+    padding: 7px 4px 7px 12px;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--text) 6%, var(--menu));
+  }
+
+  .ar::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 9px;
+    bottom: 9px;
+    width: 3px;
+    border-radius: 0 2px 2px 0;
+    background: var(--edge);
+  }
+
+  .ar.warning {
+    --edge: var(--warn);
+  }
+
+  .ar.recovered {
+    --edge: var(--ok);
+  }
+
+  .sic {
+    display: flex;
     flex: none;
   }
 
-  .ackl .tx {
+  .sic.critical {
+    color: var(--err);
+  }
+
+  .sic.warning {
+    color: var(--warn);
+  }
+
+  .sic.recovered {
+    color: var(--ok);
+  }
+
+  .tx {
     flex: 1;
     min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .msg {
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  .sub {
     overflow: hidden;
+    color: var(--muted);
+    font-size: 12.5px;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .ackl b {
-    font-weight: 600;
+  .sub .mono {
+    color: var(--text);
   }
 
-  .ackl .d {
-    font-size: 11px;
+  .tm {
+    flex: none;
+    color: var(--muted);
+    font-family: var(--mono);
+    letter-spacing: 0;
+    font-size: 12px;
+  }
+
+  /* The Acknowledged fold. */
+  .ak {
+    min-height: 34px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+    padding: 6px 6px 0;
+    border: 0;
+    border-top: 1px solid var(--line);
+    border-radius: 0;
+    background: none;
+    color: var(--muted);
+    font-size: 12.5px;
+    font-weight: 600;
+    text-align: left;
+  }
+
+  .ak b {
     color: var(--faint);
-    font-variant-numeric: tabular-nums;
+  }
+
+  .ackl {
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 6px 0 12px;
+    color: var(--muted);
+    font-size: 12.5px;
+  }
+
+  .ackl .tx {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .empty {
@@ -1004,472 +882,245 @@
     flex-direction: column;
     align-items: center;
     gap: 6px;
-    padding: 20px 16px 22px;
+    padding: 32px 20px;
+    color: var(--muted);
+    font-size: 13px;
     text-align: center;
-    flex: none;
   }
 
   .empty b {
-    font-size: 13px;
+    color: var(--text);
+    font-size: 14px;
   }
 
-  .empty > span:last-child {
-    max-width: 34ch;
-    font-size: 12px;
-    color: var(--faint);
-  }
-
-  .nothing {
-    margin: 0;
-    padding: 16px;
-    text-align: center;
-    font-size: 12px;
-    color: var(--faint);
-  }
-
-  .vnote {
+  /* ── Footer ─────────────────────────────────────────────────────────── */
+  .ft {
+    min-height: 56px;
+    flex: none;
     display: flex;
     align-items: center;
-    gap: 10px;
-    margin-top: 4px;
-    padding: 8px 10px;
-    border-radius: 8px;
-    background: var(--hover);
-    font-size: 12px;
-    color: var(--muted);
-    flex: none;
-  }
-
-  .vnote span {
-    flex: 1;
-  }
-
-  .small {
-    height: 26px;
-    padding: 0 10px;
-    border: 1px solid var(--line-strong);
-    border-radius: 6px;
-    background: var(--surface);
-    font-size: 12.5px;
-    font-weight: 550;
-    white-space: nowrap;
-    cursor: pointer;
-  }
-
-  /* ── touch: every target 44 px or more, labels beside icons ── */
-  .touch {
-    gap: 0;
-    padding: 0;
-  }
-
-  .touch .head {
     gap: 8px;
-    padding: 8px 12px 8px 18px;
+    padding: 0 12px 0 8px;
+    border-top: 1px solid var(--line);
+    background: color-mix(in srgb, var(--menu) 85%, var(--app));
   }
 
-  .touch .title {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 2px;
+  .ft button,
+  .ft span {
+    white-space: nowrap;
   }
 
-  .touch h2 {
-    font-size: 19px;
-    font-weight: 700;
-    letter-spacing: -0.01em;
-  }
-
-  .touch .sub {
-    font-size: 13px;
-    color: var(--muted);
-  }
-
-  .touch .ib {
-    min-width: 44px;
-    height: 44px;
-    border-radius: 12px;
-    background: var(--hover);
-    color: var(--text);
-  }
-
-  .touch .ib.text {
+  .btn-t {
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
     padding: 0 12px;
+    border: 0;
+    border-radius: 999px;
     background: none;
     color: var(--accent);
-    font-size: 14px;
+    font-size: 13.5px;
     font-weight: 600;
   }
 
-  .touch .tools {
-    flex-direction: column;
-    flex-wrap: nowrap;
-    gap: 8px;
-    padding: 0 12px 10px;
+  .btn-t[aria-pressed='false'] {
+    color: var(--muted);
   }
 
-  .touch .seg.sev,
-  .touch .seg.grp {
-    display: grid;
-    grid-auto-flow: column;
-    grid-auto-columns: 1fr;
-    gap: 3px;
-    padding: 3px;
-    border: 0;
-    border-radius: 14px;
-    background: var(--hover);
+  /* The browser still blocks sound until a tap: amber, as before. */
+  .btn-t.locked {
+    color: var(--warn);
   }
 
-  .touch .seg.grp {
-    flex: 1;
-    min-width: 0;
+  @media (hover: hover) {
+    .btn-t:hover {
+      background: var(--accent-soft);
+    }
   }
 
-  .touch .seg.sev button,
-  .touch .seg.grp button {
+  .btn-f {
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
     justify-content: center;
     gap: 7px;
-    min-width: 0;
-    height: 42px;
-    padding: 0 6px;
+    padding: 0 16px 0 12px;
     border: 0;
-    border-radius: 11px;
-    background: none;
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--muted);
-  }
-
-  .touch .seg.grp button {
-    height: 38px;
+    border-radius: 999px;
+    background: var(--primary);
+    color: var(--on-primary);
     font-size: 13.5px;
-  }
-
-  .touch .seg.grp button + button {
-    border-left: 0;
-  }
-
-  .touch .seg.sev b {
-    font-weight: 700;
-    color: var(--text);
-  }
-
-  .touch .seg.sev button[aria-pressed='true'],
-  .touch .seg.grp button[aria-pressed='true'] {
-    background: var(--surface);
-    color: var(--text);
-    box-shadow: var(--sh-1);
-  }
-
-  .touch .seg.sev button[aria-pressed='true'] b {
-    color: var(--text);
-  }
-
-  .touch .opts {
-    gap: 8px;
-  }
-
-  .touch .pg {
-    width: auto;
-    min-width: 44px;
-    height: 44px;
-    padding: 0 12px;
-    border: 0;
-    border-radius: 12px;
-    background: var(--hover);
-    color: var(--text);
-    font-size: 14px;
     font-weight: 600;
   }
 
-  .touch .pg[aria-pressed='true'] {
-    background: var(--accent-soft);
-    color: var(--accent);
+  .vn {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 12.5px;
+    text-align: right;
+    text-overflow: ellipsis;
+  }
+
+  .btn-u {
+    height: 36px;
+    flex: none;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--pc);
+    color: var(--on-pc);
+    font-size: 13.5px;
+    font-weight: 600;
+  }
+
+  /* ── Touch sheets: 44 px+ targets; a tablet labels its buttons ──────── */
+  .touch .hd {
+    height: 64px;
+    gap: 4px;
+    padding: 0 8px 0 18px;
+  }
+
+  .touch .hd .g {
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .touch .hd b {
+    font-size: 16px;
+  }
+
+  .touch .ab {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+  }
+
+  .touch .ab.x {
+    background: var(--soft);
+    color: var(--text);
+  }
+
+  .touch .seg {
+    border-radius: 12px;
+  }
+
+  .touch .seg button {
+    width: 42px;
+    height: 38px;
+    border-radius: 9px;
+  }
+
+  .labelled .hd {
+    height: 68px;
+    gap: 8px;
+    padding: 0 12px 0 22px;
+  }
+
+  .labelled .hd b {
+    font-size: 17px;
+  }
+
+  .labelled .ab.tb {
+    width: auto;
+    padding: 0 14px 0 12px;
+    border: 1px solid var(--line-strong);
+    font-size: 13.5px;
+    font-weight: 600;
+  }
+
+  .labelled .ab.tb[aria-pressed='true'] {
+    border-color: var(--accent);
+  }
+
+  .labelled .seg button {
+    width: auto;
+    padding: 0 12px;
+    font-size: 13.5px;
+    font-weight: 500;
+  }
+
+  .touch .chips {
+    gap: 8px;
+    padding: 0 14px 12px;
+  }
+
+  .touch .chip {
+    height: 40px;
+    padding: 0 14px;
+    font-size: 13.5px;
   }
 
   .touch .list {
     gap: 6px;
-    padding: 6px 12px 12px;
-    border-top: 1px solid var(--line);
+    padding: 10px;
   }
 
-  .touch .ind {
-    gap: 6px;
-    padding-left: 14px;
-  }
-
-  .touch .gh {
-    min-height: 54px;
-    gap: 8px;
-  }
-
-  .touch .sec {
-    min-height: 48px;
-    gap: 8px;
-  }
-
+  .touch .gh,
   .touch .fold {
-    gap: 10px;
-    padding: 0 6px;
-    border-radius: 12px;
+    min-height: 48px;
   }
 
-  .touch .ttl {
-    font-size: 16px;
-    font-weight: 650;
-  }
-
-  .touch .ttl span {
-    display: block;
-    margin: 2px 0 0;
-    font-size: 13px;
-  }
-
-  .touch .nm {
-    font-size: 13px;
-  }
-
-  /* The projector count under the group's name, like a group header's note. */
-  .touch .nm span {
-    display: block;
-    margin: 2px 0 0;
-    font-size: 12.5px;
-  }
-
-  .touch .gdot {
-    width: 14px;
-    height: 14px;
-    border-radius: 4px;
-  }
-
-  .touch .sc {
-    font-size: 15px;
-  }
-
-  .touch .row {
-    gap: 12px;
-    min-height: 68px;
-    padding: 8px 8px 8px 14px;
-    border-radius: 14px;
-    overflow: hidden;
-  }
-
-  .touch .row::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 5px;
-  }
-
-  .touch .row.critical::before {
-    background: var(--sev-crit);
-  }
-
-  .touch .row.warning::before {
-    background: var(--sev-warn);
-  }
-
-  .touch .row.recovered::before {
-    background: var(--sev-ok);
-  }
-
-  .touch .chip {
-    width: 36px;
-    height: 36px;
-    border-radius: 10px;
-  }
-
-  .touch .mid {
-    line-height: 1.25;
-  }
-
-  .touch .rl {
-    font-size: 13px;
-    font-weight: 550;
-  }
-
-  .touch .rl.subj {
+  .touch .ip {
     font-size: 14px;
-    font-weight: 650;
   }
 
-  .touch .rl.subj span {
-    font-size: 12.5px;
+  .touch .md {
+    font-size: 13px;
   }
 
-  /* Large, and on two rows rather than cut on a narrow phone. */
-  .touch .val {
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    white-space: normal;
-    font-size: 17px;
-    font-weight: 700;
-  }
-
-  .touch .tm {
-    display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 12.5px;
-    color: var(--muted);
-  }
-
-  .touch .tm b {
-    font-size: inherit;
-    color: var(--text);
-    font-weight: 650;
+  .touch .pl {
+    height: 22px;
+    font-size: 12px;
   }
 
   .touch .ack {
-    width: 52px;
-    height: 52px;
-    border: 2px solid var(--accent-line);
-    border-radius: 14px;
-  }
-
-  .touch .ack.many {
-    width: 48px;
-    height: 48px;
+    width: 44px;
+    height: 44px;
     border-radius: 12px;
   }
 
-  .touch .ackh {
-    gap: 10px;
-    min-height: 52px;
-    padding: 0 6px;
-    font-size: 15px;
-    font-weight: 650;
+  .touch .ar {
+    min-height: 62px;
+    gap: 12px;
+    padding: 8px 2px 8px 14px;
+    border-radius: 12px;
   }
 
-  .touch .ackl {
-    gap: 10px;
+  .touch .msg {
+    font-size: 14.5px;
+  }
+
+  .touch .ak {
     min-height: 44px;
-    padding: 6px 10px;
-    font-size: 14px;
+    font-size: 13.5px;
   }
 
-  /* A phone's width: the whole line, wrapped rather than cut. */
-  .touch .ackl .tx {
-    white-space: normal;
-    line-height: 1.3;
-  }
-
-  .touch .ackl b {
-    color: var(--text);
-    font-weight: 650;
-  }
-
-  .touch .ackl .d {
-    font-size: 12.5px;
-  }
-
-  .touch .empty {
+  .touch .ft {
     gap: 8px;
-    padding: 28px 20px;
+    padding: 12px 14px calc(16px + env(safe-area-inset-bottom));
   }
 
-  .touch .empty b {
-    font-size: 16px;
+  .touch .btn-t,
+  .touch .btn-f,
+  .touch .btn-u {
+    height: 48px;
+    font-size: 14.5px;
   }
 
-  .touch .empty > span:last-child {
-    max-width: 32ch;
-    font-size: 14px;
+  .touch .btn-f.grow {
+    flex: 1;
+    font-size: 15px;
   }
 
-  .touch .nothing {
-    font-size: 14px;
-  }
-
-  .foot {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 12px 14px;
-    border-top: 1px solid var(--line);
-    background: var(--surface);
-    flex: none;
-  }
-
-  .fbtn {
+  .touch .btn-u.ic {
+    width: 48px;
+    padding: 0;
+    border-radius: 14px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    min-width: 52px;
-    height: 52px;
-    padding: 0 16px;
-    border: 0;
-    border-radius: 14px;
-    background: var(--hover);
-    color: var(--text);
-    font-size: 15px;
-    font-weight: 600;
-    white-space: nowrap;
-    cursor: pointer;
-    flex: none;
-  }
-
-  .fbtn[aria-pressed='true'] {
-    background: var(--accent-soft);
-    color: var(--accent);
-  }
-
-  .fbtn.primary {
-    flex: 1;
-    min-width: 0;
-    background: var(--accent);
-    color: var(--on-accent);
-  }
-
-  .fbtn.primary.short {
-    flex: none;
-  }
-
-  .vtext {
-    flex: 1;
-    min-width: 0;
-    font-size: 13px;
-    line-height: 1.3;
-    color: var(--muted);
-  }
-
-  /* A phone held sideways: the segments share one row, short labels. */
-  .narrow .head {
-    padding: 6px 10px 4px 16px;
-  }
-
-  .narrow h2 {
-    font-size: 17px;
-  }
-
-  .narrow .tools {
-    flex-direction: row;
-    padding-bottom: 6px;
-  }
-
-  .narrow .seg.sev {
-    flex: 1;
-  }
-
-  .narrow .seg.sev button,
-  .narrow .seg.grp button {
-    height: 38px;
-  }
-
-  .narrow .foot {
-    padding: 6px 10px 8px;
-  }
-
-  .narrow .fbtn {
-    height: 46px;
-  }
-
-  .narrow .row {
-    min-height: 60px;
   }
 </style>

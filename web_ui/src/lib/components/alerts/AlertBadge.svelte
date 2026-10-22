@@ -38,15 +38,15 @@
   }
 
   .crit {
-    color: var(--sev-crit);
+    color: var(--err);
   }
 
   .warn {
-    color: var(--sev-warn);
+    color: var(--warn);
   }
 
   .ok {
-    color: var(--sev-ok);
+    color: var(--ok);
   }
 
   b {

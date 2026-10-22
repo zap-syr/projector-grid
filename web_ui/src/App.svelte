@@ -420,21 +420,24 @@
   }
 
   /* The drawer opens over everything left of the alerts rail. */
+  /* The 420 px Active alerts panel beside the rail, floating as the boards draw it. */
   .drawer {
     position: absolute;
-    top: 0;
-    bottom: 0;
-    right: 52px;
+    top: 8px;
+    bottom: 8px;
+    right: 60px;
     z-index: 20;
-    width: min(404px, calc(100% - 52px));
-    border-left: 1px solid var(--line);
-    background: var(--surface);
+    width: min(420px, calc(100% - 68px));
+    overflow: hidden;
+    border: 1px solid var(--line-strong);
+    border-radius: 14px;
+    background: var(--menu);
     box-shadow: var(--sh-3);
     animation: slide 0.18s ease-out;
   }
 
   .drawer.touch {
-    width: min(440px, calc(100% - 52px));
+    width: min(440px, calc(100% - 68px));
   }
 
   @keyframes slide {

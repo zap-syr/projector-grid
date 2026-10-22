@@ -3,7 +3,13 @@ import { describe, expect, test } from 'vitest';
 import type { Alert } from '../src/lib/api/types';
 import {
   alertBadge,
+  alertKind,
+  alertMessage,
+  alertOverAt,
   alertPill,
+  filterEmptyTitle,
+  formatStarted,
+  hiddenByFilter,
   alertsInSections,
   alertTint,
   byProjectGroup,
@@ -169,6 +175,48 @@ describe('raisedAlerts (the cues)', () => {
     expect(raisedAlerts([a], [{ ...a, acknowledged: true }])).toEqual([]);
     const lost = al('2', 'signal-lost', 'critical', 1);
     expect(raisedAlerts([lost], [back(lost)])).toEqual([]);
+  });
+});
+
+describe('what a row says (alerts.dart §7m.2)', () => {
+  const temp = al('1', 'exhaust-temp', 'critical', 0, {
+    label: 'Exhaust temperature',
+    value: '52 °C',
+  });
+  const fan = al('1', 'error', 'critical', 0, {
+    label: 'Projector error',
+    value: 'Fan error (F305)',
+  });
+
+  test('a temperature names itself, except under its own alert group', () => {
+    expect(alertMessage(temp)).toBe('Exhaust temperature 52 °C');
+    expect(alertMessage(temp, true)).toBe('52 °C');
+    expect(alertMessage(fan)).toBe('Fan error (F305)');
+  });
+
+  test('the kind under it; both temperatures read Temperature', () => {
+    expect(alertKind(temp)).toBe('Temperature');
+    expect(alertKind(fan)).toBe('Projector error');
+  });
+
+  test('over at, and the start tooltip', () => {
+    const now = new Date(T0 + 10 * 60_000);
+    expect(alertOverAt(temp, now)).toBeNull();
+    const back = new Date(T0 + 60_000);
+    expect(alertOverAt({ ...temp, restoredAt: back.toISOString() }, now)).toMatch(
+      /^over at \d\d:\d\d$/,
+    );
+    expect(formatStarted(new Date(T0), now)).toMatch(/^Started \d\d:\d\d, 10 min ago$/);
+    expect(formatStarted(new Date(now.getTime() - 5_000), now)).toMatch(/just now$/);
+  });
+
+  test('a filter that hides everything says what it hides', () => {
+    expect(filterEmptyTitle('critical')).toBe('No critical alerts');
+    expect(filterEmptyTitle('warning')).toBe('No warnings');
+    const w = al('2', 'intake-temp', 'warning', 0);
+    expect(hiddenByFilter([w], 'critical')).toBe('1 warning is hidden by the filter');
+    expect(hiddenByFilter([w, temp], 'warning')).toBe('1 critical alert is hidden by the filter');
+    expect(hiddenByFilter([w, w], 'critical')).toBe('2 warnings are hidden by the filter');
   });
 });
 

@@ -153,11 +153,11 @@
   }
 
   .crit {
-    color: var(--sev-crit);
+    color: var(--err);
   }
 
   .warn {
-    color: var(--sev-warn);
+    color: var(--warn);
   }
 
   .tag {
@@ -226,13 +226,13 @@
   }
 
   .chip.critical {
-    background: color-mix(in srgb, var(--sev-crit) 17%, var(--item));
-    color: var(--sev-crit);
+    background: color-mix(in srgb, var(--err) 17%, var(--item));
+    color: var(--err);
   }
 
   .chip.warning {
-    background: color-mix(in srgb, var(--sev-warn) 17%, var(--item));
-    color: var(--sev-warn);
+    background: color-mix(in srgb, var(--warn) 17%, var(--item));
+    color: var(--warn);
   }
 
   .nm {
