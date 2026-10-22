@@ -75,8 +75,10 @@
     height: 66px;
     border: 0;
     border-radius: 50%;
-    background: var(--hover);
+    background: var(--soft);
+    color: var(--text);
     font-size: 25px;
+    font-variant-numeric: tabular-nums;
     font-weight: 450;
     cursor: pointer;
     touch-action: manipulation;
@@ -93,8 +95,8 @@
   }
 
   .key.ok {
-    background: var(--accent);
-    color: var(--on-accent);
+    background: var(--primary);
+    color: var(--on-primary);
     font-size: 16px;
     font-weight: 600;
   }

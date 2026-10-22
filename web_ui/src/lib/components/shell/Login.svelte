@@ -1,18 +1,29 @@
+<!--
+  Sign in (shell canvas, *Sign in…*, *Phone: sign in…*): a card with the
+  app's logo, the project name, the PIN field with its help line and *Sign
+  in*; on phones and touch screens the logo sits beside the name and the
+  PIN pad takes the field's place.
+-->
 <script lang="ts">
+  import { device } from '../../state/device.svelte';
   import { session } from '../../state/session.svelte';
   import AppLogo from './AppLogo.svelte';
   import PinEntry from './PinEntry.svelte';
 </script>
 
 <main class="wrap">
-  <div class="card">
-    <div class="logo"><AppLogo size={56} /></div>
-    <div class="t">
-      <b>{session.projectName}</b>
-      <span>Enter your PIN</span>
+  <div class="card" class:pad={device.pinPad}>
+    <div class="top">
+      <AppLogo size={device.pinPad ? 48 : 56} />
+      <div class="t">
+        <b>{session.projectName}</b>
+        <small>{device.pinPad ? 'Enter your PIN' : 'Projector Grid, Web Access'}</small>
+      </div>
     </div>
     <PinEntry
       label="Sign in"
+      fieldLabel="PIN"
+      help="Ask the person at the show PC"
       notice={session.notice}
       autofocus
       submit={(pin) => session.login(pin)}
@@ -27,52 +38,57 @@
     align-items: center;
     justify-content: center;
     padding: 24px 16px;
+    background: var(--app);
   }
 
   .card {
     width: 100%;
-    max-width: 340px;
+    max-width: 380px;
     display: flex;
     flex-direction: column;
-    align-items: stretch;
-    gap: 18px;
-    padding: 28px 24px 14px;
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: 16px;
-    box-shadow: var(--sh-2);
+    gap: 20px;
+    padding: 28px 28px 24px;
+    border: 1px solid var(--line-strong);
+    border-radius: 20px;
+    background: var(--card);
+    box-shadow: var(--sh-3);
   }
 
-  .logo {
-    align-self: center;
-  }
-
-  .t {
+  .top {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
     text-align: center;
   }
 
   .t b {
     display: block;
-    font-size: 21px;
-    font-weight: 650;
-    letter-spacing: -0.01em;
+    font-size: 18px;
+    font-weight: 600;
   }
 
-  .t span {
+  .t small {
+    display: block;
+    margin-top: 2px;
     color: var(--muted);
+    font-size: 12.5px;
   }
 
-  /* Phones: full screen, no card, like the mockup's PIN screen. */
-  @media (max-width: 600px) {
-    .wrap {
-      padding: 0;
-      background: var(--surface);
-    }
+  /* The PIN pad: logo beside the name, the pad centred under them. */
+  .card.pad {
+    align-items: center;
+    padding: 26px 20px 18px;
+  }
 
-    .card {
-      max-width: none;
-      border: 0;
-      box-shadow: none;
-    }
+  .pad .top {
+    flex-direction: row;
+    align-self: stretch;
+    gap: 14px;
+    text-align: left;
+  }
+
+  .pad .t b {
+    font-size: 17px;
   }
 </style>

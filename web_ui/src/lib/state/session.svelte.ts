@@ -7,7 +7,7 @@ type Status = 'loading' | 'signedOut' | 'signedIn';
 function pinRefused(e: unknown, fallback: string): string {
   if (!(e instanceof ApiError)) throw e;
   if (e.body?.error === 'locked_out') {
-    return `Too many attempts — try again in ${e.body.retryAfter} s`;
+    return `Too many attempts, try again in ${e.body.retryAfter} s`;
   }
   return e.body?.error === 'invalid_pin' ? 'Wrong PIN' : fallback;
 }

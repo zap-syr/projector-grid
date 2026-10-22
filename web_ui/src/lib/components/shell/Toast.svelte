@@ -23,12 +23,13 @@
     gap: 10px;
     max-width: calc(100% - 32px);
     padding: 10px 16px 10px 12px;
+    border: 1px solid var(--line-strong);
     border-radius: 12px;
-    background: var(--text);
-    color: var(--app);
+    background: var(--menu);
+    color: var(--text);
     font-size: 13.5px;
     font-weight: 550;
-    box-shadow: var(--sh-2);
+    box-shadow: var(--sh-3);
   }
 
   .toast :global(svg) {
