@@ -5,8 +5,29 @@ import type { PreviewStatus, Projector } from '../api/types';
  * green with the shutter open, red closed, neutral while not on.
  */
 export function frameColor(p: Projector | undefined): string {
-  if (!p || p.power !== 'on') return 'var(--line-strong)';
-  return p.shutter === 'open' ? '#6cff6c' : '#ff5f56';
+  if (!p || p.power !== 'on') return FRAME.notOn;
+  return p.shutter === 'open' ? FRAME.open : FRAME.closed;
+}
+
+/** The frame's colours, also the footer's legend (`PreviewViewport.frame*`). */
+export const FRAME = { open: '#6cff6c', closed: '#ff5f56', notOn: 'var(--t3)' } as const;
+
+/** `RZ34K (192.168.0.41)`: how a dialog names one projector (`projectorLabel`). */
+export const projectorLabel = (model: string, ip: string): string =>
+  model === '' || model === ip ? ip : `${model} (${ip})`;
+
+/**
+ * Under *Pre-show mode*: why the switch can or can't be used, as the app's
+ * card says it.
+ */
+export function preShowNote(p: Projector | undefined, s: PreviewStatus | null): string {
+  if (p?.power === 'on') return 'Only in Standby: this projector is on';
+  if (preShowReady(p, s)) {
+    return 'Keeps the input alive for preview, the projector stays off. Stays on after you close this window.';
+  }
+  return s?.state === 'connecting'
+    ? 'Connecting to the live feed'
+    : 'Needs the live feed and Standby';
 }
 
 const NOTICES: Record<NonNullable<PreviewStatus['notice']>, string> = {

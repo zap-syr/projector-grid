@@ -8,7 +8,14 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import type { Config, PreviewStatus, Projector } from '../src/lib/api/types';
 import PreviewDialog from '../src/lib/components/preview/PreviewDialog.svelte';
 import DataTable from '../src/lib/components/table/DataTable.svelte';
-import { cornerTag, frameColor, preShowReady, stepped } from '../src/lib/logic/preview';
+import {
+  cornerTag,
+  frameColor,
+  preShowNote,
+  preShowReady,
+  projectorLabel,
+  stepped,
+} from '../src/lib/logic/preview';
 import { live } from '../src/lib/state/live.svelte';
 import { preview } from '../src/lib/state/preview.svelte';
 import { type StoredLayout } from '../src/lib/state/tableLayout.svelte';
@@ -75,13 +82,27 @@ describe('preview logic', () => {
   test('the frame follows the shutter while the projector is on', () => {
     expect(frameColor(byId('n2'))).toBe('#6cff6c');
     expect(frameColor({ ...(byId('n2') as Projector), shutter: 'closed' })).toBe('#ff5f56');
-    expect(frameColor(byId('n3'))).toBe('var(--line-strong)');
+    expect(frameColor(byId('n3'))).toBe('var(--t3)');
   });
 
   test('pre-show wins the corner tag', () => {
     expect(cornerTag(live1)).toBe('PRE-SHOW');
     expect(cornerTag({ ...live1, preShow: false })).toBe('TEST PATTERN');
     expect(cornerTag({ ...noSignal, preShow: false })).toBeNull();
+  });
+
+  test('a dialog names the projector by model and IP', () => {
+    expect(projectorLabel('RZ34K', '192.168.0.41')).toBe('RZ34K (192.168.0.41)');
+    expect(projectorLabel('', '192.168.0.41')).toBe('192.168.0.41');
+  });
+
+  test("the pre-show card says why, as the app's", () => {
+    expect(preShowNote(byId('n2'), live1)).toBe('Only in Standby: this projector is on');
+    expect(preShowNote(byId('n3'), noSignal)).toMatch(/^Keeps the input alive/);
+    expect(preShowNote(byId('n3'), { ...noSignal, state: 'connecting' })).toBe(
+      'Connecting to the live feed',
+    );
+    expect(preShowNote(byId('n3'), null)).toBe('Needs the live feed and Standby');
   });
 
   test('pre-show needs Standby and the feed up', () => {
@@ -124,7 +145,7 @@ describe('preview window', () => {
   function open(id = 'n2', operator = true) {
     live.projectors = projectors;
     preview.open(['n1', 'n2', 'n3', 'n4'], id);
-    render(PreviewDialog, { config, operator });
+    render(PreviewDialog, { operator });
   }
 
   test('status, then the image with its tags', () => {
@@ -136,14 +157,14 @@ describe('preview window', () => {
     expect(screen.getByRole('img').getAttribute('src')).toBe('data:image/jpeg;base64,/9j/');
     expect(screen.getByText('TEST PATTERN')).toBeTruthy();
     expect(screen.getByText(live1.signal ?? '')).toBeTruthy();
-    expect(screen.getByText('2 / 4')).toBeTruthy();
+    expect(screen.getByText('2 of 4')).toBeTruthy();
   });
 
   test('◀ ▶ and the arrow keys step to the next stream, wrapping', async () => {
     open('n1');
     await fireEvent.click(screen.getByRole('button', { name: 'Previous projector' }));
     // n4 is offline: not dialled until Retry.
-    expect(screen.getByText('4 / 4')).toBeTruthy();
+    expect(screen.getByText('4 of 4')).toBeTruthy();
     expect(screen.getByText('Preview not available')).toBeTruthy();
     expect(FakeSource.opened).toEqual(['/api/preview/n1']);
 
@@ -154,7 +175,7 @@ describe('preview window', () => {
     await fireEvent.keyDown(window, { key: 'ArrowRight' });
     expect(n4?.closed).toBe(true);
     expect(FakeSource.opened.at(-1)).toBe('/api/preview/n1');
-    expect(screen.getByText('1 / 4')).toBeTruthy();
+    expect(screen.getByText('1 of 4')).toBeTruthy();
   });
 
   test('Esc closes and ends the stream', async () => {
@@ -172,7 +193,7 @@ describe('preview window', () => {
     FakeSource.last?.emit('status', noSignal);
     expect(sw().disabled).toBe(false);
     expect(screen.getByText('No signal')).toBeTruthy();
-    expect(screen.getByText(/applying/)).toBeTruthy();
+    expect(screen.getByLabelText('Applying')).toBeTruthy();
   });
 
   test('a viewer watches without the pre-show switch', () => {

@@ -65,7 +65,7 @@ class PreviewState {
         text:
           e.status === 400
             ? 'Pre-show needs Standby and a live preview'
-            : 'Not sent — control is locked',
+            : 'Not sent, control is locked',
         ok: false,
       });
     });

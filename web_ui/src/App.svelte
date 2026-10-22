@@ -265,7 +265,7 @@
     </Sheet>
   {/if}
   {#if preview.id && config.value}
-    <PreviewDialog config={config.value} {operator} />
+    <PreviewDialog {operator} />
   {/if}
   <ConfirmDialog />
   <AlertToast />
