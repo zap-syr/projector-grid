@@ -1,9 +1,9 @@
 <!--
-  The app's Alignment banner across the page (ROADMAP §5 *Alignment mode on
-  the web*): ◀ n / N ▶ (the ring on the card names the focused projector),
-  Neighbours · Diagonals · Show
-  all, the preset switch, Focused ▾ / Others ▾, Exit. A viewer gets one
-  read-only line instead.
+  The app's Alignment banner across the page (shell canvas, *Alignment
+  banner…*): one 52 px row tinted with the mode's orange, ◀ 3 of 24 ▶ (the
+  ring on the card names the focused projector), Neighbours, Diagonals and
+  Show all, the preset switch, Focused ▾ / Others ▾ and Exit alignment. A
+  viewer gets one read-only sentence; entering or leaving, a spinner.
 -->
 <script lang="ts">
   import type { AlignmentPresetId, Config } from '../../api/types';
@@ -22,13 +22,15 @@
   const presetLabel = $derived(
     config.alignmentPresets.find((p) => p.id === a?.preset)?.label ?? '',
   );
+  /** "3 of 24". */
+  const pos = $derived(a ? position(alignment.order, a.focusedId).replace(' / ', ' of ') : '');
 
   const toggles: { op: 'neighbours' | 'diagonals' | 'showAll'; label: string; icon: IconName }[] = [
     { op: 'neighbours', label: 'Neighbours', icon: 'neighbours' },
     { op: 'diagonals', label: 'Diagonals', icon: 'diagonal' },
     { op: 'showAll', label: 'Show all', icon: 'all' },
   ];
-  /** A sideways tablet: finger-sized controls (44–48 px). */
+  /** A sideways tablet: 60 px bar, 44 px controls. */
   const touch = $derived(device.touch);
 
   const on = (op: 'neighbours' | 'diagonals' | 'showAll') =>
@@ -36,24 +38,27 @@
 </script>
 
 <div class="banner" class:touch role="region" aria-label="Alignment mode">
-  <span class="mode"><Icon name="target" size={touch ? 22 : 18} /></span>
   {#if !a || alignment.busy}
-    <span class="busy"></span>
-    <span>Alignment — reading / restoring projectors…</span>
+    <span class="atile"><span class="spin"></span></span>
+    <span class="ro"><b>Alignment</b>, waiting for the projectors</span>
   {:else if !operator}
-    <span class="ro">
-      Alignment in progress · <b>{alignment.focused?.name ?? '—'}</b> focused ·
-      {position(alignment.order, a.focusedId).replace(' / ', ' of ')} · {presetLabel} — controlled by
-      an operator
-    </span>
+    <span class="atile"><Icon name="alignment" size={18} /></span>
+    <span class="ro"
+      ><b>Alignment</b>, <span class="mono">{alignment.focused?.ip ?? ''}</span> focused ({pos}),
+      {presetLabel} patterns</span
+    >
+    <span class="grow"></span>
+    <span class="lockn"><Icon name="lock" size={16} />An operator controls it</span>
   {:else}
+    <span class="atile"><Icon name="alignment" size={18} /></span>
+    <span class="at">Alignment</span>
     <div class="nav">
-      <button class="icon" aria-label="Previous projector" onclick={() => alignment.prev()}>
-        <Icon name="left" size={touch ? 26 : 18} />
+      <button class="nb" aria-label="Previous projector" onclick={() => alignment.prev()}>
+        <Icon name="left" size={touch ? 22 : 18} />
       </button>
-      <span class="pos">{position(alignment.order, a.focusedId)}</span>
-      <button class="icon" aria-label="Next projector" onclick={() => alignment.next()}>
-        <Icon name="right" size={touch ? 26 : 18} />
+      <span class="pos">{pos}</span>
+      <button class="nb" aria-label="Next projector" onclick={() => alignment.next()}>
+        <Icon name="right" size={touch ? 22 : 18} />
       </button>
     </div>
     <span class="sep"></span>
@@ -61,6 +66,7 @@
       <button
         class="tog"
         aria-pressed={on(t.op)}
+        aria-label={t.label}
         title={t.label}
         disabled={t.op === 'diagonals' && !a.showNeighbours}
         onclick={() => alignment.toggle(t.op)}
@@ -69,7 +75,7 @@
       </button>
     {/each}
     <span class="sep"></span>
-    <div class="seg" role="group" aria-label="Preset">
+    <div class="seg" role="group" aria-label="Patterns">
       {#each config.alignmentPresets as p (p.id)}
         <button
           aria-pressed={a.preset === p.id}
@@ -95,32 +101,43 @@
       onpick={(code) => alignment.setOthersPattern(code)}
     />
     <span class="grow"></span>
-    <button class="exit" onclick={() => alignment.exit()}>Exit</button>
+    <!-- Labelled, and no Esc: a stray one would restore the whole wall. -->
+    <button class="exit" onclick={() => alignment.exit()}
+      ><Icon name="close" size={18} />Exit alignment</button
+    >
   {/if}
 </div>
 
 <style>
   .banner {
+    height: 52px;
     display: flex;
+    flex: none;
     align-items: center;
-    gap: 6px;
-    min-height: 46px;
-    padding: 4px 10px 4px 14px;
-    background: var(--align);
-    color: var(--on-align);
+    gap: 8px;
+    padding: 0 12px 0 14px;
+    background: color-mix(in srgb, var(--align) 9%, var(--surface));
+    border-bottom: 1px solid color-mix(in srgb, var(--align) 40%, transparent);
     font-size: 13px;
   }
 
-  .mode {
+  .atile {
+    width: 30px;
+    height: 30px;
     display: flex;
-    margin-right: 2px;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9px;
+    background: color-mix(in srgb, var(--align) 18%, transparent);
+    color: var(--align);
   }
 
-  .busy {
-    width: 14px;
-    height: 14px;
-    border: 2px solid var(--on-align);
-    border-right-color: transparent;
+  .spin {
+    width: 18px;
+    height: 18px;
+    border: 2px solid color-mix(in srgb, var(--align) 30%, transparent);
+    border-top-color: var(--align);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
   }
@@ -131,73 +148,104 @@
     }
   }
 
+  .at {
+    margin-right: 4px;
+    font-size: 13.5px;
+    font-weight: 600;
+  }
+
+  .ro {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 13.5px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .ro b {
-    font-weight: 700;
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  .mono {
+    color: var(--text);
+    font-family: var(--mono);
+    letter-spacing: 0;
+    font-weight: 600;
+  }
+
+  .lockn {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 7px;
+    color: var(--faint);
+    font-size: 12.5px;
   }
 
   .nav {
     display: flex;
     align-items: center;
     gap: 2px;
-    min-width: 0;
+  }
+
+  button {
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+  }
+
+  .nb {
+    width: 34px;
+    height: 34px;
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px solid var(--line-strong);
+    border-radius: 50%;
+    background: none;
   }
 
   .pos {
-    min-width: 5ch;
+    min-width: 62px;
+    font-size: 13.5px;
+    font-weight: 600;
     font-variant-numeric: tabular-nums;
     text-align: center;
   }
 
   .sep {
     width: 1px;
-    height: 22px;
+    height: 24px;
+    flex: none;
     margin: 0 4px;
-    background: rgb(0 0 0 / 0.18);
+    background: color-mix(in srgb, var(--align) 30%, var(--line-strong));
   }
 
-  button {
-    border: 0;
-    background: none;
-    color: inherit;
-    font-size: 13px;
-    cursor: pointer;
-  }
-
-  .icon {
-    width: 32px;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 7px;
-  }
-
-  /* Hover only where there's a mouse (a touch screen keeps :hover after a
-     tap), and never over a toggle that's on — it keeps its dark pill. */
-  @media (hover: hover) {
-    .icon:hover,
-    .tog:not([aria-pressed='true']):hover:not(:disabled),
-    .seg button:not([aria-pressed='true']):hover,
-    .exit:hover {
-      background: rgb(0 0 0 / 0.1);
-    }
-  }
-
-  /* Off: plain text on the banner; on: a dark pill with orange text, like
-     the app — same weight, so turning one on doesn't widen it. */
+  /* Off: an outlined pill; on: primaryContainer, as the app's toolbar (owner,
+     2026-10-21). Same weight either way, so turning one on doesn't widen it. */
   .tog {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
     height: 32px;
-    padding: 0 10px;
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 7px;
+    padding: 0 12px 0 10px;
+    border: 1px solid var(--line-strong);
     border-radius: 999px;
-    font-weight: 550;
+    background: none;
+    color: var(--muted);
+    font-size: 12.5px;
+    font-weight: 600;
   }
 
   .tog[aria-pressed='true'] {
-    background: var(--on-align);
-    color: var(--align);
+    border-color: var(--accent);
+    background: var(--pc);
+    color: var(--on-pc);
   }
 
   .tog:disabled {
@@ -207,22 +255,40 @@
 
   .seg {
     display: flex;
+    flex: none;
     gap: 2px;
-    padding: 2px;
-    border-radius: 8px;
-    background: rgb(0 0 0 / 0.12);
+    padding: 3px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--hover);
   }
 
   .seg button {
-    height: 28px;
+    height: 26px;
     padding: 0 10px;
-    border-radius: 6px;
-    font-weight: 550;
+    border: 0;
+    border-radius: 7px;
+    background: none;
+    color: var(--faint);
+    font-size: 12.5px;
+    font-weight: 500;
   }
 
   .seg button[aria-pressed='true'] {
-    background: var(--on-align);
-    color: var(--align);
+    background: var(--card);
+    color: var(--text);
+    font-weight: 600;
+    box-shadow: var(--sh-1);
+  }
+
+  /* Hover only where there's a mouse, and never over what's on. */
+  @media (hover: hover) {
+    .nb:hover,
+    .tog:not([aria-pressed='true']):hover:not(:disabled),
+    .seg button:not([aria-pressed='true']):hover,
+    .exit:hover {
+      background: var(--hover);
+    }
   }
 
   .grow {
@@ -230,115 +296,65 @@
   }
 
   .exit {
-    height: 32px;
-    padding: 0 14px;
-    border-radius: 7px;
-    border: 1px solid rgb(0 0 0 / 0.3);
-    font-weight: 650;
-  }
-
-  /* Touch (a sideways tablet): everything at least 44 px, ◀ ▶ as wide,
-     visible buttons well apart from the count — they're pressed the most —
-     and Exit set off from the rest so it isn't hit by accident. */
-  .touch {
-    gap: 8px;
-    min-height: 60px;
-    padding: 6px 12px 6px 16px;
-    font-size: 14px;
-  }
-
-  .touch .nav {
-    gap: 8px;
-  }
-
-  /* The orange bar already says which mode this is; its room goes to ◀ ▶. */
-  .touch .mode {
-    display: none;
-  }
-
-  .touch .icon {
+    height: 34px;
+    display: inline-flex;
     flex: none;
-    width: 56px;
-    height: 48px;
+    align-items: center;
+    gap: 8px;
+    padding: 0 14px;
+    border: 1px solid var(--line-strong);
     border-radius: 10px;
-    background: rgb(0 0 0 / 0.1);
-  }
-
-  .touch .icon:active {
-    background: rgb(0 0 0 / 0.22);
-  }
-
-  .touch .pos {
-    min-width: 6ch;
-    font-size: 15px;
+    background: none;
+    font-size: 13px;
     font-weight: 600;
   }
 
-  .touch .sep {
-    height: 32px;
-    margin: 0 2px;
+  .exit :global(svg) {
+    color: var(--err);
+  }
+
+  /* Touch (a sideways tablet): a 60 px bar and 44 px controls. */
+  .touch {
+    height: 60px;
+  }
+
+  .touch .nb {
+    width: 44px;
+    height: 44px;
   }
 
   .touch .tog,
-  .touch .seg,
   .touch .exit {
-    flex: none;
+    height: 44px;
   }
 
   .touch .tog {
-    justify-content: center;
-    min-width: 48px;
-    height: 48px;
-    padding: 0 12px;
     border-radius: 12px;
-    font-size: 14px;
-  }
-
-  .touch .seg {
-    padding: 3px;
-    border-radius: 11px;
   }
 
   .touch .seg button {
-    height: 42px;
-    padding: 0 11px;
-    border-radius: 8px;
-    font-size: 14px;
-  }
-
-  .touch .exit {
-    height: 44px;
-    margin-left: 12px;
-    padding: 0 18px;
-    border-radius: 10px;
-    font-size: 14px;
+    height: 38px;
+    font-size: 13.5px;
   }
 
   .touch :global(.wrap.banner .trigger) {
     height: 44px;
-    padding: 0 10px;
-    border-radius: 10px;
-    font-size: 14px;
   }
 
-  .touch :global(.wrap.banner .sw.sm) {
-    width: 32px;
-    height: 21px;
-  }
-
-  /* Narrower screens (a sideways tablet): icon toggles, like the app's banner. */
+  /* Narrower screens: icon toggles, like the app's banner. */
   @media (max-width: 1279px) {
     .tl {
       display: none;
     }
 
     .tog {
-      padding: 0 8px;
+      width: 34px;
+      justify-content: center;
+      padding: 0;
     }
 
     .touch .tog {
-      width: 48px;
-      padding: 0;
+      width: 44px;
     }
   }
 </style>

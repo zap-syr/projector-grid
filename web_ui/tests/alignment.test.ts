@@ -61,7 +61,7 @@ describe('banner', () => {
     live.projectors = projectors;
     live.alignment = on;
     render(Banner, { config, operator: true });
-    expect(screen.getByText('2 / 3')).toBeTruthy();
+    expect(screen.getByText('2 of 3')).toBeTruthy();
     // The ring on the card names the focused projector; the banner doesn't.
     expect(screen.queryByText('PJ-02')).toBeNull();
     expect(screen.getByRole('button', { name: 'Neighbours' }).getAttribute('aria-pressed')).toBe(
@@ -71,7 +71,7 @@ describe('banner', () => {
       'true',
     );
     expect(screen.getByRole('button', { name: /Focused.*Cross Hatch$/ })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Exit' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Exit alignment' })).toBeTruthy();
   });
 
   test('a viewer gets one read-only line', () => {
@@ -79,7 +79,7 @@ describe('banner', () => {
     live.alignment = on;
     render(Banner, { config, operator: false });
     expect(screen.getByRole('region').textContent?.replace(/\s+/g, ' ')).toMatch(
-      /Alignment in progress · PJ-02 focused · 2 of 3 · Geometry — controlled by an operator/,
+      /Alignment, 192\.168\.0\.112 focused \(2 of 3\), Geometry patterns An operator controls it/,
     );
     expect(screen.queryByRole('button')).toBeNull();
   });
@@ -87,7 +87,7 @@ describe('banner', () => {
   test('entering or exiting shows the busy line', () => {
     live.alignment = { ...off, busy: true };
     render(Banner, { config, operator: true });
-    expect(screen.getByText(/reading \/ restoring projectors/)).toBeTruthy();
+    expect(screen.getByRole('region').textContent).toMatch(/Alignment, waiting for the projectors/);
   });
 });
 

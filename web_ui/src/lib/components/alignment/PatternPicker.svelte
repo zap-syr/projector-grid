@@ -138,22 +138,25 @@
     opacity: 0.6;
   }
 
-  /* On the orange banner. */
+  /* In the banner: a field with the label, the swatch and ▾. */
   .banner .trigger {
     height: 32px;
-    padding: 0 8px;
-    border-radius: 7px;
-    color: var(--on-align);
-    font-size: 13px;
+    gap: 8px;
+    padding: 0 6px 0 10px;
+    border: 1px solid var(--line-strong);
+    border-radius: 9px;
+    background: var(--field);
+    color: var(--muted);
+    font-size: 12.5px;
   }
 
   .banner .trigger:hover:not(:disabled),
   .banner .trigger[aria-expanded='true'] {
-    background: rgb(0 0 0 / 0.1);
+    border-color: var(--accent-line);
   }
 
-  .bl {
-    font-weight: 600;
+  .banner .trigger :global(svg) {
+    color: var(--faint);
   }
 
   .swt {

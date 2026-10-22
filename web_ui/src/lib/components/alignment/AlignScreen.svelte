@@ -1,14 +1,15 @@
 <!--
-  Alignment mode on touch layouts (ROADMAP §5, *Phone* — walking the room
-  with a phone): big ◀ ▶ with the focused name, Neighbours / Diagonals /
-  Show all, the wall mini-map, the preset switch and Focused / Others rows,
-  then the lens for the focused projector. A viewer sees the same screen
-  without the controls.
+  Alignment mode on touch layouts (shell canvas, *Phone Alignment screen…*):
+  a pinned step bar with big ◀ ▶ around the focused projector's IP, model and
+  place in the order; under it Neighbours / Diagonals / Show all and the
+  cards Wall, Patterns and Lens, then Exit alignment. A viewer gets the bar
+  without arrows, the wall and the patterns read-only.
 -->
 <script lang="ts">
   import type { AlignmentPresetId, Config } from '../../api/types';
   import { position, presetPatterns } from '../../logic/alignment';
   import { testPatternLabel } from '../../logic/cells';
+  import { patternSwatch } from '../../logic/patterns';
   import { alignment } from '../../state/alignment.svelte';
   import ControlPanel from '../control/ControlPanel.svelte';
   import Icon, { type IconName } from '../Icon.svelte';
@@ -23,6 +24,7 @@
   const presetLabel = $derived(
     config.alignmentPresets.find((p) => p.id === a?.preset)?.label ?? '',
   );
+  const focused = $derived(alignment.focused);
 
   const toggles: { op: 'neighbours' | 'diagonals' | 'showAll'; label: string; icon: IconName }[] = [
     { op: 'neighbours', label: 'Neighbours', icon: 'neighbours' },
@@ -33,19 +35,34 @@
     op === 'neighbours' ? a?.showNeighbours : op === 'diagonals' ? a?.includeDiagonals : a?.showAll;
 </script>
 
+{#snippet roRow(label: string, code: string | null)}
+  <div class="prow">
+    <span class="l">{label}</span>
+    <i style:background={code ? (patternSwatch(code) ?? 'var(--soft)') : 'var(--soft)'}></i>
+    <span class="n">{code ? patternLabel(code) : 'Same as focused'}</span>
+  </div>
+{/snippet}
+
 <div class="screen">
   {#if !a || alignment.busy}
-    <p class="busy"><span class="spin"></span>Reading / restoring projectors…</p>
+    <p class="busy"><span class="spin"></span>Alignment, waiting for the projectors</p>
   {:else}
-    <div class="nav">
+    <!-- Pinned: the list below scrolls, the next projector stays one tap away. -->
+    <div class="nav" class:ro={!operator}>
       {#if operator}
         <button class="step" aria-label="Previous projector" onclick={() => alignment.prev()}>
           <Icon name="left" size={28} />
         </button>
       {/if}
       <div class="who">
-        <b>{alignment.focused?.name ?? '—'}</b>
-        <span>{position(alignment.order, a.focusedId)} · {presetLabel}</span>
+        <span class="tag">Alignment</span>
+        <b>{focused?.ip ?? ''}</b>
+        <span
+          >{focused?.name ?? ''}, {position(alignment.order, a.focusedId).replace(
+            ' / ',
+            ' of ',
+          )}</span
+        >
       </div>
       {#if operator}
         <button class="step" aria-label="Next projector" onclick={() => alignment.next()}>
@@ -54,75 +71,86 @@
       {/if}
     </div>
 
-    {#if !operator}
-      <p class="ro">Controlled by an operator</p>
-    {:else}
-      <div class="toggles">
-        {#each toggles as t (t.op)}
-          <button
-            aria-pressed={on(t.op)}
-            disabled={t.op === 'diagonals' && !a.showNeighbours}
-            onclick={() => alignment.toggle(t.op)}
-          >
-            <Icon name={t.icon} size={18} />{t.label}
-          </button>
-        {/each}
-      </div>
-    {/if}
-
-    <WallMap {operator} {patternLabel} />
-
-    {#if operator}
-      <section>
-        <h6>Patterns</h6>
-        <div class="seg" role="group" aria-label="Preset">
-          {#each config.alignmentPresets as p (p.id)}
+    <div class="body">
+      {#if operator}
+        <div class="tgs">
+          {#each toggles as t (t.op)}
             <button
-              aria-pressed={a.preset === p.id}
-              onclick={() => alignment.setPreset(p.id as AlignmentPresetId)}>{p.label}</button
+              class="tog"
+              aria-pressed={on(t.op)}
+              disabled={t.op === 'diagonals' && !a.showNeighbours}
+              onclick={() => alignment.toggle(t.op)}
             >
+              <Icon name={t.icon} size={18} />{t.label}
+            </button>
           {/each}
         </div>
-        <PatternPicker
-          label="Focused"
-          variant="row"
-          value={a.focusedPattern}
-          patterns={presetPatterns(config, a)}
-          {patternLabel}
-          onpick={(code) => code && alignment.setFocusedPattern(code)}
-        />
-        <PatternPicker
-          label="Others"
-          variant="row"
-          value={a.othersPattern}
-          patterns={presetPatterns(config, a)}
-          same
-          {patternLabel}
-          onpick={(code) => alignment.setOthersPattern(code)}
-        />
+      {:else}
+        <p class="rol"><Icon name="lock" size={16} />An operator controls it</p>
+      {/if}
+
+      <section class="card">
+        <div class="ch"><Icon name="map" size={16} />Wall</div>
+        <WallMap {operator} {patternLabel} />
       </section>
 
-      <ControlPanel {config} embedded onclose={() => {}} />
+      <section class="card">
+        <div class="ch"><Icon name="grid" size={16} />Patterns</div>
+        {#if operator}
+          <div class="seg" role="group" aria-label="Patterns">
+            {#each config.alignmentPresets as p (p.id)}
+              <button
+                aria-pressed={a.preset === p.id}
+                onclick={() => alignment.setPreset(p.id as AlignmentPresetId)}>{p.label}</button
+              >
+            {/each}
+          </div>
+          <PatternPicker
+            label="Focused"
+            variant="row"
+            value={a.focusedPattern}
+            patterns={presetPatterns(config, a)}
+            {patternLabel}
+            onpick={(code) => code && alignment.setFocusedPattern(code)}
+          />
+          <PatternPicker
+            label="Others"
+            variant="row"
+            value={a.othersPattern}
+            patterns={presetPatterns(config, a)}
+            same
+            {patternLabel}
+            onpick={(code) => alignment.setOthersPattern(code)}
+          />
+        {:else}
+          <p class="preset">{presetLabel}</p>
+          {@render roRow('Focused', a.focusedPattern)}
+          {@render roRow('Others', a.othersPattern)}
+        {/if}
+      </section>
 
-      <button class="exit" onclick={() => alignment.exit()}>Exit alignment</button>
-    {/if}
+      {#if operator}
+        <section class="card">
+          <div class="ch">
+            <Icon name="lens" size={16} />Lens, <span class="mono">{focused?.ip ?? ''}</span>
+          </div>
+          <ControlPanel {config} embedded onclose={() => {}} />
+        </section>
+
+        <button class="exit" onclick={() => alignment.exit()}
+          ><Icon name="close" size={20} />Exit alignment</button
+        >
+      {/if}
+    </div>
   {/if}
 </div>
 
 <style>
   .screen {
     height: 100%;
-    overflow: auto;
     display: flex;
     flex-direction: column;
-    gap: 14px;
-    padding: 12px 14px calc(20px + env(safe-area-inset-bottom));
-    overscroll-behavior: contain;
-  }
-
-  /* The screen scrolls; its blocks keep their height instead of squeezing. */
-  .screen > :global(*) {
-    flex: none;
+    min-height: 0;
   }
 
   .busy {
@@ -135,10 +163,10 @@
   }
 
   .spin {
-    width: 16px;
-    height: 16px;
-    border: 2px solid var(--align);
-    border-right-color: transparent;
+    width: 18px;
+    height: 18px;
+    border: 2px solid color-mix(in srgb, var(--align) 30%, transparent);
+    border-top-color: var(--align);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
   }
@@ -149,42 +177,38 @@
     }
   }
 
-  /* Stays at the top while the lens below is scrolled to, so the next
-     projector is one tap away. The shadow covers the padding above it,
-     where scrolled content would otherwise show. */
+  /* The step bar, tinted with the mode's orange like the desktop banner. */
   .nav {
-    position: sticky;
-    top: 0;
-    /* Above the embedded Control panel's own layer (z-index 5). */
-    z-index: 6;
-    box-shadow:
-      0 -12px 0 var(--app),
-      0 6px 16px -8px rgb(0 0 0 / 0.35);
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 8px;
-    border-radius: var(--r-lg);
-    background: var(--align);
-    color: var(--on-align);
-  }
-
-  .step {
-    width: 64px;
-    height: 64px;
     flex: none;
     display: flex;
     align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: color-mix(in srgb, var(--align) 9%, var(--surface));
+    border-bottom: 1px solid color-mix(in srgb, var(--align) 40%, transparent);
+  }
+
+  .nav.ro {
+    padding: 14px 12px;
+  }
+
+  .step {
+    width: 56px;
+    height: 56px;
+    display: flex;
+    flex: none;
+    align-items: center;
     justify-content: center;
-    border: 0;
-    border-radius: 12px;
-    background: rgb(0 0 0 / 0.12);
-    color: inherit;
+    padding: 0;
+    border: 1px solid var(--line-strong);
+    border-radius: 16px;
+    background: var(--app);
+    color: var(--text);
     cursor: pointer;
   }
 
   .step:active {
-    background: rgb(0 0 0 / 0.22);
+    background: var(--hover);
   }
 
   .who {
@@ -193,126 +217,204 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 4px 0;
+    gap: 2px;
+    text-align: center;
+  }
+
+  .tag {
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    margin-bottom: 2px;
+    padding: 0 9px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--align) 16%, transparent);
+    color: var(--align);
+    font-size: 11.5px;
+    font-weight: 600;
   }
 
   .who b {
+    font-family: var(--mono);
+    letter-spacing: 0;
+    font-size: 17px;
+    font-weight: 600;
+  }
+
+  .who span:last-child {
     max-width: 100%;
     overflow: hidden;
-    font-size: 22px;
-    font-weight: 750;
+    color: var(--muted);
+    font-size: 12.5px;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .who span {
-    font-size: 13.5px;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .ro {
-    margin: -4px 0 0;
-    text-align: center;
-    color: var(--muted);
-    font-size: 13px;
-  }
-
-  .toggles {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-  }
-
-  .toggles button {
+  .body {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
     display: flex;
     flex-direction: column;
+    gap: 10px;
+    padding: 12px 12px calc(20px + env(safe-area-inset-bottom));
+    overscroll-behavior: contain;
+  }
+
+  /* The body scrolls; its blocks keep their height instead of squeezing. */
+  .body > :global(*) {
+    flex: none;
+  }
+
+  .tgs {
+    display: flex;
+    gap: 6px;
+  }
+
+  .tog {
+    flex: 1;
+    height: 44px;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 4px;
-    height: 58px;
+    gap: 6px;
+    padding: 0 6px;
     border: 1px solid var(--line-strong);
-    border-radius: var(--r);
-    background: var(--surface);
+    border-radius: 12px;
+    background: none;
     color: var(--muted);
     font-size: 13px;
-    font-weight: 550;
+    font-weight: 600;
     cursor: pointer;
   }
 
-  .toggles button[aria-pressed='true'] {
-    border-color: var(--align);
-    background: var(--align-soft);
-    color: var(--text);
-    box-shadow: 0 0 0 1px var(--align);
+  .tog[aria-pressed='true'] {
+    border-color: var(--accent);
+    background: var(--pc);
+    color: var(--on-pc);
   }
 
-  .toggles button:disabled {
+  .tog:disabled {
     opacity: 0.45;
     cursor: default;
   }
 
-  section {
+  .rol {
     display: flex;
-    flex-direction: column;
-    gap: 10px;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin: 2px 0;
+    color: var(--faint);
+    font-size: 13px;
   }
 
-  h6 {
+  .card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 12px 12px;
+    border: 1px solid var(--line-strong);
+    border-radius: 14px;
+    background: var(--card);
+  }
+
+  .ch {
+    height: 28px;
     display: flex;
     align-items: center;
     gap: 8px;
-    margin: 4px 0 0;
-    font-size: 11.5px;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--align);
+    color: var(--muted);
+    font-size: 12.5px;
+    font-weight: 600;
   }
 
-  h6::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: color-mix(in srgb, var(--align) 40%, transparent);
+  .ch :global(svg) {
+    color: var(--accent);
+  }
+
+  .mono {
+    font-family: var(--mono);
+    letter-spacing: 0;
+    font-weight: 500;
   }
 
   .seg {
-    display: grid;
-    grid-auto-flow: column;
-    grid-auto-columns: 1fr;
+    display: flex;
     gap: 2px;
+    margin-bottom: 4px;
     padding: 3px;
-    border-radius: 9px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
     background: var(--hover);
   }
 
   .seg button {
-    height: 40px;
+    flex: 1;
+    height: 38px;
     border: 0;
-    border-radius: 7px;
+    border-radius: 9px;
     background: none;
-    color: var(--muted);
-    font-size: 14px;
-    font-weight: 550;
+    color: var(--faint);
+    font-size: 13.5px;
+    font-weight: 500;
     cursor: pointer;
   }
 
   .seg button[aria-pressed='true'] {
-    background: var(--surface);
+    background: var(--card);
     color: var(--text);
+    font-weight: 600;
     box-shadow: var(--sh-1);
   }
 
+  .preset {
+    margin: 0 0 4px;
+    color: var(--muted);
+    font-size: 13.5px;
+  }
+
+  .prow {
+    height: 52px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-top: 1px solid var(--line);
+    font-size: 14px;
+  }
+
+  .prow .l {
+    width: 70px;
+    color: var(--muted);
+  }
+
+  .prow i {
+    width: 30px;
+    height: 19px;
+    border-radius: 3px;
+    box-shadow: inset 0 0 0 1px var(--line-strong);
+  }
+
+  .prow .n {
+    font-weight: 500;
+  }
+
   .exit {
-    flex: none;
-    height: 50px;
-    margin-top: 6px;
-    border: 1px solid var(--align);
-    border-radius: var(--r);
-    background: var(--surface);
-    color: var(--text);
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 4px;
+    border: 1px solid var(--line-strong);
+    border-radius: 12px;
+    background: none;
     font-size: 15px;
-    font-weight: 650;
+    font-weight: 600;
     cursor: pointer;
+  }
+
+  .exit :global(svg) {
+    color: var(--err);
   }
 </style>
