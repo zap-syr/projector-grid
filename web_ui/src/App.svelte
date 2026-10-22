@@ -34,6 +34,8 @@
   import { selection } from './lib/state/selection.svelte';
   import { session } from './lib/state/session.svelte';
   import { tableLayout } from './lib/state/tableLayout.svelte';
+  // Applies the stored theme before the first paint of the page.
+  import './lib/state/theme.svelte';
 
   void session.refresh();
 

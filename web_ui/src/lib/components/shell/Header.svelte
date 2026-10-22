@@ -1,43 +1,42 @@
+<!--
+  The page's header (shell canvas, *Desktop header…*, *Phone header…*).
+  Desktop and tablets: logo, project over *Projector Grid*, the Live pill;
+  the operator's Alignment toggle and Refresh, then the role pill whose menu
+  holds Lock control, Theme and Sign out. A viewer gets *Unlock control*
+  (while control is allowed) and a menu with Theme and Sign out. Phones:
+  name over Live, the Alignment icon or the viewer's Unlock icon, the bell
+  and ⋮ with the rest.
+-->
 <script lang="ts">
   import { api, ApiError } from '../../api/client';
-  import { control } from '../../state/control.svelte';
+  import { alerts } from '../../state/alerts.svelte';
   import { alignment } from '../../state/alignment.svelte';
+  import { control } from '../../state/control.svelte';
+  import { device } from '../../state/device.svelte';
   import { live } from '../../state/live.svelte';
   import { session } from '../../state/session.svelte';
-  import { device } from '../../state/device.svelte';
-  import { alerts } from '../../state/alerts.svelte';
+  import { theme, type ThemeChoice } from '../../state/theme.svelte';
   import AlertBell from '../alerts/AlertBell.svelte';
-  import Icon from '../Icon.svelte';
+  import Icon, { type IconName } from '../Icon.svelte';
   import AppLogo from './AppLogo.svelte';
   import UnlockDialog from './UnlockDialog.svelte';
 
   let { operator }: { operator: boolean } = $props();
 
   let unlocking = $state(false);
+  let menuOpen = $state(false);
+  let menuWrap = $state<HTMLElement>();
   /** A refresh request is out: the button spins and ignores more presses. */
   let refreshing = $state(false);
-  /** Briefly green after a finished poll, in place of a toast. */
+  /** Briefly a green check after a finished poll, in place of a toast. */
   let refreshed = $state(false);
   let refreshedTimer: ReturnType<typeof setTimeout> | undefined;
 
-  async function refresh() {
-    clearTimeout(refreshedTimer);
-    refreshed = false;
-    refreshing = true;
-    try {
-      await api.refresh();
-      refreshed = true;
-      refreshedTimer = setTimeout(() => (refreshed = false), 1500);
-    } catch (e) {
-      if (!(e instanceof ApiError)) throw e;
-      // 403/404: control was locked or switched off meanwhile.
-      control.notify({ text: 'Not refreshed, control is locked', ok: false });
-    } finally {
-      refreshing = false;
-    }
-  }
-  /** Phones and portrait tablets: short labels, icons for the rest. */
-  const compact = $derived(device.cardsOnly);
+  /** A phone either way up: the compact bar with ⋮. */
+  const phone = $derived(device.phone || device.short);
+  /** Touch layouts without the rail open the alerts from the header. */
+  const bell = $derived(device.control !== 'side');
+  const role = $derived(session.role === 'operator' ? 'Operator' : 'Viewer');
 
   const liveText = $derived(
     live.connection === 'live'
@@ -46,72 +45,183 @@
         ? 'Reconnecting'
         : 'Connecting',
   );
-  /** Touch layouts open the alerts from the header; others have the rail. */
-  const bell = $derived(device.control !== 'side');
+
+  const THEMES: { value: ThemeChoice; icon: IconName; label: string }[] = [
+    { value: 'system', icon: 'monitor', label: 'Same as the device' },
+    { value: 'light', icon: 'sun', label: 'Light' },
+    { value: 'dark', icon: 'moon', label: 'Dark' },
+  ];
+
+  async function refresh(fromMenu = false) {
+    clearTimeout(refreshedTimer);
+    refreshed = false;
+    refreshing = true;
+    try {
+      await api.refresh();
+      // The phone's menu closes on the tap, so it confirms with a toast.
+      if (fromMenu) control.notify({ text: 'Status refreshed', ok: true });
+      else {
+        refreshed = true;
+        refreshedTimer = setTimeout(() => (refreshed = false), 1500);
+      }
+    } catch (e) {
+      if (!(e instanceof ApiError)) throw e;
+      // 403/404: control was locked or switched off meanwhile.
+      control.notify({ text: 'Not refreshed, control is locked', ok: false });
+    } finally {
+      refreshing = false;
+    }
+  }
+
+  function run(action: () => void) {
+    menuOpen = false;
+    action();
+  }
 </script>
 
-<header
-  class="hdr"
-  class:phone={device.phone}
-  class:short={device.short}
-  class:compact
-  class:op={operator}
-  class:touch={device.touch}
->
-  <AppLogo size={32} />
+<svelte:window
+  onpointerdown={(e) => {
+    if (menuOpen && !menuWrap?.contains(e.target as Node)) menuOpen = false;
+  }}
+  onkeydowncapture={(e) => {
+    // Before the toolbar's Esc, which would clear the selection.
+    if (menuOpen && e.key === 'Escape') {
+      e.preventDefault();
+      menuOpen = false;
+    }
+  }}
+/>
+
+{#snippet menu()}
+  <div class="menu" role="menu" aria-label={phone ? 'More' : 'Session'}>
+    <div class="mh">
+      <span class="tile"><Icon name={operator ? 'unlock' : 'lock'} size={16} /></span>
+      <div>
+        <b>{role}</b>
+        <small>{operator ? 'Control unlocked in this browser' : 'View only'}</small>
+      </div>
+    </div>
+    {#if phone && operator}
+      <button
+        class="mi"
+        role="menuitem"
+        disabled={refreshing}
+        onclick={() => run(() => refresh(true))}
+        ><Icon name="refresh" size={18} />Refresh status</button
+      >
+    {/if}
+    {#if operator}
+      <button class="mi" role="menuitem" onclick={() => run(() => session.lock())}
+        ><Icon name="lock" size={18} />Lock control</button
+      >
+    {/if}
+    <div class="hr"></div>
+    <div class="trow">
+      <span class="tl"><Icon name="contrast" size={18} />Theme</span>
+      <div class="seg" role="radiogroup" aria-label="Theme">
+        {#each THEMES as t (t.value)}
+          <button
+            role="radio"
+            aria-checked={theme.value === t.value}
+            aria-label={t.label}
+            title={t.label}
+            onclick={() => theme.set(t.value)}><Icon name={t.icon} size={phone ? 18 : 16} /></button
+          >
+        {/each}
+      </div>
+    </div>
+    <div class="hr"></div>
+    <button class="mi" role="menuitem" onclick={() => run(() => session.logout())}
+      ><Icon name="logout" size={18} />Sign out</button
+    >
+  </div>
+{/snippet}
+
+<header class="hdr" class:phone class:touch={device.touch}>
+  <AppLogo size={30} />
   <div class="proj">
     <b>{session.projectName}</b>
-    <span>Projector Grid</span>
+    {#if phone}
+      <span class="lv" class:off={live.connection !== 'live'}><i></i>{liveText}</span>
+    {:else}
+      <span>Projector Grid</span>
+    {/if}
   </div>
-  <div class="grow"></div>
+  {#if !phone}
+    <span class="live" class:off={live.connection !== 'live'}><i></i>{liveText}</span>
+  {/if}
+  <span class="grow"></span>
+
   {#if operator}
     <!-- The app's Alignment mode toggle: the same session the app's banner drives. -->
     <button
-      class="align"
+      class="tool"
+      class:ic={phone}
       aria-pressed={alignment.active}
+      aria-label="Alignment"
       disabled={alignment.busy}
       title={alignment.active ? 'Exit Alignment mode' : 'Alignment mode'}
       onclick={() => (alignment.active ? alignment.exit() : alignment.enter())}
     >
-      <Icon name="target" size={16} /><span class="at">Alignment</span>
+      <Icon name="alignment" size={phone ? 22 : 18} />{#if !phone}Alignment{/if}
     </button>
-    <!-- The app's F5: polls every projector now, not just the selection. On
-         an upright phone it moves to the end of the filter row. -->
+    {#if !phone}
+      <!-- The app's F5: polls every projector now, not just the selection. -->
+      <button
+        class="tool ic refresh"
+        class:spin={refreshing}
+        class:done={refreshed}
+        disabled={refreshing}
+        aria-label={refreshed ? 'Status refreshed' : 'Refresh status'}
+        title={refreshing ? 'Polling projectors…' : 'Refresh status of all projectors'}
+        onclick={() => refresh()}
+      >
+        <Icon name={refreshed ? 'checkmark' : 'refresh'} size={18} />
+      </button>
+    {/if}
+  {:else if session.controlAllowed}
+    <!-- The viewer's main action: a tonal button, an icon on a phone. -->
     <button
-      class="refresh"
-      class:spin={refreshing}
-      class:done={refreshed}
-      disabled={refreshing}
-      aria-label={refreshed ? 'Status refreshed' : 'Refresh status'}
-      title={refreshing ? 'Polling projectors…' : 'Refresh status of all projectors'}
-      onclick={refresh}
+      class="unl"
+      class:ic={phone}
+      aria-label="Unlock control"
+      title={phone ? 'Unlock control' : undefined}
+      onclick={() => (unlocking = true)}
     >
-      <Icon name={refreshed ? 'check' : 'refresh'} size={16} />
+      <Icon name="unlock" size={phone ? 22 : 18} />{#if !phone}Unlock control{/if}
     </button>
   {/if}
-  <span class="live" class:off={live.connection !== 'live'} title={liveText}>
-    <span class="dot"></span>
-    <span class="lt">{liveText}</span>
-  </span>
+
   {#if bell}
     <AlertBell pressed={alerts.sheet} touch={device.touch} onclick={() => (alerts.sheet = true)} />
   {/if}
-  <div class="who" class:op={session.role === 'operator'}>
-    <span class="role" title={session.role === 'operator' ? 'Operator' : 'Viewer'}>
-      <Icon name={session.role === 'operator' ? 'unlock' : 'lock'} size={13} />
-      <span class="rt">{session.role === 'operator' ? 'Operator' : 'Viewer'}</span>
-    </span>
-    {#if session.role === 'operator'}
-      <button class="small" onclick={() => session.lock()}>Lock</button>
-    {:else if session.controlAllowed}
-      <button class="small" onclick={() => (unlocking = true)}
-        >{compact ? 'Unlock' : 'Unlock control'}</button
+
+  <div class="mw" bind:this={menuWrap}>
+    {#if phone}
+      <button
+        class="tool ic"
+        class:open={menuOpen}
+        aria-label="More"
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        onclick={() => (menuOpen = !menuOpen)}><Icon name="more" size={22} /></button
       >
+    {:else}
+      <span class="vsep"></span>
+      <button
+        class="role"
+        class:open={menuOpen}
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        onclick={() => (menuOpen = !menuOpen)}
+      >
+        <Icon name={operator ? 'unlock' : 'lock'} size={16} />{role}<span class="cv"
+          ><Icon name={menuOpen ? 'up' : 'down'} size={15} /></span
+        >
+      </button>
     {/if}
+    {#if menuOpen}{@render menu()}{/if}
   </div>
-  <button class="quiet" aria-label="Sign out" title="Sign out" onclick={() => session.logout()}>
-    {#if compact}<Icon name="logout" size={18} />{:else}Sign out{/if}
-  </button>
 </header>
 
 {#if unlocking}
@@ -120,112 +230,147 @@
 
 <style>
   .hdr {
+    height: 56px;
     display: flex;
     align-items: center;
-    flex-wrap: wrap;
-    gap: 8px 14px;
-    min-height: 60px;
-    padding: 10px 16px;
+    gap: 10px;
+    padding: 0 12px 0 16px;
     background: var(--surface);
     border-bottom: 1px solid var(--line);
   }
 
-  /* Phone: project, live, refresh, bell, role and sign-out in one row. */
+  /* Touch: a 60 px bar with 44 px controls. */
+  .hdr.touch {
+    height: 60px;
+  }
+
   .hdr.phone {
-    flex-wrap: wrap;
-    gap: 8px;
-    min-height: 0;
-    padding: 8px 12px;
+    gap: 4px;
+    padding: 0 6px 0 14px;
+  }
+
+  .proj {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    line-height: 1.25;
   }
 
   .phone .proj {
     flex: 1;
-    min-width: 0;
+    margin-left: 6px;
   }
 
-  /* Phone held sideways: everything in one short row. */
-  .hdr.compact:not(.phone) {
-    flex-wrap: nowrap;
-    min-height: 0;
-    padding: 6px 12px;
+  .proj b {
+    overflow: hidden;
+    font-size: 15px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
-  .compact:not(.phone) .proj {
-    min-width: 0;
+  .proj span {
+    color: var(--faint);
+    font-size: 11.5px;
+    font-weight: 500;
   }
 
-  .phone .grow,
-  .compact .proj span,
-  .compact .lt,
-  .compact .rt,
-  .compact .at {
+  .grow {
+    flex: 1;
+  }
+
+  .phone .grow {
     display: none;
   }
 
-  .align {
+  /* Live, amber while the stream reconnects. */
+  .live {
+    height: 24px;
     display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    height: 34px;
-    padding: 0 12px;
-    border: 1px solid var(--line-strong);
-    border-radius: 9px;
-    background: var(--surface);
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-  }
-
-  .align:hover:not(:disabled) {
-    border-color: var(--align);
-  }
-
-  .align[aria-pressed='true'] {
-    border-color: var(--align);
-    background: var(--align);
-    color: var(--on-align);
-  }
-
-  .align:disabled {
-    opacity: 0.6;
-    cursor: progress;
-  }
-
-  .compact .align {
-    width: 36px;
-    padding: 0;
-    justify-content: center;
-  }
-
-  .refresh {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
     flex: none;
-    width: 36px;
-    height: 34px;
-    border: 1px solid var(--line-strong);
-    border-radius: 9px;
-    background: var(--surface);
+    align-items: center;
+    gap: 6px;
+    margin-left: 6px;
+    padding: 0 10px;
+    border-radius: 999px;
+    background: var(--ok-soft);
+    color: var(--ok);
+    font-size: 11.5px;
+    font-weight: 600;
+  }
+
+  .live.off {
+    background: var(--warn-soft);
+    color: var(--warn);
+  }
+
+  .live i,
+  .lv i {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  .proj .lv {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--ok);
+    font-weight: 600;
+  }
+
+  .proj .lv.off {
+    color: var(--warn);
+  }
+
+  .tool {
+    height: 36px;
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px 0 10px;
+    border: 0;
+    border-radius: 10px;
+    background: none;
+    color: var(--muted);
+    font-size: 13.5px;
+    font-weight: 500;
+    white-space: nowrap;
     cursor: pointer;
-    transition:
-      background-color 0.3s,
-      border-color 0.3s,
-      color 0.3s;
   }
 
-  .refresh:hover:not(:disabled) {
-    background: var(--hover);
+  .tool.ic {
+    width: 38px;
+    justify-content: center;
+    padding: 0;
   }
 
-  .refresh:disabled {
+  @media (hover: hover) {
+    .tool:hover:not(:disabled) {
+      background: var(--hover);
+      color: var(--text);
+    }
+  }
+
+  /* A pressed toggle in primaryContainer, as the app's toolbar. */
+  .tool[aria-pressed='true'],
+  .tool[aria-pressed='true']:hover {
+    background: var(--pc);
+    color: var(--on-pc);
+  }
+
+  .tool.open {
+    background: var(--soft);
+    color: var(--text);
+  }
+
+  .tool:disabled {
     cursor: progress;
   }
 
-  .refresh.done,
-  .refresh.done:hover {
-    background: var(--ok-soft);
-    border-color: var(--ok);
+  .refresh.done :global(svg) {
     color: var(--ok);
   }
 
@@ -246,144 +391,239 @@
     }
   }
 
-  .phone .refresh {
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
-  }
-
-  .compact .proj b {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .compact .live {
-    padding: 0 9px;
-  }
-
-  .compact .who {
-    padding-left: 8px;
-  }
-
-  .proj {
-    display: flex;
-    flex-direction: column;
-    line-height: 1.2;
-  }
-
-  .proj b {
-    font-size: 15px;
-    font-weight: 650;
-    letter-spacing: -0.01em;
-  }
-
-  .proj span {
-    font-size: 12px;
-    color: var(--faint);
-  }
-
-  /* Lock / Unlock already says which role this is; the name gets the room. */
-  .phone .who:has(button),
-  .short .who:has(button) {
-    padding-left: 4px;
-  }
-
-  .phone .who:has(button) .role,
-  .short .who:has(button) .role {
-    display: none;
-  }
-
-  .grow {
-    flex: 1;
-  }
-
-  .live {
+  .unl {
+    height: 34px;
     display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    height: 28px;
-    padding: 0 10px;
-    border-radius: 999px;
-    background: var(--ok-soft);
-    color: var(--ok);
-    font-size: 12.5px;
-    font-weight: 600;
-  }
-
-  .live.off {
-    background: var(--warn-soft);
-    color: var(--warn);
-  }
-
-  .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: currentColor;
-  }
-
-  .who {
-    display: flex;
+    flex: none;
     align-items: center;
     gap: 8px;
-    height: 34px;
-    padding: 0 4px 0 10px;
-    border-radius: 9px;
-    border: 1px solid var(--line);
+    padding: 0 14px;
+    border: 0;
+    border-radius: 10px;
+    background: var(--pc);
+    color: var(--on-pc);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
   }
 
-  .who.op {
-    border-color: var(--accent-line);
-    background: var(--accent-soft);
+  .unl.ic {
+    width: 44px;
+    height: 44px;
+    justify-content: center;
+    padding: 0;
+    border-radius: 12px;
+  }
+
+  .vsep {
+    width: 1px;
+    height: 24px;
+    flex: none;
+    margin: 0 4px;
+    background: var(--line-strong);
+  }
+
+  .mw {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
   }
 
   .role {
-    display: flex;
+    height: 34px;
+    display: inline-flex;
     align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    font-weight: 650;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
+    gap: 7px;
+    padding: 0 8px 0 10px;
+    border: 1px solid var(--line-strong);
+    border-radius: 999px;
+    background: none;
     color: var(--muted);
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
   }
 
-  .who.op .role {
+  .role.open {
+    background: var(--soft);
+    color: var(--text);
+  }
+
+  .cv {
+    display: flex;
+    color: var(--faint);
+  }
+
+  /* Touch: 44 px controls in the 60 px bar. */
+  .touch .tool,
+  .touch .unl {
+    height: 44px;
+  }
+
+  .touch .tool.ic {
+    width: 44px;
+    border-radius: 12px;
+  }
+
+  .touch .role {
+    height: 44px;
+    padding: 0 10px 0 12px;
+  }
+
+  /* The role menu, under the pill; on a phone under ⋮. */
+  .menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 40;
+    width: 280px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px;
+    border: 1px solid var(--line-strong);
+    border-radius: 12px;
+    background: var(--menu);
+    box-shadow: var(--sh-3);
+  }
+
+  .phone .menu {
+    width: 272px;
+  }
+
+  .mh {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 8px 10px;
+  }
+
+  .mh .tile {
+    width: 30px;
+    height: 30px;
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9px;
+    background: var(--soft);
     color: var(--accent);
   }
 
-  .small {
-    height: 26px;
-    padding: 0 10px;
-    border-radius: 6px;
-    border: 1px solid var(--line-strong);
-    background: var(--surface);
+  .mh b {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .mh small {
+    display: block;
+    color: var(--muted);
     font-size: 12.5px;
-    font-weight: 550;
+  }
+
+  .mi {
+    width: 100%;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 8px;
+    background: none;
+    color: var(--text);
+    font-size: 13.5px;
+    text-align: left;
     cursor: pointer;
   }
 
-  .small:hover {
+  .mi :global(svg) {
+    color: var(--muted);
+  }
+
+  @media (hover: hover) {
+    .mi:hover {
+      background: var(--hover);
+    }
+  }
+
+  .mi:disabled {
+    color: var(--disabled);
+    cursor: progress;
+  }
+
+  .hr {
+    height: 1px;
+    margin: 4px 2px;
+    background: var(--line);
+  }
+
+  .trow {
+    height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 6px 4px 10px;
+  }
+
+  .tl {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13.5px;
+  }
+
+  .tl :global(svg) {
+    color: var(--muted);
+  }
+
+  .seg {
+    display: flex;
+    gap: 2px;
+    padding: 3px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
     background: var(--hover);
   }
 
-  .quiet {
+  .seg button {
+    width: 36px;
+    height: 28px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    height: 32px;
-    padding: 0 10px;
+    padding: 0;
     border: 0;
-    border-radius: var(--r-sm);
+    border-radius: 7px;
     background: none;
-    color: var(--muted);
-    font-weight: 550;
+    color: var(--faint);
     cursor: pointer;
   }
 
-  .quiet:hover {
-    background: var(--hover);
+  .seg button[aria-checked='true'] {
+    background: var(--card);
     color: var(--text);
+    box-shadow: var(--sh-1);
+  }
+
+  /* Phone: 44 px menu rows and a larger theme switch. */
+  .phone .mi {
+    height: 44px;
+    gap: 12px;
+    font-size: 14px;
+  }
+
+  .phone .trow {
+    height: 52px;
+    padding: 4px 4px 4px 10px;
+  }
+
+  .phone .seg button {
+    width: 42px;
+    height: 38px;
+    border-radius: 9px;
   }
 </style>
