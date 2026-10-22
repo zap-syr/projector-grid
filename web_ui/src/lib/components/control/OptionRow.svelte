@@ -8,13 +8,16 @@
     label,
     showLabel = false,
     options,
-    disabled,
+    disabled = false,
+    action = 'Set',
     onset,
   }: {
     label: string;
     showLabel?: boolean;
     options: readonly { code: string; label: string }[];
-    disabled: boolean;
+    disabled?: boolean;
+    /** The send button's word (*Set*, *Show*). */
+    action?: string;
     onset: (code: string) => void;
   } = $props();
 
@@ -32,7 +35,7 @@
         <option value={o.code}>{o.label}</option>
       {/each}
     </select>
-    <button class="btn" {disabled} onclick={() => onset(value)}>Set</button>
+    <button class="btn" {disabled} onclick={() => onset(value)}>{action}</button>
   </span>
 </label>
 
@@ -55,31 +58,33 @@
     gap: 8px;
   }
 
+  /* The app's control bar: 36 px, the send button tonal so it stands out. */
   select {
-    height: 34px;
+    height: 36px;
     min-width: 0;
     padding: 0 10px;
-    border-radius: var(--r-sm);
+    border-radius: 10px;
     border: 1px solid var(--line-strong);
-    background: var(--surface);
+    background: var(--field);
     color: var(--text);
     font: inherit;
     font-size: 13.5px;
   }
 
   .btn {
-    height: 34px;
-    padding: 0 14px;
-    border-radius: var(--r-sm);
-    border: 1px solid var(--line-strong);
-    background: var(--surface);
-    font-size: 13.5px;
-    font-weight: 550;
+    height: 36px;
+    padding: 0 16px;
+    border-radius: 10px;
+    border: 0;
+    background: var(--pc);
+    color: var(--on-pc);
+    font-size: 13px;
+    font-weight: 600;
     cursor: pointer;
   }
 
   .btn:hover {
-    background: var(--hover);
+    background: color-mix(in srgb, var(--on-pc) 10%, var(--pc));
   }
 
   .btn:disabled {

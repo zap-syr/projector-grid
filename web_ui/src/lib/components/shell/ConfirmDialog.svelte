@@ -23,11 +23,16 @@
 {#if p}
   <div class="overlay">
     <div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title">
-      <span class="ic" class:danger={p.confirmation.danger}>
-        <Icon name={p.confirmation.danger ? 'error' : 'check'} size={20} />
-      </span>
-      <h4 id="confirm-title">{p.confirmation.title}</h4>
-      <p>{p.confirmation.question}</p>
+      <!-- The app's ConfirmDialog: round mark, the question as the title, no title bar. -->
+      <div class="top">
+        <span class="ic" class:danger={p.confirmation.danger}>
+          <Icon name={p.confirmation.danger ? 'error' : 'check'} size={20} />
+        </span>
+        <div class="txt">
+          <h4 id="confirm-title">{p.confirmation.question}</h4>
+          <p>{p.confirmation.title}</p>
+        </div>
+      </div>
       {#if p.confirmation.hidden.length > 0}
         {@const n = p.confirmation.hidden.length}
         <div class="hidden">
@@ -36,7 +41,7 @@
         </div>
       {/if}
       <div class="row">
-        <button class="btn" onclick={() => control.cancel()}>Cancel</button>
+        <button class="btn text" onclick={() => control.cancel()}>Cancel</button>
         <button
           class="btn primary"
           class:danger={p.confirmation.danger}
@@ -62,26 +67,33 @@
 
   .dialog {
     width: 100%;
-    max-width: 400px;
+    max-width: 440px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    padding: 22px;
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: 16px;
+    gap: 14px;
+    padding: 22px 22px 16px;
+    background: var(--bar);
+    border: 1px solid var(--line-strong);
+    border-radius: 20px;
     box-shadow: var(--sh-3);
+  }
+
+  .top {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
   }
 
   .ic {
     width: 40px;
     height: 40px;
+    flex: none;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 11px;
-    background: var(--accent-soft);
-    color: var(--accent);
+    border-radius: 50%;
+    background: var(--pc);
+    color: var(--on-pc);
   }
 
   .ic.danger {
@@ -89,16 +101,25 @@
     color: var(--err);
   }
 
+  .txt {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+    padding-top: 2px;
+  }
+
   h4 {
     margin: 0;
-    font-size: 17px;
-    font-weight: 650;
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 1.3;
   }
 
   p {
     margin: 0;
     color: var(--muted);
-    font-size: 13.5px;
+    font-size: 12.5px;
   }
 
   .row {
@@ -109,29 +130,33 @@
   }
 
   .btn {
-    height: 36px;
-    padding: 0 14px;
-    border-radius: var(--r-sm);
-    border: 1px solid var(--line-strong);
-    background: var(--surface);
-    font-weight: 550;
+    height: 40px;
+    padding: 0 20px;
+    border: 0;
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 600;
     cursor: pointer;
   }
 
-  .btn:hover {
-    background: var(--hover);
+  .btn.text {
+    background: none;
+    color: var(--accent);
+  }
+
+  .btn.text:hover {
+    background: var(--accent-soft);
   }
 
   .btn.primary {
     background: var(--accent);
-    border-color: var(--accent);
     color: var(--on-accent);
   }
 
+  /* Destructive: filled in the error colour, as the app's confirm. */
   .btn.primary.danger {
     background: var(--err);
-    border-color: var(--err);
-    color: #fff;
+    color: var(--on-err);
   }
 
   .hidden {

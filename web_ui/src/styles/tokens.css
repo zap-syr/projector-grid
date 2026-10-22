@@ -30,6 +30,7 @@
   --ok: #1e7b3a;
   --warn: #8a5300;
   --err: #ba1a1a;
+  --on-err: #ffffff;
   /* Alignment mode (AppTheme.alignmentAccent / alignmentNeighbour). */
   --align: #e8710a;
   --align-2: #f7b77e;
@@ -64,6 +65,7 @@
     --ok: #6dd58c;
     --warn: #f5b544;
     --err: #ffb4ab;
+    --on-err: #690005;
     --align: #ff9e40;
     --align-2: #ffddb3;
     --scrim: rgba(0, 0, 0, 0.6);
@@ -92,6 +94,7 @@
   --ok: #6dd58c;
   --warn: #f5b544;
   --err: #ffb4ab;
+  --on-err: #690005;
   --align: #ff9e40;
   --align-2: #ffddb3;
   --scrim: rgba(0, 0, 0, 0.6);
