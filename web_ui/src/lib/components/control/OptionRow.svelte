@@ -1,7 +1,9 @@
 <!--
   A dropdown + Set, like the control bar's _DropdownRow (input, lens
-  calibration, lens type); [showLabel] puts the label above, as the app does
-  for the rows that share a block.
+  calibration, lens type, test pattern); [showLabel] puts the label above, as
+  the app does for the rows that share a block. The list itself is the
+  system's; with [swatch] the closed field shows the chosen pattern's
+  thumbnail beside its name.
 -->
 <script lang="ts">
   let {
@@ -10,6 +12,8 @@
     options,
     disabled = false,
     action = 'Set',
+    swatch,
+    touch = false,
     onset,
   }: {
     label: string;
@@ -18,6 +22,10 @@
     disabled?: boolean;
     /** The send button's word (*Set*, *Show*). */
     action?: string;
+    /** A test pattern's thumbnail colour for the closed field. */
+    swatch?: (code: string) => string | null;
+    /** 44 px for a finger. */
+    touch?: boolean;
     onset: (code: string) => void;
   } = $props();
 
@@ -25,16 +33,21 @@
   let value = $state(options[0]?.code ?? '');
 </script>
 
-<label class="wrap">
+<label class="wrap" class:touch>
   {#if showLabel}
     <span class="cap">{label}</span>
   {/if}
   <span class="row">
-    <select aria-label={label} bind:value>
-      {#each options as o (o.code)}
-        <option value={o.code}>{o.label}</option>
-      {/each}
-    </select>
+    <span class="field" class:sw={swatch !== undefined}>
+      {#if swatch}
+        <i style:background={swatch(value) ?? 'var(--soft)'}></i>
+      {/if}
+      <select aria-label={label} bind:value>
+        {#each options as o (o.code)}
+          <option value={o.code}>{o.label}</option>
+        {/each}
+      </select>
+    </span>
     <button class="btn" {disabled} onclick={() => onset(value)}>{action}</button>
   </span>
 </label>
@@ -58,8 +71,28 @@
     gap: 8px;
   }
 
+  .field {
+    position: relative;
+    display: flex;
+    min-width: 0;
+  }
+
+  /* The chosen pattern's thumbnail over the closed field, before its name. */
+  .field i {
+    position: absolute;
+    top: 50%;
+    left: 10px;
+    width: 22px;
+    height: 14px;
+    border-radius: 2px;
+    box-shadow: inset 0 0 0 1px var(--line-strong);
+    transform: translateY(-50%);
+    pointer-events: none;
+  }
+
   /* The app's control bar: 36 px, the send button tonal so it stands out. */
   select {
+    flex: 1;
     height: 36px;
     min-width: 0;
     padding: 0 10px;
@@ -69,6 +102,10 @@
     color: var(--text);
     font: inherit;
     font-size: 13.5px;
+  }
+
+  .sw select {
+    padding-left: 40px;
   }
 
   .btn {
@@ -90,5 +127,20 @@
   .btn:disabled {
     opacity: 0.45;
     cursor: default;
+  }
+
+  .touch select,
+  .touch .btn {
+    height: 44px;
+    border-radius: 12px;
+  }
+
+  .touch select {
+    font-size: 15px;
+  }
+
+  .touch .btn {
+    padding: 0 18px;
+    font-size: 14px;
   }
 </style>

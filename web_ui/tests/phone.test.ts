@@ -25,7 +25,6 @@ function card(id: string, operator: boolean, open = false) {
   const ondetails = vi.fn();
   render(ProjectorCard, {
     p: byId(id),
-    groups,
     patternLabel: (c: string) => c,
     operator,
     selected: false,
@@ -157,7 +156,7 @@ describe('phone card', () => {
 
   test('an operator taps the card to select it; ⓘ opens the details', async () => {
     const { onselect, ondetails } = card('n2', true);
-    await fireEvent.click(screen.getByRole('button', { name: /^PJ-02/ }));
+    await fireEvent.click(screen.getByRole('button', { name: /^192\.168\.0\.112/ }));
     expect(onselect).toHaveBeenCalledOnce();
     await fireEvent.click(screen.getByRole('button', { name: 'Details of 192.168.0.112' }));
     expect(ondetails).toHaveBeenCalledOnce();
@@ -167,7 +166,7 @@ describe('phone card', () => {
     const { onselect } = card('n4', true);
     expect(screen.getByText('Offline')).toBeTruthy();
     expect(screen.getByRole('checkbox')).toHaveProperty('disabled', true);
-    await fireEvent.click(screen.getByRole('button', { name: /^PJ-04/ }));
+    await fireEvent.click(screen.getByRole('button', { name: /^192\.168\.0\.131/ }));
     expect(onselect).not.toHaveBeenCalled();
   });
 
@@ -175,7 +174,6 @@ describe('phone card', () => {
     const show = (testPattern: string, shutter: 'open' | 'closed') =>
       render(ProjectorCard, {
         p: { ...byId('n2'), testPattern, shutter },
-        groups,
         patternLabel: () => 'Cross Hatch',
         operator: false,
         selected: false,

@@ -265,6 +265,7 @@
       label="Test pattern"
       action="Show"
       options={config.testPatterns.filter((t) => t.code !== 'OTS:00')}
+      swatch={patternSwatch}
       onset={(code) => send(act.testPattern(code))}
     />
   </div>
@@ -428,29 +429,60 @@
 {#snippet patterns()}
   <section>
     <h6>Test pattern</h6>
-    <button
-      class="btn wide"
-      class:cur={current === 'OTS:00'}
-      disabled={false}
-      onclick={() => send(act.testPattern('OTS:00'))}>Off</button
-    >
-    <div class="tpgrid">
-      {#each showMore ? [...MAIN_PATTERNS, ...morePatterns] : MAIN_PATTERNS as code (code)}
+    {#if device.phone}
+      <!-- Phone: a full-width Off, then 74 px tiles with the name, four a row. -->
+      <button
+        class="tpoff"
+        class:cur={current === 'OTS:00'}
+        onclick={() => send(act.testPattern('OTS:00'))}><Icon name="gridOff" size={20} />Off</button
+      >
+      <div class="tpgrid">
+        {#each showMore ? [...MAIN_PATTERNS, ...morePatterns] : MAIN_PATTERNS as code (code)}
+          <button
+            class="tp"
+            class:cur={current === code}
+            aria-label={codeLabel(code)}
+            onclick={() => send(act.testPattern(code))}
+          >
+            <span class="img" style:background={patternSwatch(code) ?? 'var(--hover)'}></span>
+            <span class="nm">{codeLabel(code)}</span>
+          </button>
+        {/each}
+      </div>
+      <button class="link" onclick={() => (showMore = !showMore)}>
+        <Icon name={showMore ? 'up' : 'down'} size={18} />{showMore
+          ? 'Fewer patterns'
+          : 'More patterns'}
+      </button>
+    {:else}
+      <!-- Tablets: the desktop layout at 44 px; the tile grid made the upright
+           sheet's left column far taller than the lens (owner, 2026-10-21). -->
+      <div class="pats touchpats">
         <button
-          class="tp"
-          class:cur={current === code}
-          disabled={false}
-          title={codeLabel(code)}
-          onclick={() => send(act.testPattern(code))}
+          class="pt off"
+          class:cur={current === 'OTS:00'}
+          onclick={() => send(act.testPattern('OTS:00'))}
+          ><Icon name="gridOff" size={20} />Off</button
         >
-          <span class="img" style:background={patternSwatch(code) ?? 'var(--hover)'}></span>
-          <span class="nm">{codeLabel(code)}</span>
-        </button>
-      {/each}
-    </div>
-    <button class="link" onclick={() => (showMore = !showMore)}>
-      {showMore ? 'Fewer patterns' : 'More patterns'}
-    </button>
+        {#each FAVOURITES as code (code)}
+          <button
+            class="pt"
+            class:cur={current === code}
+            aria-label={codeLabel(code)}
+            onclick={() => send(act.testPattern(code))}
+            ><i style:background={patternSwatch(code) ?? 'var(--soft)'}></i></button
+          >
+        {/each}
+      </div>
+      <OptionRow
+        label="Test pattern"
+        action="Show"
+        options={config.testPatterns.filter((t) => t.code !== 'OTS:00')}
+        swatch={patternSwatch}
+        touch
+        onset={(code) => send(act.testPattern(code))}
+      />
+    {/if}
   </section>
 {/snippet}
 
@@ -617,64 +649,102 @@
     cursor: default;
   }
 
-  .btn.cur {
+  /* ── Phone: test pattern tiles (board *Phone: test pattern…*) ─────────── */
+  .tpoff {
+    width: 100%;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: 1px solid var(--line-strong);
+    border-radius: 12px;
+    background: none;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .tpoff :global(svg) {
+    color: var(--err);
+  }
+
+  .tpoff.cur {
     border-color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent);
     color: var(--accent);
-    box-shadow: 0 0 0 1px var(--accent);
   }
 
   .tpgrid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 6px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
   }
 
   .tp {
+    height: 74px;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 5px;
     min-width: 0;
-    padding: 5px;
-    border-radius: 8px;
-    border: 1px solid var(--line);
-    background: var(--surface);
-    font-size: 10.5px;
-    font-weight: 550;
+    padding: 6px 6px 0;
+    border-radius: 12px;
+    border: 1px solid var(--line-strong);
+    background: none;
+    font-size: 11.5px;
+    font-weight: 500;
     color: var(--muted);
     cursor: pointer;
   }
 
-  .tp:hover {
-    border-color: var(--accent-line);
-  }
-
+  /* With one projector selected its pattern is framed in primary. */
   .tp.cur {
     border-color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent);
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
     color: var(--accent);
-    box-shadow: 0 0 0 1px var(--accent);
+    font-weight: 600;
   }
 
   .tp .img {
-    height: 28px;
-    border-radius: 4px;
+    height: 36px;
+    flex: none;
+    border-radius: 6px;
     box-shadow: inset 0 0 0 1px var(--line-strong);
   }
 
   .tp .nm {
     overflow: hidden;
+    text-align: center;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .link {
     align-self: flex-start;
-    padding: 0;
+    height: 44px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 4px;
     border: 0;
     background: none;
     color: var(--accent);
-    font-size: 12.5px;
-    font-weight: 550;
+    font-size: 14px;
+    font-weight: 600;
     cursor: pointer;
+  }
+
+  /* Tablets: the desktop's Off + four swatches, at 44 px. */
+  .touchpats .pt {
+    width: 56px;
+    height: 44px;
+    border-radius: 12px;
+  }
+
+  .touchpats .pt.off {
+    width: auto;
+    font-size: 15px;
   }
 
   .seg {

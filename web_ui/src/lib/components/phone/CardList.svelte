@@ -27,7 +27,6 @@
 
   const patterns = $derived(new Map(config.testPatterns.map((t) => [t.code, t.label])));
   const patternLabel = (code: string) => testPatternLabel(code, patterns);
-  const groupMap = $derived(new Map(live.groups.map((g) => [g.id, g])));
 
   const shown = $derived(
     sortByIp(
@@ -71,7 +70,6 @@
       {@const p = entry.projector}
       <ProjectorCard
         {p}
-        groups={groupMap}
         {patternLabel}
         {operator}
         selected={selection.ids.has(p.id)}
