@@ -127,3 +127,28 @@ export function withDetails(
 
 /** Collapse key of the trailing "Ungrouped" section. */
 export const UNGROUPED = '__ungrouped__';
+
+/** A group row's summary, the app's `monitoringGroupSummary`: `8 projectors, 7 online, 1 needs attention`. */
+export function groupSummary(members: readonly Projector[]): string {
+  let online = 0;
+  let standby = 0;
+  let attention = 0;
+  let errors = 0;
+  let offline = 0;
+  for (const { status: s } of members) {
+    if (s.online) online++;
+    if (s.standby) standby++;
+    if (s.level === 'warning') attention++;
+    if (s.level === 'error') errors++;
+    if (s.level === 'offline') offline++;
+  }
+  const n = members.length;
+  return [
+    `${n} ${n === 1 ? 'projector' : 'projectors'}`,
+    `${online} online`,
+    ...(errors > 0 ? [`${errors} ${errors === 1 ? 'error' : 'errors'}`] : []),
+    ...(attention > 0 ? [`${attention} ${attention === 1 ? 'needs' : 'need'} attention`] : []),
+    ...(offline > 0 ? [`${offline} offline`] : []),
+    ...(standby > 0 ? [`${standby} in standby`] : []),
+  ].join(', ');
+}

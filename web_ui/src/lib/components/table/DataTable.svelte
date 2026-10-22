@@ -7,10 +7,14 @@
   import type { ColumnId, Config, Density, Projector } from '../../api/types';
   import { cellLines, testPatternLabel } from '../../logic/cells';
   import { renderedColumns, reorderColumn, resolveColumns } from '../../logic/columns';
-  import { groupPills } from '../../logic/alerts';
-  import { buildEntries, matchesFilter, matchesSearch, UNGROUPED } from '../../logic/rows';
+  import {
+    buildEntries,
+    groupSummary,
+    matchesFilter,
+    matchesSearch,
+    UNGROUPED,
+  } from '../../logic/rows';
   import { sortProjectors } from '../../logic/sort';
-  import { alerts } from '../../state/alerts.svelte';
   import { autoFitWidth, layoutWidths, resizeBase, type ResizeStart } from '../../logic/widths';
   import { live } from '../../state/live.svelte';
   import { tableLayout, type StoredLayout } from '../../state/tableLayout.svelte';
@@ -391,17 +395,19 @@
       {#each entries as entry (entry.kind === 'group' ? `g:${entry.key}` : entry.projector.id)}
         {#if entry.kind === 'group'}
           {@const open = !layout.collapsed.includes(entry.key)}
-          {@const pills = groupPills(entry.members, alerts.list)}
           <tr class="grp" style:--gcolor={entry.group?.color ?? 'var(--line-strong)'}>
             <td colspan={cols.length + (lead ? 2 : 1)}>
               <div class="grpcell">
                 {#if operator && !alignment.active}
-                  <Checkbox
-                    state={triState(entry.members, selection.ids)}
-                    label="Select {entry.group?.name ?? 'Ungrouped'}"
-                    disabled={!entry.members.some(isSelectable)}
-                    onclick={() => selection.set(toggledAll(entry.members, selection.ids))}
-                  />
+                  <!-- In the rows' checkbox column, right above their boxes. -->
+                  <span class="gcb"
+                    ><Checkbox
+                      state={triState(entry.members, selection.ids)}
+                      label="Select {entry.group?.name ?? 'Ungrouped'}"
+                      disabled={!entry.members.some(isSelectable)}
+                      onclick={() => selection.set(toggledAll(entry.members, selection.ids))}
+                    /></span
+                  >
                 {/if}
                 <button
                   class="chev"
@@ -414,12 +420,7 @@
                 </button>
                 <span class="gdot" class:none={entry.key === UNGROUPED}></span>
                 <b>{entry.group?.name ?? 'Ungrouped'}</b>
-                <span class="cnt"
-                  >{entry.members.length} projector{entry.members.length === 1 ? '' : 's'}</span
-                >
-                {#each pills as pill (pill.text)}
-                  <span class="pill {pill.tone}">{pill.text}</span>
-                {/each}
+                <span class="cnt">{groupSummary(entry.members)}</span>
               </div>
             </td>
           </tr>
@@ -429,8 +430,10 @@
           {@const role = alignment.role(p.id)}
           <tr
             class="row {role ?? ''}"
-            class:stripe={entry.stripe}
             class:offline={p.connection === 'offline'}
+            class:lv-warning={p.status.level === 'warning'}
+            class:lv-error={p.status.level === 'error'}
+            class:lv-offline={p.status.level === 'offline'}
             class:outside={alignment.active && !role}
             class:sel={operator && selected && !alignment.active}
             class:pick={operator && (alignment.active ? role !== null : isSelectable(p))}
@@ -457,7 +460,8 @@
               </td>
             {/if}
             {#each cols as col (col)}
-              <td class="dc">
+              <!-- Offline, every value but the IP and Errors is the last one it sent. -->
+              <td class="dc" class:keep={col === 'projector' || col === 'errors'}>
                 <Cell column={col} {p} groups={groupMap} {patternLabel} />
               </td>
             {/each}
@@ -497,7 +501,7 @@
   .scroller {
     height: 100%;
     overflow: auto;
-    background: var(--surface);
+    background: var(--app);
     scrollbar-gutter: stable;
   }
 
@@ -572,8 +576,28 @@
     cursor: pointer;
   }
 
-  tr.row.sel td.selc {
-    box-shadow: inset 3px 0 0 var(--accent);
+  /* A problem's 3 px stripe at the row's left edge: amber warning, red error, grey offline. */
+  tr.row td:first-child::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 7px;
+    bottom: 7px;
+    width: 3px;
+    border-radius: 0 2px 2px 0;
+    background: var(--stripe, transparent);
+  }
+
+  tr.row.lv-warning {
+    --stripe: var(--warn);
+  }
+
+  tr.row.lv-error {
+    --stripe: var(--err);
+  }
+
+  tr.row.lv-offline {
+    --stripe: var(--faint);
   }
 
   /* Pinned cells paint the row's colour themselves: it must be opaque, or
@@ -674,31 +698,27 @@
     overflow: hidden;
   }
 
-  /* Every row colour is opaque (see the pinned cells above). Selection comes
-     last so it wins over the stripe on every row. */
+  /* Every row colour is opaque (see the pinned cells above). A selected
+     row: 8 % primary, as the app's. */
   tr.row {
-    --row-bg: var(--surface);
+    --row-bg: var(--app);
     background: var(--row-bg);
   }
 
-  tr.row.stripe {
-    --row-bg: var(--surface-2);
-  }
-
   tr.row:hover {
-    --row-bg: var(--hover);
+    --row-bg: color-mix(in srgb, var(--accent) 4%, var(--app));
   }
 
   tr.row.sel {
-    --row-bg: color-mix(in srgb, var(--accent) 14%, var(--surface));
+    --row-bg: color-mix(in srgb, var(--accent) 8%, var(--app));
   }
 
   tr.row.sel:hover {
-    --row-bg: color-mix(in srgb, var(--accent) 20%, var(--surface));
+    --row-bg: color-mix(in srgb, var(--accent) 12%, var(--app));
   }
 
-  tr.row.offline td {
-    color: var(--faint);
+  tr.row.offline td.dc:not(.keep) {
+    opacity: 0.55;
   }
 
   /* Alignment mode: the focused row tinted, closed and out-of-mode rows dimmed. */
@@ -781,7 +801,7 @@
     overflow: visible;
     height: var(--row);
     padding: 0;
-    background: var(--app);
+    background: color-mix(in srgb, var(--text) 4%, var(--app));
   }
 
   /* Pinned with the label, the group's colour bar stays at the left edge too. */
@@ -793,8 +813,18 @@
     gap: 8px;
     min-height: var(--row);
     padding: 0 var(--hpad) 0 calc(var(--hpad) - 6px);
-    box-shadow: inset 3px 0 0 var(--gcolor);
     vertical-align: middle;
+  }
+
+  .op .grpcell {
+    padding-left: 0;
+  }
+
+  .gcb {
+    width: var(--selw);
+    display: flex;
+    justify-content: center;
+    margin-right: -8px;
   }
 
   .grpcell b {
@@ -825,7 +855,7 @@
   .gdot {
     width: 10px;
     height: 10px;
-    border-radius: 50%;
+    border-radius: 3px;
     background: var(--gcolor);
   }
 
@@ -835,30 +865,8 @@
   }
 
   .cnt {
-    font-size: 12px;
-    color: var(--faint);
-  }
-
-  .pill {
-    padding: 1px 8px;
-    border-radius: 999px;
-    font-size: 11.5px;
-    font-weight: 550;
-  }
-
-  .pill.crit {
-    background: var(--err-soft);
-    color: var(--err);
-  }
-
-  .pill.warn {
-    background: var(--warn-soft);
-    color: var(--warn);
-  }
-
-  .pill.ok {
-    background: var(--ok-soft);
-    color: var(--ok);
+    font-size: 12.5px;
+    color: var(--muted);
   }
 
   .empty {

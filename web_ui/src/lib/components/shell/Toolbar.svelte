@@ -42,6 +42,15 @@
   const iconSize = $derived(touch ? 18 : 15);
 
   let menu = $state<'columns' | 'select' | null>(null);
+  let chipsRow = $state<HTMLElement>();
+
+  // A phone's chips scroll sideways: keep the picked one in sight.
+  $effect(() => {
+    void view.filter;
+    chipsRow
+      ?.querySelector('[aria-pressed="true"]')
+      ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  });
   let columnsWrap = $state<HTMLElement>();
   let selectWrap = $state<HTMLElement>();
 
@@ -151,7 +160,7 @@
     <span class="count"><b>{shown.length}</b>/{live.projectors.length}</span>
   {/if}
   <!-- Always all five, an empty one dimmed: filters never come and go. -->
-  <div class="chips" role="group" aria-label="Filter">
+  <div class="chips" role="group" aria-label="Filter" bind:this={chipsRow}>
     {#each QUICK_FILTERS as f (f)}
       <button
         class="chip {f}"
