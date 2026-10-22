@@ -10,19 +10,22 @@
     display,
     threshold,
     level,
+    bar = true,
   }: {
     label: string;
     display: string;
     threshold: TempThreshold;
     /** The rule's active alert, which colours the value. */
     level: AlertSeverity | null;
+    /** Only the desktop table draws bars; touch shows the coloured value alone. */
+    bar?: boolean;
   } = $props();
 </script>
 
 <span class="tl">
   <span class="k">{label}</span>
   <span class="v"><TemperatureText {display} {level} /></span>
-  <TemperatureBar {display} {threshold} width={40} />
+  {#if bar}<TemperatureBar {display} {threshold} width={40} />{/if}
 </span>
 
 <style>

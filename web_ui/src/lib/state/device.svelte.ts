@@ -6,6 +6,7 @@ const TOUCH = '(pointer: coarse)';
 const SHORT = '(max-height: 500px) and (pointer: coarse)';
 /** A tablet held sideways (or bigger) has room for the table. */
 const WIDE = '(min-width: 1024px)';
+const PORTRAIT = '(orientation: portrait)';
 
 function watch(query: string, set: (matches: boolean) => void): void {
   if (typeof matchMedia === 'undefined') return;
@@ -22,6 +23,7 @@ export interface Screen {
   short: boolean;
   touch: boolean;
   wide: boolean;
+  portrait: boolean;
 }
 
 /** Phones and portrait tablets always show cards; the rest can pick. */
@@ -33,11 +35,13 @@ export const mapAllowed = (s: Screen): boolean => !s.phone && !s.short;
 /**
  * A bottom sheet on phones and portrait tablets, a right-hand sheet on a
  * phone held sideways (too short for a bottom one), the side panel otherwise.
+ * An upright touch screen gets the sheet whatever its width: a 13" iPad Pro
+ * shows the table, and a 344 px side panel would leave it ~630 px.
  */
 export function controlPlacement(s: Screen): ControlPlacement {
   if (s.phone) return 'bottom';
   if (s.short) return 'right';
-  return s.touch && !s.wide ? 'bottom' : 'side';
+  return s.touch && (!s.wide || s.portrait) ? 'bottom' : 'side';
 }
 
 class DeviceState implements Screen {
@@ -49,6 +53,7 @@ class DeviceState implements Screen {
   /** Phone landscape. */
   short = $state(false);
   wide = $state(false);
+  portrait = $state(false);
   /** Script-driven transitions skip tokens.css's reduced-motion rule. */
   reduceMotion = $state(false);
 
@@ -62,6 +67,7 @@ class DeviceState implements Screen {
     watch(TOUCH, (m) => (this.touch = m));
     watch(SHORT, (m) => (this.short = m));
     watch(WIDE, (m) => (this.wide = m));
+    watch(PORTRAIT, (m) => (this.portrait = m));
     watch('(prefers-reduced-motion: reduce)', (m) => (this.reduceMotion = m));
   }
 }

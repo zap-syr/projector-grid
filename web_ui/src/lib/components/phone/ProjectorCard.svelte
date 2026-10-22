@@ -73,6 +73,7 @@
   class="card {role ?? ''}"
   class:sel={operator && selected && !aligning}
   class:open
+  class:hasinfo={operator && !aligning}
   class:outside
   class:offline={p.connection === 'offline'}
 >
@@ -133,15 +134,18 @@
             </span>
           </span>
         </span>
-        {#if hasErrors}
-          <span class="errline">{@render value('errors')}</span>
-        {/if}
+        <!-- Kept when empty: every card the same height, so no row grows and
+             a new error doesn't resize the card. -->
+        <span class="errline">
+          {#if hasErrors}{@render value('errors')}{/if}
+        </span>
       {:else}
-        <span class="sum">
+        <span class="sum solo">
           <span class="state" class:warn={p.connection === 'unauthorized'}
             >{cell('connection')}</span
           >
         </span>
+        <span class="errline"></span>
       {/if}
     </button>
     <!-- The operator's way to the details (a tap selects); a viewer's tap opens them. -->
@@ -211,14 +215,22 @@
 
   /* The chevron sits in the top-right corner over the title row, so the
      status lines below run the card's full width. */
+  /* The card's button fills it, so every part of the card answers a click. */
+  .card {
+    display: flex;
+    flex-direction: column;
+  }
+
   .head {
     position: relative;
+    flex: 1;
     display: flex;
-    align-items: flex-start;
+    align-items: stretch;
   }
 
   .cb {
     display: flex;
+    align-self: flex-start;
     padding: 15px 0 0 14px;
   }
 
@@ -250,7 +262,11 @@
     min-width: 0;
     height: 22px;
     overflow: hidden;
-    /* The chevron's icon, not its whole 44 px hit area. */
+  }
+
+  /* Room for the operator's ⓘ (its icon, not its whole hit area); a viewer
+     has none, so the IP runs to the card's edge. */
+  .card.hasinfo .title {
     padding-right: 30px;
   }
 
@@ -374,7 +390,14 @@
   .errline {
     display: flex;
     min-width: 0;
+    /* The error tags' own height (ErrorTags). */
+    min-height: 25px;
     font-size: 13px;
+  }
+
+  /* An offline card's one state line takes the room of the two status lines. */
+  .sum.solo {
+    min-height: calc(2 * 1.45em + 4px);
   }
 
   /* ⓘ in the top-right corner: 32 px with a mouse, 44 px for a finger. */

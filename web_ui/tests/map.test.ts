@@ -152,6 +152,7 @@ test('the Map is offered on tablets and desktops, not on phones', () => {
     short: false,
     touch: false,
     wide: false,
+    portrait: false,
     ...over,
   });
   expect(mapAllowed(on({ phone: true, touch: true }))).toBe(false);

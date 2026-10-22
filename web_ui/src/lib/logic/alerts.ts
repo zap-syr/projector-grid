@@ -3,7 +3,7 @@
  * functions: order, counts, the card badge, grouping and the panel's
  * sections. The page never decides what is an alert; the app sends the list.
  */
-import type { Alert, AlertRule, AlertSeverity, Projector } from '../api/types';
+import type { Alert, AlertRule, AlertSeverity } from '../api/types';
 
 export type AlertGrouping = 'projector' | 'alert';
 
@@ -182,54 +182,6 @@ export function raisedAlerts(prev: readonly Alert[], next: readonly Alert[]): Al
     const old = before.get(a.id);
     return !old || old.acknowledged || old.since !== a.since || old.severity !== a.severity;
   });
-}
-
-export interface Pill {
-  text: string;
-  tone: 'crit' | 'warn' | 'ok';
-  /** What it counts, for the phone's icon-and-number form. */
-  kind: 'critical' | 'warning' | 'recovered' | 'auth';
-  count: number;
-}
-
-/**
- * A group header's pills (`_GroupHeaderRow`): its unacknowledged alerts by
- * severity and the returned signals; auth errors (not an alert) only when
- * nothing else is wrong.
- */
-export function groupPills(members: readonly Projector[], alerts: readonly Alert[]): Pill[] {
-  const ids = new Set(members.map((p) => p.id));
-  const c = countAlerts(alerts.filter((a) => ids.has(a.projectorId)));
-  const auth = members.filter((p) => p.connection === 'unauthorized').length;
-  const pills: Pill[] = [];
-  if (c.critical > 0) {
-    pills.push({
-      text: `${c.critical} critical`,
-      tone: 'crit',
-      kind: 'critical',
-      count: c.critical,
-    });
-  }
-  if (c.warning > 0) {
-    pills.push({ text: `${c.warning} warning`, tone: 'warn', kind: 'warning', count: c.warning });
-  }
-  if (c.recovered > 0) {
-    pills.push({
-      text: `${c.recovered} recovered`,
-      tone: 'ok',
-      kind: 'recovered',
-      count: c.recovered,
-    });
-  }
-  if (c.critical + c.warning === 0 && auth > 0) {
-    pills.push({
-      text: `${auth} auth error${auth === 1 ? '' : 's'}`,
-      tone: 'warn',
-      kind: 'auth',
-      count: auth,
-    });
-  }
-  return pills;
 }
 
 /** The touch pill above the cards; null when nothing waits. */

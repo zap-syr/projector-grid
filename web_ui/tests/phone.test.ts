@@ -42,16 +42,20 @@ describe('layout per screen', () => {
     short: false,
     touch: false,
     wide: false,
+    portrait: false,
     ...over,
   });
   const cases: [string, Partial<Screen>, boolean, string][] = [
-    ['phone upright', { phone: true, touch: true }, true, 'bottom'],
+    ['phone upright', { phone: true, touch: true, portrait: true }, true, 'bottom'],
     ['phone sideways', { short: true, touch: true }, true, 'right'],
-    ['tablet upright', { touch: true }, true, 'bottom'],
+    ['tablet upright', { touch: true, portrait: true }, true, 'bottom'],
     ['tablet sideways', { touch: true, wide: true }, false, 'side'],
+    // iPad Pro 13" upright: the table, with Control and the details as sheets.
+    ['large tablet upright', { touch: true, wide: true, portrait: true }, false, 'bottom'],
     ['desktop', { wide: true }, false, 'side'],
-    // A narrow desktop window keeps the chosen view and the side panel.
+    // A narrow or tall desktop window keeps the chosen view and the side panel.
     ['narrow desktop window', {}, false, 'side'],
+    ['upright desktop monitor', { wide: true, portrait: true }, false, 'side'],
   ];
 
   test.each(cases)('%s', (_, over, cards, placement) => {

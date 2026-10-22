@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Config, Projector } from './lib/api/types';
   import AlertPill from './lib/components/alerts/AlertPill.svelte';
   import AlertsPanel from './lib/components/alerts/AlertsPanel.svelte';
   import AlertsRail from './lib/components/alerts/AlertsRail.svelte';
@@ -70,6 +71,7 @@
   });
 
   const groupMap = $derived(new Map(live.groups.map((g) => [g.id, g])));
+  let selectBarH = $state(0);
   const patternLabels = $derived(
     new Map((config.value?.testPatterns ?? []).map((t) => [t.code, t.label])),
   );
@@ -133,59 +135,53 @@
       {@const sheetLayout = device.control !== 'side'}
       {@const control = operator && panel.open && !sheetLayout}
       {@const sideDetails = details.projector && !sheetLayout ? details.projector : undefined}
-      {@const sidePanel = control || sideDetails !== undefined}
-      <div class="work" class:op={sidePanel} class:rail={!sheetLayout}>
-        <div class="main">
-          <div class="top">
-            <Toolbar config={config.value} layout={tableLayout.value} {operator} />
-            {#if sheetLayout}
-              <AlertPill />
-            {/if}
-          </div>
-          <div class="table">
-            {#if listMode.value === 'cards'}
-              <CardList config={config.value} layout={tableLayout.value} {operator} />
-            {:else if listMode.value === 'map'}
-              <MapView config={config.value} {operator} />
-            {:else}
-              <DataTable config={config.value} layout={tableLayout.value} {operator} />
-            {/if}
-          </div>
-          {#if sheetLayout && operator && selection.ids.size > 0}
-            <SelectBar />
+      {@const overList = sideDetails !== undefined && !control}
+      {@const selectBar = sheetLayout && operator && selection.ids.size > 0}
+      {@const overMap = listMode.value === 'map'}
+      <!-- The toolbar runs the whole width above the list and the side panel,
+           so opening Control or the details never moves its buttons; the
+           alerts rail keeps the full height (owner, 2026-10-22). -->
+      <div class="work" class:op={control} class:rail={!sheetLayout}>
+        <div class="top">
+          <Toolbar config={config.value} layout={tableLayout.value} {operator} />
+          {#if sheetLayout}
+            <AlertPill />
           {/if}
         </div>
-        {#if sideDetails}
-          <!-- In the Control panel's place at its width, so the table doesn't reflow. -->
-          <aside class="slot" aria-label="Projector {sideDetails.ip}">
-            {#if control}
-              <div class="back">
-                <button onclick={() => details.close()}
-                  ><Icon name="left" size={18} />Control</button
-                >
-                <em
-                  >{selection.ids.size > 0
-                    ? `${selection.ids.size} selected`
-                    : 'No projectors selected'}</em
-                >
-              </div>
-            {/if}
-            <ProjectorDetails
-              p={sideDetails}
-              config={config.value}
-              groups={groupMap}
-              {patternLabel}
-              placement="panel"
-              touch={device.touch}
-              onclose={() => details.close()}
-              onpreview={() => preview.open(details.order, sideDetails.id)}
-            />
-          </aside>
-        {:else if sidePanel}
-          <ControlPanel config={config.value} onclose={() => panel.toggle()} />
+        <div class="list" style:--select-bar={selectBar && overMap ? `${selectBarH}px` : '0px'}>
+          {#if listMode.value === 'cards'}
+            <CardList config={config.value} layout={tableLayout.value} {operator} />
+          {:else if listMode.value === 'map'}
+            <MapView config={config.value} {operator} />
+          {:else}
+            <DataTable config={config.value} layout={tableLayout.value} {operator} />
+          {/if}
+          {#if selectBar && overMap}
+            <!-- Over the Map, so its fitted tiles don't move when the first
+                 projector is selected; only the zoom buttons step up. -->
+            <div class="selectbar over" bind:offsetHeight={selectBarH}>
+              <SelectBar />
+            </div>
+          {/if}
+          {#if sideDetails && overList}
+            {@render detailsPanel(sideDetails, config.value, false)}
+          {/if}
+        </div>
+        {#if selectBar && !overMap}
+          <div class="selectbar">
+            <SelectBar />
+          </div>
+        {/if}
+        {#if sideDetails && !overList}
+          <!-- In the Control panel's place at its width, so nothing reflows. -->
+          {@render detailsPanel(sideDetails, config.value, true)}
+        {:else if control}
+          <div class="side">
+            <ControlPanel config={config.value} onclose={() => panel.toggle()} />
+          </div>
         {/if}
         {#if !sheetLayout}
-          <AlertsRail touch={device.touch} />
+          <div class="railc"><AlertsRail touch={device.touch} /></div>
           {#if alerts.prefs.drawer}
             <!-- Over the content, so the table and Control panel don't reflow. -->
             <aside class="drawer" class:touch={device.touch}>
@@ -198,6 +194,30 @@
           {/if}
         {/if}
       </div>
+      {#snippet detailsPanel(p: Projector, cfg: Config, inPlace: boolean)}
+        <aside class="slot" class:over={!inPlace} aria-label="Projector {p.ip}">
+          {#if inPlace}
+            <div class="back">
+              <button onclick={() => details.close()}><Icon name="left" size={18} />Control</button>
+              <em
+                >{selection.ids.size > 0
+                  ? `${selection.ids.size} selected`
+                  : 'No projectors selected'}</em
+              >
+            </div>
+          {/if}
+          <ProjectorDetails
+            {p}
+            config={cfg}
+            groups={groupMap}
+            {patternLabel}
+            placement="panel"
+            touch={device.touch}
+            onclose={() => details.close()}
+            onpreview={() => preview.open(details.order, p.id)}
+          />
+        </aside>
+      {/snippet}
       {#if device.control !== 'side' && operator && panel.sheet}
         <Sheet label="Control" placement={device.control} onclose={() => (panel.sheet = false)}>
           <ControlPanel
@@ -268,24 +288,89 @@
     grid-template-rows: auto auto 1fr;
   }
 
+  /* toolbar over list and side panel · the phone's select bar · the rail
+     on the right the whole height. The 0 floors keep a wide toolbar or table
+     from stretching the columns. */
   .work {
+    position: relative;
     display: grid;
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas: 'top' 'list' 'bar';
     min-height: 0;
   }
 
   .work.op {
     grid-template-columns: minmax(0, 1fr) 344px;
+    grid-template-areas: 'top top' 'list side' 'bar side';
+  }
+
+  .work.rail {
+    grid-template-columns: minmax(0, 1fr) 52px;
+    grid-template-areas: 'top rail' 'list rail' 'bar rail';
+  }
+
+  .work.rail.op {
+    grid-template-columns: minmax(0, 1fr) 344px 52px;
+    grid-template-areas: 'top top rail' 'list side rail' 'bar side rail';
+  }
+
+  .top {
+    grid-area: top;
+    min-width: 0;
+  }
+
+  .list {
+    grid-area: list;
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .selectbar {
+    grid-area: bar;
+  }
+
+  .side,
+  .slot {
+    grid-area: side;
+    min-height: 0;
+    display: flex;
+  }
+
+  .railc {
+    grid-area: rail;
+    display: flex;
+    min-height: 0;
+  }
+
+  .railc > :global(*) {
+    flex: 1;
   }
 
   .slot {
     position: relative;
     z-index: 5;
-    min-height: 0;
     display: flex;
     flex-direction: column;
     background: var(--surface);
     border-left: 1px solid var(--line);
+  }
+
+  /* No Control beside the list (a viewer, or Control hidden): the details
+     open over the table or the cards, as the app's projector panel does, so
+     neither reflows (owner, 2026-10-22). Under the toolbar, beside the
+     alerts rail, under its drawer. */
+  .slot.over {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    z-index: 15;
+    width: 344px;
+    box-shadow: var(--sh-3);
+    animation: slide 0.18s ease-out;
   }
 
   /* ‹ Control: back to the panel, the selection untouched. */
@@ -332,16 +417,7 @@
     flex: 1;
   }
 
-  /* The alerts rail at the far right; the drawer opens over everything left of it. */
-  .work.rail {
-    position: relative;
-    grid-template-columns: minmax(0, 1fr) 52px;
-  }
-
-  .work.rail.op {
-    grid-template-columns: minmax(0, 1fr) 344px 52px;
-  }
-
+  /* The drawer opens over everything left of the alerts rail. */
   .drawer {
     position: absolute;
     top: 0;
@@ -366,20 +442,12 @@
     }
   }
 
-  .top {
-    min-width: 0;
-  }
-
-  .main {
-    display: grid;
-    /* toolbar · list · the phone's select bar */
-    grid-template-rows: auto 1fr auto;
-    /* Same 0 floor as .app, or a wide toolbar / table stretches the column
-       under the Control panel. */
-    grid-template-columns: minmax(0, 1fr);
-    min-width: 0;
-    min-height: 0;
-    overflow: hidden;
+  .selectbar.over {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10;
   }
 
   .table {

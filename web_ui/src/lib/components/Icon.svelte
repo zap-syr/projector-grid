@@ -12,6 +12,8 @@
     grid: '<rect x="3" y="5" width="18" height="14" rx="1.5"/><path d="M9 5v14M15 5v14M3 12h18"/>',
     gridOff: '<rect x="3" y="5" width="18" height="14" rx="1.5"/><path d="M4 4l16 16"/>',
     info: '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.8v.2"/>',
+    groups:
+      '<rect x="3" y="3.5" width="18" height="5" rx="1.5"/><path d="M7 12.5h14M7 16.5h14M7 20.5h14M3.5 12.5v8"/>',
     globe:
       '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.6 2.5 14.4 0 17M12 3.5c-2.5 2.6-2.5 14.4 0 17"/>',
     eyeOff:

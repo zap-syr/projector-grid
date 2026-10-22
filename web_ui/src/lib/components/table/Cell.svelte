@@ -9,6 +9,7 @@
   import { withUnit } from '../../logic/labels';
   import { alerts } from '../../state/alerts.svelte';
   import { config } from '../../state/config.svelte';
+  import { device } from '../../state/device.svelte';
   import ErrorTags from '../alerts/ErrorTags.svelte';
   import ConnectionBadge from '../status/ConnectionBadge.svelte';
   import PowerState from '../status/PowerState.svelte';
@@ -64,12 +65,14 @@
         display={p.intakeTemp}
         threshold={thresholds.intake}
         level={p.status.intake ?? null}
+        bar={!device.touch}
       />
       <TemperatureLine
         label="Ex"
         display={p.exhaustTemp}
         threshold={thresholds.exhaust}
         level={p.status.exhaust ?? null}
+        bar={!device.touch}
       />
     </span>
   {:else if column === 'runtimes'}

@@ -2,7 +2,6 @@
 <script lang="ts">
   import type { Config, Density } from '../../api/types';
   import { resolveColumns, toggledColumn } from '../../logic/columns';
-  import { live } from '../../state/live.svelte';
   import { tableLayout, type StoredLayout } from '../../state/tableLayout.svelte';
 
   let { config, layout }: { config: Config; layout: StoredLayout } = $props();
@@ -72,16 +71,6 @@
         onchange={() => tableLayout.update({ fitToWidth: !layout.fitToWidth })}
       />
     </label>
-    <label class="opt" class:dis={live.groups.length === 0}>
-      Merge into groups
-      <input
-        type="checkbox"
-        role="switch"
-        checked={layout.groupBy && live.groups.length > 0}
-        disabled={live.groups.length === 0}
-        onchange={() => tableLayout.update({ groupBy: !layout.groupBy })}
-      />
-    </label>
   </section>
 </div>
 
@@ -144,11 +133,6 @@
 
   .opt {
     justify-content: space-between;
-  }
-
-  .opt.dis {
-    color: var(--faint);
-    cursor: default;
   }
 
   input[type='checkbox'] {

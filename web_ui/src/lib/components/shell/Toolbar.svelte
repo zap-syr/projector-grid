@@ -17,7 +17,7 @@
   import { panel } from '../../state/panel.svelte';
   import { selection } from '../../state/selection.svelte';
   import Checkbox from '../Checkbox.svelte';
-  import type { StoredLayout } from '../../state/tableLayout.svelte';
+  import { tableLayout, type StoredLayout } from '../../state/tableLayout.svelte';
   import { view } from '../../state/view.svelte';
   import Icon from '../Icon.svelte';
   import ColumnsMenu from '../table/ColumnsMenu.svelte';
@@ -118,18 +118,18 @@
         onclick={() => (menu = menu === 'select' ? null : 'select')}
       >
         <span class="blabel">{count > 0 ? `${count} selected` : 'Select'}</span>
-        <Icon name="chevron" size={14} />
+        <span class="bchev"><Icon name="chevron" size={14} /></span>
       </button>
       {#if hidden.length > 0 && !device.phone}
         <!-- Over the menu button, which keeps room for it: the bulk selector
              never changes width. -->
         <button
           class="hid"
+          aria-label="{hidden.length} hidden, show all"
           title="{hidden.length} selected {hidden.length === 1
             ? 'projector is'
-            : 'projectors are'} hidden: {hidden.map((p) => p.ip).join(', ')}. Show all"
-          onclick={() => view.showAll()}
-          ><Icon name="eyeOff" size={14} />{hidden.length} hidden</button
+            : 'projectors are'} hidden: {hidden.map((p) => p.ip).join(', ')}. Click to show all"
+          onclick={() => view.showAll()}><Icon name="eyeOff" size={13} />{hidden.length}</button
         >
       {/if}
       {#if menu === 'select'}
@@ -191,6 +191,23 @@
 
 {#snippet desktopTools()}
   <div class="grow"></div>
+  <!-- One grouping for the table and the cards (owner, 2026-10-22). -->
+  {#if listMode.value !== 'map'}
+    <button
+      class="btn"
+      aria-pressed={layout.groupBy && live.groups.length > 0}
+      aria-label="Groups"
+      title={live.groups.length === 0
+        ? 'The project has no groups'
+        : layout.groupBy
+          ? 'Show without groups'
+          : 'Merge into groups'}
+      disabled={live.groups.length === 0}
+      onclick={() => tableLayout.update({ groupBy: !layout.groupBy })}
+    >
+      <Icon name="groups" size={iconSize} /><span class="bl">Groups</span>
+    </button>
+  {/if}
   <!-- Columns comes and goes on the left, so the switch and Control stay put. -->
   {#if listMode.value === 'table'}
     <div class="menuwrap" bind:this={columnsWrap}>
@@ -236,10 +253,17 @@
   {#if operator && device.control === 'side'}
     <button
       class="btn ctl"
-      aria-pressed={panel.open}
+      aria-pressed={panel.open && !details.id}
       aria-label="Control"
-      title={panel.open ? 'Hide control panel' : 'Show control panel'}
-      onclick={() => panel.toggle()}
+      title={panel.open && !details.id ? 'Hide control panel' : 'Show control panel'}
+      onclick={() => {
+        // Open details give way to Control; only with none open does the
+        // button hide the panel.
+        if (details.id) {
+          details.close();
+          if (!panel.open) panel.toggle();
+        } else panel.toggle();
+      }}
     >
       <Icon name="panel" size={iconSize} /><span class="bl">Control</span>
     </button>
@@ -341,6 +365,12 @@
   .btn:hover,
   .btn[aria-expanded='true'] {
     background: var(--hover);
+  }
+
+  .btn:disabled {
+    color: var(--disabled);
+    background: var(--surface);
+    cursor: default;
   }
 
   .btn[aria-pressed='true'] {
@@ -535,41 +565,52 @@
     color: var(--accent);
   }
 
-  /* The pill over the menu button's right end, left of the chevron. */
+  /* ⊘16: a compact amber button between the label and the chevron, over
+     room the menu button keeps for it, so "999 selected" never runs under it
+     (owner, 2026-10-22). */
   .hid {
     position: absolute;
     top: 50%;
-    right: 28px;
+    right: 30px;
     transform: translateY(-50%);
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: 3px;
     height: 22px;
-    padding: 0 8px 0 6px;
+    padding: 0 5px 0 4px;
     border: 0;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--on-pc) 14%, transparent);
-    color: var(--on-pc);
-    font-size: 11.5px;
-    font-weight: 600;
+    border-radius: 6px;
+    background: var(--warn-soft);
+    color: var(--warn);
+    font-size: 12px;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
     white-space: nowrap;
     cursor: pointer;
   }
 
-  .hid:hover {
-    background: color-mix(in srgb, var(--on-pc) 24%, transparent);
+  @media (hover: hover) {
+    .hid:hover {
+      background: color-mix(in srgb, var(--warn) 24%, transparent);
+    }
   }
 
-  /* Wide enough for "999 selected" and the hidden pill, so neither moves the search. */
   .blabel {
-    min-width: 12ch;
     font-variant-numeric: tabular-nums;
     text-align: left;
     white-space: nowrap;
   }
 
+  /* Fixed, so the search never moves: room for "999 selected", then the
+     hidden icon and its number (no word), then the chevron (owner, 2026-10-22). */
   .toolbar:not(.phone) .bmenu {
-    width: 190px;
+    width: 176px;
+  }
+
+  /* The chevron at the selector's right edge, whatever the label's width. */
+  .bchev {
+    display: flex;
+    margin-left: auto;
   }
 
   .phone .bulk {

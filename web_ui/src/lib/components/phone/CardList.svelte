@@ -5,7 +5,6 @@
 <script lang="ts">
   import type { Config } from '../../api/types';
   import { testPatternLabel } from '../../logic/cells';
-  import { groupPills } from '../../logic/alerts';
   import {
     buildEntries,
     type Entry,
@@ -13,19 +12,14 @@
     matchesSearch,
     UNGROUPED,
   } from '../../logic/rows';
-  import { alerts } from '../../state/alerts.svelte';
-  import { device } from '../../state/device.svelte';
-  import AlertIcon, { severityIcon } from '../alerts/AlertIcon.svelte';
   import { sortByIp } from '../../logic/sort';
-  import { isSelectable, toggledAll, triState } from '../../logic/selection';
   import { alignment } from '../../state/alignment.svelte';
   import { details } from '../../state/details.svelte';
   import { live } from '../../state/live.svelte';
   import { selection } from '../../state/selection.svelte';
   import { tableLayout, type StoredLayout } from '../../state/tableLayout.svelte';
   import { view } from '../../state/view.svelte';
-  import Checkbox from '../Checkbox.svelte';
-  import Icon from '../Icon.svelte';
+  import GroupHeader from '../table/GroupHeader.svelte';
   import ProjectorCard from './ProjectorCard.svelte';
 
   let { config, layout, operator }: { config: Config; layout: StoredLayout; operator: boolean } =
@@ -41,7 +35,12 @@
     ),
   );
   const entries = $derived(
-    buildEntries(shown, live.groups, live.groups.length > 0, new Set(layout.collapsed)),
+    buildEntries(
+      shown,
+      live.groups,
+      layout.groupBy && live.groups.length > 0,
+      new Set(layout.collapsed),
+    ),
   );
   /** Preview's ◀ ▶ from the details: the cards as shown (filtered, collapsed groups left out). */
   const order = $derived(entries.flatMap((e) => (e.kind === 'row' ? [e.projector.id] : [])));
@@ -51,47 +50,22 @@
 <div class="list">
   {#each entries as entry (entryKey(entry))}
     {#if entry.kind === 'group'}
-      {@const open = !layout.collapsed.includes(entry.key)}
-      {@const pills = groupPills(entry.members, alerts.list)}
-      {@const name = entry.group?.name ?? 'Ungrouped'}
-      <div class="grp" style:--gcolor={entry.group?.color ?? 'var(--line-strong)'}>
-        {#if operator && !alignment.active}
-          <span class="cb">
-            <Checkbox
-              state={triState(entry.members, selection.ids)}
-              label="Select {name}"
-              disabled={!entry.members.some(isSelectable)}
-              onclick={() => selection.set(toggledAll(entry.members, selection.ids))}
-            />
-          </span>
-        {/if}
-        <button
-          class="gbtn"
-          aria-expanded={open}
-          onclick={() => tableLayout.toggleCollapsed(entry.key)}
-        >
-          <span class="gdot" class:none={entry.key === UNGROUPED}></span>
-          <b>{name}</b>
-          <span class="cnt">{entry.members.length}</span>
-          {#each pills as pill (pill.text)}
-            {#if device.phone}
-              <!-- A phone's width: icon and number, so the group's name keeps its room. -->
-              <span class="cpill {pill.tone}" title={pill.text}>
-                {#if pill.kind === 'auth'}
-                  <Icon name="lock" size={15} />
-                {:else}
-                  <AlertIcon
-                    name={pill.kind === 'recovered' ? 'checkCircle' : severityIcon(pill.kind)}
-                    size={17}
-                  />
-                {/if}{pill.count}
-              </span>
-            {:else}
-              <span class="pill {pill.tone}">{pill.text}</span>
-            {/if}
-          {/each}
-          <span class="chev" class:closed={!open}><Icon name="chevron" size={16} /></span>
-        </button>
+      <!-- The table's group line; the whole line folds it, the chevron is the keyboard path. -->
+      <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+      <div
+        class="grp"
+        class:plain={!operator || alignment.active}
+        onclick={(e) => {
+          if (!(e.target as Element).closest('button')) tableLayout.toggleCollapsed(entry.key);
+        }}
+      >
+        <GroupHeader
+          group={entry.key === UNGROUPED ? null : (entry.group ?? null)}
+          members={entry.members}
+          open={!layout.collapsed.includes(entry.key)}
+          select={operator && !alignment.active}
+          ontoggle={() => tableLayout.toggleCollapsed(entry.key)}
+        />
       </div>
     {:else}
       {@const p = entry.projector}
@@ -117,16 +91,14 @@
 </div>
 
 <style>
-  /* As many columns as fit at 300 px; touch screens stop at three, so a
-     sideways tablet reads like the owner's 3-column layout. Under 280 px
-     the longest statuses (STANDBY · CLOSED, the pattern, a warning and the
-     IP) no longer fit, so an upright iPad gets two columns, not three. */
+  /* Cards fill the width from 300 px; the details open over them rather than
+     beside them, so the grid never reflows (App). Touch screens stop at three
+     columns, never under 280 px, so an upright iPad gets two. */
   .list {
-    --card-min: 300px;
     height: 100%;
     overflow: auto;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--card-min)), 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
     align-content: start;
     gap: 8px;
     padding: 10px 12px 16px;
@@ -135,134 +107,39 @@
 
   @media (pointer: coarse) {
     .list {
-      --card-min: max(280px, (100% - 16px) / 3);
+      grid-template-columns: repeat(
+        auto-fill,
+        minmax(min(100%, max(280px, (100% - 16px) / 3)), 1fr)
+      );
     }
   }
 
+  /* The table's group line: its band, its height, the box above the cards' boxes. */
   .grp {
+    --selw: 48px;
     grid-column: 1 / -1;
     display: flex;
     align-items: center;
+    height: 40px;
     margin-top: 6px;
+    padding-right: 12px;
     border-radius: var(--r-sm);
-    box-shadow: inset 3px 0 0 var(--gcolor);
+    background: color-mix(in srgb, var(--text) 4%, var(--app));
+    cursor: pointer;
   }
 
   .grp:first-child {
     margin-top: 0;
   }
 
-  .cb {
-    display: flex;
-    padding-left: 14px;
+  .grp.plain {
+    padding-left: 6px;
   }
 
-  .gbtn {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    height: 40px;
-    padding: 0 6px 0 12px;
-    border: 0;
-    background: none;
-    text-align: left;
-    cursor: pointer;
-  }
-
-  .gbtn b {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-weight: 650;
-  }
-
-  .gdot {
-    width: 10px;
-    height: 10px;
-    flex: none;
-    border-radius: 50%;
-    background: var(--gcolor);
-  }
-
-  .gdot.none {
-    background: none;
-    border: 1.5px solid var(--line-strong);
-  }
-
-  .cnt {
-    font-size: 12.5px;
-    color: var(--faint);
-  }
-
-  .pill {
-    padding: 1px 8px;
-    border-radius: 999px;
-    font-size: 11.5px;
-    font-weight: 550;
-    white-space: nowrap;
-  }
-
-  .pill.crit {
-    background: var(--err-soft);
-    color: var(--err);
-  }
-
-  .pill.warn {
-    background: var(--warn-soft);
-    color: var(--warn);
-  }
-
-  .pill.ok {
-    background: var(--ok-soft);
-    color: var(--ok);
-  }
-
-  .cpill {
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-    flex: none;
-    font-size: 14px;
-    font-weight: 650;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .cpill.crit {
-    color: var(--err);
-  }
-
-  .cpill.warn {
-    color: var(--warn);
-  }
-
-  .cpill.ok {
-    color: var(--ok);
-  }
-
-  /* Touch: the pills a finger-sized read, like the rest of the touch layout. */
   @media (pointer: coarse) {
-    .pill {
-      padding: 2px 9px;
-      font-size: 12.5px;
-    }
-
-    .gbtn {
+    .grp {
       height: 48px;
-      gap: 10px;
     }
-  }
-
-  .chev {
-    display: flex;
-    margin-left: auto;
-    padding: 0 8px;
-    color: var(--muted);
-  }
-
-  .chev.closed :global(svg) {
-    transform: rotate(-90deg);
   }
 
   .empty {

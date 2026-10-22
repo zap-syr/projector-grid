@@ -471,9 +471,10 @@ Then the existing `build_runner → format → analyze → flutter test`. The re
       52 / 40 / 40, Comfortable 60 / 44 / 44. The Projector column is always shown and
       pinned.
     - **Errors column:** the first badge, *+N* and the popover of all codes.
-    - **Viewer details:** the table keeps the full width while the details are closed and
-      narrows by the 344 px panel when they open; a second click on the same row closes
-      them (a card the same); the viewer's row action is Remote Preview only. The viewer's
+    - **Viewer details:** the details open over the table or the cards, which keep their
+      full width (owner, 2026-10-22; was: the table narrows by 344 px); a second click on
+      the same row closes them (a card the same); the viewer's row action is Remote
+      Preview only. The viewer's
       table has no checkbox column, bulk selector or Control toggle, as today.
     - **Cards stay the default** on every touch screen until the user picks a view.
     - **Fonts:** latin and cyrillic subsets.
@@ -592,6 +593,25 @@ Then the existing `build_runner → format → analyze → flutter test`. The re
       table keeps the full width (a 340 px side panel would leave it ~630 px).
       `controlPlacement` in `device.svelte.ts` gains that rule. Upright screens under
       1024 px (iPad Pro 11", iPad Air) stay cards only.
+    - **Owner's review (2026-10-22), done with Phase 5:**
+      - The data bar runs the whole width above the list and the side panel; Control
+        and the details start under it, so opening either never moves its buttons. The
+        alerts rail keeps the full height.
+      - With no Control beside the list (a viewer, or Control hidden) the details open
+        over the table or the cards, as the app's projector panel does; with Control
+        open they take its place as before. The Control button closes open details.
+      - One group line for the table and the cards (`GroupHeader`: box, chevron,
+        colour square, name, the app's summary); a click anywhere on it folds the group.
+        A *Groups* toggle left of *Columns* serves both views (*Merge into groups* left
+        the Columns menu); the phone keeps the last choice.
+      - Cards are all one height (the error line is always reserved) and the whole card
+        answers a click; a viewer's card has no room kept for ⓘ.
+      - The bulk selector's hidden count is an amber eye-off icon with the number, no
+        word; the selector is sized for *999 selected* plus it.
+      - On touch layouts the *Control* bar lies over the Map, so its tiles don't move;
+        only the zoom buttons step up.
+      - The Map's Phase 4 popover, the touch tables' Preview in the details and the
+        phone's sheets are unchanged.
 
     **Phase 6: cards** (boards *Web: desktop 1440, cards with the info button…*, *Phone:
     cards, the info button and the Control button*, the tablet boards).

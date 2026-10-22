@@ -434,10 +434,11 @@
     pointer-events: none;
   }
 
+  /* Steps up over the touch layouts' Control bar, which lies over the Map (App). */
   .zoom {
     position: absolute;
     right: 16px;
-    bottom: 16px;
+    bottom: calc(16px + var(--select-bar, 0px));
     display: flex;
     align-items: center;
     gap: 2px;

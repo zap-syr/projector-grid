@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
-import type { Alert, Projector } from '../src/lib/api/types';
+import type { Alert } from '../src/lib/api/types';
 import {
   alertBadge,
   alertPill,
@@ -12,7 +12,6 @@ import {
   formatDuration,
   formatStart,
   groupAlerts,
-  groupPills,
   raisedAlerts,
   signalLost,
 } from '../src/lib/logic/alerts';
@@ -173,28 +172,7 @@ describe('raisedAlerts (the cues)', () => {
   });
 });
 
-describe('group header pills and the touch pill', () => {
-  const pj = (id: string, connection: Projector['connection'] = 'connected') =>
-    ({ id, connection }) as Projector;
-
-  test('alerts by severity; auth errors only when nothing else is wrong', () => {
-    const members = [pj('1'), pj('2', 'unauthorized')];
-    expect(groupPills(members, [])).toEqual([
-      { text: '1 auth error', tone: 'warn', kind: 'auth', count: 1 },
-    ]);
-    expect(
-      groupPills(members, [
-        al('1', 'offline', 'critical', 1),
-        al('1', 'error', 'critical', 1, { item: 'F011' }),
-        back(al('2', 'signal-lost', 'critical', 1)),
-        al('9', 'offline', 'critical', 1),
-      ]),
-    ).toEqual([
-      { text: '2 critical', tone: 'crit', kind: 'critical', count: 2 },
-      { text: '1 recovered', tone: 'ok', kind: 'recovered', count: 1 },
-    ]);
-  });
-
+describe('the touch pill', () => {
   test('the pill', () => {
     expect(alertPill([])).toBeNull();
     expect(

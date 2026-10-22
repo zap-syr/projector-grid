@@ -7,25 +7,13 @@
   import type { ColumnId, Config, Density, Projector } from '../../api/types';
   import { cellLines, testPatternLabel } from '../../logic/cells';
   import { renderedColumns, reorderColumn, resolveColumns } from '../../logic/columns';
-  import {
-    buildEntries,
-    groupSummary,
-    matchesFilter,
-    matchesSearch,
-    UNGROUPED,
-  } from '../../logic/rows';
+  import { buildEntries, matchesFilter, matchesSearch, UNGROUPED } from '../../logic/rows';
   import { sortProjectors } from '../../logic/sort';
   import { autoFitWidth, layoutWidths, resizeBase, type ResizeStart } from '../../logic/widths';
   import { live } from '../../state/live.svelte';
   import { tableLayout, type StoredLayout } from '../../state/tableLayout.svelte';
   import { view } from '../../state/view.svelte';
-  import {
-    draggedSelection,
-    isSelectable,
-    selectedRange,
-    toggledAll,
-    triState,
-  } from '../../logic/selection';
+  import { draggedSelection, isSelectable, selectedRange } from '../../logic/selection';
   import { alignment } from '../../state/alignment.svelte';
   import { details } from '../../state/details.svelte';
   import { device } from '../../state/device.svelte';
@@ -34,6 +22,7 @@
   import Checkbox from '../Checkbox.svelte';
   import Icon from '../Icon.svelte';
   import Cell from './Cell.svelte';
+  import GroupHeader from './GroupHeader.svelte';
 
   let {
     config,
@@ -46,17 +35,17 @@
     operator: boolean;
   } = $props();
 
-  /** The pinned checkbox column in operator mode. */
-  const SELECT_W = 44;
+  /**
+   * The pinned checkbox column in operator mode; on touch it's the only
+   * selection target, 52 px and set off by a hairline.
+   */
+  const SELECT_W = $derived(device.touch ? 52 : 44);
   /**
    * The row actions at the row's end, not a column of the menu: Remote
    * Preview, then the operator's Details (a viewer's row click opens them).
+   * Touch has none: a tap on the row opens the details, Preview is there.
    */
-  const ACT_W = $derived.by(() => {
-    // `.pvb`: 30 px with a mouse, 44 px for a finger; 2 px between them.
-    const button = device.touch ? 44 : 30;
-    return (operator ? 2 * button + 2 : button) + 2 * (metrics.hpad - 8) + 6;
-  });
+  const actions = $derived(!device.touch);
 
   /** Row / header height and cell padding per density (`_densityMetrics`). */
   const DENSITY: Record<Density, { row: number; header: number; hpad: number }> = {
@@ -109,6 +98,10 @@
    * everyone's role markers (focused filled, shown ring, closed faint).
    */
   const lead = $derived(operator || alignment.active);
+  // `.pvb` is 30 px, 2 px between the two.
+  const ACT_W = $derived(actions ? (operator ? 62 : 30) + 2 * (metrics.hpad - 8) + 6 : 0);
+  /** A group header's or the empty row's cell spans the whole row. */
+  const span = $derived(cols.length + (lead ? 1 : 0) + (actions ? 1 : 0));
   /** What the data columns share once the lead column is taken out. */
   const dataViewport = $derived(viewport - ACT_W - (lead ? SELECT_W : 0));
 
@@ -132,7 +125,8 @@
    * one delegated listener does. With a mouse the pressed row toggles right
    * away on press, and dragging on sweeps every row passed the same way (in,
    * or out when the pressed row was selected); Shift-click adds a range.
-   * Touch toggles on a tap instead, so a swipe still scrolls.
+   * On touch only the checkbox selects: a tap on the row opens its details,
+   * as a viewer's click does.
    */
   function rowPointer(tbody: HTMLElement) {
     let sweep: { from: string; base: Set<string>; over: string } | null = null;
@@ -164,12 +158,9 @@
         else tap = id;
         return;
       }
+      if (e.pointerType !== 'mouse') return;
       const p = id ? live.projectors.find((x) => x.id === id) : undefined;
       if (!p || !isSelectable(p)) return;
-      if (e.pointerType !== 'mouse') {
-        tap = p.id;
-        return;
-      }
       e.preventDefault(); // no text selection while sweeping
       if (e.shiftKey) {
         rowClick(e, p);
@@ -183,32 +174,42 @@
       window.addEventListener('pointerup', onUp);
     };
     const onTapUp = (e: PointerEvent) => {
-      if (tap && rowIdAt(e.clientX, e.clientY) === tap) {
-        if (alignment.active) alignment.focus(tap);
-        else selection.toggle(tap);
-      }
+      if (tap && alignment.active && rowIdAt(e.clientX, e.clientY) === tap) alignment.focus(tap);
       tap = null;
     };
     const onTapCancel = () => (tap = null); // the finger scrolled instead
 
-    // A viewer selects nothing: a row click opens its details, a second one closes them.
-    const onViewerClick = (e: MouseEvent) => {
-      if (operator || alignment.active || (e.target as Element).closest('button')) return;
-      const id = (e.target as Element).closest<HTMLElement>('tr[data-id]')?.dataset.id;
+    // A viewer's click or anyone's tap opens the row's details, a second one
+    // closes them; the checkbox cell and the buttons keep their own job. A
+    // swipe that scrolls fires no click.
+    const onRowClick = (e: MouseEvent) => {
+      const t = e.target as Element;
+      if (alignment.active || t.closest('button, td.selc')) return;
+      const touch =
+        e instanceof PointerEvent && e.pointerType !== ''
+          ? e.pointerType !== 'mouse'
+          : device.touch;
+      if (operator && !touch) return;
+      const id = t.closest<HTMLElement>('tr[data-id]')?.dataset.id;
       if (id) openDetails(id);
     };
 
     tbody.addEventListener('pointerdown', onDown);
     tbody.addEventListener('pointerup', onTapUp);
     tbody.addEventListener('pointercancel', onTapCancel);
-    tbody.addEventListener('click', onViewerClick);
+    tbody.addEventListener('click', onRowClick);
     return () => {
       onUp();
       tbody.removeEventListener('pointerdown', onDown);
       tbody.removeEventListener('pointerup', onTapUp);
       tbody.removeEventListener('pointercancel', onTapCancel);
-      tbody.removeEventListener('click', onViewerClick);
+      tbody.removeEventListener('click', onRowClick);
     };
+  }
+
+  /** A click anywhere on a group's line folds it; its box and chevron do their own job. */
+  function foldClick(e: MouseEvent, key: string) {
+    if (!(e.target as Element).closest('button')) tableLayout.toggleCollapsed(key);
   }
 
   // ── Resize ──────────────────────────────────────────────────────────────
@@ -353,6 +354,7 @@
     class={layout.density}
     class:resizing={resizing !== null}
     class:op={lead}
+    class:touch={device.touch}
     style:width="{sized.tableWidth + ACT_W + (lead ? SELECT_W : 0)}px"
     style:--selw="{SELECT_W}px"
     style:--row="{metrics.row}px"
@@ -366,7 +368,9 @@
       {#each cols as col, i (col)}
         <col style:width="{sized.widths[i]}px" />
       {/each}
-      <col style:width="{ACT_W}px" />
+      {#if actions}
+        <col style:width="{ACT_W}px" />
+      {/if}
     </colgroup>
     <thead>
       <tr>
@@ -413,39 +417,26 @@
             ></span>
           </th>
         {/each}
-        <th class="pvc"><span class="sr">Actions</span></th>
+        {#if actions}
+          <th class="pvc"><span class="sr">Actions</span></th>
+        {/if}
       </tr>
     </thead>
     <tbody {@attach rowPointer}>
       {#each entries as entry (entry.kind === 'group' ? `g:${entry.key}` : entry.projector.id)}
         {#if entry.kind === 'group'}
           {@const open = !layout.collapsed.includes(entry.key)}
-          <tr class="grp" style:--gcolor={entry.group?.color ?? 'var(--line-strong)'}>
-            <td colspan={cols.length + (lead ? 2 : 1)}>
+          <!-- The whole line folds the group; the chevron is the keyboard path. -->
+          <tr class="grp" onclick={(e) => foldClick(e, entry.key)}>
+            <td colspan={span}>
               <div class="grpcell">
-                {#if operator && !alignment.active}
-                  <!-- In the rows' checkbox column, right above their boxes. -->
-                  <span class="gcb"
-                    ><Checkbox
-                      state={triState(entry.members, selection.ids)}
-                      label="Select {entry.group?.name ?? 'Ungrouped'}"
-                      disabled={!entry.members.some(isSelectable)}
-                      onclick={() => selection.set(toggledAll(entry.members, selection.ids))}
-                    /></span
-                  >
-                {/if}
-                <button
-                  class="chev"
-                  class:closed={!open}
-                  aria-expanded={open}
-                  aria-label="{open ? 'Collapse' : 'Expand'} {entry.group?.name ?? 'Ungrouped'}"
-                  onclick={() => tableLayout.toggleCollapsed(entry.key)}
-                >
-                  <Icon name="chevron" size={15} />
-                </button>
-                <span class="gdot" class:none={entry.key === UNGROUPED}></span>
-                <b>{entry.group?.name ?? 'Ungrouped'}</b>
-                <span class="cnt">{groupSummary(entry.members)}</span>
+                <GroupHeader
+                  group={entry.key === UNGROUPED ? null : (entry.group ?? null)}
+                  members={entry.members}
+                  {open}
+                  select={operator && !alignment.active}
+                  ontoggle={() => tableLayout.toggleCollapsed(entry.key)}
+                />
               </div>
             </td>
           </tr>
@@ -496,37 +487,39 @@
               </td>
             {/each}
             <!-- No row actions in Alignment mode; the cell keeps its width. -->
-            <td class="pvc">
-              {#if !alignment.active}
-                <span class="racts">
-                  <button
-                    class="pvb"
-                    aria-label="Remote Preview of {p.ip}"
-                    title="Remote Preview"
-                    onclick={() => openPreview(p.id)}
-                  >
-                    <Icon name="preview" size={17} />
-                  </button>
-                  {#if operator}
+            {#if actions}
+              <td class="pvc">
+                {#if !alignment.active}
+                  <span class="racts">
                     <button
                       class="pvb"
-                      class:on={details.id === p.id}
-                      aria-pressed={details.id === p.id}
-                      aria-label="Details of {p.ip}"
-                      title="Details"
-                      onclick={() => openDetails(p.id)}
+                      aria-label="Remote Preview of {p.ip}"
+                      title="Remote Preview"
+                      onclick={() => openPreview(p.id)}
                     >
-                      <Icon name="info" size={17} />
+                      <Icon name="preview" size={17} />
                     </button>
-                  {/if}
-                </span>
-              {/if}
-            </td>
+                    {#if operator}
+                      <button
+                        class="pvb"
+                        class:on={details.id === p.id}
+                        aria-pressed={details.id === p.id}
+                        aria-label="Details of {p.ip}"
+                        title="Details"
+                        onclick={() => openDetails(p.id)}
+                      >
+                        <Icon name="info" size={17} />
+                      </button>
+                    {/if}
+                  </span>
+                {/if}
+              </td>
+            {/if}
           </tr>
         {/if}
       {:else}
         <tr>
-          <td class="empty" colspan={cols.length + (lead ? 2 : 1)}>
+          <td class="empty" colspan={span}>
             {live.projectors.length === 0 ? 'No projectors in this project' : 'No projectors match'}
           </td>
         </tr>
@@ -606,6 +599,11 @@
   .selc {
     padding: 0;
     text-align: center;
+  }
+
+  /* Touch: the checkbox column is the only way to select, so a hairline sets it off from the row a tap opens. */
+  .touch tr.row td.selc {
+    border-right: 1px solid var(--line);
   }
 
   .sr {
@@ -823,13 +821,6 @@
     color: var(--on-pc);
   }
 
-  @media (pointer: coarse) {
-    .pvb {
-      width: 44px;
-      height: min(44px, var(--row) - 4px);
-    }
-  }
-
   .mk {
     display: inline-block;
     width: 12px;
@@ -882,53 +873,8 @@
     padding-left: 0;
   }
 
-  .gcb {
-    width: var(--selw);
-    display: flex;
-    justify-content: center;
-    margin-right: -8px;
-  }
-
-  .grpcell b {
-    font-weight: 650;
-  }
-
-  .chev {
-    width: 24px;
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 0;
-    border-radius: 6px;
-    background: none;
-    color: var(--muted);
+  tr.grp {
     cursor: pointer;
-  }
-
-  .chev:hover {
-    background: var(--hover);
-  }
-
-  .chev.closed :global(svg) {
-    transform: rotate(-90deg);
-  }
-
-  .gdot {
-    width: 10px;
-    height: 10px;
-    border-radius: 3px;
-    background: var(--gcolor);
-  }
-
-  .gdot.none {
-    background: none;
-    border: 1.5px solid var(--line-strong);
-  }
-
-  .cnt {
-    font-size: 12.5px;
-    color: var(--muted);
   }
 
   .empty {
