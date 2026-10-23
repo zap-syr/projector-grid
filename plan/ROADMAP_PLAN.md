@@ -1389,7 +1389,7 @@ Useful beyond the web page: Companion, QLab, custom scripts can poll or drive th
 
 ---
 
-## 6. `[ ]` R4 — Global Error Handler & Log File (accepted 2026-10-23, for the next release)
+## 6. `[~]` R4 — Global Error Handler & Log File (accepted 2026-10-23, for the next release)
 
 ### What it means
 Today, if an unexpected exception is thrown somewhere in Flutter code (a widget build error, a
@@ -1449,6 +1449,45 @@ These replace the proposal above where they differ.
   tests; the hooks in `main.dart`; `eventLogProvider.log()` forwards each event to the
   event log file; the isolate's error port in `isolate_protocol_service.dart`; the menu
   item in `top_menu_bar.dart`.
+
+### Progress
+- `[x]` Built (2026-10-23), awaiting the owner's check in the app. As built:
+  - `core/services/log_files.dart` (pure: names, pruning, line layout, session header,
+    `ErrorRepeatGate`) and `core/services/app_log_file.dart` (`DailyLogFile`, the `AppLog`
+    facade; it writes nothing until `start`, so tests write no files). The pure helpers
+    sit in `core/` rather than `domain/`, since `core/` doesn't import features.
+    `domain/event_log_line.dart` lays an Event Log event out as a file line: a batch
+    line carries its command, every line of a batch its number (`[batch 7]`), commands
+    their source and NTCONTROL code (`[VXX:LNSI2=+00001]`: a lens step's name doesn't
+    say which way; the code stays out of the UI), OSC lines their sender. The projector
+    column is 28 wide, so the text starts in one place for any IP with its model.
+  - Commands to several projectors are compact in the file (owner, 2026-10-23, after
+    the first run gave 21 lines per command on 20 projectors): a line only for each
+    projector that failed or was skipped, and the summary with the counts
+    (`…, 18 sent, 1 failed, 1 skipped  [OSH:1]  [batch 0]`). `EventLogFileLines`
+    counts a batch's lines until its summary. The in-app Event Log is unchanged.
+  - `main.dart`: `AppLog.start` with version and OS, `FlutterError.onError` (the console
+    still shows it), `PlatformDispatcher.instance.onError`, and `debugPrint` copied into
+    the app log as INFO, which takes every OSC diagnostic.
+  - Protocol worker: spawned with `errorsAreFatal: false` (an uncaught error used to kill
+    it, and every later call would wait forever), its uncaught errors and the errors of
+    failed calls, with the worker's stack, go to the app log.
+  - Web server: a middleware logs a request that threw (shelf still answers 500).
+  - Remote Preview socket errors are left out after all: they are a projector in standby
+    or unplugged, normal events, not internal errors.
+  - Project: *New project*, *Project opened* and *Project saved as* as a NOTE in both
+    files; a failed save (silent before) and a failed open go to the app log with the
+    stack.
+  - `AppLog.stop()` (held-back repeats, session end, flush) right before every
+    `windowManager.destroy()` and on the macOS quit path.
+  - *Help → Open Logs Folder*.
+  - Found on the way: *File → Exit* destroyed the window itself, skipping what Ctrl+Q
+    does (leaving Alignment mode, the macOS termination mark, now also the logs). Both
+    now run one `ExitIntent` action (defined in `top_menu_bar.dart`).
+  - Tests: `test/unit/log_files_test.dart`, `test/unit/event_log_line_test.dart`, File →
+    Exit in `test/widgets/main_screen_test.dart`.
+  - Checked by the owner in the app (2026-10-23): both files written, Event Log lines
+    in the event log, the folder opens.
 
 ---
 
