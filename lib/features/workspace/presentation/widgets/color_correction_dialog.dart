@@ -107,14 +107,13 @@ class _ColorCorrectionDialogState extends ConsumerState<ColorCorrectionDialog> {
       );
     }
     _applyTemperature(qte);
-    final seq = _readSeq;
-    await Future.wait([
-      if (_method != MatchMethod.off) _readMatching(_method, seq),
+    await _readValues(
+      _method,
       // White balance is also what Color Matching edits; QTE reads ER401
       // then, so the method decides, not the mode.
-      if (_method != MatchMethod.off || _tempMode.isUser)
-        _readWhiteBalance(seq),
-    ]);
+      whiteBalance: _method != MatchMethod.off || _tempMode.isUser,
+      seq: _readSeq,
+    );
     if (mounted) setState(() => _loading = false);
   }
 
@@ -137,37 +136,50 @@ class _ColorCorrectionDialogState extends ConsumerState<ColorCorrectionDialog> {
   // QHR..QOB report whichever User slot (OTE:04 / OTE:09) is active: there
   // is no per-slot query (confirmed live), so they are read again on every
   // switch.
-  Future<void> _readWhiteBalance(int seq) async {
-    final r = await Future.wait([
-      for (final cmd in ['QHR', 'QHG', 'QHB', 'QOR', 'QOG', 'QOB'])
-        _client.query(cmd),
-    ]);
-    if (!mounted || seq != _readSeq) return;
-    setState(() {
-      _whHigh = List.unmodifiable([
-        for (var i = 0; i < 3; i++) parseWhiteBalanceHigh(r[i], _whHigh[i]),
-      ]);
-      _whLow = List.unmodifiable([
-        for (var i = 0; i < 3; i++) parseWhiteBalanceLow(r[i + 3], _whLow[i]),
-      ]);
-    });
-  }
+  static const _whiteBalanceQueries = [
+    'QHR',
+    'QHG',
+    'QHB',
+    'QOR',
+    'QOG',
+    'QOB',
+  ];
 
-  // Read on every switch to the method, also back to one already seen, so
-  // values changed elsewhere meanwhile show up.
-  Future<void> _readMatching(MatchMethod m, int seq) async {
-    final results = await Future.wait([
-      for (final c in m.colors) _client.query(colorMatchingQuery(m, c)),
+  // [m]'s colours (none for Off) and, with [whiteBalance], the white balance,
+  // as one batched burst: 7 colors and white balance together are 13
+  // connections, and weaker models answer ERR3 to that many at once. Read on
+  // every switch, also back to a method already seen, so values changed
+  // elsewhere meanwhile show up.
+  Future<void> _readValues(
+    MatchMethod m, {
+    required bool whiteBalance,
+    required int seq,
+  }) async {
+    final colors = m.colors;
+    final replies = await _client.queryAll([
+      for (final c in colors) colorMatchingQuery(m, c),
+      if (whiteBalance) ..._whiteBalanceQueries,
     ]);
     if (!mounted || seq != _readSeq) return;
     setState(() {
-      final next = {..._values[m]!};
-      for (final (i, c) in m.colors.indexed) {
-        final raw = results[i];
-        final rgb = raw == null ? null : parseRgbTriple(raw);
-        if (rgb != null) next[c] = rgb;
+      if (colors.isNotEmpty) {
+        final next = {..._values[m]!};
+        for (final (i, c) in colors.indexed) {
+          final raw = replies[i];
+          final rgb = raw == null ? null : parseRgbTriple(raw);
+          if (rgb != null) next[c] = rgb;
+        }
+        _values = {..._values, m: next};
       }
-      _values = {..._values, m: next};
+      if (whiteBalance) {
+        final r = replies.sublist(colors.length);
+        _whHigh = List.unmodifiable([
+          for (var i = 0; i < 3; i++) parseWhiteBalanceHigh(r[i], _whHigh[i]),
+        ]);
+        _whLow = List.unmodifiable([
+          for (var i = 0; i < 3; i++) parseWhiteBalanceLow(r[i + 3], _whLow[i]),
+        ]);
+      }
     });
   }
 
@@ -211,9 +223,7 @@ class _ColorCorrectionDialogState extends ConsumerState<ColorCorrectionDialog> {
     if (m == MatchMethod.off) {
       _enqueue(() => _readTemperature(seq));
     } else {
-      _enqueue(
-        () => Future.wait([_readMatching(m, seq), _readWhiteBalance(seq)]),
-      );
+      _enqueue(() => _readValues(m, whiteBalance: true, seq: seq));
     }
   }
 
@@ -261,7 +271,11 @@ class _ColorCorrectionDialogState extends ConsumerState<ColorCorrectionDialog> {
     _flushPending();
     setState(() => _tempMode = m);
     _write(m.writeCommand(_kelvin));
-    if (m.isUser) _enqueue(() => _readWhiteBalance(seq));
+    if (m.isUser) {
+      _enqueue(
+        () => _readValues(MatchMethod.off, whiteBalance: true, seq: seq),
+      );
+    }
   }
 
   static String _wbKey(bool isHigh, int channel) =>

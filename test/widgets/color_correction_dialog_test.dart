@@ -20,6 +20,10 @@ import '../helpers/test_config_dir.dart';
 class _Fake extends FakeProtocolService {
   Completer<void>? hold;
 
+  /// Most queries waiting for a reply at once.
+  int maxInFlight = 0;
+  int _inFlight = 0;
+
   @override
   Future<String?> sendRawCommand(
     String ip,
@@ -28,7 +32,14 @@ class _Fake extends FakeProtocolService {
     String password,
     String cmd,
   ) async {
-    if (cmd.startsWith('Q')) await hold?.future;
+    if (cmd.startsWith('Q')) {
+      _inFlight++;
+      if (_inFlight > maxInFlight) maxInFlight = _inFlight;
+      // Yields, so every query of a batch is counted before any returns.
+      await Future<void>.value();
+      await hold?.future;
+      _inFlight--;
+    }
     final reply = await super.sendRawCommand(ip, port, login, password, cmd);
     return reply ?? (cmd.startsWith('Q') ? null : cmd);
   }
@@ -217,6 +228,24 @@ void main() {
     await tester.tap(tile('magenta'));
     await tester.pump();
     expect(resetEnabled(tester), isTrue);
+  });
+
+  testWidgets('7 colors and white balance are read in batches, not at once', (
+    tester,
+  ) async {
+    script(method: 2, qte: 'ER401');
+    await pumpDialog(tester);
+    expect(queries(), containsAll(['QVX:C7CS6', 'QOB']));
+    expect(fake.maxInFlight, inInclusiveRange(1, 8));
+  });
+
+  testWidgets('a switch to 7 colors reads in batches too', (tester) async {
+    script();
+    await pumpDialog(tester);
+    fake.maxInFlight = 0;
+    await tester.tap(find.text('7 colors'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(fake.maxInFlight, inInclusiveRange(1, 8));
   });
 
   testWidgets('switching method writes CMAI0, then reads that method', (
