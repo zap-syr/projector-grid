@@ -69,11 +69,14 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
       _service.stop();
     });
     ref.listen(workspaceProvider, (_, nodes) {
-      _pushWorkspace();
+      _pushGroups();
       _previews.refresh();
     });
-    // A projector's status also changes with its alerts, without a poll.
-    ref.listen(monitoringStatusProvider, (_, _) => _pushWorkspace());
+    // Projectors go out from here, not from the workspace listener: that one
+    // can run before this provider sees the change, so a just-added node
+    // would have no status yet. It rebuilds on every workspace change, and
+    // on alerts without a poll.
+    ref.listen(monitoringStatusProvider, (_, _) => _pushProjectors());
     // Raised, cleared or acknowledged (in the app or on any page).
     ref.listen(alertsProvider, (_, _) {
       if (_hub.clientCount == 0) return;
@@ -201,13 +204,17 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
     _previews.closeAll();
   }
 
-  void _pushWorkspace() {
-    // With no page connected there's nobody to diff for; the next page gets
-    // a full snapshot on connect.
+  // With no page connected there's nobody to diff for; the next page gets a
+  // full snapshot on connect.
+  void _pushProjectors() {
     if (_hub.clientCount == 0) return;
     final projectors = this.projectors();
     projectorEvents(_sentProjectors, projectors).forEach(_hub.broadcast);
     _sentProjectors = projectors;
+  }
+
+  void _pushGroups() {
+    if (_hub.clientCount == 0) return;
     final groups = this.groups();
     if (!sameGroupsJson(_sentGroups, groups)) {
       _hub.broadcast((name: WebEvents.groups, data: groups));
