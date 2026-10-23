@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../../core/services/app_config_dir.dart';
+import '../../../../core/services/app_log_file.dart';
 import '../../domain/log_event.dart';
 import '../../domain/projector_group.dart';
 import '../../domain/projector_node.dart';
@@ -136,6 +137,7 @@ class ProjectStateNotifier extends _$ProjectStateNotifier {
     ref.read(scheduledTasksProvider.notifier).loadTasks([]);
     _suppressDirty = false;
     state = state.copyWith(clearCurrentFilePath: true, isDirty: false);
+    AppLog.note('New project');
   }
 
   Future<void> openProject(String path) async {
@@ -171,7 +173,9 @@ class ProjectStateNotifier extends _$ProjectStateNotifier {
         recentProjects: updated,
       );
       _saveRecentProjects(updated);
-    } catch (e) {
+      AppLog.note('Project opened: $path');
+    } catch (e, stack) {
+      AppLog.error('Opening the project $path', e, stack);
       ref
           .read(eventLogProvider.notifier)
           .log(
@@ -335,6 +339,7 @@ if (\$r -eq 'OK') { Write-Output \$dialog.FileName }
       await file.parent.create(recursive: true);
       await file.writeAsString(json);
 
+      final renamed = path != state.currentFilePath;
       final updated = _addToRecent(path, state.recentProjects);
       state = state.copyWith(
         currentFilePath: path,
@@ -342,8 +347,10 @@ if (\$r -eq 'OK') { Write-Output \$dialog.FileName }
         recentProjects: updated,
       );
       _saveRecentProjects(updated);
+      if (renamed) AppLog.note('Project saved as: $path');
       return true;
-    } catch (_) {
+    } catch (e, stack) {
+      AppLog.error('Saving the project to $path', e, stack);
       return false;
     }
   }

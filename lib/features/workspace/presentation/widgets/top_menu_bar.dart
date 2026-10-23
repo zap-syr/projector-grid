@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:window_manager/window_manager.dart';
 
 import '../providers/alignment_provider.dart';
 import '../providers/workspace_provider.dart';
@@ -18,8 +17,15 @@ import 'common/menu_check_gutter.dart';
 import 'add_projector_dialog.dart';
 import 'alignment_banner.dart';
 import 'monitoring_table.dart';
+import '../../../../core/services/app_log_file.dart';
 import '../../../../core/services/docs_service.dart';
 import '../../../../core/theme/app_theme.dart';
+
+/// Quit, handled by the main screen's `Actions`: File → Exit and Ctrl+Q
+/// take the same path (unsaved changes, leaving Alignment mode, the logs).
+class ExitIntent extends Intent {
+  const ExitIntent();
+}
 
 class TopMenuBar extends ConsumerWidget {
   const TopMenuBar({super.key});
@@ -233,8 +239,9 @@ class TopMenuBar extends ConsumerWidget {
                     shortcutLabel: 'Ctrl+Q',
                     width: _menuItemWidth,
                     onPressed: () async {
-                      if (!await confirmUnsavedChanges(context, ref)) return;
-                      windowManager.destroy();
+                      // The same path as Ctrl+Q, which also puts the
+                      // projectors back from Alignment mode.
+                      Actions.maybeInvoke(context, const ExitIntent());
                     },
                   ),
                 ],
@@ -484,6 +491,12 @@ class TopMenuBar extends ConsumerWidget {
                     label: 'OSC Reference',
                     width: _menuItemWidth,
                     onPressed: () => DocsService.openOscReference(),
+                  ),
+                  _menuItem(
+                    context,
+                    label: 'Open Logs Folder',
+                    width: _menuItemWidth,
+                    onPressed: AppLog.openFolder,
                   ),
                   const Divider(),
                   _menuItem(

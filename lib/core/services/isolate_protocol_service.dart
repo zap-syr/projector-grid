@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:isolate';
 
+import 'app_log_file.dart';
 import 'panasonic_protocol_service.dart';
 
 enum _Op {
@@ -26,27 +27,46 @@ enum _Op {
 class IsolateProtocolService extends PanasonicProtocolService {
   IsolateProtocolService() {
     _replies.listen(_onReply);
-    _worker = Isolate.spawn(_workerMain, _replies.sendPort);
+    _errors.listen(_onUncaught);
+    // Not fatal: an uncaught error in one exchange would otherwise kill the
+    // worker, and every call after it would wait forever.
+    _worker = Isolate.spawn(
+      _workerMain,
+      _replies.sendPort,
+      errorsAreFatal: false,
+      onError: _errors.sendPort,
+    );
   }
 
   final _replies = ReceivePort();
+  final _errors = ReceivePort();
   final _pending = <int, Completer<Object?>>{};
   final _workerPort = Completer<SendPort>();
   late final Future<Isolate> _worker;
   var _nextId = 0;
 
   void _onReply(Object? message) {
-    if (message is SendPort) {
-      _workerPort.complete(message);
-      return;
+    switch (message) {
+      case final SendPort port:
+        _workerPort.complete(port);
+      // A call that threw in the worker: the caller gets the error, the app
+      // log gets the worker's stack, which the caller's doesn't show.
+      case (String error, String stack):
+        AppLog.error('Protocol worker', error, stack);
+      case (int id, bool ok, Object? value):
+        final completer = _pending.remove(id)!;
+        if (ok) {
+          completer.complete(value);
+        } else {
+          completer.completeError(value!);
+        }
     }
-    final (id, ok, value) = message as (int, bool, Object?);
-    final completer = _pending.remove(id)!;
-    if (ok) {
-      completer.complete(value);
-    } else {
-      completer.completeError(value!);
-    }
+  }
+
+  // The worker's uncaught errors arrive as `[error, stack]`, both text.
+  void _onUncaught(Object? message) {
+    final [error, stack] = message as List<Object?>;
+    AppLog.error('Protocol worker, uncaught', error!, stack);
   }
 
   Future<T> _call<T>(_Op op, List<Object?> args) async {
@@ -60,6 +80,7 @@ class IsolateProtocolService extends PanasonicProtocolService {
   Future<void> dispose() async {
     (await _worker).kill(priority: Isolate.immediate);
     _replies.close();
+    _errors.close();
   }
 
   @override
@@ -134,9 +155,10 @@ class IsolateProtocolService extends PanasonicProtocolService {
       try {
         final result = await _dispatch(service, op, a);
         replies.send((id, true, result));
-      } catch (e) {
+      } catch (e, stack) {
         // Without a reply the caller's future would never complete.
         replies.send((id, false, e.toString()));
+        replies.send((e.toString(), stack.toString()));
       }
     });
   }

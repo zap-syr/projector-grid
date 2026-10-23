@@ -4,10 +4,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:screen_retriever/screen_retriever.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'app/app.dart';
+import 'core/services/app_log_file.dart';
 import 'core/services/window_prefs_service.dart';
 
 import 'dart:io' show Platform;
@@ -42,8 +44,44 @@ Future<bool> _isPositionOnScreen(WindowPrefs prefs) async {
   }
 }
 
+/// Internal errors go to the app log only, never to the UI (ROADMAP §6);
+/// the console still shows them in a debug run.
+void _logInternalErrors() {
+  final presentError = FlutterError.onError;
+  FlutterError.onError = (details) {
+    presentError?.call(details);
+    final context = details.context;
+    AppLog.error(
+      context == null ? 'Flutter' : 'Flutter, $context',
+      details.exception,
+      details.stack,
+    );
+  };
+  final consolePrint = debugPrint;
+  PlatformDispatcher.instance.onError = (error, stack) {
+    consolePrint('Uncaught: $error\n$stack');
+    AppLog.error('Uncaught', error, stack);
+    return true;
+  };
+  // What only reached the console (an unreadable OSC message, a failed
+  // send) is lost in a release build otherwise.
+  debugPrint = (message, {wrapWidth}) {
+    consolePrint(message, wrapWidth: wrapWidth);
+    if (message != null) AppLog.info(message);
+  };
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  final package = await PackageInfo.fromPlatform();
+  AppLog.start(
+    appVersion:
+        '${package.version}+${package.buildNumber}'
+        '${kReleaseMode ? '' : (kProfileMode ? ', profile' : ', debug')}',
+    os: '${Platform.operatingSystem} ${Platform.operatingSystemVersion}',
+  );
+  _logInternalErrors();
 
   // The bundled fonts' OFL licences, alongside the packages' own on the
   // Third-party licenses page.

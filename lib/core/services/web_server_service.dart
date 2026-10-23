@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 
+import 'app_log_file.dart';
+
 /// Headers every response carries. The page loads nothing from other origins
 /// (fonts and icons are bundled), so `'self'` is all it needs; inline styles
 /// are allowed for Svelte's `style:` bindings.
@@ -14,6 +16,15 @@ const webSecurityHeaders = {
 
 Middleware addWebSecurityHeaders() => createMiddleware(
   responseHandler: (r) => r.change(headers: webSecurityHeaders),
+);
+
+/// A request that threw goes to the app log with its stack; shelf still
+/// answers it with a 500.
+Middleware logWebErrors() => createMiddleware(
+  errorHandler: (error, stack) {
+    AppLog.error('Web server', error, stack);
+    Error.throwWithStackTrace(error, stack);
+  },
 );
 
 /// HTTP server for the Web UI, bound on all IPv4 interfaces so phones on the
@@ -31,6 +42,7 @@ class WebServerService {
       _server = await shelf_io.serve(
         const Pipeline()
             .addMiddleware(addWebSecurityHeaders())
+            .addMiddleware(logWebErrors())
             .addHandler(handler),
         InternetAddress.anyIPv4,
         port,

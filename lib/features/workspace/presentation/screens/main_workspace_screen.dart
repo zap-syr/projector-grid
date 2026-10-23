@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../../../../core/services/app_log_file.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../providers/alert_notifications_provider.dart';
 import '../providers/alerts_provider.dart';
@@ -40,10 +41,6 @@ class _SaveProjectIntent extends Intent {
 
 class _SaveAsProjectIntent extends Intent {
   const _SaveAsProjectIntent();
-}
-
-class _ExitIntent extends Intent {
-  const _ExitIntent();
 }
 
 class _RefreshIntent extends Intent {
@@ -215,7 +212,10 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
     if (call.method != 'confirmQuit') return true;
     if (!mounted) return true;
     final canQuit = await TopMenuBar.confirmUnsavedChanges(context, ref);
-    if (canQuit) await _leaveAlignmentMode();
+    if (canQuit) {
+      await _leaveAlignmentMode();
+      AppLog.stop();
+    }
     return canQuit;
   }
 
@@ -260,6 +260,7 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
   @override
   void onWindowClose() async {
     if (!mounted) {
+      AppLog.stop();
       windowManager.destroy();
       return;
     }
@@ -267,6 +268,7 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
     if (canProceed) {
       await _leaveAlignmentMode();
       await _markTerminationApproved();
+      AppLog.stop();
       await windowManager.destroy();
     }
   }
@@ -307,7 +309,7 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
             shift: true,
           ): const _SaveAsProjectIntent(),
           const SingleActivator(LogicalKeyboardKey.keyQ, control: true):
-              const _ExitIntent(),
+              const ExitIntent(),
           const SingleActivator(LogicalKeyboardKey.f5): const _RefreshIntent(),
           const SingleActivator(LogicalKeyboardKey.digit1, control: true):
               const _ShowControlsIntent(),
@@ -328,7 +330,7 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
               shift: true,
             ): const _SaveAsProjectIntent(),
             const SingleActivator(LogicalKeyboardKey.keyQ, meta: true):
-                const _ExitIntent(),
+                const ExitIntent(),
             const SingleActivator(LogicalKeyboardKey.digit1, meta: true):
                 const _ShowControlsIntent(),
             const SingleActivator(LogicalKeyboardKey.digit2, meta: true):
@@ -369,13 +371,14 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
                 return null;
               },
             ),
-            _ExitIntent: CallbackAction<_ExitIntent>(
+            ExitIntent: CallbackAction<ExitIntent>(
               onInvoke: (_) async {
                 if (!await TopMenuBar.confirmUnsavedChanges(context, ref)) {
                   return null;
                 }
                 await _leaveAlignmentMode();
                 await _markTerminationApproved();
+                AppLog.stop();
                 await windowManager.destroy();
                 return null;
               },

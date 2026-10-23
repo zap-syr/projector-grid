@@ -1,8 +1,11 @@
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:projector_grid/features/workspace/presentation/providers/alignment_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/project_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/selection_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/workspace_provider.dart';
+import 'package:projector_grid/features/workspace/presentation/widgets/top_menu_bar.dart';
 
 import '../helpers/app_harness.dart';
 import '../helpers/fake_protocol_service.dart';
@@ -62,6 +65,38 @@ void main() {
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
       expect(calls, isNot(contains('destroy')));
+    });
+
+    testWidgets('File, Exit leaves Alignment mode first, as Ctrl+Q does', (
+      tester,
+    ) async {
+      final fake = FakeProtocolService()
+        ..rawResponses.addAll({
+          'QSH': '0',
+          'QTS': '00',
+          'QVX:SEFS1': 'SEFS1=0.0',
+          'QVX:SEFS2': 'SEFS2=0.0',
+        });
+      final calls = await pumpApp(tester, fake);
+      final c = appContainer(tester);
+      c.read(workspaceProvider.notifier).setNodes([node('1'), node('2')]);
+      await tester.pumpAndSettle();
+      await c.read(alignmentProvider.notifier).enter();
+      await tester.pumpAndSettle();
+      expect(c.read(alignmentProvider).active, isTrue);
+
+      // What File, Exit does, from the menu bar's context. (Opening the menu
+      // here overflows its labels in the test font.)
+      Actions.invoke(
+        tester.element(find.byType(TopMenuBar)),
+        const ExitIntent(),
+      );
+      await tester.pumpAndSettle();
+      // The unsaved project asks first.
+      await tester.tap(find.text('Discard'));
+      await tester.pumpAndSettle();
+      expect(c.read(alignmentProvider).active, isFalse);
+      expect(calls, contains('destroy'));
     });
 
     testWidgets('Discard closes the window', (tester) async {
