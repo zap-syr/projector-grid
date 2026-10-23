@@ -7,6 +7,8 @@ import { describe, expect, test, vi } from 'vitest';
 import type { Config, Group, Projector } from '../src/lib/api/types';
 import ProjectorDetails from '../src/lib/components/details/ProjectorDetails.svelte';
 import ProjectorCard from '../src/lib/components/phone/ProjectorCard.svelte';
+import { cardStatus } from '../src/lib/logic/cardStatus';
+import type { CardSize } from '../src/lib/state/cardSize.svelte';
 import { details } from '../src/lib/state/details.svelte';
 import { cardsOnly, controlPlacement, type Screen } from '../src/lib/state/device.svelte';
 
@@ -20,11 +22,13 @@ const projectors = fixture<Projector[]>('projectors');
 const groups = new Map(fixture<Group[]>('groups').map((g) => [g.id, g]));
 const byId = (id: string) => projectors.find((p) => p.id === id) as Projector;
 
-function card(id: string, operator: boolean, open = false) {
+function card(id: string, operator: boolean, open = false, size: CardSize = 'extended') {
   const onselect = vi.fn();
   const ondetails = vi.fn();
   render(ProjectorCard, {
     p: byId(id),
+    size,
+    thresholds: config.thresholds,
     patternLabel: (c: string) => c,
     operator,
     selected: false,
@@ -164,7 +168,7 @@ describe('phone card', () => {
 
   test('an offline projector can’t be selected and shows its state', async () => {
     const { onselect } = card('n4', true);
-    expect(screen.getByText('Offline')).toBeTruthy();
+    expect(screen.getByText(/^Offline/)).toBeTruthy();
     expect(screen.getByRole('checkbox')).toHaveProperty('disabled', true);
     await fireEvent.click(screen.getByRole('button', { name: /^192\.168\.0\.131/ }));
     expect(onselect).not.toHaveBeenCalled();
@@ -174,6 +178,8 @@ describe('phone card', () => {
     const show = (testPattern: string, shutter: 'open' | 'closed') =>
       render(ProjectorCard, {
         p: { ...byId('n2'), testPattern, shutter },
+        size: 'extended',
+        thresholds: config.thresholds,
         patternLabel: () => 'Cross Hatch',
         operator: false,
         selected: false,
@@ -189,5 +195,91 @@ describe('phone card', () => {
     cleanup();
     show('OTS:00', 'open');
     expect(screen.queryByRole('img')).toBeNull();
+  });
+
+  test('Extended labels its values; Compact names them in tooltips', () => {
+    card('n2', true);
+    for (const label of ['Input', 'Signal', 'Intake', 'Exhaust', 'Runtime', 'AC']) {
+      expect(screen.getByText(label)).toBeTruthy();
+    }
+    cleanup();
+    card('n2', true, false, 'compact');
+    expect(screen.queryByText('Runtime')).toBeNull();
+    expect(screen.getByTitle('Intake temperature')).toBeTruthy();
+    expect(screen.getByText('In')).toBeTruthy();
+  });
+
+  test('a wrong login knows nothing: Unknown in place of the values', () => {
+    render(ProjectorCard, {
+      p: { ...byId('n2'), connection: 'unauthorized' },
+      size: 'extended',
+      thresholds: config.thresholds,
+      patternLabel: (c: string) => c,
+      operator: false,
+      selected: false,
+      open: false,
+      onselect: () => {},
+      ondetails: () => {},
+    });
+    // Power, shutter, input, signal, both temperatures, runtime and AC.
+    expect(screen.getAllByText('Unknown')).toHaveLength(8);
+  });
+});
+
+describe('card status footer', () => {
+  const now = new Date();
+  const problem = (over: Partial<Projector['status']['problems'][number]>) => ({
+    level: 'warning' as const,
+    kind: 'temperature' as const,
+    badge: 'Exhaust hot',
+    title: 'Exhaust temperature',
+    value: '52 °C, limit 50 °C',
+    flag: '52°C',
+    since: null,
+    ...over,
+  });
+  const withProblems = (problems: Projector['status']['problems']): Projector => ({
+    ...byId('n2'),
+    status: { ...byId('n2').status, problems },
+  });
+
+  test('no problem reads No problems', () => {
+    expect(cardStatus(withProblems([]), now)).toEqual({
+      tone: 'none',
+      icon: 'check',
+      text: 'No problems',
+    });
+  });
+
+  test('a temperature names its value; the rest count as +N more', () => {
+    expect(cardStatus(withProblems([problem({})]), now).text).toBe('Exhaust hot, 52 °C');
+    const s = cardStatus(
+      withProblems([
+        problem({ level: 'error', kind: 'projectorError', badge: 'Error F305', flag: 'F305' }),
+        problem({}),
+      ]),
+      now,
+    );
+    expect(s).toEqual({ tone: 'error', icon: 'error', text: 'Error F305, +1 more' });
+  });
+
+  test('a lost signal names the input; a wrong login gets the lock', () => {
+    const p = { ...withProblems([problem({ level: 'error', kind: 'signal' })]), input: 'SDI 2' };
+    expect(cardStatus(p, now).text).toBe('Signal lost on SDI 2');
+    const login = cardStatus(
+      withProblems([problem({ kind: 'login', badge: 'Wrong login', flag: 'Login' })]),
+      now,
+    );
+    expect(login).toEqual({ tone: 'warning', icon: 'lock', text: 'Wrong login' });
+  });
+
+  test('offline says when it last answered', () => {
+    const p: Projector = { ...byId('n2'), connection: 'offline', lastSeen: null };
+    expect(cardStatus(p, now)).toEqual({ tone: 'offline', icon: 'offline', text: 'Offline' });
+    const seen = new Date(now);
+    seen.setHours(16, 41);
+    expect(cardStatus({ ...p, lastSeen: seen.toISOString() }, now).text).toBe(
+      'Offline, last seen 16:41',
+    );
   });
 });

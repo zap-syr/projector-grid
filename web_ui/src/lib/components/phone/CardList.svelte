@@ -14,6 +14,7 @@
   } from '../../logic/rows';
   import { sortByIp } from '../../logic/sort';
   import { alignment } from '../../state/alignment.svelte';
+  import { cardSize } from '../../state/cardSize.svelte';
   import { details } from '../../state/details.svelte';
   import { live } from '../../state/live.svelte';
   import { selection } from '../../state/selection.svelte';
@@ -46,7 +47,7 @@
   const entryKey = (e: Entry) => (e.kind === 'group' ? `g:${e.key}` : e.projector.id);
 </script>
 
-<div class="list">
+<div class="list" class:compact={cardSize.value === 'compact'}>
   {#each entries as entry (entryKey(entry))}
     {#if entry.kind === 'group'}
       <!-- The table's group line; the whole line folds it, the chevron is the keyboard path. -->
@@ -70,6 +71,8 @@
       {@const p = entry.projector}
       <ProjectorCard
         {p}
+        size={cardSize.value}
+        thresholds={config.thresholds}
         {patternLabel}
         {operator}
         selected={selection.ids.has(p.id)}
@@ -98,9 +101,21 @@
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
     align-content: start;
-    gap: 8px;
-    padding: 10px 12px 16px;
+    gap: 12px;
+    padding: 12px 16px 16px;
     overscroll-behavior: contain;
+  }
+
+  /* Phones: the boards' tighter list, Compact closest. */
+  @media (max-width: 600px) {
+    .list {
+      gap: 10px;
+      padding: 4px 12px 16px;
+    }
+
+    .list.compact {
+      gap: 8px;
+    }
   }
 
   @media (pointer: coarse) {

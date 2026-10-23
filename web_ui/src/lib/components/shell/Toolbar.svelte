@@ -9,6 +9,7 @@
     triState,
   } from '../../logic/selection';
   import { alignment } from '../../state/alignment.svelte';
+  import { cardSize } from '../../state/cardSize.svelte';
   import { control } from '../../state/control.svelte';
   import { details } from '../../state/details.svelte';
   import { device } from '../../state/device.svelte';
@@ -231,6 +232,26 @@
       {#if menu === 'columns'}
         <ColumnsMenu {config} {layout} />
       {/if}
+    </div>
+  {/if}
+  {#if listMode.value === 'cards' && !device.cardSizeInMenu}
+    <!-- Card size, left of the view switch, in the Cards view only. -->
+    <div class="seg" role="radiogroup" aria-label="Card size">
+      <button
+        role="radio"
+        aria-checked={cardSize.value === 'compact'}
+        aria-label="Compact"
+        title="Compact"
+        onclick={() => cardSize.set('compact')}><Icon name="cardsCompact" size={iconSize} /></button
+      >
+      <button
+        role="radio"
+        aria-checked={cardSize.value === 'extended'}
+        aria-label="Extended"
+        title="Extended"
+        onclick={() => cardSize.set('extended')}
+        ><Icon name="cardsExtended" size={iconSize} /></button
+      >
     </div>
   {/if}
   {#if device.mapAllowed}
@@ -517,7 +538,8 @@
     }
   }
 
-  .seg button[aria-pressed='true'] {
+  .seg button[aria-pressed='true'],
+  .seg button[aria-checked='true'] {
     background: var(--surface);
     color: var(--text);
     box-shadow: var(--sh-1);

@@ -131,9 +131,7 @@
 
       {#if operator}
         <section class="card">
-          <div class="ch">
-            <Icon name="lens" size={16} />Lens, <span class="mono">{focused?.ip ?? ''}</span>
-          </div>
+          <!-- The lens names itself, with Home in its header. -->
           <ControlPanel {config} embedded onclose={() => {}} />
         </section>
 
@@ -331,12 +329,6 @@
 
   .ch :global(svg) {
     color: var(--accent);
-  }
-
-  .mono {
-    font-family: var(--mono);
-    letter-spacing: 0;
-    font-weight: 500;
   }
 
   .seg {

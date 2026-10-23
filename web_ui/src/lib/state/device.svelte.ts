@@ -60,6 +60,11 @@ class DeviceState implements Screen {
   readonly cardsOnly = $derived(cardsOnly(this));
   readonly mapAllowed = $derived(mapAllowed(this));
   readonly control: ControlPlacement = $derived(controlPlacement(this));
+  /**
+   * Card size lives in the header's menu where the toolbar has no room: an
+   * upright phone or tablet (owner, 2026-10-23).
+   */
+  readonly cardSizeInMenu = $derived(this.phone || (this.touch && !this.wide && !this.short));
 
   constructor() {
     watch(PIN_PAD, (m) => (this.pinPad = m));

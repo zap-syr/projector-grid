@@ -895,9 +895,11 @@
   }
 
   /* ── Footer ─────────────────────────────────────────────────────────── */
+  /* Pinned to the bottom: without alerts there is no list to push it there. */
   .ft {
     min-height: 56px;
     flex: none;
+    margin-top: auto;
     display: flex;
     align-items: center;
     gap: 8px;

@@ -87,47 +87,51 @@
     aria-pressed={operator ? (aligning ? role === 'focused' : selected) : undefined}
     aria-haspopup={operator ? undefined : 'dialog'}
   >
-    {#if compact}
-      <span class="cname">
-        <StatusDot connection={p.connection} />
-        <b>{p.name}</b>
-      </span>
-    {:else}
-      <span class="head {tone}">
-        {#if tone === 'offline'}
-          <span class="lab err"><Icon name="power" size={13} />Offline</span>
-        {:else if tone === 'login'}
-          <span class="lab warn"><Icon name="lock" size={13} />Login failed</span>
-        {:else}
-          <span class="ic {powerColor}"><Icon name="power" size={15} /></span>
-          <span class="ic {shutterColor}"
-            ><Icon name={p.shutter === 'open' ? 'eye' : 'eyeOff'} size={15} /></span
+    <!-- Safari doesn't stretch a button's own flex children: the layout lives in .inner. -->
+    <span class="inner">
+      {#if compact}
+        <span class="cname">
+          <StatusDot connection={p.connection} />
+          <b>{p.name}</b>
+        </span>
+      {:else}
+        <span class="head {tone}">
+          {#if tone === 'offline'}
+            <span class="lab err"><Icon name="power" size={13} />Offline</span>
+          {:else if tone === 'login'}
+            <span class="lab warn"><Icon name="lock" size={13} />Login failed</span>
+          {:else}
+            <span class="ic {powerColor}"><Icon name="power" size={15} /></span>
+            <span class="ic {shutterColor}"
+              ><Icon name={p.shutter === 'open' ? 'eye' : 'eyeOff'} size={15} /></span
+            >
+          {/if}
+          <span class="grow"></span>
+          {#if p.connection === 'unprotected'}
+            <span class="ic faint"><Icon name="unlock" size={13} /></span>
+          {/if}
+          <AlertBadge id={p.id} size={15} />
+        </span>
+        <span class="body">
+          <b class="name">{p.name}</b>
+          <span class="ipr">
+            <span class="ip" style:--n={ipChars}>{p.ip}</span>
+            {#if isPatternActive(p.testPattern)}
+              <span
+                class="tp"
+                role="img"
+                aria-label="Test pattern: {patternLabel(p.testPattern)}"
+                style:background={patternSwatch(p.testPattern) ?? 'var(--hover)'}
+              ></span>
+            {/if}
+          </span>
+        </span>
+        {#if group && band}
+          <span class="band" style:background={band.fill} style:color={band.text}>{group.name}</span
           >
         {/if}
-        <span class="grow"></span>
-        {#if p.connection === 'unprotected'}
-          <span class="ic faint"><Icon name="unlock" size={13} /></span>
-        {/if}
-        <AlertBadge id={p.id} size={15} />
-      </span>
-      <span class="body">
-        <b class="name">{p.name}</b>
-        <span class="ipr">
-          <span class="ip" style:--n={ipChars}>{p.ip}</span>
-          {#if isPatternActive(p.testPattern)}
-            <span
-              class="tp"
-              role="img"
-              aria-label="Test pattern: {patternLabel(p.testPattern)}"
-              style:background={patternSwatch(p.testPattern) ?? 'var(--hover)'}
-            ></span>
-          {/if}
-        </span>
-      </span>
-      {#if group && band}
-        <span class="band" style:background={band.fill} style:color={band.text}>{group.name}</span>
       {/if}
-    {/if}
+    </span>
   </button>
 </div>
 
@@ -144,7 +148,6 @@
     position: relative;
     width: 100%;
     display: flex;
-    flex-direction: column;
     padding: 0;
     overflow: hidden;
     border: 1px solid var(--line-strong);
@@ -155,6 +158,15 @@
     text-align: left;
     cursor: pointer;
     transition: border-color 0.12s;
+  }
+
+  .inner {
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
   }
 
   .card:hover {

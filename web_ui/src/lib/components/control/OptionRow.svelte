@@ -6,6 +6,8 @@
   thumbnail beside its name.
 -->
 <script lang="ts">
+  import Icon from '../Icon.svelte';
+
   let {
     label,
     showLabel = false,
@@ -47,6 +49,7 @@
           <option value={o.code}>{o.label}</option>
         {/each}
       </select>
+      <span class="chev"><Icon name="chevron" size={touch ? 18 : 16} /></span>
     </span>
     <button class="btn" {disabled} onclick={() => onset(value)}>{action}</button>
   </span>
@@ -91,11 +94,14 @@
   }
 
   /* The app's control bar: 36 px, the send button tonal so it stands out. */
+  /* Our own chevron: iOS Safari ignores a native select's padding, which put
+     the thumbnail over the pattern's name. */
   select {
+    appearance: none;
     flex: 1;
     height: 36px;
     min-width: 0;
-    padding: 0 10px;
+    padding: 0 34px 0 10px;
     border-radius: 10px;
     border: 1px solid var(--line-strong);
     background: var(--field);
@@ -106,6 +112,16 @@
 
   .sw select {
     padding-left: 40px;
+  }
+
+  .chev {
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    display: flex;
+    color: var(--muted);
+    transform: translateY(-50%);
+    pointer-events: none;
   }
 
   .btn {

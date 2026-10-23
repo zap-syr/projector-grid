@@ -11,6 +11,7 @@
   import { api, ApiError } from '../../api/client';
   import { alerts } from '../../state/alerts.svelte';
   import { alignment } from '../../state/alignment.svelte';
+  import { cardSize } from '../../state/cardSize.svelte';
   import { control } from '../../state/control.svelte';
   import { device } from '../../state/device.svelte';
   import { live } from '../../state/live.svelte';
@@ -109,6 +110,26 @@
         onclick={() => run(() => refresh(true))}
         ><Icon name="refresh" size={18} />Refresh status</button
       >
+    {/if}
+    {#if device.cardSizeInMenu}
+      <!-- An upright phone's or tablet's bar has no room for the toolbar's switch. -->
+      <div class="hr"></div>
+      <div class="lbl">Card size</div>
+      <div class="mseg" role="radiogroup" aria-label="Card size">
+        <button
+          role="radio"
+          aria-checked={cardSize.value === 'compact'}
+          onclick={() => cardSize.set('compact')}
+          ><Icon name="cardsCompact" size={18} />Compact</button
+        >
+        <button
+          role="radio"
+          aria-checked={cardSize.value === 'extended'}
+          onclick={() => cardSize.set('extended')}
+          ><Icon name="cardsExtended" size={18} />Extended</button
+        >
+      </div>
+      {#if operator}<div class="hr"></div>{/if}
     {/if}
     {#if operator}
       <button class="mi" role="menuitem" onclick={() => run(() => session.lock())}
@@ -604,6 +625,47 @@
   }
 
   .seg button[aria-checked='true'] {
+    background: var(--card);
+    color: var(--text);
+    box-shadow: var(--sh-1);
+  }
+
+  .lbl {
+    padding: 6px 10px 4px;
+    color: var(--faint);
+    font-size: 11.5px;
+    font-weight: 500;
+  }
+
+  /* Card size: both choices spelled out, the menu's full width. */
+  .mseg {
+    display: flex;
+    gap: 2px;
+    margin: 0 6px 6px;
+    padding: 3px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--hover);
+  }
+
+  .mseg button {
+    flex: 1;
+    height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 0;
+    border: 0;
+    border-radius: 9px;
+    background: none;
+    color: var(--muted);
+    font-size: 14px;
+    font-weight: 550;
+    cursor: pointer;
+  }
+
+  .mseg button[aria-checked='true'] {
     background: var(--card);
     color: var(--text);
     box-shadow: var(--sh-1);

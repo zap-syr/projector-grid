@@ -33,6 +33,15 @@
 
   let open = $state(false);
   let wrap = $state<HTMLElement>();
+  let pop = $state<HTMLElement>();
+  /** The popover would run off the right edge: it opens leftwards instead. */
+  let flip = $state(false);
+
+  $effect(() => {
+    if (pop && wrap) {
+      flip = wrap.getBoundingClientRect().left + pop.offsetWidth > window.innerWidth - 8;
+    }
+  });
   const text = (code: string | null) => (code === null ? 'Same as focused' : patternLabel(code));
 
   function pick(code: string | null) {
@@ -100,7 +109,9 @@
     {/if}
   </button>
   {#if open && variant === 'banner'}
-    <div class="pop" class:touch={device.touch}>{@render grid()}</div>
+    <div class="pop" class:touch={device.touch} class:flip bind:this={pop}>
+      {@render grid()}
+    </div>
   {/if}
 </div>
 
@@ -238,13 +249,24 @@
     box-shadow: var(--sh-2);
   }
 
-  /* A finger needs bigger swatches than a mouse. */
+  .pop.flip {
+    left: auto;
+    right: 0;
+  }
+
+  /* A finger needs bigger tiles than a mouse; six a row and never taller
+     than the screen under the banner, the rest scrolls inside (owner,
+     2026-10-23: four a row ran off a sideways iPad). */
   .pop.touch {
-    width: 460px;
+    width: 640px;
+    max-height: calc(100dvh - 140px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
     padding: 10px;
   }
 
   .pop.touch .grid {
+    grid-template-columns: repeat(6, 1fr);
     gap: 8px;
   }
 
@@ -254,7 +276,7 @@
   }
 
   .pop.touch .sw.lg {
-    height: 46px;
+    height: 36px;
   }
 
   .grid {

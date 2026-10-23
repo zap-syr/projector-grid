@@ -629,7 +629,8 @@ Then the existing `build_runner → format → analyze → flutter test`. The re
         phone's sheets are unchanged.
 
     **Phase 6: cards** (boards *Web: desktop 1440, cards with the info button…*, *Phone:
-    cards, the info button and the Control button*, the tablet boards).
+    cards, the info button and the Control button*, the tablet boards). The card's
+    layout is replaced by step 14 (Extended and Compact).
     - Card: checkbox; IP in mono with the alert badge; model under it (*, last seen 16:41*
       while offline); power and shutter states; input + `SignalPill` (ellipsized when
       narrow); then *In 25 °C   Ex 39 °C* on its own line, coloured by the alert. Two lines
@@ -724,6 +725,58 @@ Then the existing `build_runner → format → analyze → flutter test`. The re
     upright sheet the board draws), the view switch drops its words below 1600 px so the
     1440 toolbar stays one row, and the alert toast names the projector by IP. Left: the
     real app with the simulator, the owner's review.
+
+14. `[ ]` **Card redesign: Extended and Compact** (owner, 2026-10-23). The Phase 6 card's
+    text and layout read as uneven and hard to scan. Boards: page *Projector card* of the
+    shell canvas https://claude.ai/artifact/THMEEesSxnwzgrQVCYDwqi (*Extended card…*,
+    *Compact card…*, desktop / tablet / phone boards of each). Supersedes the Phase 6
+    card layout (its selection, open, offline and touch rules stay).
+
+    **Two card sizes, different content** (owner): Compact is not just a smaller
+    Extended; Extended adds labels, temperature bars, Runtime and AC.
+
+    **Shared by both:**
+    - Header: checkbox (operator), status dot, IP in mono, model; the active test
+      pattern's thumbnail (tooltip with its name) before ⓘ; no thumbnail while the
+      pattern is off. The viewer has no checkbox and no ⓘ, as now.
+    - Status footer, always there so every card has one height: the projector's verdict
+      in one line. *No problems* (grey, check icon), a warning in amber (*Exhaust hot,
+      52 °C*, *Wrong login*), an error in red (*Error F305, +1 more*, *Signal lost on
+      SDI 2*), offline in grey (*Offline, last seen 16:41*). The card outline takes the
+      footer's tint; the problem badge beside the IP goes.
+    - Selected, details open, offline (dashed, last readings dimmed), wrong login
+      (*Unknown* in every value) and the touch sizes (22 px checkbox, 44 px ⓘ) as in
+      Phase 6.
+
+    **Extended** (desktop 320 px high, touch 352):
+    - Under the header, Power and Shutter as two chips (icon + state in the status
+      colour on a soft fill), no labels.
+    - A two-column grid of label above value, rows split by hairlines: *Input* |
+      *Signal* (pill); *Intake* | *Exhaust* with a bar against the alert threshold
+      (mark at the limit, amber past it; the value's colour follows the alert);
+      *Runtime* | *AC*.
+
+    **Compact** (desktop 146 px high, touch 160):
+    - Header in one row: IP and the model beside it.
+    - A 3 × 2 grid without labels: power / input, shutter / signal, *In* / *Ex*
+      temperatures, so related values stand in one column; names in tooltips. A long
+      value ellipsizes in its own cell (*Warming up* on a 360 px phone is fine).
+
+    **Card size switch:**
+    - Desktop, tablet and sideways phone: an icon segmented control *Compact* /
+      *Extended* left of the view switch, shown in the Cards view only.
+    - Upright phone and upright tablet: *Card size* (Compact / Extended) in the header's
+      menu (⋮ on the phone, the role menu on the tablet), no room in the bar (owner,
+      2026-10-23: on an 820 iPad the switch squeezed the search and the filters).
+    - Stored per browser; Compact by default on phones, Extended elsewhere. The grid's
+      columns follow the card's minimum width as now (Compact on a 1440 desktop
+      without Control: four columns).
+
+    **Progress (2026-10-23):** `ProjectorCard.svelte` draws both sizes, the footer's text
+    comes from `logic/cardStatus.ts` (tested), the choice lives in
+    `state/cardSize.svelte.ts`; the switch is in `Toolbar.svelte` and the phone's ⋮ menu
+    (`Header.svelte`); the cards list takes the boards' 12 px gap. Left: the owner's
+    review in the app.
 
 ## 11. Open points
 

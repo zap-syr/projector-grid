@@ -159,6 +159,10 @@
   /** Set by a drag, pinch or long press so the click that follows does nothing. */
   let swallowClick = false;
   let lastPointer = 'mouse';
+  /** A second finger touched since the first one went down: a pinch, never a tap. */
+  let multiTouch = false;
+  /** When the first finger of the current touch went down. */
+  let pressAt = 0;
   let marquee = $state<Rect | null>(null);
 
   const tileId = (t: EventTarget | null) =>
@@ -185,9 +189,14 @@
     if (e.target === el && (e.offsetX >= el.clientWidth || e.offsetY >= el.clientHeight)) return;
     lastPointer = e.pointerType;
     const touch = e.pointerType !== 'mouse';
+    if (pointers.size === 0) {
+      multiTouch = false;
+      pressAt = e.timeStamp;
+    }
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
     if (touch && pointers.size === 2) {
+      multiTouch = true;
       // A second finger: drop the one-finger gesture (and a marquee's changes).
       if (gesture?.kind === 'marquee') selection.set(gesture.base);
       endGesture();
@@ -277,9 +286,11 @@
     const touch = e.detail !== 0 && lastPointer !== 'mouse';
     const id = tileId(e.target);
     if (id === null) {
-      // Empty space: the app clears the selection; a finger that just missed
-      // a tile shouldn't.
-      if (operator && !touch && !alignment.active) selection.clear();
+      // Empty space clears the selection, as in the app. A finger clears it
+      // only with a short one-finger tap (owner, 2026-10-23): never after a
+      // pinch, whichever finger lifts last, nor after a long press.
+      const tap = !multiTouch && e.timeStamp - pressAt < LONG_PRESS_MS;
+      if (operator && !alignment.active && (!touch || tap)) selection.clear();
       return;
     }
     const p = live.projectors.find((x) => x.id === id);

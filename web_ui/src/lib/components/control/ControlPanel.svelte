@@ -348,11 +348,15 @@
 
 {#snippet lens()}
   {#if embedded}
-    <!-- The Alignment screen's own card names the lens: no header, Home with the setup. -->
+    <!-- The Alignment screen's card: the lens on the focused projector, with
+         Home in its header as on the Control sheet. -->
+    <div class="ch tall">
+      <Icon name="lens" size={16} />Lens, <span class="mono">{alignment.focused?.ip ?? ''}</span>
+      <button class="hbtn" aria-label="Home position" onclick={() => send(act.lensHome())}
+        ><Icon name="home" size={20} /></button
+      >
+    </div>
     {@render touchLensBody()}
-    <button class="tbtn" onclick={() => send(act.lensHome())}>
-      <Icon name="home" size={18} />Home position
-    </button>
     {@render touchSetup()}
   {:else}
     <div class="card">
@@ -537,10 +541,6 @@
     padding: 0;
   }
 
-  .embedded .tbtn {
-    width: 100%;
-  }
-
   h3.lens {
     color: var(--align);
   }
@@ -611,7 +611,12 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
-    padding: 0 12px 12px;
+    padding: 12px;
+  }
+
+  /* A sheet's header has no rule under it: its own space is enough. */
+  .sheet .body {
+    padding-top: 0;
   }
 
   /* ── Touch: the same cards at finger size ─────────────────────────────── */
@@ -652,19 +657,10 @@
     color: var(--faint);
   }
 
-  .tbtn {
-    height: 44px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    margin-top: 12px;
-    border: 1px solid var(--line-strong);
-    border-radius: 12px;
-    background: none;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
+  .ch .mono {
+    font-family: var(--mono);
+    letter-spacing: 0;
+    font-weight: 500;
   }
 
   .touch .disc {
@@ -764,15 +760,23 @@
     cursor: pointer;
   }
 
-  /* Tablets: the desktop's Off + four swatches, at 44 px. */
+  /* Tablets: the desktop's Off + four swatches, at 44 px. Off is as wide as
+     its word with room around it, the swatches share the rest evenly
+     (owner, 2026-10-23). */
+  .pats.touchpats {
+    display: grid;
+    grid-template-columns: auto repeat(4, minmax(0, 1fr));
+  }
+
   .touchpats .pt {
-    width: 56px;
+    width: auto;
+    min-width: 0;
     height: 44px;
     border-radius: 12px;
   }
 
   .touchpats .pt.off {
-    width: auto;
+    padding: 0 16px;
     font-size: 15px;
   }
 

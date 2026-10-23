@@ -131,6 +131,8 @@
   function rowPointer(tbody: HTMLElement) {
     let sweep: { from: string; base: Set<string>; over: string } | null = null;
     let tap: string | null = null;
+    /** The last press's pointer: Safari reports a tap's click as `mouse`. */
+    let pressedWith = '';
 
     const onMove = (e: PointerEvent) => {
       if (!sweep) return;
@@ -146,6 +148,7 @@
     };
 
     const onDown = (e: PointerEvent) => {
+      pressedWith = e.pointerType;
       if (!operator || e.button !== 0) return;
       // The checkbox handles its own click (and would be toggled twice).
       if ((e.target as Element).closest('button')) return;
@@ -185,10 +188,8 @@
     const onRowClick = (e: MouseEvent) => {
       const t = e.target as Element;
       if (alignment.active || t.closest('button, td.selc')) return;
-      const touch =
-        e instanceof PointerEvent && e.pointerType !== ''
-          ? e.pointerType !== 'mouse'
-          : device.touch;
+      const touch = pressedWith !== '' ? pressedWith !== 'mouse' : device.touch;
+      pressedWith = '';
       if (operator && !touch) return;
       const id = t.closest<HTMLElement>('tr[data-id]')?.dataset.id;
       if (id) openDetails(id);
