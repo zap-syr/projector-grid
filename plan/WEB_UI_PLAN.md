@@ -439,10 +439,10 @@ Then the existing `build_runner → format → analyze → flutter test`. The re
     now through `POST /api/refresh` (the app's `refreshAll`); it spins until the cycle is
     done and ignores presses meanwhile, then shows a green check for 1.5 s instead of a
     toast (owner); a locked control still gets a toast. openapi, mock (1.5 s delay), route tests. Checked
-    in Chrome with `dev:mock` on desktop and at 360 / 390 px phone width; not yet against
-    the real app.
+    in Chrome with `dev:mock` on desktop and at 360 / 390 px phone width, and against the
+    real app (owner, 2026-10-23): no bugs found.
 
-13. `[ ]` **Redesign to the app's look** (owner, 2026-10-21). After the app's dialog and
+13. `[x]` **Redesign to the app's look** (owner, 2026-10-21). After the app's dialog and
     Monitoring redesign (`DIALOG_REDESIGN_PLAN.md`) the page no longer matches it. The
     boards are in the *Web Access page* section of the design canvas
     https://claude.ai/artifact/AL2c8Kh9aoXrrv2eUmVdcJ; each phase names the boards it
@@ -723,10 +723,10 @@ Then the existing `build_runner → format → analyze → flutter test`. The re
     desktop 1024 / 1440; dark everywhere, light on desktop and phones) found three things,
     fixed: the tablet's sideways alerts drawer keeps icon buttons (labels only in the
     upright sheet the board draws), the view switch drops its words below 1600 px so the
-    1440 toolbar stays one row, and the alert toast names the projector by IP. Left: the
-    real app with the simulator, the owner's review.
+    1440 toolbar stays one row, and the alert toast names the projector by IP. Checked
+    against the real app with the simulator and reviewed by the owner (2026-10-23): done.
 
-14. `[ ]` **Card redesign: Extended and Compact** (owner, 2026-10-23). The Phase 6 card's
+14. `[x]` **Card redesign: Extended and Compact** (owner, 2026-10-23). The Phase 6 card's
     text and layout read as uneven and hard to scan. Boards: page *Projector card* of the
     shell canvas https://claude.ai/artifact/THMEEesSxnwzgrQVCYDwqi (*Extended card…*,
     *Compact card…*, desktop / tablet / phone boards of each). Supersedes the Phase 6
@@ -775,8 +775,8 @@ Then the existing `build_runner → format → analyze → flutter test`. The re
     **Progress (2026-10-23):** `ProjectorCard.svelte` draws both sizes, the footer's text
     comes from `logic/cardStatus.ts` (tested), the choice lives in
     `state/cardSize.svelte.ts`; the switch is in `Toolbar.svelte` and the phone's ⋮ menu
-    (`Header.svelte`); the cards list takes the boards' 12 px gap. Left: the owner's
-    review in the app.
+    (`Header.svelte`); the cards list takes the boards' 12 px gap. Reviewed by the owner
+    in the app (2026-10-23): done.
 
 ## 11. Open points
 

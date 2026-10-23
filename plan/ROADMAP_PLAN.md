@@ -24,7 +24,7 @@ accepted item so each can be picked up independently. Edge Blending has its own 
 | R1 | Per-projector command queue | `[later]` | Stress test: newer models have no session cap, only slower replies; Geometry/Color dialogs open rarely. Revisit only if field reports show `ERR3` on older models |
 | R2 | Credentials in OS keychain | `[dropped]` | Not a concern for this deployment |
 | R3 | Autosave / crash recovery | `[dropped]` | The project holds only card layout, cheap to redo |
-| R4 | Global error handler + log file | **Clarified** → §6, awaiting a go/no-go | The owner didn't follow the original one-liner — explained in §6 |
+| R4 | Global error handler + log file | **Accepted** (2026-10-23) → §6 | Two daily files (events, app errors), app errors never shown in the UI, 14 days |
 | R5 | Show lock mode | `[later]` | During shows the app is mostly used for monitoring; accidental commands are unlikely |
 | R6 | Pre-release test suite | **Accepted** → §7, `[~]` suite in place | Owner asked for a concrete list |
 | U1 | Fix light theme in dialogs | **Accepted** → §8, `[x]` done | |
@@ -907,13 +907,13 @@ Build order: engine → Preferences (fields, dropdown, Alerts section) → card 
 - `[ ]` Signal watch on weak Wi-Fi (hardware): the PC on poor Wi-Fi with the watch on.
   Timeouts are expected; the check is no false Signal lost or Offline, queries don't pile
   up and the UI stays responsive.
-- `[ ]` Color Correction reads in batches: on open in a matching mode, and on every
-  switch to one, it starts the colour reads and the 6 white-balance reads at once
-  (13 connections for 7 colors, `color_correction_dialog.dart` `_loadValues` /
-  `_selectMethod`), past the 3-per-projector ceiling measured for the poll
+- `[x]` Color Correction reads in batches (2026-10-23): on open in a matching mode, and on
+  every switch to one, it started the colour reads and the 6 white-balance reads at once
+  (13 connections for 7 colors), past the 3-per-projector ceiling measured for the poll
   (`_telemetryConcurrencyFor`); weaker models answer ERR3 to wide bursts and the dialog
-  would show defaults for the values that failed. Route them through
-  `ProjectorSettingsClient.queryAll` or a smaller cap.
+  would show defaults for the values that failed. Now one `_readValues` sends them through
+  `ProjectorSettingsClient.queryAll` (batches of 8, as Geometry and Edge Blending); a
+  widget test checks no more than 8 are in flight.
 - `[later]` A missed-readings warning in the event log when the watch gets no answers
   from a projector for a while: under bad conditions it goes blind silently, and the
   operator can't tell a short dropout may have been missed.
@@ -1389,7 +1389,7 @@ Useful beyond the web page: Companion, QLab, custom scripts can poll or drive th
 
 ---
 
-## 6. `[ ]` R4 — Global Error Handler & Log File (explanation, awaiting go/no-go)
+## 6. `[ ]` R4 — Global Error Handler & Log File (accepted 2026-10-23, for the next release)
 
 ### What it means
 Today, if an unexpected exception is thrown somewhere in Flutter code (a widget build error, a
@@ -1411,6 +1411,44 @@ keeps only the last 500 entries in memory — once the app is closed, the histor
    command failed, and whether the app hit an internal error.
 
 Small (≈1 day), no new dependencies. Also listed as item 7 in `IMPROVEMENT_PLAN.md`.
+
+### Decisions (owner, 2026-10-23)
+These replace the proposal above where they differ.
+- **Two logs, two files**, one of each per day in `<config dir>/logs/`
+  (`%APPDATA%\ProjectorGrid\logs\`, `~/Library/Application Support/ProjectorGrid/logs/`):
+  - **Event log** `events-YYYY-MM-DD.log`: every event the in-app Event Log gets, as it
+    gets it today (projectors, commands from any source, OSC, Web, alerts, the OSC / Web
+    bind failures), one line each. The in-app Event Log itself doesn't change.
+  - **App log** `app-YYYY-MM-DD.log`: internal errors with their full stack trace and
+    diagnostics for the developer. Nothing of it reaches the Event Log.
+- **No UI for app errors**: no Event Log row, no status bar mark, no dialog. They go to
+  the file only; after a problem the operator sends the logs folder for analysis.
+- **What the app log catches:**
+  - framework errors (`FlutterError.onError`: build, layout, paint, gesture callbacks);
+  - uncaught async errors (`PlatformDispatcher.instance.onError`: unawaited futures,
+    timers, stream listeners without `onError`). No `runZonedGuarded`: the dispatcher
+    hook replaces it in current Flutter, and a zone around `runApp` brings zone-mismatch
+    warnings;
+  - errors of the protocol worker isolate (`Isolate.spawn(..., onError:)`), which the
+    two hooks above don't see;
+  - what goes only to `debugPrint` today and is lost in release: unparsable OSC
+    messages, web server handler errors (500s), Remote Preview socket errors;
+  - app start and stop.
+  Not caught: native crashes of the process (e.g. the access violation in
+  `flutter_windows.dll`) and errors the code already handles as events.
+- **Both files:** the same timestamp format and a session header (app version, OS, open
+  project) so the two can be lined up; buffered writes, flushed every second and on
+  window close (in `onWindowClose` before `destroy()`); no passwords or auth hashes.
+- **Retention 14 days** for both, pruned at launch.
+- **App log guard:** the same error repeating (an error in `build` fires every frame) is
+  written once a minute with a repeat count; about 20 MB a day at most, then a note that
+  the cap was reached and only errors after it.
+- **Help → Open logs folder** opens the folder in Explorer / Finder.
+- **Code:** `core/services/app_log_file.dart` (files, rotation, cap); the line format,
+  the pruning choice and the repeat folding as pure functions in `domain/` with unit
+  tests; the hooks in `main.dart`; `eventLogProvider.log()` forwards each event to the
+  event log file; the isolate's error port in `isolate_protocol_service.dart`; the menu
+  item in `top_menu_bar.dart`.
 
 ---
 
@@ -1497,12 +1535,12 @@ Refactors done first (behaviour unchanged):
 - `[ ]` Custom-command ids are `microsecondsSinceEpoch`; Windows' clock is coarse enough that
   two adds in the same tick share an id. Unreachable at human click speed — fix only if
   commands are ever created programmatically.
-- `[ ]` OSC start/stop race (found 2026-10-20, predates the status bar redesign): a `stop()`
-  sent while a `start()` still awaits its socket bind can be overtaken, and OSC ends up
-  listening with the switch off. `OscService.start()` now reports when it was superseded
-  (so a superseded bind isn't shown as *port busy*), but stop doesn't wait for or cancel a
-  pending start. Fix by serialising start/stop in `oscProvider` (one in flight, the last
-  request wins).
+- `[x]` OSC start/stop race (found 2026-10-20, fixed 2026-10-23): a `stop()` sent right
+  after a `start()` could be overtaken, and OSC ended up listening with the switch off.
+  The cause was in `OscService.start()`: it awaited its own `stop()` before claiming its
+  generation, so a `stop()` in that gap bumped a generation the start then replaced. The
+  start now closes the socket and claims its generation before any await, so any later
+  `stop()` supersedes it (test in `osc_provider_test.dart`, fails without the fix).
 
 Note: on the dev laptop `flutter_tester.exe` sometimes dies with the same Dart VM profiler
 access violation as the debug app (`debug_crash_investigation.md`). A run then shows a batch of
