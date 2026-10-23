@@ -247,10 +247,10 @@ class OscService {
     required String sendIp,
     required int sendPort,
   }) async {
-    // Claim the generation *after* stop() — stop() also bumps _startGeneration,
-    // so capturing it earlier would leave `generation` permanently stale and
-    // make the post-bind check below abort every successful bind.
-    await stop();
+    // Claimed before any await, so a stop() called from here on supersedes
+    // this start. Awaiting stop() first left a gap in which a stop() was
+    // overtaken and OSC kept listening with the switch off.
+    _close();
     final generation = ++_startGeneration;
     _sendIp = sendIp;
     _sendPort = sendPort;
@@ -296,6 +296,10 @@ class OscService {
 
   Future<void> stop() async {
     _startGeneration++; // invalidate any in-flight start()
+    _close();
+  }
+
+  void _close() {
     _socket?.close();
     _socket = null;
     _isActive = false;

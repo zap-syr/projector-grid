@@ -43,6 +43,20 @@ void main() {
       expect(c.read(oscProvider), const OscOff());
     });
 
+    test('a stop sent while a start is pending wins', () async {
+      final c = makeContainer(FakeProtocolService());
+      c.read(appSettingsProvider.notifier)
+        ..setOscNetworkDevice('127.0.0.1')
+        ..setOscReceivePort(0);
+      final osc = c.read(oscProvider.notifier);
+
+      final starting = osc.start();
+      await osc.stop();
+      await starting;
+      expect(c.read(oscProvider), const OscOff());
+      expect(c.read(appSettingsProvider).oscActive, isFalse);
+    });
+
     test('a restart never reports a bind failure', () async {
       final c = makeContainer(FakeProtocolService());
       c.read(appSettingsProvider.notifier)
