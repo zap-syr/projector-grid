@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -23,6 +24,19 @@ const double kCardHeaderHeight = 26;
 const double kCardGroupBandHeight = 18;
 
 const double _radius = 10;
+
+/// Pointers that drag a card or the selection marquee: everything but the
+/// trackpad. macOS and Windows (Precision Touchpad) deliver two-finger scroll
+/// and pinch as trackpad pan/zoom, which a pan recognizer can otherwise win
+/// from the scroll views (it counts the whole wobbly path, they count net
+/// travel along their axis). A trackpad click-drag still arrives as a mouse.
+const kCanvasDragDevices = {
+  PointerDeviceKind.mouse,
+  PointerDeviceKind.touch,
+  PointerDeviceKind.stylus,
+  PointerDeviceKind.invertedStylus,
+  PointerDeviceKind.unknown,
+};
 
 /// Fill of the card body, top and bottom of its gradient. The group band
 /// mixes into [bottom].
@@ -390,6 +404,7 @@ class _ProjectorCardState extends ConsumerState<ProjectorCard> {
               onEnter: (_) => setState(() => _isHovered = true),
               onExit: (_) => setState(() => _isHovered = false),
               child: GestureDetector(
+                supportedDevices: kCanvasDragDevices,
                 onTap: widget.onTap,
                 onPanDown: widget.onPanDown,
                 onPanUpdate: widget.onPanUpdate,

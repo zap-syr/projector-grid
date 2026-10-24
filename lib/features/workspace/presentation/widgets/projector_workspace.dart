@@ -179,6 +179,7 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
   final double _workspaceWidth = 3000.0;
   final double _workspaceHeight = 3000.0;
   double _currentZoom = 1.0;
+  double _pinchStartZoom = 1.0;
   bool _isMultiSelect = false;
   bool _isPanning = false;
 
@@ -914,6 +915,23 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
                         onPointerUp: (event) {
                           if (_isPanning) setState(() => _isPanning = false);
                         },
+                        // Trackpad pinch. Here rather than on the inner
+                        // listener: this one doesn't scroll, so localPosition
+                        // stays valid as the zoom moves the scroll offsets.
+                        onPointerPanZoomStart: (_) =>
+                            _pinchStartZoom = _currentZoom,
+                        onPointerPanZoomUpdate: (event) {
+                          if (event.scale == 1.0) return;
+                          _setZoom(
+                            _pinchStartZoom * event.scale,
+                            contentOffset:
+                                event.localPosition +
+                                Offset(
+                                  _horizontalController.offset,
+                                  _verticalController.offset,
+                                ),
+                          );
+                        },
                         onPointerMove: (event) {
                           final panning = event.buttons == kMiddleMouseButton;
                           if (panning != _isPanning) {
@@ -995,6 +1013,7 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
                                     }
                                   },
                                   child: GestureDetector(
+                                    supportedDevices: kCanvasDragDevices,
                                     onTap: () {
                                       notifier.deselectAll();
                                     },
