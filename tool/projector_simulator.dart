@@ -549,6 +549,9 @@ void _listOffline(List<SimProjector> projectors) {
 }
 
 void _serve(Socket socket, SimProjector p) {
+  // The app's reachability check connects and resets at once; on macOS the
+  // greeting then fails with ECONNRESET, which would kill the simulator.
+  socket.done.catchError((_) {});
   socket.add(ascii.encode('NTCONTROL 0\r'));
   final buffer = StringBuffer();
   socket.listen((data) {
@@ -562,7 +565,7 @@ void _serve(Socket socket, SimProjector p) {
     // Queries are left out: the poll cycle would drown the actual commands.
     if (!cmd.startsWith('Q')) stdout.writeln('${p.ip}  $cmd -> $reply');
     socket.add(ascii.encode('00$reply\r'));
-    unawaited(socket.flush().then((_) => socket.close()));
+    unawaited(socket.flush().then((_) => socket.close()).catchError((_) {}));
   }, onError: (_) {});
 }
 
