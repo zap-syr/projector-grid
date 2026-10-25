@@ -1,6 +1,7 @@
 // Loopback NTCONTROL projector simulator.
 //
 //   dart run tool/projector_simulator.dart [count] [--demo-errors]
+//                                         [--base=192.168.0.101]
 //
 // Starts [count] (default 6, max 250) fake projectors on 127.0.0.1,
 // 127.0.0.2, … — each on the NTCONTROL port, unprotected (`NTCONTROL 0`) —
@@ -48,6 +49,23 @@
 // Windows routes the whole 127.0.0.0/8 range to loopback out of the box;
 // macOS only has 127.0.0.1 — add aliases first:
 //   for i in $(seq 2 6); do sudo ifconfig lo0 alias 127.0.0.$i up; done
+//
+// --base=<ip> puts the first projector on <ip> and counts up its last octet,
+// for screenshots with LAN-looking addresses (192.168.0.101, .102, …). Those
+// addresses must exist on this machine first, each as a /32 so they don't
+// clash with a real 192.168.0.0/24 network; pick ones no device on it uses.
+//   Windows (admin; a Microsoft KM-TEST Loopback Adapter, added once through
+//   Device Manager, Action, Add legacy hardware, Network adapters,
+//   Microsoft, here named "Loopback"):
+//     for /L %i in (101,1,116) do netsh interface ipv4 add address
+//       "Loopback" 192.168.0.%i 255.255.255.255
+//   (not skipassource: with no source address left on the adapter,
+//   connecting to them fails as "unreachable host")
+//   macOS:
+//     for i in $(seq 101 116); do
+//       sudo ifconfig lo0 alias 192.168.0.$i netmask 255.255.255.255; done
+// Remove them again with `netsh interface ipv4 delete address "Loopback"
+// 192.168.0.<n>` or `sudo ifconfig lo0 -alias 192.168.0.<n>`.
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -66,13 +84,13 @@ const double _cardWidth = 120;
 const double _cardHeight = 100;
 
 class SimProjector {
-  SimProjector(this.index)
+  SimProjector(this.index, this.ip)
     : fadeIn = index == 2 ? '2.0' : '0.0',
       serial = 'SIM${index.toString().padLeft(5, '0')}';
 
   final int index;
   final String serial;
-  String get ip => '127.0.0.$index';
+  final String ip;
 
   // POWI1 codes: 1 standby, 2 turning on, 3 on, 4 cooling.
   int power = 3;
@@ -432,7 +450,28 @@ Future<void> main(List<String> args) async {
   final numbers = args.where((a) => !a.startsWith('--'));
   final count = (numbers.isEmpty ? defaultCount : int.parse(numbers.first))
       .clamp(1, 250);
-  final projectors = [for (var i = 1; i <= count; i++) SimProjector(i)];
+  final base = args
+      .firstWhere((a) => a.startsWith('--base='), orElse: () => '=127.0.0.1')
+      .split('=')
+      .last
+      .split('.');
+  final first = int.tryParse(base.last);
+  if (base.length != 4 || first == null || first < 1) {
+    stdout.writeln('--base needs an IPv4 address, e.g. --base=192.168.0.101');
+    exit(64);
+  }
+  if (first + count - 1 > 254) {
+    stdout.writeln(
+      '$count projectors from .$first run past .254; '
+      'lower the count or the base.',
+    );
+    exit(64);
+  }
+  final prefix = base.take(3).join('.');
+  final projectors = [
+    for (var i = 1; i <= count; i++)
+      SimProjector(i, '$prefix.${first + i - 1}'),
+  ];
   if (args.contains('--demo-errors')) {
     for (final e in demoErrors.entries) {
       if (e.key <= count) projectors[e.key - 1].errors = [...e.value];
@@ -440,7 +479,15 @@ Future<void> main(List<String> args) async {
   }
 
   for (final p in projectors) {
-    await p.goOnline();
+    try {
+      await p.goOnline();
+    } on SocketException {
+      stdout.writeln(
+        'Cannot listen on ${p.ip}: the address isn\'t on this machine. '
+        'See the top of tool/projector_simulator.dart to add it.',
+      );
+      exit(1);
+    }
   }
 
   final project = File(
@@ -451,7 +498,10 @@ Future<void> main(List<String> args) async {
 
   stdout
     // ASCII only: the Windows console mangles ×, – and →.
-    ..writeln('Simulating $count x $model on 127.0.0.1-$count, port $port.')
+    ..writeln(
+      'Simulating $count x $model on '
+      '${projectors.first.ip}-${projectors.last.ip}, port $port.',
+    )
     ..writeln('Open in the app: ${project.path}')
     ..writeln('Type "help" for console commands. Ctrl+C to stop.\n');
   _listErrors(projectors);
