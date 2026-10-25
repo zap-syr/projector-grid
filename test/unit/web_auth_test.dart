@@ -100,10 +100,35 @@ void main() {
       for (var i = 0; i < 4; i++) {
         login('0000');
       }
-      expect(login('1234'), isA<LoginOk>());
+      expect(login('9876'), isA<LoginOk>());
       for (var i = 0; i < 4; i++) {
         expect(login('0000'), isA<LoginInvalidPin>());
       }
+    });
+
+    test('without an Operator PIN a viewer login clears it too', () {
+      for (var i = 0; i < 4; i++) {
+        login('0000', controlAllowed: false);
+      }
+      expect(login('1234', controlAllowed: false), isA<LoginOk>());
+      for (var i = 0; i < 4; i++) {
+        expect(login('0000', controlAllowed: false), isA<LoginInvalidPin>());
+      }
+    });
+
+    test('a viewer login does not reset guesses at the Operator PIN', () {
+      final session = (login('1234') as LoginOk).session;
+      for (var round = 0; round < 2; round++) {
+        for (var i = 0; i < 2; i++) {
+          auth.unlock(session, '0000', operatorHash);
+        }
+        expect(login('1234'), isA<LoginOk>());
+      }
+      expect(
+        auth.unlock(session, '0000', operatorHash),
+        isA<LoginLockedOut>(),
+        reason: 'the fifth wrong PIN, though viewer logins came between',
+      );
     });
 
     test('sessions expire after 12 h idle; use keeps them alive', () {

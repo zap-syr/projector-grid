@@ -107,7 +107,7 @@ class WebAuth {
     required String pin,
     required String viewerPinHash,
     required String? operatorPinHash,
-  }) => _attempt(ip, () {
+  }) => _attempt(ip, operatorPinSet: operatorPinHash != null, () {
     final WebRole role;
     if (operatorPinHash != null && verifyPin(pin, operatorPinHash)) {
       role = WebRole.operator;
@@ -125,7 +125,7 @@ class WebAuth {
   /// *Unlock control*: upgrades [session] to operator with the Operator PIN.
   /// Wrong PINs count towards the same per-IP lockout as logins.
   LoginResult unlock(WebSession session, String pin, String operatorPinHash) =>
-      _attempt(session.ip, () {
+      _attempt(session.ip, operatorPinSet: true, () {
         if (!verifyPin(pin, operatorPinHash)) return null;
         session.role = WebRole.operator;
         return session;
@@ -149,7 +149,15 @@ class WebAuth {
   }
 
   /// Runs [check] unless [ip] is locked out; a null result is a wrong PIN.
-  LoginResult _attempt(String ip, WebSession? Function() check) {
+  ///
+  /// While an Operator PIN is set, only an operator success clears the
+  /// failures: a wrong PIN may have been a guess at it, and a Viewer PIN
+  /// the crew shares would otherwise reset the count between guesses.
+  LoginResult _attempt(
+    String ip,
+    WebSession? Function() check, {
+    required bool operatorPinSet,
+  }) {
     final now = _now();
     final attempts = _attempts.putIfAbsent(ip, _Attempts.new);
     final lockedUntil = attempts.lockedUntil;
@@ -159,7 +167,9 @@ class WebAuth {
 
     final session = check();
     if (session != null) {
-      _attempts.remove(ip);
+      if (!operatorPinSet || session.role == WebRole.operator) {
+        _attempts.remove(ip);
+      }
       onChange?.call();
       return LoginOk(session);
     }
