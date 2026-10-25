@@ -2,9 +2,11 @@
 /// fields, kept out of the widgets so they can be unit tested.
 library;
 
+// No leading zeros: `192.168.0.010` would slip past the duplicate check
+// against `192.168.0.10`, and some resolvers read it as octal.
 final _ipv4 = RegExp(
-  r'^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}'
-  r'(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$',
+  r'^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\.){3}'
+  r'(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])$',
 );
 
 bool isValidIpv4(String text) => _ipv4.hasMatch(text);

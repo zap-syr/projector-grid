@@ -6,6 +6,10 @@ void main() {
     expect(isValidIpv4('192.168.0.10'), isTrue);
     expect(isValidIpv4('192.168.0.256'), isFalse);
     expect(isValidIpv4('192.168.0'), isFalse);
+    expect(isValidIpv4('0.0.0.0'), isTrue);
+    expect(isValidIpv4('10.100.199.255'), isTrue);
+    expect(isValidIpv4('192.168.0.010'), isFalse, reason: 'leading zero');
+    expect(isValidIpv4('192.168.000.10'), isFalse);
     expect(parsePort('1024'), 1024);
     expect(parsePort('0'), isNull);
     expect(parsePort('65536'), isNull);
