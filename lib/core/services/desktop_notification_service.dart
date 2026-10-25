@@ -63,7 +63,15 @@ class DesktopNotificationService {
         ),
         onDidReceiveNotificationResponse: (_) => onClick?.call(),
       )
-      .then((_) {});
+      .then(
+        (_) {},
+        // A failed start is tried again with the next alert, instead of
+        // leaving the rest of the session without notifications.
+        onError: (Object e, StackTrace stack) {
+          _ready = null;
+          Error.throwWithStackTrace(e, stack);
+        },
+      );
 
   /// [icon] picks the Windows toast's logo (`assets/alert_icons/`); macOS
   /// always shows the app icon there.
