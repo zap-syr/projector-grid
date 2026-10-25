@@ -4,14 +4,217 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+## [2.0.0] - 2026-10-25
+
+This version brings a massive update to the app: a full redesign of every
+window, dialog and panel, and a lot of new functions. Telemetry alerts with
+desktop notifications and sound, a Web Access page for phones, tablets and
+laptops on the show network, Alignment mode, Edge Blending, a new Monitoring
+view and daily log files for the night after the show.
 
 ### For Users
 
+#### Added
+- **Web Access**: a web page served by the app itself, so any phone, tablet
+  or laptop on the show network can watch and control the projectors without
+  installing anything. Turn it on in Preferences, Web Access (port 8080 by
+  default) and open the address shown there
+  - Two roles with their own PIN: a **Viewer** sees status, alerts and live
+    updates; an **Operator** (only while *Allow control* is on) can also
+    send power, shutter, OSD, input, test pattern and lens commands, run
+    Alignment mode and refresh every projector's status. A viewer can
+    *Unlock control* with the Operator PIN and *Lock* again
+  - Sessions last 12 hours idle; five wrong PINs lock that address out for
+    a while, doubling on each repeat. Preferences lists the signed-in
+    clients with their role, signs one out or *Sign out all clients*; the
+    status bar shows how many are connected
+  - Three views: a table with the Monitoring columns (sort, show and hide,
+    presets, reorder, resize, fit to width, density, grouping), cards in
+    Compact or Extended size, and a Map of the project's card layout with
+    zoom and marquee selection
+  - Search and quick filters (All, Online, Attention, Offline, Standby),
+    select presets (Online, Attention, Standby, Invert, a group); selected
+    projectors hidden by a search or filter stay selected and every command
+    names them before it goes out
+  - A projector details panel, Remote Preview with Pre-show, the Active
+    alerts panel with acknowledge, alert sounds, a new-alert toast and a
+    count in the browser tab
+  - Layouts for desktop, tablets upright and sideways, and phones upright
+    and sideways, with a PIN pad and touch-sized controls on touch screens;
+    light, dark or system theme
+  - Fully offline: fonts and icons are bundled, nothing is loaded from the
+    internet
+  - The same API serves scripts and show controllers: `POST /api/login`
+    with a PIN, then a bearer token
+- **Telemetry alerts**: the app now watches the projectors for you
+  - Rules, each with its own switch in Preferences, Alerts: *Offline*,
+    *Projector error* (the projector's self-diagnosis codes, decoded into
+    names such as "Fan error (F305)"), *Signal lost*, *Intake temperature*
+    and *Exhaust temperature* (warning and critical thresholds with a 2 °C
+    hysteresis)
+  - *Signal lost* is checked every 2 seconds on powered-on projectors, so
+    even a short dropout is caught. It stays until acknowledged and shows
+    how long the signal was gone ("Back after 3 s")
+  - An alert badge on each projector card with its own alert panel, the
+    *Active alerts* panel from the status bar (grouped by projector or by
+    alert, by project group, filters, *Acknowledge all*), alert tints in
+    Monitoring
+  - Desktop notifications (with the severity icon on Windows) and two alert
+    sounds, each for all alerts or critical ones only; a notification click
+    brings the window forward on Active alerts
+  - OSC: `/pgrid/alert/<rule>` on every alert change,
+    `/pgrid/alert/acknowledged`, and `/pgrid/status/critical` /
+    `/pgrid/status/warning` with the counts of unacknowledged alerts
+- **Alignment mode** (`Ctrl/Cmd+L`, or Tools, Alignment Mode): work through a
+  wall one projector at a time. The focused projector shows its alignment
+  pattern, the others close their shutter or show their own pattern;
+  `<` / `>` step through the projectors in layout order, *Neighbours* (`N`)
+  also opens the projectors next to it, *Show all* (`A`) opens every one.
+  Presets *Geometry*, *Color* and *Custom* choose the patterns, *Adjust*
+  opens Geometry, Color, Brightness or Edge Blending for the focused
+  projector. Leaving the mode puts every shutter, pattern and shutter fade
+  back as it was, also when the app quits
+- **Edge Blending** dialog (projector right-click, Edge Blending): Off / On /
+  User, each edge with Start and Width on a canvas with draggable zones and
+  limits that keep opposite edges from crossing, Markers and Auto test
+  pattern toggles. Two projectors open as a pair side by side or stacked,
+  with the overlap shown and *Link* to send Width and the overlapped black
+  level to both. A *Black Level* tab sets the overlapped, border and
+  non-overlapped areas per R, G and B
+- **Geometry Correction preview** in Keystone and Curved Correction, drawn
+  from camera measurements of a real projector; Corner Correction draws the
+  Linearity and Pincushion warp and uses the wider inward range of Quad
+  Pixel Drive models
+- **Test pattern indicator**: the active test pattern is polled and shown
+  as a thumbnail on the projector card and in Monitoring
+- **Quick status** popover: select one projector card and press `Space` to
+  see its power, shutter, input, signal, temperatures and alerts, with
+  *Show in Monitoring* and *Remote Preview*
+- **Monitoring**: search (`Ctrl/Cmd+F`), quick filters with counts, Table and
+  Cards views (Compact and Extended), a projector panel with every reading,
+  its alerts and since when, *Preview*, *Web UI* and *Locate*
+- **Event log**: filter chips (All, Alerts, Commands, Connection, OSC, Web),
+  search, a command sent to several projectors as one row that opens to
+  each projector's result, *Retry failed*, repeats folded with a count,
+  *Locate* a projector on the canvas, *Follow* for new events, a resizable
+  panel whose height is remembered
+- **Log files**: every Event Log line is also written to a daily file, and
+  the app's own internal errors to a second one, both kept for 14 days
+  (`%APPDATA%\ProjectorGrid\logs\` on Windows,
+  `~/Library/Application Support/ProjectorGrid/logs/` on macOS). Help, Open
+  Logs Folder opens them, ready to send with a bug report
+- **Scheduled tasks** can target several groups at once
+- **Add Projectors** remembers the last login and password used; **Edit
+  Projector** can change the port and masks the password
+- **Keyboard Shortcuts** has a search field; `Ctrl/Cmd+G` selects the whole
+  group of the selected projector
+- **About** shows the version and build with links to the release notes,
+  the project page, bug reports, the licenses and support
+
+#### Changed
+- **Full redesign** of the main window: a new toolbar with group and task
+  counts that turns to icons in a narrow window, a control bar in cards
+  (Power, Shutter and OSD rows, lens cross with Home position in its header,
+  Focus and Zoom, a folded Lens setup, test pattern favourites as
+  thumbnails), new projector cards (header tinted by power state, *Offline*
+  and *Login failed* in words, the group as a band inside the card), a new
+  status bar (online meter, alert counts, OSC and Web state, last update)
+  and new tooltips
+- **Every dialog redesigned**: Add Projectors (Address, IP range with a
+  preview of the addresses, Discover with a manual Scan), Edit Projector,
+  Groups (inline editing, 48 colours, which tasks a delete pauses),
+  Scheduled Tasks (one window with the list and the editor, a command
+  picker with search), Brightness Control (mode tiles, 0.1 % steps, hold to
+  repeat), Color Correction (one colour at a time, presets for colour
+  temperature), Geometry Correction, Remote Preview, Custom Command (shows
+  both OSC addresses and which command holds a taken one), Keyboard
+  Shortcuts, About and Preferences (sections in a sidebar). Dialogs show
+  the projector's model, IP, group and live status in their title bar and
+  fit windows down to 800 × 600
+- Confirmations share one dialog that says what will change
+- New fonts: Inter for the interface, IBM Plex Mono for addresses, ports
+  and commands
+- **Monitoring** has fewer, two-line columns (Projector, Group, Power,
+  Shutter, Input and signal, Temperature, Runtime, AC, Errors, Connection,
+  Test pattern), group rows with a summary, coloured stripes on problem
+  rows and offline rows shown dimmed with the time they were last seen.
+  Saved column layouts start over with the new columns. The Serial number
+  column is gone: the serial is in the projector panel, and it is read
+  only on first contact, after an edit or after a projector comes back
+- Power is read with `QVX:POWI1`, so cards and Monitoring show *Warming
+  up* and *Cooling*; the signal is read again once a projector has warmed
+  up
+- Color Correction reads only the values of the active method and mode,
+  and reads them in small batches, so weaker projectors no longer answer
+  some reads with an error and show defaults
+- Polling runs on a background worker and skips updates that change
+  nothing, so large projects no longer make the window stutter; it also
+  keeps its full rate while the window is in the background, so alerts and
+  the Web Access page stay current
+- **A one-time scheduled task that was missed no longer runs late**: if the
+  app wasn't running at its time (more than 2 minutes ago), it is listed
+  under *Completed* as "Not run" with *Schedule again*, instead of firing
+  the moment the app opens
+- Deleting a group removes it from scheduled tasks; a task left without a
+  group is paused instead of running and matching nothing. Undo brings the
+  group back to its tasks and resumes them
+- File, Exit now does what `Ctrl/Cmd+Q` does: it also leaves Alignment mode
+  before closing
+
 #### Fixed
-- OSC status feedback on Windows no longer silently drops messages — the
+- OSC status feedback on Windows no longer silently drops messages: the
   `/pgrid/status/offline` and `/pgrid/status/warning` updates sent right
   after `/pgrid/status/online` often never reached the show controller
+- Color Correction's white balance shows the values of the User mode you
+  switch to, instead of keeping the ones read when the dialog opened
+- macOS: the window is opaque again, so the title bar no longer shows what
+  is behind the window
+- Trackpad on the canvas (macOS and Windows Precision Touchpad): a
+  two-finger scroll scrolls instead of drawing a selection marquee or
+  dragging a card, and a pinch zooms around the fingers. A click-drag on
+  the trackpad still selects and moves cards
+- Adding, renaming or recolouring a group, or changing its OSC address, now
+  marks the project as unsaved, so closing the window asks to save instead
+  of losing the group edits
+- An offline projector whose port opens but that doesn't answer yet (still
+  booting, or busy) stays Offline, instead of flashing online on every poll
+- A busy projector's error reply is no longer shown as a reading: an AC
+  voltage of "3V", a runtime of "ERR3H" or "ERR3" in the Errors column
+- An IP address with leading zeros (`192.168.0.010`) is refused when adding
+  or editing a projector; it slipped past the duplicate check and never
+  connected
+
+### For Developers
+
+#### Added
+- `web_ui/`: the Web Access page (Svelte 5, Vite, TypeScript), built into
+  `assets/web/` and bundled with the app; `api/openapi.yaml` is the API
+  contract, with golden JSON fixtures shared by the Dart and web tests
+- Web server on `shelf` / `shelf_router` (`web_server_service.dart`), PIN
+  sessions and an SSE hub; desktop notifications with
+  `flutter_local_notifications`, sounds with `audioplayers`
+- `IsolateProtocolService`: every NTCONTROL exchange runs on a worker
+  isolate, which survives an uncaught error and reports it
+- `AppLog` (`core/services/app_log_file.dart`): the event log and app log
+  files; `FlutterError.onError`, `PlatformDispatcher.onError` and
+  `debugPrint` go to the app log
+- Test suite (unit, provider and widget tests, over 1,000 of them) and a CI
+  workflow on Windows and macOS, plus a `web` job; the release workflow
+  builds `web_ui/` before the app
+- `tool/projector_simulator.dart` (loopback projectors with error codes,
+  signal loss and network drops, or LAN-looking addresses with `--base`),
+  `tool/geometry_measure/` (the camera
+  measurement behind the Geometry preview), Edge Blending probe scripts
+- The shared dialog parts in `presentation/widgets/common/` and the
+  `projector-grid-visual-rules` skill
+
+#### Changed
+- Monitoring's column catalogue, status labels and temperature thresholds
+  are shared by the app and the Web API
+- NTCONTROL error codes are matched exactly instead of by the `ER` prefix
+- Dependencies updated for Flutter 3.47.8
+- `tool/projector_simulator.dart` keeps running on macOS when a client
+  resets its connection
 
 ## [1.4.2] - 2026-09-16
 
