@@ -12,9 +12,9 @@
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-green.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Gumroad](https://img.shields.io/badge/support-Gumroad-36a9ae?logo=gumroad&logoColor=white)](https://projectorhub.gumroad.com/l/projectorgrid)
 
-**[Download for Windows](https://github.com/zap-syr/projector-grid/releases/download/v1.4.2/ProjectorGrid_Setup_1.4.2.exe)**
+**[Download for Windows](https://github.com/zap-syr/projector-grid/releases/download/v2.0.0/ProjectorGrid_Setup_2.0.0.exe)**
 &nbsp;&nbsp;|&nbsp;&nbsp;
-**[Download for macOS](https://github.com/zap-syr/projector-grid/releases/download/v1.4.2/ProjectorGrid-macOS-1.4.2.dmg)**
+**[Download for macOS](https://github.com/zap-syr/projector-grid/releases/download/v2.0.0/ProjectorGrid-macOS-2.0.0.dmg)**
 
 [Release notes](CHANGELOG.md), [Supported projectors](#supported-projectors), [Show control](#fits-into-your-show-control), [Report a bug](https://github.com/zap-syr/projector-grid/issues/new)
 
@@ -138,8 +138,8 @@ Projector Grid talks to projectors over NTCONTROL, the control protocol built in
 
 | Platform | Download | Requires |
 |---|---|---|
-| Windows | [Windows installer](https://github.com/zap-syr/projector-grid/releases/download/v1.4.2/ProjectorGrid_Setup_1.4.2.exe) | Windows 10 (64-bit) or later |
-| macOS | [macOS disk image](https://github.com/zap-syr/projector-grid/releases/download/v1.4.2/ProjectorGrid-macOS-1.4.2.dmg) | macOS 12 or later, Intel and Apple Silicon |
+| Windows | [Windows installer](https://github.com/zap-syr/projector-grid/releases/download/v2.0.0/ProjectorGrid_Setup_2.0.0.exe) | Windows 10 (64-bit) or later |
+| macOS | [macOS disk image](https://github.com/zap-syr/projector-grid/releases/download/v2.0.0/ProjectorGrid-macOS-2.0.0.dmg) | macOS 12 or later, Intel and Apple Silicon |
 
 ## Contributing
 
