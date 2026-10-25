@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/services/app_log_file.dart';
 import '../../../../core/services/docs_service.dart';
 import '../providers/alignment_provider.dart';
 import '../providers/app_settings_provider.dart';
@@ -479,6 +480,10 @@ class MacMenuBar extends ConsumerWidget {
                 PlatformMenuItem(
                   label: 'OSC Reference',
                   onSelected: () => DocsService.openOscReference(),
+                ),
+                const PlatformMenuItem(
+                  label: 'Open Logs Folder',
+                  onSelected: AppLog.openFolder,
                 ),
               ],
             ),
