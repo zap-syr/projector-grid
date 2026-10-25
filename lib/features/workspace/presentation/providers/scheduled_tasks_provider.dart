@@ -77,6 +77,7 @@ class ScheduledTasksNotifier extends _$ScheduledTasksNotifier {
   // ── CRUD ───────────────────────────────────────────────────────────────────
 
   void loadTasks(List<ScheduledTask> tasks) {
+    _detached.clear();
     state = tasks;
   }
 
@@ -103,18 +104,59 @@ class ScheduledTasksNotifier extends _$ScheduledTasksNotifier {
   /// no projector) until the user picks a new target.
   void detachGroup(String groupId) => _dropGroups((id) => id == groupId);
 
-  /// Drops every group not in [groupIds] from the tasks, after an undo or
-  /// redo puts the group list back to a state where some are gone.
-  void detachMissingGroups(Set<String> groupIds) =>
-      _dropGroups((id) => !groupIds.contains(id));
+  /// After an undo or redo puts the group list back to [groupIds]: tasks
+  /// drop the groups that are gone, and get back the ones they lost to an
+  /// earlier detach once those return.
+  void syncGroups(Set<String> groupIds) {
+    _dropGroups((id) => !groupIds.contains(id));
+    _reattach(groupIds);
+  }
+
+  // Undo and redo don't snapshot tasks, so what a detach took is kept here
+  // per group id: the task and whether it was on before.
+  final _detached = <String, List<({String taskId, bool enabled})>>{};
 
   void _dropGroups(bool Function(String id) gone) {
     bool touches(ScheduledTask t) => t.targetGroupIds.any(gone);
     if (!state.any(touches)) return;
+    for (final t in state) {
+      for (final id in t.targetGroupIds.where(gone)) {
+        (_detached[id] ??= []).add((taskId: t.id, enabled: t.enabled));
+      }
+    }
     state = [
       for (final t in state)
         if (touches(t))
           _withGroups(t, t.targetGroupIds.where((id) => !gone(id)).toList())
+        else
+          t,
+    ];
+  }
+
+  void _reattach(Set<String> groupIds) {
+    final back = [
+      for (final id in groupIds)
+        if (_detached.remove(id) case final records?)
+          for (final r in records)
+            (groupId: id, taskId: r.taskId, on: r.enabled),
+    ];
+    if (back.isEmpty) return;
+    state = [
+      for (final t in state)
+        if (back.where((b) => b.taskId == t.id).toList() case final mine
+            when mine.isNotEmpty)
+          t.copyWith(
+            targetGroupIds: [
+              ...t.targetGroupIds,
+              for (final b in mine)
+                if (!t.targetGroupIds.contains(b.groupId)) b.groupId,
+            ],
+            // Only the switch-off the detach did is undone: a task the user
+            // has since re-aimed or switched keeps its own state.
+            enabled:
+                t.enabled ||
+                (t.targetGroupIds.isEmpty && mine.any((b) => b.on)),
+          )
         else
           t,
     ];

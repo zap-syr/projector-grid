@@ -100,6 +100,63 @@ void main() {
     expect(task.enabled, isFalse);
   });
 
+  test('undoing a group delete re-aims and resumes its tasks', () {
+    final c = makeContainer(FakeProtocolService());
+    final ws = c.read(workspaceProvider.notifier);
+    ws.addGroup(const ProjectorGroup(id: 'g', name: 'Left', color: 0));
+    ws.addGroup(const ProjectorGroup(id: 'h', name: 'Right', color: 0));
+    c.read(scheduledTasksProvider.notifier).loadTasks([
+      _task('1', groupIds: ['g']),
+      _task('2', groupIds: ['h', 'g']),
+    ]);
+
+    ws.deleteGroup('g');
+    ws.undo();
+
+    final tasks = c.read(scheduledTasksProvider);
+    expect(tasks[0].targetGroupIds, ['g']);
+    expect(tasks[0].enabled, isTrue);
+    expect(tasks[1].targetGroupIds, ['h', 'g']);
+  });
+
+  test('stepping back past a group and forward again keeps its tasks', () {
+    final c = makeContainer(FakeProtocolService());
+    final ws = c.read(workspaceProvider.notifier);
+    ws.setNodes([node('1')]);
+    ws.addGroup(const ProjectorGroup(id: 'g', name: 'Left', color: 0));
+    c.read(scheduledTasksProvider.notifier).add(_task('1', groupIds: ['g']));
+    drag(c, '1', const Offset(20, 0));
+
+    ws.undo();
+    ws.undo();
+    expect(c.read(scheduledTasksProvider).single.enabled, isFalse);
+    ws.redo();
+    ws.redo();
+
+    final task = c.read(scheduledTasksProvider).single;
+    expect(task.targetGroupIds, ['g']);
+    expect(task.enabled, isTrue);
+  });
+
+  test('a task switched off by hand after the delete stays off', () {
+    final c = makeContainer(FakeProtocolService());
+    final ws = c.read(workspaceProvider.notifier);
+    ws.addGroup(const ProjectorGroup(id: 'g', name: 'Left', color: 0));
+    ws.addGroup(const ProjectorGroup(id: 'h', name: 'Right', color: 0));
+    final tasks = c.read(scheduledTasksProvider.notifier);
+    tasks.loadTasks([
+      _task('1', groupIds: ['g']),
+    ]);
+    ws.deleteGroup('g');
+    tasks.update(_task('1', groupIds: ['h']).copyWith(enabled: false));
+
+    ws.undo();
+
+    final task = c.read(scheduledTasksProvider).single;
+    expect(task.targetGroupIds, ['h', 'g']);
+    expect(task.enabled, isFalse);
+  });
+
   test('a delete that touches no task leaves the task list as it was', () {
     final c = makeContainer(FakeProtocolService());
     final ws = c.read(workspaceProvider.notifier);
