@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:projector_grid/core/services/panasonic_protocol_service.dart';
+import 'package:projector_grid/features/workspace/domain/projector_group.dart';
 import 'package:projector_grid/features/workspace/domain/projector_node.dart';
 import 'package:projector_grid/features/workspace/domain/scheduled_task.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/project_provider.dart';
@@ -169,6 +170,32 @@ void main() {
 
     c.read(scheduledTasksProvider.notifier).toggleEnabled('t1');
     expect(dirty(), isTrue, reason: 'task edits count too');
+  });
+
+  test('group edits set the dirty flag', () async {
+    bool dirty() => c.read(projectStateProvider).isDirty;
+    final ws = c.read(workspaceProvider.notifier);
+    await project().openProject(writeProject('a.pgrid', _projectV2).path);
+    await pumpEventQueue(); // openProject's own refresh
+    expect(dirty(), isFalse);
+
+    ws.updateGroup(ws.groups.single.copyWith(name: 'Stage left'));
+    expect(dirty(), isTrue, reason: 'rename');
+    await project().saveProject();
+
+    ws.addGroup(
+      const ProjectorGroup(
+        id: 'g2',
+        name: 'Rear',
+        color: 4283215696,
+        oscAddress: '/group/rear',
+      ),
+    );
+    expect(dirty(), isTrue, reason: 'add');
+    await project().saveProject();
+
+    ws.deleteGroup('g2');
+    expect(dirty(), isTrue, reason: 'delete an empty group');
   });
 
   test('newProject clears everything and is clean', () async {

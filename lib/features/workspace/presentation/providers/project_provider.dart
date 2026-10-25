@@ -47,6 +47,10 @@ class ProjectState {
 class ProjectStateNotifier extends _$ProjectStateNotifier {
   bool _suppressDirty = false;
 
+  // Groups live beside the node list, not in it: a group edit only rebuilds
+  // the list, so the listener compares them with the last ones it saw.
+  List<ProjectorGroup> _groupsSeen = const [];
+
   static String get _recentProjectsPath => appConfigFilePath('recent.json');
 
   @override
@@ -54,8 +58,11 @@ class ProjectStateNotifier extends _$ProjectStateNotifier {
     final recentProjects = _loadRecentProjects();
 
     ref.listen(workspaceProvider, (previous, next) {
+      final groups = ref.read(workspaceProvider.notifier).groups;
+      final groupsChanged = !_listsEqual(groups, _groupsSeen);
+      _groupsSeen = groups;
       if (_suppressDirty || previous == null) return;
-      if (_configurableStateChanged(previous, next)) {
+      if (groupsChanged || _configurableStateChanged(previous, next)) {
         state = state.copyWith(isDirty: true);
       }
     });
@@ -134,6 +141,7 @@ class ProjectStateNotifier extends _$ProjectStateNotifier {
     final wsNotifier = ref.read(workspaceProvider.notifier);
     wsNotifier.setNodes([]);
     wsNotifier.setGroups([]);
+    _groupsSeen = wsNotifier.groups;
     ref.read(scheduledTasksProvider.notifier).loadTasks([]);
     _suppressDirty = false;
     state = state.copyWith(clearCurrentFilePath: true, isDirty: false);
@@ -160,6 +168,7 @@ class ProjectStateNotifier extends _$ProjectStateNotifier {
       final wsNotifier = ref.read(workspaceProvider.notifier);
       wsNotifier.setNodes(nodes);
       wsNotifier.setGroups(groups);
+      _groupsSeen = wsNotifier.groups;
       wsNotifier.refreshAll();
       ref
           .read(scheduledTasksProvider.notifier)
