@@ -4,7 +4,7 @@ This document covers how to set up the development environment, understand the c
 
 ## Prerequisites
 
-- [Flutter SDK](https://docs.flutter.dev/get-started/install) - stable channel (requires Dart SDK `^3.11.1`, bundled with Flutter)
+- [Flutter SDK](https://docs.flutter.dev/get-started/install) - stable channel, 3.47 or newer (requires Dart SDK `^3.13.0`, bundled with Flutter)
 - A desktop target: Windows or macOS
 - [Node.js](https://nodejs.org/) 24.15 or newer - only to build the Web Access page (`web_ui/`)
 
@@ -39,27 +39,33 @@ flutter run -d windows   # or macos
 
 ```
 lib/
-├── main.dart                        # Window setup + ProviderScope
+├── main.dart                        # Window setup, log files, ProviderScope
 ├── app/app.dart                     # MyApp widget (theme + root screen)
 ├── core/
-│   ├── docs/
-│   │   └── osc_reference_html.dart  # Embedded OSC reference HTML
-│   ├── services/
-│   │   ├── panasonic_protocol_service.dart   # NTCONTROL TCP protocol
-│   │   ├── osc_service.dart                  # OSC command mapping
-│   │   └── docs_service.dart                 # Writes OSC reference to config dir
-│   └── theme/app_theme.dart                  # Material 3 light/dark themes
+│   ├── docs/osc_reference_html.dart # Embedded OSC reference HTML
+│   ├── services/                    # Transport and platform code, no Riverpod
+│   │   ├── panasonic_protocol_service.dart   # NTCONTROL over TCP
+│   │   ├── isolate_protocol_service.dart     # Runs every NTCONTROL call on a worker isolate
+│   │   ├── osc_service.dart                  # OSC over UDP, in and out
+│   │   ├── remote_preview_service.dart       # Remote Preview WebSocket to the projector's web UI
+│   │   ├── web_server_service.dart           # Web Access server (shelf)
+│   │   ├── web_api.dart, web_auth.dart, ...  # Its routes, PIN sessions, SSE hub, static files
+│   │   ├── desktop_notification_service.dart # Alert notifications
+│   │   ├── alert_sound_service.dart          # Alert sounds
+│   │   ├── app_log_file.dart, log_files.dart # Daily event and app log files
+│   │   └── app_config_dir.dart               # Per-platform config directory
+│   └── theme/                       # Material 3 themes, status thresholds
 └── features/workspace/
-    ├── domain/
-    │   ├── projector_node.dart      # Freezed - 21-field model (telemetry, position, status)
-    │   ├── projector_group.dart     # Freezed - group name, color + OSC address
-    │   ├── scheduled_task.dart      # Freezed - a timed/recurring action
-    │   ├── log_event.dart           # Plain Dart class - event log entry
-    │   └── custom_command.dart      # Plain Dart class - user-defined commands
+    ├── domain/                      # Models and pure logic (alerts, telemetry parsing,
+    │                                #   schedules, geometry, Web API DTOs, ...)
     └── presentation/
         ├── providers/               # Riverpod state (Notifier-based, codegen)
         ├── screens/                 # main_workspace_screen.dart
-        └── widgets/                 # widget files
+        └── widgets/                 # widget files, grouped by dialog or panel
+
+web_ui/                              # The Web Access page (Svelte 5, see below)
+test/                                # unit/, providers/, widgets/, helpers/, fixtures/
+tool/                                # Manual scripts and the projector simulator
 ```
 
 ## Architecture Overview
@@ -72,13 +78,20 @@ Key providers:
 
 | Provider | Responsibility |
 |---|---|
-| `workspaceProvider` | Projector node list, group assignments, undo/redo stack, polling timers |
+| `workspaceProvider` | Projector node list, groups, undo/redo stack, polling timers |
 | `projectStateProvider` | Current file path, dirty flag, recent projects list |
-| `appSettingsProvider` | Theme mode, polling interval, OSC port/enabled |
+| `protocolServiceProvider` | The shared protocol service (`keepAlive`); tests override it with a fake |
+| `appSettingsProvider` | Theme, polling interval, OSC, Web Access and alert settings, active view, log panel |
 | `oscProvider` | OSC UDP server/client lifecycle (`keepAlive`) |
 | `customCommandsProvider` | User-defined commands with auto-generated OSC slugs |
-| `eventLogProvider` | Rolling log of app events, capped at 500 entries (`keepAlive`) |
-| `scheduledTasksProvider` | Timed/recurring task list and its internal scheduler `Timer` (`keepAlive`) |
+| `eventLogProvider` | Rolling event log, capped at 5000 rows (a batch command or folded repeats is one row) (`keepAlive`) |
+| `scheduledTasksProvider` | Timed/recurring task list and its scheduler `Timer` (`keepAlive`) |
+| `alertsProvider` | Active alerts, reconciled from workspace state by `domain/alerts.dart` (`keepAlive`) |
+| `signalWatchProvider` | Signal lost detection: `QVX:NSGS1` every 2 s on powered-on projectors (`keepAlive`) |
+| `alignmentProvider` | Alignment mode, and what it captured so exit puts every projector back |
+| `webServerProvider` | Web Access server lifecycle, and the data source its routes read (`keepAlive`) |
+
+The full list, with the smaller selector providers, is in `CLAUDE.md`.
 
 ### Data Models
 
@@ -90,15 +103,21 @@ Key providers:
 
 `CustomCommand` and `LogEvent` are plain Dart classes (no Freezed, no codegen). `CustomCommand` has manual `toJson`/`fromJson`. Extend either directly without running code generation.
 
+Logic that can be tested on its own goes into pure functions under `domain/` (for example `telemetry_parsing.dart`, `alerts.dart`, `schedule_due.dart`) rather than into private widget or notifier methods.
+
 ### Network Protocols
 
-**NTCONTROL** (`panasonic_protocol_service.dart`): TCP socket per projector. Authentication uses an MD5 hash of a challenge token. Commands are plain-text strings (`PON` = power on, `OSH:1` = shutter close).
+**NTCONTROL** (`panasonic_protocol_service.dart`): opens a new TCP connection per command and closes it after the reply; there is no persistent socket per projector. Authentication uses an MD5 hash of a challenge token. Commands are plain-text strings (`PON` = power on, `OSH:1` = shutter close). The app's instance is an `IsolateProtocolService`, which runs every call on a worker isolate so polling doesn't stall the UI: a new public method on the service must be routed there too.
 
-**OSC** (`osc_service.dart`): UDP-based. Receives commands on a configurable port and maps OSC addresses to projector actions. Custom commands produce slugs like `/pgrid/custom/dynamic-contrast`. The service also broadcasts projector status outbound (`/pgrid/status/online`, `/pgrid/status/offline`, and the unacknowledged alert counts `/pgrid/status/critical`, `/pgrid/status/warning`) to a configurable send IP and port whenever status changes, plus one `/pgrid/alert/<rule>` or `/pgrid/alert/acknowledged` message per alert change.
+**OSC** (`osc_service.dart`): UDP-based. Receives commands on a configurable port and maps OSC addresses to projector actions. Custom commands produce slugs like `/pgrid/all/custom/dynamic-contrast` or `/pgrid/group/<group-name>/custom/dynamic-contrast`. The service also broadcasts projector status outbound (`/pgrid/status/online`, `/pgrid/status/offline`, and the unacknowledged alert counts `/pgrid/status/critical`, `/pgrid/status/warning`) to a configurable send IP and port whenever status changes, plus one `/pgrid/alert/<rule>` or `/pgrid/alert/acknowledged` message per alert change.
+
+**Remote Preview** (`remote_preview_service.dart`): a WebSocket to the projector's own web UI on port 80 (not the NTCONTROL port), receiving about one JPEG frame per second. Design in `plan/REMOTE_PREVIEW_PLAN.md`.
+
+**Web Access** (`web_server_service.dart`): an HTTP server in the app that serves the `web_ui/` page and its API (see below).
 
 ### Persistence
 
-Project state is saved as JSON in the platform config directory:
+Project files, app settings and window geometry are JSON in the platform config directory, and the daily log files sit in its `logs/` folder (kept 14 days):
 
 - Windows: `%APPDATA%\ProjectorGrid\`
 - macOS: `~/Library/Application Support/ProjectorGrid/`
@@ -121,7 +140,7 @@ dart run build_runner watch --delete-conflicting-outputs
 
 ### Linting and Analysis
 
-The project uses `flutter_lints`. Run the analyzer before committing:
+The project uses `flutter_lints`. Run the analyzer before committing; only `lib/` and `test/` are linted:
 
 ```bash
 flutter analyze
@@ -138,8 +157,20 @@ dart format .
 ### Running Tests
 
 ```bash
-flutter test
+flutter test                                        # the whole suite
+flutter test test/unit/telemetry_parsing_test.dart  # one file
 ```
+
+Tests live in `test/unit/` (pure logic), `test/providers/` (Riverpod, with a `ProviderContainer`) and `test/widgets/`, with shared fakes in `test/helpers/`. Two rules:
+
+- The network is always faked: override `protocolServiceProvider` with `FakeProtocolService`. Only `test/unit/protocol_service_test.dart` opens sockets, to a loopback fake projector.
+- Any test that builds a provider or the app calls `useTempConfigDir()`, otherwise it reads and can overwrite your real settings.
+
+On Windows, `flutter_tester` occasionally crashes in the Dart VM profiler, showing as a batch of tests that "did not complete" with no error. Rerun, or use `flutter test --concurrency=1`.
+
+### Continuous Integration
+
+`.github/workflows/ci.yml` runs on Windows and macOS for pushes and pull requests to `main`: code generation, `dart format --set-exit-if-changed lib test`, `flutter analyze lib test` and `flutter test`. A `web` job checks that `types.gen.ts` matches `openapi.yaml`, then runs `check`, `lint`, `test` and `build` in `web_ui/`.
 
 ### Testing Without Projectors
 
@@ -147,14 +178,30 @@ flutter test
 (127.0.0.1, 127.0.0.2, …, port 1024) and writes a matching project file:
 
 ```bash
-dart run tool/projector_simulator.dart      # 6 projectors
-dart run tool/projector_simulator.dart 12   # any count up to 250
+dart run tool/projector_simulator.dart                 # 6 projectors
+dart run tool/projector_simulator.dart 12              # any count up to 250
+dart run tool/projector_simulator.dart --demo-errors   # start with self-diagnosis codes set
+dart run tool/projector_simulator.dart 16 --base=192.168.0.101   # LAN-looking addresses
 ```
 
 Open the printed `.pgrid` path via File → Open. The simulated projectors answer the
-poll cycle and track power, shutter, input, test pattern and shutter fade, so controls,
-Monitoring and Alignment mode all work. Commands they receive are printed; Ctrl+C stops
-them. On macOS, add loopback aliases first (see the script's header).
+poll cycle and track power, shutter, input, test pattern, shutter fade, Edge Blending
+and Geometry registers, so controls, Monitoring, Alignment mode and the dialogs all work.
+Commands they receive are printed; Ctrl+C stops them.
+
+While it runs, type into its console to test alerts and connection states:
+
+```
+err 3 F305 U200     projector 3 reports these self-diagnosis codes
+clear all           remove them
+sig 3 off | on      input signal gone / back (sig all blip: a short dropout)
+net 3 off | on      network cable out / back in
+list                who reports what
+```
+
+On macOS, add loopback aliases first. `--base` needs its addresses to exist on the
+machine (a loopback adapter on Windows, `lo0` aliases on macOS). The script's header
+has the commands for both.
 
 ### Web Access page (`web_ui/`)
 
@@ -186,7 +233,7 @@ flutter build windows --release
 flutter build macos --release
 ```
 
-Releases are automated via GitHub Actions (`.github/workflows/release.yml`). Pushing a tag in `v*.*.*` format triggers a build for Windows and macOS, creates a GitHub Release with the installer and DMG attached, then a final job updates README.md's download links to point at that tag's exact versioned filenames and pushes the change back to `main`.
+Releases are automated via GitHub Actions (`.github/workflows/release.yml`). Pushing a tag in `v*.*.*` format triggers a build for Windows and macOS (the Web Access page is built first), creates a GitHub Release with the installer and DMG attached and the tag's section of `CHANGELOG.md` as its notes, then a final job updates README.md's download links to point at that tag's exact versioned filenames and pushes the change back to `main`.
 
 ## Contributing
 
@@ -200,6 +247,7 @@ For new PRs, please go through the following checklist:
 
 - [ ] `flutter analyze` reports no issues.
 - [ ] `dart format .` has been run and all changed files are formatted.
+- [ ] `flutter test` passes, and new logic comes with tests.
 - [ ] If `web_ui/` changed: `npm run check`, `npm run lint` and `npm test` pass there.
 - [ ] The branch is clean: commits are logically separated and have descriptive messages.
 - [ ] The PR body describes what changed and why.
@@ -222,6 +270,6 @@ Common prefixes: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`.
 
 - Follow Dart/Flutter idioms and the rules enforced by `flutter_lints`.
 - Keep providers and widgets focused - one responsibility per file.
-- Use Freezed for `ProjectorNode` and `ProjectorGroup`; other state classes (`AppSettings`, `ProjectState`, `CustomCommand`) are plain Dart. Do not mutate state directly in either case.
+- Use Freezed for `ProjectorNode`, `ProjectorGroup` and `ScheduledTask`; other state classes (`AppSettings`, `ProjectState`, `CustomCommand`) are plain Dart. Do not mutate state directly in either case.
 - Do not add fallback handling or validation for cases that cannot occur at runtime.
 - Comments should explain *why*, not *what* - well-named identifiers already do that.
