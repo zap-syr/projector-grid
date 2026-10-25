@@ -105,13 +105,18 @@ does window setup; `lib/app/app.dart` is just `MaterialApp` + theme.
 | `appSettingsProvider` | theme mode, polling interval, OSC port/enabled, which view is active, log panel visibility |
 | `oscProvider` | OSC UDP server/client lifecycle (`keepAlive`) |
 | `customCommandsProvider` | user-defined commands + auto-generated OSC slugs |
-| `eventLogProvider` | rolling event log, capped at 500 entries (`keepAlive`) |
+| `eventLogProvider` | rolling event log, capped at 5000 *rows* (`keepAlive`): a batch command or a run of folded repeats is one row however many events it holds (`capLogRows` in `domain/event_log_rows.dart`) |
 | `scheduledTasksProvider` | timed/recurring task list + its scheduler `Timer` (`keepAlive`) |
 | `selectionProvider` / `pollStatusProvider` | current card selection; per-projector poll-in-flight state |
 | `editHistoryStatusProvider` / `statusSummaryProvider` | small derived/selector providers (undo-redo availability for the Edit menu; online/offline/warning counts for the status bar) that dedupe by structural equality so they don't rebuild on every telemetry tick |
 | `alertsProvider` | active alerts (`keepAlive`), reconciled from workspace state and the signal watch by pure functions in `domain/alerts.dart` |
 | `signalWatchProvider` | Signal lost detection (`keepAlive`): `QVX:NSGS1` every 2 s on powered-on projectors while the rule is on, staggered, at most 16 in flight, skipping nodes `WorkspaceNotifier.isNodeBusy`; logic in `domain/signal_watch.dart` |
+| `alertNotificationsProvider` | turns raised alerts into desktop notifications and the alert sound (`keepAlive`), batching alerts raised close together; the services behind it are in `alert_delivery_providers.dart` so tests can fake them |
+| `alignmentProvider` | Alignment mode: the focused projector, neighbours/others patterns, and what entry captured so exit puts every shutter and pattern back; holds no widget state so the web page drives it too |
 | `remotePreviewProvider` / `previewSignalStatusProvider` | per-projector "Remote Preview" (RemoView) WebSocket feed and its web-UI-driven signal status — see `remote_preview_service.dart` below |
+| `preShowProvider` | one projector's Pre-show state while a Remote Preview of it is open in the app or on a web page (not `keepAlive`) |
+| `webServerProvider` / `webClientsProvider` | Web Access server lifecycle (`keepAlive`), also the `WebApiSource` its routes read from; the signed-in clients for the status bar and Preferences |
+| `monitoringViewProvider` / `monitoringFilterProvider` / `monitoringPanelProvider` | Monitoring layout (saved to `monitoring_view.json`), search and quick filter (session only), the open projector panel |
 
 `workspaceProvider` polls every projector on an interval. Undo/redo snapshots **strip transient telemetry**
 before storing and **merge live telemetry back** on restore (`_stripTransient` / `_mergeWithTelemetry`) so
@@ -135,7 +140,7 @@ undoing a layout change never rolls back power/temperature readings.
   receiving ~1fps JPEG frames and text status messages. Transport-only, no Riverpod/UI in this
   file — `remote_preview_provider.dart` and `preview_signal_status_provider.dart` wrap it for
   state, `remote_preview_dialog.dart`/`preview_viewport.dart` render it. Full design in
-  `REMOTE_PREVIEW_PLAN.md`.
+  `plan/REMOTE_PREVIEW_PLAN.md`.
 
 ### Persistence
 
@@ -161,12 +166,12 @@ Window geometry is persisted separately (`window_prefs_service.dart`), debounced
 `primaryFocus == null` and silently kills all `Shortcuts` (Ctrl+A, Ctrl+Z, …). Don't remove the
 `_requestViewFocus` post-frame callback.
 
-### Windows debug-mode crash workaround
+### Windows debug-mode crash
 
-`windows/runner/main.cpp` registers a Vectored Exception Handler under `#ifdef _DEBUG` that swallows a
-specific access violation inside `flutter_windows.dll` (Dart VM `ThreadInterrupter` / profiler stack-walk
-race in JIT builds). Release builds are unaffected and don't include it. Full write-up in
-`debug_crash_investigation.md`. Do not remove this without confirming the upstream Dart bug is fixed.
+JIT (debug) builds on the dev laptop can die with an access violation inside `flutter_windows.dll`
+(Dart VM `ThreadInterrupter` / profiler stack-walk race). Release builds are unaffected. There is no
+workaround in the runner (`windows/runner/main.cpp` is the stock template): rerun the debug app, or
+test in a release build.
 
 ## Deliberate deviations from the flutter-desktop-arch skill
 
