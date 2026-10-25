@@ -1,4 +1,5 @@
-/// Web Access PIN rules for the Preferences dialog: 4–8 digits, a PIN is
+/// Web Access PIN rules for the Preferences dialog: 4-8 digits (the field
+/// takes nothing else), a PIN is
 /// required once its role can be used, and the two PINs must differ (the
 /// server tells the role from which PIN matches).
 library;
@@ -19,7 +20,7 @@ WebPinErrors validateWebPins({
 }) {
   String? lengthError(String pin) =>
       pin.isNotEmpty && (pin.length < 4 || pin.length > 8)
-      ? '4–8 digits'
+      ? '4-8 digits'
       : null;
 
   var viewer =

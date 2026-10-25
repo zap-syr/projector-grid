@@ -31,10 +31,10 @@ void main() {
     ));
   });
 
-  test('4–8 digits', () {
+  test('4-8 digits', () {
     expect(
       check(viewer: '123', vHash: viewerHash, oHash: operatorHash).viewer,
-      '4–8 digits',
+      '4-8 digits',
     );
     expect(
       check(
@@ -42,7 +42,7 @@ void main() {
         vHash: viewerHash,
         oHash: operatorHash,
       ).operator,
-      '4–8 digits',
+      '4-8 digits',
     );
   });
 

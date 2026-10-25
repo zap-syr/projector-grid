@@ -698,7 +698,7 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
           children: [
             SettingsRow(
               label: 'Viewer PIN',
-              hint: '4–8 digits',
+              hint: '4-8 digits',
               error: _webPinError,
               controlWidth: 132,
               control: _pinField(
@@ -721,7 +721,7 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
             ),
             SettingsRow(
               label: 'Operator PIN',
-              hint: '4–8 digits',
+              hint: '4-8 digits',
               error: _webOperatorPinError,
               indented: true,
               enabled: _webAllowControl,
