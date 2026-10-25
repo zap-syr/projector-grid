@@ -205,10 +205,15 @@ abstract final class AppLog {
           f.uri.pathSegments.last,
       ];
       for (final name in logFilesToPrune(names, now)) {
-        File('$folder${Platform.pathSeparator}$name').deleteSync();
+        try {
+          File('$folder${Platform.pathSeparator}$name').deleteSync();
+        } on FileSystemException {
+          // Open elsewhere (an editor holds it on Windows): it goes on a
+          // later launch, and the files after it go now.
+        }
       }
     } on FileSystemException {
-      // An old file that can't be deleted now goes on the next launch.
+      // The folder itself can't be listed; pruning waits for a later launch.
     }
   }
 }
