@@ -600,9 +600,8 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     // as-is instead of NTCONTROL's own reading and instead of triggering the
     // Standby fallback fetch above. See [applyWebSignal]'s doc comment for why.
     WebSignalStatus? webSignalOverride,
-    // What the node was before a caller already flipped it optimistically
-    // (see _checkAndSetNodeStatus) — so status-transition log events still
-    // see the real transition, not the optimistic intermediate state.
+    // Overrides the node's own status as the one the poll transitions from,
+    // for the log (see _checkAndSetNodeStatus).
     ConnectionStatus? previousStatus,
   }) async {
     final oldStatus = previousStatus ?? node.connectionStatus;
@@ -881,23 +880,18 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
   }) async {
     final isOnline = await _protocolService.checkConnection(ip, port);
     if (isOnline) {
-      final previousStatus = logCameOnline
-          ? state.where((n) => n.id == id).firstOrNull?.connectionStatus
-          : null;
-      state = state.map((node) {
-        if (node.id == id) {
-          return node.copyWith(connectionStatus: ConnectionStatus.connected);
-        }
-        return node;
-      }).toList();
-      _notifyStateChanged();
-
+      // An open port isn't an answer: the node stays offline until the poll
+      // gets one. Flipping it to connected here would clear its Offline alert
+      // (and the operator's acknowledgement) on every cycle in which the port
+      // opens but NTCONTROL doesn't reply, e.g. while the projector boots.
       final targetNode = state.where((n) => n.id == id).firstOrNull;
       if (targetNode == null) return;
       await _pollSingleProjector(
         targetNode,
         _telemetryConcurrencyFor(state.length),
-        previousStatus: previousStatus,
+        // A just-added node wasn't offline, only not probed yet: anything
+        // but offline keeps "Came online" out of the log.
+        previousStatus: logCameOnline ? null : ConnectionStatus.connected,
       );
     } else if (state.where((n) => n.id == id && !n.polled).firstOrNull
         case final node?) {

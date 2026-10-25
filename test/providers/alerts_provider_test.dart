@@ -155,6 +155,39 @@ void main() {
     expect(alertLog(c).single.message, 'Offline acknowledged');
   });
 
+  test(
+    'an open port that gives no answer keeps Offline and its acknowledgement',
+    () async {
+      final fake = FakeProtocolService()..reachable['10.0.0.1'] = true;
+      final c = makeContainer(fake);
+      c.listen(alertsProvider, (_, _) {});
+      final events = <AlertChange>[];
+      final sub = c
+          .read(alertsProvider.notifier)
+          .events
+          .listen((e) => events.add(e.change));
+      addTearDown(sub.cancel);
+      final ws = c.read(workspaceProvider.notifier);
+      ws.setNodes([
+        node('1')
+            .copyWith(connectionStatus: ConnectionStatus.offline, polled: true),
+      ]);
+      final key = c.read(alertsProvider).keys.single;
+      c.read(alertsProvider.notifier).acknowledge(key);
+      final since = c.read(alertsProvider)[key]!.since;
+      await Future<void>.delayed(Duration.zero);
+      events.clear();
+
+      await ws.refreshAll();
+      await pumpEventQueue();
+
+      final alert = c.read(alertsProvider)[key]!;
+      expect(alert.acknowledged, isTrue);
+      expect(alert.since, since);
+      expect(events, isEmpty);
+    },
+  );
+
   test('switching a rule off clears its alerts', () {
     final c = makeContainer(FakeProtocolService());
     c.listen(alertsProvider, (_, _) {});
