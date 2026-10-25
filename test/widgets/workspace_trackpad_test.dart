@@ -121,4 +121,24 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('75%'), findsOneWidget);
   });
+
+  testWidgets('pinching back to the start restores the starting zoom', (
+    tester,
+  ) async {
+    await pumpCanvas(tester);
+    final gesture = await tester.createGesture(
+      kind: PointerDeviceKind.trackpad,
+    );
+    await gesture.panZoomStart(canvas(tester, const Offset(400, 300)));
+    for (final scale in [1.1, 1.3, 1.0]) {
+      await gesture.panZoomUpdate(
+        canvas(tester, const Offset(400, 300)),
+        scale: scale,
+      );
+      await tester.pump();
+    }
+    await gesture.panZoomEnd();
+    await tester.pumpAndSettle();
+    expect(find.text('100%'), findsOneWidget);
+  });
 }

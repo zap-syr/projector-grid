@@ -921,7 +921,6 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
                         onPointerPanZoomStart: (_) =>
                             _pinchStartZoom = _currentZoom,
                         onPointerPanZoomUpdate: (event) {
-                          if (event.scale == 1.0) return;
                           _setZoom(
                             _pinchStartZoom * event.scale,
                             contentOffset:
