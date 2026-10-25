@@ -4,7 +4,17 @@
 /// display value, which is kept on a transport failure rather than guessing.
 library;
 
+import '../../../core/services/panasonic_protocol_service.dart';
 import 'projector_node.dart';
+
+/// What a reading shows when the projector answered with a protocol error
+/// in its place, or null when [value] is a real reply. `ER401` means it has
+/// no such reading (`-`); `ERR1`…`ERRA` (busy, refused) say nothing about
+/// the value, so the last one read stays, as on a transport failure.
+String? _errorReplyDisplay(String value, String fallback) {
+  if (!PanasonicProtocolService.isErrorCode(value)) return null;
+  return value == 'ER401' ? '-' : fallback;
+}
 
 /// Inserts thousands separators: `2185` → `2,185`. No `intl` dependency for
 /// one call site.
@@ -69,9 +79,10 @@ String formatSignal(String? raw, {required String fallback}) {
 String formatRuntime(String? raw, {required String fallback}) {
   final value = raw?.replaceAll('RTMS1=', '').trim();
   if (value == null) return fallback;
+  if (_errorReplyDisplay(value, fallback) case final shown?) return shown;
   final hours = int.tryParse(value);
   if (hours != null) return '${groupThousands(hours)}H';
-  return value.isEmpty || value == 'ER401' ? '-' : '${value}H';
+  return value.isEmpty ? '-' : '${value}H';
 }
 
 /// The `QVX:LRTS3=00` reply carries the light-source on-time in hours after
@@ -80,6 +91,7 @@ String formatRuntime(String? raw, {required String fallback}) {
 String formatLightRuntime(String? raw, {required String fallback}) {
   final value = raw?.trim();
   if (value == null) return fallback;
+  if (_errorReplyDisplay(value, fallback) case final shown?) return shown;
   final colon = value.lastIndexOf(':');
   final hours = colon < 0
       ? null
@@ -106,14 +118,18 @@ String formatTemperature(String? raw, {required String fallback}) {
 String formatVoltage(String? raw, {required String fallback}) {
   final value = raw?.replaceAll('VMOI2=', '').trim();
   if (value == null) return fallback;
-  if (value != 'ER401' && value.length > 3) return '${value.substring(3)}V';
+  if (_errorReplyDisplay(value, fallback) case final shown?) return shown;
+  if (value.length > 3) return '${value.substring(3)}V';
   if (value.length == 3) return '${value}V';
   return '-';
 }
 
-/// `QVX:ERRS2` replies `ERRS2=` with nothing after it when healthy.
+/// `QVX:ERRS2` replies `ERRS2=` with nothing after it when healthy. A
+/// protocol error in its place is not a self-diagnosis code: stored as one,
+/// it would raise a critical Projector error alert.
 String formatErrors(String? raw, {required String fallback}) {
   final value = raw?.replaceAll('ERRS2=', '').trim();
   if (value == null) return fallback;
+  if (_errorReplyDisplay(value, fallback) case final shown?) return shown;
   return value.isEmpty ? 'NO ERRORS' : value;
 }

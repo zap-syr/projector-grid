@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:projector_grid/features/workspace/domain/projector_errors.dart';
 import 'package:projector_grid/features/workspace/domain/projector_node.dart';
 import 'package:projector_grid/features/workspace/domain/telemetry_parsing.dart';
 
@@ -15,6 +16,10 @@ void main() {
     });
     test('transport failure keeps the last known value', () {
       expect(formatRuntime(null, fallback: '1,000H'), '1,000H');
+    });
+    test('a busy reply keeps the last known value', () {
+      expect(formatRuntime('ERR3', fallback: '1,000H'), '1,000H');
+      expect(formatLightRuntime('ERR3', fallback: '5H'), '5H');
     });
   });
 
@@ -44,6 +49,11 @@ void main() {
     test('transport failure keeps the last known value', () {
       expect(formatErrors(null, fallback: 'NO ERRORS'), 'NO ERRORS');
     });
+    test('a protocol error is not an error code', () {
+      expect(formatErrors('ER401', fallback: 'NO ERRORS'), '-');
+      expect(formatErrors('ERR3', fallback: 'NO ERRORS'), 'NO ERRORS');
+      expect(decodeProjectorErrors(formatErrors('ER401', fallback: 'x')), []);
+    });
   });
 
   group('formatVoltage', () {
@@ -61,6 +71,10 @@ void main() {
     });
     test('transport failure keeps the last known value', () {
       expect(formatVoltage(null, fallback: '230V'), '230V');
+    });
+    test('a busy reply keeps the last known value', () {
+      expect(formatVoltage('ERR3', fallback: '230V'), '230V');
+      expect(formatVoltage('ER402', fallback: '230V'), '230V');
     });
   });
 
