@@ -187,6 +187,32 @@ void main() {
       expect((await send('POST', '/api/login', body: [1])).statusCode, 400);
     });
 
+    test('an oversized body → 400 without buffering it', () async {
+      final big = jsonEncode({'pin': '1234', 'pad': 'x' * 2000});
+      expect((await send('POST', '/api/login', body: big)).statusCode, 400);
+
+      // Chunked, no Content-Length: cut off once past the limit, the rest
+      // never read.
+      var chunksRead = 0;
+      Stream<List<int>> endless() async* {
+        while (true) {
+          chunksRead++;
+          yield List.filled(512, 0x20);
+        }
+      }
+
+      final r = await api(
+        Request(
+          'POST',
+          Uri.parse('http://localhost/api/login'),
+          body: endless(),
+          context: {'shelf.io.connection_info': _Conn('10.0.0.5')},
+        ),
+      );
+      expect(r.statusCode, 400);
+      expect(chunksRead, lessThan(10));
+    });
+
     test('lockout → 429 with Retry-After', () async {
       for (var i = 0; i < WebAuth.maxFailures - 1; i++) {
         await send('POST', '/api/login', body: {'pin': '0000'});

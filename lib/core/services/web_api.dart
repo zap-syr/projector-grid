@@ -196,10 +196,22 @@ class WebApi {
 
   bool get _controlAllowed => source.operatorPinHash != null;
 
+  /// A PIN body is a few dozen bytes. Login needs no session, so anything
+  /// past this is refused before it's buffered: any device on the network
+  /// could otherwise make the app hold an arbitrarily large body.
+  static const maxPinBodyBytes = 1024;
+
   /// `{"pin": "<string>"}` → the PIN; null for anything else.
   static Future<String?> _readPin(Request request) async {
+    final length = request.contentLength;
+    if (length != null && length > maxPinBodyBytes) return null;
+    final bytes = <int>[];
+    await for (final chunk in request.read()) {
+      bytes.addAll(chunk);
+      if (bytes.length > maxPinBodyBytes) return null;
+    }
     try {
-      final body = jsonDecode(await request.readAsString());
+      final body = jsonDecode(utf8.decode(bytes));
       final pin = body is Map ? body['pin'] : null;
       return pin is String ? pin : null;
     } on FormatException {
