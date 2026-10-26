@@ -233,7 +233,7 @@ flutter build windows --release
 flutter build macos --release
 ```
 
-Releases are automated via GitHub Actions (`.github/workflows/release.yml`). Pushing a tag in `v*.*.*` format triggers a build for Windows and macOS (the Web Access page is built first), creates a GitHub Release with the installer and DMG attached and the tag's section of `CHANGELOG.md` as its notes, then a final job updates README.md's download links to point at that tag's exact versioned filenames and pushes the change back to `main`.
+Releases are automated via GitHub Actions (`.github/workflows/release.yml`). Pushing a tag in `v*.*.*` format first runs the full CI workflow (`ci.yml`) on the tagged commit; only if it passes does it build for Windows and macOS (the Web Access page is built first) and create a GitHub Release with the installer and DMG attached and the tag's section of `CHANGELOG.md` as its notes. The assets keep fixed names (`ProjectorGrid_Setup.exe`, `ProjectorGrid-macOS.dmg`), so README.md's `releases/latest/download/` links always point at the newest release and never need updating.
 
 ## Contributing
 
