@@ -36,9 +36,7 @@ class FakeProjectorServer {
   }) async {
     final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
     final fake = FakeProjectorServer._(server, greeting, responses ?? {});
-    // macOS can fail accept() with ECONNRESET when a client (checkConnection)
-    // hangs up before the server gets to it; that is the client's business.
-    server.listen(fake._handle, onError: (_) {});
+    server.listen(fake._handle);
     return fake;
   }
 
@@ -49,9 +47,12 @@ class FakeProjectorServer {
     final limit = validHandshakes;
     final ok = limit == null || _connections < limit;
     _connections++;
+    // A client that hangs up right after the greeting (checkConnection) makes
+    // the write fail with ECONNRESET on macOS; that is not the test's concern.
+    socket.done.ignore();
     socket.add(ascii.encode(ok ? '$greeting\r' : 'HTTP/1.1 400\r'));
     if (!ok) {
-      unawaited(socket.flush().then((_) => socket.close()));
+      socket.close().ignore();
       return;
     }
     final buffer = StringBuffer();
@@ -66,7 +67,7 @@ class FakeProjectorServer {
       final body = RegExp(r'^(?:[0-9a-f]{32})?00(.*)$').firstMatch(line);
       final cmd = body?.group(1) ?? line;
       socket.add(ascii.encode('00${responses[cmd] ?? 'ER401'}\r'));
-      unawaited(socket.flush().then((_) => socket.close()));
+      socket.close().ignore();
     }, onError: (_) {});
   }
 
