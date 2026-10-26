@@ -1,5 +1,4 @@
-import 'dart:io' show Platform;
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -31,7 +30,9 @@ class MacMenuBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (!Platform.isMacOS) return child;
+    // Not dart:io's Platform: `flutter test` on a Mac host would build the
+    // native menu, which only the real macOS embedder can take.
+    if (defaultTargetPlatform != TargetPlatform.macOS) return child;
 
     final recentProjects = ref.watch(
       projectStateProvider.select((s) => s.recentProjects),

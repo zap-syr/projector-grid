@@ -1,6 +1,6 @@
-import 'dart:io' show Platform;
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -191,7 +191,7 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
     super.initState();
     windowManager.addListener(this);
     windowManager.setPreventClose(true);
-    if (Platform.isMacOS) {
+    if (defaultTargetPlatform == TargetPlatform.macOS) {
       _quitChannel.setMethodCallHandler(_handleQuitChannelCall);
     }
   }
@@ -199,7 +199,7 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
   @override
   void dispose() {
     windowManager.removeListener(this);
-    if (Platform.isMacOS) {
+    if (defaultTargetPlatform == TargetPlatform.macOS) {
       _quitChannel.setMethodCallHandler(null);
     }
     super.dispose();
@@ -232,7 +232,7 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
   /// macOS. Call this right before `destroy()` in a path that already ran
   /// its own confirmation, so that re-entry doesn't prompt a second time.
   static Future<void> _markTerminationApproved() async {
-    if (!Platform.isMacOS) return;
+    if (defaultTargetPlatform != TargetPlatform.macOS) return;
     try {
       await _quitChannel.invokeMethod('markTerminationApproved');
     } catch (_) {
@@ -317,7 +317,8 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
               const _ShowMonitoringIntent(),
           const SingleActivator(LogicalKeyboardKey.keyL, control: true):
               const _ToggleAlignmentIntent(),
-          if (Platform.isMacOS) ...<ShortcutActivator, Intent>{
+          if (defaultTargetPlatform ==
+              TargetPlatform.macOS) ...<ShortcutActivator, Intent>{
             const SingleActivator(LogicalKeyboardKey.keyN, meta: true):
                 const _NewProjectIntent(),
             const SingleActivator(LogicalKeyboardKey.keyO, meta: true):
@@ -418,7 +419,7 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
                 // MainToolbar's own .select() watches already stop most
                 // spurious rebuilds, but a boundary here also caps repaint
                 // cost for whatever legitimately does rebuild this strip.
-                if (!Platform.isMacOS)
+                if (defaultTargetPlatform != TargetPlatform.macOS)
                   const RepaintBoundary(child: TopMenuBar()),
                 const RepaintBoundary(child: MainToolbar()),
                 const Expanded(child: _WorkspaceBody()),

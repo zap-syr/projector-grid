@@ -1,5 +1,4 @@
-import 'dart:io' show Platform;
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../../core/theme/app_theme.dart';
@@ -36,7 +35,8 @@ class CornerCanvasCard extends StatelessWidget {
   /// Shown in place of the canvas while the corner values are read.
   final Widget? loading;
 
-  static String get _multiKey => Platform.isMacOS ? 'Cmd' : 'Ctrl';
+  static String get _multiKey =>
+      defaultTargetPlatform == TargetPlatform.macOS ? 'Cmd' : 'Ctrl';
 
   static String get hintText =>
       'Drag a corner, or move it 1 step with the arrow keys. $_multiKey '

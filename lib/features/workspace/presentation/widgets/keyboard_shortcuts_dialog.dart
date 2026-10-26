@@ -1,6 +1,6 @@
-import 'dart:io' show Platform;
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
@@ -24,7 +24,9 @@ class _KeyboardShortcutsDialogState extends State<KeyboardShortcutsDialog> {
   /// Below this width the two columns of cards stack into one.
   static const _twoColumnMinWidth = 600.0;
 
-  final _sections = shortcutSections(macOS: Platform.isMacOS);
+  final _sections = shortcutSections(
+    macOS: defaultTargetPlatform == TargetPlatform.macOS,
+  );
   late final int _total = shortcutCount(_sections);
   final _search = TextEditingController();
   final _scroll = ScrollController();
@@ -345,7 +347,7 @@ class _ShortcutRow extends StatelessWidget {
   // Every shortcut is registered with both control and meta modifiers
   // (projector_workspace.dart), so Cmd is what's really bound there.
   static String _platformLabel(String label) {
-    if (!Platform.isMacOS) return label;
+    if (defaultTargetPlatform != TargetPlatform.macOS) return label;
     return switch (label) {
       'Ctrl' => '⌘',
       'Shift' => '⇧',

@@ -1,7 +1,7 @@
-import 'dart:io' show Platform;
 import 'dart:math' show min, max;
 
-import 'package:flutter/foundation.dart' show setEquals;
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, setEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
@@ -610,7 +610,7 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
           overlayChildBuilder: _buildQuickStatus,
           child: MouseRegion(
             cursor: _isPanning
-                ? (Platform.isMacOS
+                ? (defaultTargetPlatform == TargetPlatform.macOS
                       ? SystemMouseCursors.grabbing
                       : SystemMouseCursors.move)
                 : MouseCursor.defer,
