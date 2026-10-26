@@ -1,5 +1,4 @@
-import 'dart:io' show Platform;
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart' show kDoubleTapTimeout;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -229,7 +228,7 @@ class _CornerCanvasState extends State<CornerCanvas> {
         onPanUpdate: _onPanUpdate,
         onPanEnd: (_) => _onPanEnd(),
         child: MouseRegion(
-          cursor: Platform.isMacOS
+          cursor: defaultTargetPlatform == TargetPlatform.macOS
               ? SystemMouseCursors.grab
               : SystemMouseCursors.move,
         ),

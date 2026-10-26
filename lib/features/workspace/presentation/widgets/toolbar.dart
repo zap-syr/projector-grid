@@ -1,5 +1,4 @@
-import 'dart:io';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -68,7 +67,7 @@ class _MainToolbarState extends ConsumerState<MainToolbar> {
 
     final cs = Theme.of(context).colorScheme;
     final background = AppTheme.chromeBackground(cs);
-    final ctrl = Platform.isMacOS ? '⌘' : 'Ctrl';
+    final ctrl = defaultTargetPlatform == TargetPlatform.macOS ? '⌘' : 'Ctrl';
 
     final tools = <Widget>[
       _ToolButton(

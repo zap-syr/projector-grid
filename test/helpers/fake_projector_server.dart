@@ -36,7 +36,9 @@ class FakeProjectorServer {
   }) async {
     final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
     final fake = FakeProjectorServer._(server, greeting, responses ?? {});
-    server.listen(fake._handle);
+    // macOS can fail accept() with ECONNRESET when a client (checkConnection)
+    // hangs up before the server gets to it; that is the client's business.
+    server.listen(fake._handle, onError: (_) {});
     return fake;
   }
 

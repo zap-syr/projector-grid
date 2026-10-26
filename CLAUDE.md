@@ -53,6 +53,8 @@ re-run `build_runner` first.
   `FakeProjectorServer`).
 - **Any test that builds a provider or the app must call `useTempConfigDir()`** — otherwise
   it reads and can overwrite the real user's settings in the platform config dir.
+- Widgets branch on `defaultTargetPlatform == TargetPlatform.macOS`, never `dart:io` `Platform.isMacOS`:
+  tests run as a non-Mac target on every host, so the macOS CI runner sees the same tree as Windows.
 - Keep logic testable by putting it in pure functions under `domain/` (see
   `telemetry_parsing.dart`, `geometry_values.dart`, `schedule_due.dart`) rather than private
   widget/notifier methods.
