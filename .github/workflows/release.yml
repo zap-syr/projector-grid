@@ -9,8 +9,13 @@ permissions:
   contents: write
 
 jobs:
+  # The same checks as every PR; nothing is built or published unless they pass.
+  ci:
+    uses: ./.github/workflows/ci.yml
+
   build-windows:
     name: Windows Installer
+    needs: ci
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -63,10 +68,11 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           body_path: release_notes.md
-          files: installer/output/ProjectorGrid_Setup_${{ steps.version.outputs.VERSION }}.exe
+          files: installer/output/ProjectorGrid_Setup.exe
 
   build-macos:
     name: macOS (Universal)
+    needs: ci
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -114,42 +120,12 @@ jobs:
             -volname "Projector Grid" \
             -srcfolder dmg_staging \
             -ov -format UDZO \
-            "ProjectorGrid-macOS-${{ steps.version.outputs.VERSION }}.dmg"
+            "ProjectorGrid-macOS.dmg"
 
+      # Fixed asset names keep README's releases/latest/download links valid
+      # for every release, so nothing has to push back to main.
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
           body_path: release_notes.md
-          files: ProjectorGrid-macOS-${{ steps.version.outputs.VERSION }}.dmg
-
-  update-readme:
-    name: Update README download links
-    runs-on: ubuntu-latest
-    needs: [build-windows, build-macos]
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main
-
-      - name: Extract version from tag
-        id: version
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
-
-      - name: Update download links
-        run: |
-          TAG="${{ github.ref_name }}"
-          VERSION="${{ steps.version.outputs.VERSION }}"
-          sed -i -E "s#releases/(latest/download|download/v[0-9.]+)/ProjectorGrid_Setup[^)]*\.exe#releases/download/${TAG}/ProjectorGrid_Setup_${VERSION}.exe#" README.md
-          sed -i -E "s#releases/(latest/download|download/v[0-9.]+)/ProjectorGrid-macOS[^)]*\.dmg#releases/download/${TAG}/ProjectorGrid-macOS-${VERSION}.dmg#" README.md
-
-      - name: Commit and push if changed
-        run: |
-          if git diff --quiet -- README.md; then
-            echo "README already up to date"
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add README.md
-          git commit -m "chore: update download links to ${{ github.ref_name }}"
-          git push origin HEAD:main
+          files: ProjectorGrid-macOS.dmg

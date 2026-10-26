@@ -5,6 +5,8 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # release.yml runs this first and builds only if it passes.
+  workflow_call:
 
 jobs:
   test:
