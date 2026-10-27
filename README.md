@@ -105,12 +105,10 @@ Power, shutter or any command at a set time, daily, weekly or once, for all proj
 
 Show controllers such as QLab, TouchDesigner or Resolume send commands over OSC and get live status back. Phones and tablets join through Web Access.
 
-```mermaid
-flowchart LR
-    SC["Show controller"] <-- "OSC" --> PG["Projector Grid"]
-    WEB["Phones and tablets"] -- "Web Access" --> PG
-    PG -- "NTCONTROL" --> PJ["Projectors"]
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/aux-images/show-control-dark.svg">
+  <img src=".github/aux-images/show-control-light.svg" alt="A show controller talks to Projector Grid over OSC, phones and tablets join through Web Access, and Projector Grid controls the projectors over NTCONTROL">
+</picture>
 
 Custom commands get their own OSC addresses, such as `/pgrid/all/custom/dynamic-contrast` or `/pgrid/group/stage/custom/dynamic-contrast`.
 

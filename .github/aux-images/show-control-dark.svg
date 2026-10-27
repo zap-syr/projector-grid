@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="200" viewBox="0 0 800 200" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#7d8590"/>
+    </marker>
+  </defs>
+
+  <g fill="none" stroke="#7d8590" stroke-width="1.5">
+    <path d="M192 44 H292 Q300 44 300 52 V84 Q300 92 308 92 H358" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+    <path d="M190 156 H292 Q300 156 300 148 V116 Q300 108 308 108 H358" marker-end="url(#arrow)"/>
+    <path d="M540 100 H648" marker-end="url(#arrow)"/>
+  </g>
+
+  <g font-size="13" fill="#9198a1" text-anchor="middle">
+    <text x="245" y="36">OSC</text>
+    <text x="245" y="148">Web Access</text>
+    <text x="594" y="92">NTCONTROL</text>
+  </g>
+
+  <g stroke-width="1.5" font-size="15" text-anchor="middle">
+    <rect x="10" y="20" width="180" height="48" rx="8" fill="#151b23" stroke="#3d444d"/>
+    <text x="100" y="49" fill="#f0f6fc" stroke="none">Show controller</text>
+
+    <rect x="10" y="132" width="180" height="48" rx="8" fill="#151b23" stroke="#3d444d"/>
+    <text x="100" y="161" fill="#f0f6fc" stroke="none">Phones and tablets</text>
+
+    <rect x="360" y="76" width="180" height="48" rx="8" fill="#0d2847" stroke="#4493f8"/>
+    <text x="450" y="105" fill="#f0f6fc" stroke="none" font-weight="600">Projector Grid</text>
+
+    <rect x="650" y="76" width="140" height="48" rx="8" fill="#151b23" stroke="#3d444d"/>
+    <text x="720" y="105" fill="#f0f6fc" stroke="none">Projectors</text>
+  </g>
+</svg>
