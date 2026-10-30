@@ -9,12 +9,14 @@ import 'dart:io';
 import 'dart:typed_data';
 
 const host = '192.168.0.8';
+// PT-RQ25K: 80 + '/remotepreview'. PT-RZ34K: 8080 + '/'.
 const port = 80;
+const path = '/remotepreview';
 const runFor = Duration(seconds: 20);
 const framesToSave = 3;
 
 Future<void> main() async {
-  final url = 'ws://$host:$port/remotepreview';
+  final url = 'ws://$host:$port$path';
   stdout.writeln('connecting $url  (subprotocol pj-cast-protocol)');
 
   final WebSocket ws;
