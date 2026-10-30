@@ -138,7 +138,8 @@ undoing a layout change never rolls back power/temperature readings.
   configured send IP/port on every status change (`critical`/`warning` count unacknowledged alerts), and
   `/pgrid/alert/<rule>` / `/pgrid/alert/acknowledged` from `alertsProvider.events`.
 - **`remote_preview_service.dart`** — "Remote Preview" (RemoView) live view: a WebSocket client to
-  the projector's own web UI (`ws://<ip>:80/remotepreview`, port 80 — not the NTCONTROL port),
+  the projector's own web UI (`ws://<ip>:80/remotepreview`, or `ws://<ip>:8080/` on a PT-RZ34K,
+  tried in that order — not the NTCONTROL port),
   receiving ~1fps JPEG frames and text status messages. Transport-only, no Riverpod/UI in this
   file — `remote_preview_provider.dart` and `preview_signal_status_provider.dart` wrap it for
   state, `remote_preview_dialog.dart`/`preview_viewport.dart` render it. Full design in

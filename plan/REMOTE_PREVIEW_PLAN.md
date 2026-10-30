@@ -84,7 +84,7 @@ the WebSocket feed underneath it**, and that we can consume directly.
 - Frame rate is ~1 fps, ~25 KB/frame — trivial bandwidth, several concurrent
   previews are fine.
 - **At most 2 preview clients per projector, network-wide** (measured
-  2026-10-05 on a PT-RQ35K, see ROADMAP_PLAN §4 spike): the third upgrade gets a
+  2026-10-05 on a PT-RQ25K, see ROADMAP_PLAN §4 spike; a PT-RZ34K allows 5, §1): the third upgrade gets a
   plain `500 Internal Server Error` page, nothing in it says why. The projector's
   own `preview.cgi` is rendered server-side with *"Access is restricted because
   the maximum number of units to which simultaneous connection is allowed has
@@ -92,6 +92,77 @@ the WebSocket feed underneath it**, and that we can consume directly.
   Web Access page share one socket per projector, so the app takes one slot.
   `CLOSE` is a graceful end-of-stream from the projector (reboot) — handle it as
   a soft state, not a crash; an input switch does not send it.
+
+### PT-RZ34K: a different endpoint (measured 2026-10-30)
+
+The fleet-wide endpoint assumption above did not hold. A PT-RZ34KE
+(192.168.0.109) answers **`404`** to `ws://<ip>/remotepreview`, so the preview
+showed "Preview not available" while the same app worked on a PT-RQ25K. Its
+own `preview.cgi` (reached via `index.cgi → main.cgi?page=MENU_PREVIEW →
+rightframe.cgi → preview_status.cgi → preview.cgi`, no `remote_preview.cgi`
+step) opens:
+
+```js
+var socket = new WebSocket('ws://' + location.hostname + ':8080', 'pj-cast-protocol');
+```
+
+| | PT-RQ25K | PT-RZ34K |
+|---|---|---|
+| Preview WebSocket | `ws://<ip>:80/remotepreview` | `ws://<ip>:8080/` (port 80 path → 404) |
+| Auth on the socket | none | none |
+| Frame | 480×270 JPEG, ~25 KB, ~1 fps | 480×304 JPEG (16:10, from a 1920x1200 source), ~8 KB, ~4.5 fps |
+| Client messages in its page | `start`, `alive` every 5 s, `receive`, `PONG` | `start` only (no `alive`/`receive`), but it accepts ours: streamed fine with the app's exchange |
+| Text messages handled by its page | full table above | `HDCP`, `BLANK`, `REFRESH`, `SIGNAL`, `CHANGING_PRE`; `preshow:1`/`preshow:0` defined |
+| Signal status page | `/cgi-bin/simple_status_hidden.cgi` | **`404`**; same INPUT / SIGNAL NAME / SIGNAL FREQUENCY rows, same markup, in `/cgi-bin/preview_input.cgi` |
+| Viewers at once | 2, the third gets `500` | 5, the sixth is dropped before any HTTP header (`HttpException`) |
+
+`simple_status.cgi` on the RZ34K has the signal only as one string
+(`HDMI 1920x1200/50 (62.25kHz/50.00Hz)` in `id_preview_table_td_info`), so
+`preview_input.cgi` is the one to parse.
+
+**Fix (branch `fix/remote-preview`):**
+
+- `RemotePreviewController` takes a list of endpoints, default
+  `[80 /remotepreview, 8080 /]`. It moves to the next one when the projector
+  answered without upgrading (`WebSocketException`); a timeout or refused
+  connect fails at once, so an offline projector still costs one connect
+  timeout. `dart:io` doesn't reliably put the HTTP status in that exception
+  (seen both with and without `HTTP status code: 404`), so a 404 can't be told
+  from a full RQ25K's `500`: the latter costs one quick try at `:8080` before
+  "Preview not available". The endpoint that worked is tried first on Retry.
+- `ProjectorWebStatusService` fetches `simple_status_hidden.cgi`, on `404`
+  `preview_input.cgi`, and remembers per host which page answered. The parser
+  (`parseWebSignalStatus`) now requires an INPUT row, since other pages carry
+  td_left/td_right rows too.
+- Verified live on the RZ34K with the app's own classes: signal status
+  `HDMI / 1920x1200/50 / 62.25kHz/50.00Hz`, first frame 20 ms after connect,
+  29 frames in 6 s.
+
+**No signal, Standby and pre-show on the RZ34K** (measured 2026-10-30, source
+unplugged):
+
+- Powered on, no signal: the stream carries the projector's blue background as
+  frames; the app showed it as expected.
+- Standby: the socket sends **one black frame** (~3 KB) and then nothing, no
+  `NOSIGNAL` text. `preview_input.cgi` answers in Standby with `INPUT=HDMI` and
+  empty SIGNAL NAME / FREQUENCY (`hasSignal` false → "No signal" tag).
+  `simple_status.cgi` shows just `HDMI&nbsp;`.
+- `preshow:1` over the `:8080` socket works: `CHANGING_PRE`, `REFRESH`,
+  `SIGNAL` at once, a second `SIGNAL` at ≈6.3 s, `QVX:PSMI1` → `+00001` at
+  ≈8 s, frames resume at ≈10 s (~5 fps). With pre-show on and no source,
+  `preview_input.cgi` shows `---` / `---kHz/---Hz` (also "No signal").
+  `preshow:0`: `CHANGING_PRE`, `REFRESH`, `PSMI1` back to `+00000` in ≈2 s, the
+  rows empty again. The `:8080` page never sends `NOSIGNAL`; no signal is
+  known only from the status page.
+
+- Pre-show with a real source (1920x1200/50 on HDMI), checked by the user in
+  the app: the red source image streams in Standby with the `PRE-SHOW` tag and
+  the signal tag `HDMI: 1920x1200/50 (62.25 kHz, 50.00 Hz)`.
+
+Not verified yet: whether a PT-RQ35K uses the RQ25K or the RZ34K endpoint
+(every earlier measurement here was on the PT-RQ25K at 192.168.0.8, none on an
+RQ35K). The app's plane stays 16:9; a 16:10 frame
+is shown whole with narrow side bars (`BoxFit.contain`).
 
 ### Reference capture / probe scripts
 
@@ -167,7 +238,7 @@ enum RemotePreviewState { connecting, streaming, noSignal, hdcp, testPattern,
                           startingUp, rotating, blank, unavailable }
 
 class RemotePreviewController {
-  RemotePreviewController({required this.host});         // host only; port 80 fixed
+  RemotePreviewController({required this.host});         // endpoints: 80 /remotepreview, then 8080 / (§1)
   Stream<RemotePreviewEvent> get events;
   void start();      // connect + 'start' + alive timer
   void retry();
@@ -215,8 +286,8 @@ signal tag; see §5.1 for why `SIGNAL` and not frame-start.
 ### 3.4 Service — `ProjectorWebStatusService` (new)
 
 `lib/core/services/projector_web_status_service.dart`. HTTP digest fetch +
-parse of the projector's own `/cgi-bin/simple_status_hidden.cgi`, port 80 like
-the preview WebSocket. Exists because NTCONTROL (`QIN` / `QVX:NSGS1`) returns
+parse of the projector's own `/cgi-bin/simple_status_hidden.cgi`
+(`preview_input.cgi` on a PT-RZ34K, §1), port 80. Exists because NTCONTROL (`QIN` / `QVX:NSGS1`) returns
 `ER401` whenever the projector isn't fully powered on — this page is the only
 source that reports the real input/signal in Standby, mid pre-show, and
 STARTINGUP. Full write-up, including the measured values and the `SIGNAL`
@@ -391,7 +462,7 @@ same socket: `preshow:1` / `preshow:0`.
   `QVX:PSMI1` → reply `00PSMI1=+00000` (off) / `00PSMI1=+00001` (on), through the
   existing `panasonic_protocol_service.dart` TCP link (`sendRawCommand` strips the
   `00`). The preview WebSocket itself never reports this.
-- **Confirmation is slow** (measured on PT-RQ35): after `preshow:1` the projector
+- **Confirmation is slow** (measured on PT-RQ25K): after `preshow:1` the projector
   keeps reporting `+00000` for **≈12 s** before flipping to `+00001`; after
   `preshow:0` it returns `ER401` for ~1.5 s then `+00000` within ~2 s. So the
   toggle flips **optimistically** on tap (the WS command has no reply), then a
@@ -459,7 +530,7 @@ Body:
   a poll-driven tag (even re-polled on frame-start) goes stale precisely then.
   `/cgi-bin/simple_status_hidden.cgi` (the page the projector's own
   `preview.cgi` re-fetches on a WebSocket `SIGNAL` message) reports the real
-  values in every state — measured on a PT-RQ35 in Standby+pre-show with a real
+  values in every state — measured on a PT-RQ25K in Standby+pre-show with a real
   4K60 source: `INPUT=HDMI1`, `SIGNAL NAME=3840x2160/60p`,
   `SIGNAL FREQUENCY=134.99kHz/59.99Hz`, reverting to empty once pre-show turned
   back off. `ProjectorWebStatusService` (`core/services/`) fetches and parses
@@ -654,12 +725,15 @@ None blocking. All the protocol unknowns from earlier drafts are resolved below.
 
 - **Auth** — the `/remotepreview` WebSocket takes the upgrade unauthenticated on
   **every model** (user), same as the tested unit. No digest handshake to build.
-- **Endpoint** — always `ws://<ip>:80/remotepreview`, fixed port, no `wss://`
-  (user). No per-node override needed.
+- **Endpoint** — ~~always `ws://<ip>:80/remotepreview`~~: not on a PT-RZ34K,
+  which serves `ws://<ip>:8080/` and 404s the RQ path (§1, measured
+  2026-10-30). The controller tries both in order; still no `wss://` and no
+  per-node setting.
 - **Pre-show while powered on** — button is **hard-disabled** when the projector
   is on (user), so whether `preshow:1` would no-op in that state is moot.
-- **Concurrent clients** — 2 per projector across the network (measured
-  2026-10-05; the earlier "no tight limit" held only because two clients fit).
+- **Concurrent clients** — 2 per projector across the network on a PT-RQ25K
+  (measured 2026-10-05; the earlier "no tight limit" held only because two
+  clients fit), 5 on a PT-RZ34K (2026-10-30, §1).
   A third client is refused with HTTP 500, see §1 and the "Preview busy" state
   in §2. `CLOSE` is a graceful shutdown hint, not an eviction to design around.
 - **Pre-show persistence** — pre-show survives the socket closing (user-verified
@@ -670,6 +744,7 @@ None blocking. All the protocol unknowns from earlier drafts are resolved below.
 - **Standby signal source** — NTCONTROL (`QIN` / `QVX:NSGS1`) can't report
   signal/input outside fully-on; `/cgi-bin/simple_status_hidden.cgi` can, in
   every power state — measured and verified reverting correctly on/off.
-  (§3.4, §5.1)
+  (§3.4, §5.1) A PT-RZ34K has no such page; `preview_input.cgi` is the
+  fallback (§1), its Standby behaviour not yet measured.
 - **Live-tag refresh trigger** — the WS `SIGNAL` message, not frame-start;
   correlated directly against real pre-show on/off transitions. (§3.6, §5.1)

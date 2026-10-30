@@ -522,7 +522,7 @@ Outcome decides the source for the signal rule: RemoView events if the socket ca
 cheaply on every projector, otherwise a dedicated signal-only NTCONTROL poll (2–5 s, powered-on
 projectors only, only while the rule is enabled).
 
-**Results** (PT-RQ35K at 192.168.0.8, HDMI 1 at 3840x2160/50p, 2026-10-05):
+**Results** (PT-RQ25K at 192.168.0.8, HDMI 1 at 3840x2160/50p, 2026-10-05):
 - Skipping `receive` changes nothing: frames keep coming at 1 fps. The projector's own
   `preview.cgi` sends only `start`, `alive`, `PONG`, `receive`, `preshow:1/0`; there is no
   message that stops frames, so a background socket always carries the JPEG stream:
@@ -560,7 +560,7 @@ above covering standby and app-made input switches.
 ### Signal watch: implementation plan `[x]`
 Must hold up with **150 projectors** in a project.
 
-**Measured on hardware (2026-10-05, PT-RQ35K):**
+**Measured on hardware (2026-10-05, PT-RQ25K):**
 - The projector closes the NTCONTROL connection itself ~1 ms after the reply; a second
   command on the same socket gets nothing. One connection per query stays.
 - With the current `_sendSingleCommandEx` (destroys the socket right after the reply)
@@ -633,7 +633,7 @@ whole watch off (no traffic at all).
 - Simulator: console command `sig <n> off|on|blip` (`blip` = ~3.5 s without signal) to
   test alerts without a cable; `projector_simulator.dart 150` as the load test (watch CPU,
   sockets, UI smoothness).
-- Hardware: a 1-hour run on the PT-RQ35K with the watch on: no timeouts, web UI and
+- Hardware: a 1-hour run on the PT-RQ25K with the watch on: no timeouts, web UI and
   Remote Preview still responsive, `TIME_WAIT` count on the PC flat.
 
 **Docs when done:** CLAUDE.md providers table (`signalWatchProvider`), `panasonic-ntcontrol`
