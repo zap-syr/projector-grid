@@ -9,13 +9,29 @@ import 'dart:typed_data';
 /// and receives either binary JPEG frames (~480x270, ~1 fps) or one-word text
 /// status messages. This mirrors that exchange and reduces it to a stream of
 /// [RemotePreviewState]. Transport only — no Riverpod, no UI. The endpoint is
-/// unauthenticated on every fleet model, `ws://` on port 80 (not the NTCONTROL
-/// port). Full write-up in REMOTE_PREVIEW_PLAN.md.
+/// unauthenticated `ws://`, never the NTCONTROL port, and its address depends
+/// on the firmware: see [defaultEndpoints]. Full write-up in
+/// plan/REMOTE_PREVIEW_PLAN.md.
 class RemotePreviewController {
-  RemotePreviewController({required this.host, this.port = 80});
+  RemotePreviewController({
+    required this.host,
+    this.endpoints = defaultEndpoints,
+  });
 
   final String host;
-  final int port;
+
+  /// Tried in order; the next one only when a projector answered the previous
+  /// one without upgrading, so an offline projector still fails after a
+  /// single connect timeout.
+  final List<RemotePreviewEndpoint> endpoints;
+
+  /// PT-RQ25K serves `ws://<ip>/remotepreview` on port 80; PT-RZ34K
+  /// answers 404 there and serves the same protocol at `ws://<ip>:8080/`
+  /// (what its own `preview.cgi` opens).
+  static const defaultEndpoints = [
+    RemotePreviewEndpoint(80, '/remotepreview'),
+    RemotePreviewEndpoint(8080, '/'),
+  ];
 
   static const _connectTimeout = Duration(seconds: 5);
   static const _aliveInterval = Duration(seconds: 5);
@@ -49,6 +65,7 @@ class RemotePreviewController {
   bool _disposed = false;
   // Bumped on every (re)connect so a stale socket's callbacks are ignored.
   int _attempt = 0;
+  int _endpointIndex = 0;
 
   /// Opens the socket. Safe to call once; further calls are no-ops.
   void start() {
@@ -82,18 +99,8 @@ class RemotePreviewController {
 
   Future<void> _connect() async {
     final attempt = ++_attempt;
-    final connectFuture = WebSocket.connect(
-      'ws://$host:$port/remotepreview',
-      protocols: const ['pj-cast-protocol'],
-    );
-
-    final WebSocket ws;
-    try {
-      ws = await connectFuture.timeout(_connectTimeout);
-    } catch (_) {
-      // The timed-out connect may still complete later — make sure that
-      // socket is closed and any error is swallowed, then report failure.
-      unawaited(connectFuture.then((s) => s.close()).catchError((_) {}));
+    final ws = await _open(attempt);
+    if (ws == null) {
       if (!_disposed && attempt == _attempt) {
         _emit(const RemotePreviewUnavailable());
       }
@@ -115,6 +122,36 @@ class RemotePreviewController {
     _send('start');
     _aliveTimer = Timer.periodic(_aliveInterval, (_) => _send('alive'));
     _armFirstFrame();
+  }
+
+  // Starts from the endpoint that worked last, so a Retry on a projector that
+  // serves only the fallback doesn't pay for the 404 again.
+  Future<WebSocket?> _open(int attempt) async {
+    for (var i = 0; i < endpoints.length; i++) {
+      final index = (_endpointIndex + i) % endpoints.length;
+      final endpoint = endpoints[index];
+      final connectFuture = WebSocket.connect(
+        'ws://$host:${endpoint.port}${endpoint.path}',
+        protocols: const ['pj-cast-protocol'],
+      );
+      try {
+        final ws = await connectFuture.timeout(_connectTimeout);
+        _endpointIndex = index;
+        return ws;
+      } on WebSocketException {
+        // Answered without upgrading. Usually a 404 (this firmware serves the
+        // preview elsewhere), but dart:io doesn't reliably say which status,
+        // so a full projector (RQ25K answers 500 past 2 viewers) also costs
+        // one quick try at the next endpoint before failing.
+        if (_disposed || attempt != _attempt) return null;
+      } catch (_) {
+        // The timed-out connect may still complete later — make sure that
+        // socket is closed and any error is swallowed.
+        unawaited(connectFuture.then((s) => s.close()).catchError((_) {}));
+        return null;
+      }
+    }
+    return null;
   }
 
   void _onData(dynamic data) {
@@ -227,6 +264,14 @@ class RemotePreviewController {
     _ws = null;
     if (ws != null) unawaited(ws.close());
   }
+}
+
+/// Where a firmware serves the preview WebSocket.
+class RemotePreviewEndpoint {
+  const RemotePreviewEndpoint(this.port, this.path);
+
+  final int port;
+  final String path;
 }
 
 /// What the preview surface should show right now.

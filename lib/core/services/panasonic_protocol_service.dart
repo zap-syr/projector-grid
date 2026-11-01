@@ -213,7 +213,7 @@ class PanasonicProtocolService {
       final response = await currentCompleter.future.timeout(replyTimeout);
 
       // The projector closes the connection right after replying (~1 ms on a
-      // PT-RQ35K). Closing ours first would leave the socket in TIME_WAIT on
+      // PT-RQ25K). Closing ours first would leave the socket in TIME_WAIT on
       // this machine for ~2 minutes; with 150 projectors and the signal watch
       // that adds up to thousands of ports, so let the projector close first.
       await closedByProjector.future.timeout(
