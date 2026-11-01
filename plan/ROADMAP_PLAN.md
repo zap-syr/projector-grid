@@ -1383,7 +1383,10 @@ Useful beyond the web page: Companion, QLab, custom scripts can poll or drive th
   per projector, so a laggy phone can't queue up a burst.
 - Security: bind on all interfaces only when enabled; sessions and PIN checks as in *Access
   model* above; *Allow control* off by default; PINs stored as salted hashes in app settings
-  (not plain text); firewall prompt on Windows on first bind — document it.
+  (not plain text); Windows firewall: the installer adds an inbound allow rule for
+  `projector_grid.exe` (any port, any profile, local subnet only) and removes it on uninstall,
+  since a machine with firewall notifications off blocks the first bind silently, with no
+  prompt (seen on the dev laptop, 2026-11-01). A portable copy run from a zip gets no rule.
 - Keep the small OSC addition from the original F7 as a follow-up:
   `/pgrid/query/<projector>` → reply with status to the sender.
 
