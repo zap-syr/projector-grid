@@ -12,5 +12,6 @@
   "othersPattern": "OTS:70",
   "showNeighbours": true,
   "includeDiagonals": false,
-  "showAll": false
+  "showAll": false,
+  "stepOrder": "layout"
 }

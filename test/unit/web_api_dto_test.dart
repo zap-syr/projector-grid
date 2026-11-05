@@ -253,6 +253,7 @@ void main() {
           showNeighbours: true,
           includeDiagonals: false,
           showAll: false,
+          stepOrder: AlignmentStepOrder.layout,
         ),
       );
       expectFixture(
@@ -268,6 +269,7 @@ void main() {
           showNeighbours: false,
           includeDiagonals: false,
           showAll: false,
+          stepOrder: AlignmentStepOrder.ip,
         ),
       );
     });

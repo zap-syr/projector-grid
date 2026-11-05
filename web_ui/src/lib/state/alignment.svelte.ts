@@ -1,5 +1,5 @@
 import { api, ApiError } from '../api/client';
-import type { AlignmentOp, AlignmentPresetId } from '../api/types';
+import type { AlignmentOp, AlignmentPresetId, AlignmentStepOrder } from '../api/types';
 import { roleOf, scopeOrder } from '../logic/alignment';
 import { control } from './control.svelte';
 import { live } from './live.svelte';
@@ -60,6 +60,10 @@ class AlignmentState {
   /** null = same as focused. */
   setOthersPattern(code: string | null) {
     void this.#run('othersPattern', { code });
+  }
+
+  setStepOrder(order: AlignmentStepOrder) {
+    if (order !== this.value?.stepOrder) void this.#run('stepOrder', { order });
   }
 
   async #run(op: AlignmentOp, body?: Record<string, unknown>) {

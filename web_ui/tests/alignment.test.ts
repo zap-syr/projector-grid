@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen } from '@testing-library/svelte';
 import { afterEach, describe, expect, test } from 'vitest';
 
 import type { Alignment, Config, Projector } from '../src/lib/api/types';
@@ -20,12 +20,21 @@ const projectors = fixture<Projector[]>('projectors');
 // n2 focused, n1 shown, n4 closed; n3 is outside the mode.
 const on = fixture<Alignment>('alignment');
 const off = fixture<Alignment>('alignment-off');
+// n4 moved to the lowest address: by IP the scope runs n4, n1, n2.
+const byIp = { ...on, stepOrder: 'ip' } satisfies Alignment;
+const readdressed = projectors.map((p) => (p.id === 'n4' ? { ...p, ip: '192.168.0.9' } : p));
 
 describe('alignment logic', () => {
   test('the scope follows the projectors’ layout order', () => {
     expect(scopeOrder(projectors, on).map((p) => p.id)).toEqual(['n1', 'n2', 'n4']);
     expect(scopeOrder(projectors, off)).toEqual([]);
     expect(position(scopeOrder(projectors, on), on.focusedId)).toBe('2 / 3');
+  });
+
+  test('by IP address the scope is sorted numerically per octet', () => {
+    const order = scopeOrder(readdressed, byIp);
+    expect(order.map((p) => p.id)).toEqual(['n4', 'n1', 'n2']);
+    expect(position(order, byIp.focusedId)).toBe('3 / 3');
   });
 
   test('roles only while the mode is on', () => {
@@ -82,6 +91,30 @@ describe('banner', () => {
       /Alignment, 192\.168\.0\.112 focused \(2 of 3\), Geometry patterns An operator controls it/,
     );
     expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  test('the viewer line counts in the step order without naming it', () => {
+    live.projectors = readdressed;
+    live.alignment = byIp;
+    render(Banner, { config, operator: false });
+    expect(screen.getByRole('region').textContent?.replace(/\s+/g, ' ')).toMatch(
+      /focused \(3 of 3\), Geometry/,
+    );
+  });
+
+  test('the Step order button names the current order and opens the choice', async () => {
+    live.projectors = readdressed;
+    live.alignment = byIp;
+    render(Banner, { config, operator: true });
+    expect(screen.getByText('3 of 3')).toBeTruthy();
+    const button = screen.getByRole('button', { name: 'Step order: IP address' });
+    // Either order is valid: the button never shows as pressed.
+    expect(button.getAttribute('aria-pressed')).toBeNull();
+    await fireEvent.click(button);
+    expect((screen.getByRole('radio', { name: 'IP address' }) as HTMLInputElement).checked).toBe(
+      true,
+    );
+    expect((screen.getByRole('radio', { name: 'Layout' }) as HTMLInputElement).checked).toBe(false);
   });
 
   test('entering or exiting shows the busy line', () => {

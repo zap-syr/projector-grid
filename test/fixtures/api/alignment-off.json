@@ -8,5 +8,6 @@
   "othersPattern": null,
   "showNeighbours": false,
   "includeDiagonals": false,
-  "showAll": false
+  "showAll": false,
+  "stepOrder": "ip"
 }

@@ -3,6 +3,7 @@
 library;
 
 import 'card_layout.dart';
+import 'ip_sort.dart';
 import 'projector_node.dart';
 import 'test_patterns.dart';
 
@@ -49,6 +50,34 @@ enum AlignmentPreset {
   final String? defaultOthers;
 
   List<String> get patterns => _patterns ?? kTestPatternLabels.keys.toList();
+}
+
+/// The order `<` / `>` step through the scope in.
+enum AlignmentStepOrder {
+  /// Rows top to bottom, each left to right (`layoutOrder`).
+  layout('Layout'),
+
+  /// Ascending by address, numerically per octet.
+  ip('IP address');
+
+  const AlignmentStepOrder(this.label);
+
+  final String label;
+}
+
+/// [nodes] in [order]. Projectors sharing an IP (different ports) keep their
+/// layout order, so stepping never depends on Dart's unstable sort.
+List<ProjectorNode> alignmentOrder(
+  Iterable<ProjectorNode> nodes,
+  AlignmentStepOrder order,
+) {
+  final byLayout = layoutOrder(nodes);
+  if (order == AlignmentStepOrder.layout) return byLayout;
+  final rank = {for (var i = 0; i < byLayout.length; i++) byLayout[i].id: i};
+  return byLayout..sort((a, b) {
+    final byIp = ipSortKey(a.ipAddress).compareTo(ipSortKey(b.ipAddress));
+    return byIp != 0 ? byIp : rank[a.id]!.compareTo(rank[b.id]!);
+  });
 }
 
 enum AlignmentRole {

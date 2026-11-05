@@ -46,6 +46,11 @@ class WebAlignmentOthersPattern extends WebAlignmentOp {
   const WebAlignmentOthersPattern(this.code);
 }
 
+class WebAlignmentStepOrder extends WebAlignmentOp {
+  final AlignmentStepOrder order;
+  const WebAlignmentStepOrder(this.order);
+}
+
 /// [op] from the path, [body] the decoded JSON (null when empty). Patterns
 /// must be ones [preset] offers, as in the app's pickers. Null when
 /// anything is off.
@@ -94,6 +99,13 @@ WebAlignmentOp? parseWebAlignmentOp(
       if (code == null) return const WebAlignmentOthersPattern(null);
       return code is String && preset.patterns.contains(code)
           ? WebAlignmentOthersPattern(code)
+          : null;
+    case 'stepOrder':
+      final match = AlignmentStepOrder.values.where(
+        (o) => o.name == args['order'],
+      );
+      return args.length == 1 && match.isNotEmpty
+          ? WebAlignmentStepOrder(match.first)
           : null;
   }
   return null;

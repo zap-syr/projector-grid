@@ -4,7 +4,6 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../domain/alignment.dart';
-import '../../domain/card_layout.dart';
 import '../../domain/projector_node.dart';
 import '../../domain/test_patterns.dart';
 import '../providers/alignment_provider.dart';
@@ -104,7 +103,10 @@ class _ActiveRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final notifier = ref.read(alignmentProvider.notifier);
     final nodes = ref.watch(workspaceProvider);
-    final order = layoutOrder(nodes.where((n) => state.scope.contains(n.id)));
+    final order = alignmentOrder(
+      nodes.where((n) => state.scope.contains(n.id)),
+      state.stepOrder,
+    );
     final index = order.indexWhere((n) => n.id == state.focusedId);
     final focused = index < 0 ? null : order[index];
     final wide = width >= 900;
@@ -280,8 +282,9 @@ class _MenuButton extends StatelessWidget {
   }
 }
 
-/// Preset, Focused and Others pattern pickers plus the diagonal-neighbour
-/// option — rarely changed, so kept out of the banner row itself.
+/// Preset, Focused and Others pattern pickers, the step order and the
+/// diagonal-neighbour option — rarely changed, so kept out of the banner row
+/// itself.
 class _PresetsMenu extends ConsumerStatefulWidget {
   const _PresetsMenu({required this.state, required this.compact});
 
@@ -380,6 +383,22 @@ class _PresetsMenuState extends ConsumerState<_PresetsMenu> {
           menuStyle: _patternMenuStyle,
           leadingIcon: _check(false),
           child: const Text('Others'),
+        ),
+        // Apart from the pattern pickers: this one sets how ◀ ▶ move, not
+        // what the wall shows.
+        const Divider(height: 1),
+        SubmenuButton(
+          alignmentOffset: AppTheme.submenuOffset,
+          menuChildren: [
+            for (final o in AlignmentStepOrder.values)
+              MenuItemButton(
+                leadingIcon: _check(o == state.stepOrder),
+                onPressed: () => notifier.setStepOrder(o),
+                child: Text(o.label),
+              ),
+          ],
+          leadingIcon: _check(false),
+          child: const Text('Step order'),
         ),
         const Divider(height: 1),
         MenuItemButton(

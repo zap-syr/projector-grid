@@ -22,6 +22,7 @@ import type {
   AlertSeverity,
   Alignment,
   AlignmentPresetId,
+  AlignmentStepOrder,
   Config,
   ErrorItem,
   Group,
@@ -389,6 +390,7 @@ export function mockApi(): Plugin {
     showNeighbours: false,
     includeDiagonals: false,
     showAll: false,
+    stepOrder: 'layout',
   };
   /** Shutter and pattern on entry, put back on exit. */
   const saved = new Map<string, [Projector['shutter'], string | null]>();
@@ -428,7 +430,17 @@ export function mockApi(): Plugin {
   }
 
   async function alignmentOp(op: string, body: Record<string, unknown>) {
-    const order = projectors.filter((p) => saved.has(p.id));
+    // Projectors are kept in layout order; a stable sort keeps it for a shared IP.
+    const ipKey = (ip: string) =>
+      ip
+        .split('.')
+        .map((o) => o.padStart(3, '0'))
+        .join('.');
+    const scope = projectors.filter((p) => saved.has(p.id));
+    const order =
+      alignment.stepOrder === 'ip'
+        ? [...scope].sort((a, b) => ipKey(a.ip).localeCompare(ipKey(b.ip)))
+        : scope;
     const step = (d: number) => {
       const i = order.findIndex((p) => p.id === alignment.focusedId);
       alignment.focusedId = order[(i + d + order.length) % order.length]?.id ?? null;
@@ -494,6 +506,9 @@ export function mockApi(): Plugin {
         break;
       case 'othersPattern':
         alignment.othersPattern = body.code as string | null;
+        break;
+      case 'stepOrder':
+        alignment.stepOrder = body.order as AlignmentStepOrder;
         break;
       default:
         return null;

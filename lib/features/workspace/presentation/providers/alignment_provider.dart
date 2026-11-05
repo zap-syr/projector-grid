@@ -4,7 +4,6 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../../core/services/panasonic_protocol_service.dart';
 import '../../domain/alignment.dart';
-import '../../domain/card_layout.dart';
 import '../../domain/log_event.dart';
 import '../../domain/projector_node.dart';
 import '../../domain/test_patterns.dart';
@@ -35,6 +34,7 @@ class AlignmentState {
   final bool showNeighbours;
   final bool includeDiagonals;
   final bool showAll;
+  final AlignmentStepOrder stepOrder;
   final Set<String> manualNeighbours;
   final Map<String, AlignmentRole> roles;
 
@@ -49,6 +49,7 @@ class AlignmentState {
     required this.showNeighbours,
     required this.includeDiagonals,
     this.showAll = false,
+    required this.stepOrder,
     this.manualNeighbours = const {},
     this.roles = const {},
   });
@@ -65,6 +66,7 @@ class AlignmentState {
     bool? showNeighbours,
     bool? includeDiagonals,
     bool? showAll,
+    AlignmentStepOrder? stepOrder,
     Set<String>? manualNeighbours,
     Map<String, AlignmentRole>? roles,
   }) => AlignmentState(
@@ -80,6 +82,7 @@ class AlignmentState {
     showNeighbours: showNeighbours ?? this.showNeighbours,
     includeDiagonals: includeDiagonals ?? this.includeDiagonals,
     showAll: showAll ?? this.showAll,
+    stepOrder: stepOrder ?? this.stepOrder,
     manualNeighbours: manualNeighbours ?? this.manualNeighbours,
     roles: roles ?? this.roles,
   );
@@ -155,6 +158,7 @@ class AlignmentNotifier extends _$AlignmentNotifier {
       othersPattern: settings.alignmentOthersPattern,
       showNeighbours: settings.alignmentShowNeighbours,
       includeDiagonals: settings.alignmentDiagonals,
+      stepOrder: settings.alignmentStepOrder,
     );
   }
 
@@ -164,7 +168,7 @@ class AlignmentNotifier extends _$AlignmentNotifier {
 
   /// Scope is the selection when two or more cards are selected, otherwise
   /// every projector. The focused projector is the first selected one in
-  /// layout order, or the first overall. [selection] replaces the app's
+  /// step order, or the first overall. [selection] replaces the app's
   /// selection (the web page has its own).
   Future<void> enter({Set<String>? selection}) async {
     if (state.active || state.busy) return;
@@ -194,7 +198,7 @@ class AlignmentNotifier extends _$AlignmentNotifier {
     }
     await Future.wait(captured.where((m) => m.fade != null).map(_zeroFade));
 
-    final order = layoutOrder(nodes.where((n) => _managed.containsKey(n.id)));
+    final order = _order();
     final focusedId =
         order.where((n) => selected.contains(n.id)).firstOrNull?.id ??
         order.first.id;
@@ -235,6 +239,7 @@ class AlignmentNotifier extends _$AlignmentNotifier {
       othersPattern: state.othersPattern,
       showNeighbours: state.showNeighbours,
       includeDiagonals: state.includeDiagonals,
+      stepOrder: state.stepOrder,
     );
     _log(LogSeverity.info, 'Alignment mode off, projectors restored');
   }
@@ -263,9 +268,17 @@ class AlignmentNotifier extends _$AlignmentNotifier {
     focus(order[(index + delta) % order.length].id);
   }
 
-  List<ProjectorNode> _order() => layoutOrder(
+  List<ProjectorNode> _order() => alignmentOrder(
     ref.read(workspaceProvider).where((n) => _managed.containsKey(n.id)),
+    state.stepOrder,
   );
+
+  /// Only reorders the steps: the focus, roles and shutters stay as they are.
+  void setStepOrder(AlignmentStepOrder order) {
+    if (order == state.stepOrder) return;
+    state = state.copyWith(stepOrder: order);
+    ref.read(appSettingsProvider.notifier).setAlignmentStepOrder(order);
+  }
 
   // ── Toggles & patterns ───────────────────────────────────────────────────
 
@@ -346,7 +359,9 @@ class AlignmentNotifier extends _$AlignmentNotifier {
       return;
     }
     if (!present.any((n) => n.id == state.focusedId)) {
-      state = state.copyWith(focusedId: layoutOrder(present).first.id);
+      state = state.copyWith(
+        focusedId: alignmentOrder(present, state.stepOrder).first.id,
+      );
     }
     _updateRoles();
   }
