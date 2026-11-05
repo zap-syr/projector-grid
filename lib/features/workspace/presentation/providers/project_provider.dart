@@ -95,7 +95,8 @@ class ProjectStateNotifier extends _$ProjectStateNotifier {
           p.password != node.password ||
           p.x != node.x ||
           p.y != node.y ||
-          p.groupId != node.groupId) {
+          p.groupId != node.groupId ||
+          p.lensLocked != node.lensLocked) {
         return true;
       }
     }
@@ -376,6 +377,7 @@ if (\$r -eq 'OK') { Write-Output \$dialog.FileName }
     'x': node.x,
     'y': node.y,
     if (node.groupId != null) 'groupId': node.groupId,
+    if (node.lensLocked) 'lensLocked': true,
   };
 
   static Map<String, dynamic> _serializeGroup(ProjectorGroup group) => {
@@ -404,6 +406,7 @@ if (\$r -eq 'OK') { Write-Output \$dialog.FileName }
             x: (n['x'] as num).toDouble(),
             y: (n['y'] as num).toDouble(),
             groupId: n['groupId'] as String?,
+            lensLocked: n['lensLocked'] as bool? ?? false,
           ),
         )
         .toList();

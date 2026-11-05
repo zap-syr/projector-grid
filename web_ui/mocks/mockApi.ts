@@ -225,7 +225,7 @@ function wall(): Projector[] {
       ip: `192.168.0.${110 + i}`,
       serial: `SH42130${n}`,
       groupId: rowGroup[row] ?? null,
-      x: 20 + (i % 6) * 140,
+      x: 20 + (i % 6) * 160,
       y: 40 + row * 140,
       runtime: `${8200 + i * 37}H`,
       lightRuntime: `${1400 + i * 11}H`,
@@ -271,7 +271,7 @@ function wall(): Projector[] {
   });
 }
 
-const CARD_W = 120;
+const CARD_W = 140;
 const CARD_H = 100;
 
 /** `neighbours()` from `card_layout.dart`: per side the nearest card ≤ 60 px away, overlapping ≥ 50 %. */
@@ -531,8 +531,29 @@ export function mockApi(): Plugin {
 
   /** Changes the mock projectors like a real command would and reports like the app. */
   function applyAction(action: Action, targets: Projector[]) {
+    if ('lensLock' in action) {
+      for (const p of targets) {
+        p.lensLocked = action.lensLock;
+        pushProjector(p);
+      }
+      const label = action.lensLock ? 'Lens Lock' : 'Lens Unlock';
+      const n = targets.length;
+      return {
+        command: action.lensLock ? 'lensLock' : 'lensUnlock',
+        label,
+        ok: n,
+        total: n,
+        failed: [],
+        skipped: [],
+        summary: `${label} — ${n}/${n} OK`,
+      };
+    }
+    // Every lens motor action: steps, home, calibration (as the app's isLensMotionCommand).
+    const lensMotion = 'lens' in action || 'lensCalibration' in action;
     const reachable = targets.filter(
-      (p) => p.connection === 'connected' || p.connection === 'unprotected',
+      (p) =>
+        (p.connection === 'connected' || p.connection === 'unprotected') &&
+        !(lensMotion && p.lensLocked),
     );
     const skipped = targets.filter((p) => !reachable.includes(p));
     let label = 'Lens Step';

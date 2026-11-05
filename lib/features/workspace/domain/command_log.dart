@@ -13,6 +13,9 @@ String commandSkipReason(ConnectionStatus status) => switch (status) {
   _ => 'offline',
 };
 
+/// Why a lens motor command wasn't sent to a projector with Lens lock on.
+const String lensLockedSkipReason = 'lens locked';
+
 /// The Projector column of a batch: the group when every projector is in
 /// the same one (`Stage, 6 projectors`), otherwise `8 projectors`.
 String batchTargetLabel(

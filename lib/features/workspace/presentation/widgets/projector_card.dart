@@ -7,11 +7,14 @@ import '../../../../core/services/external_links.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../domain/alignment.dart';
 import '../../domain/card_layout.dart';
+import '../../domain/command_source.dart';
+import '../../domain/lens_commands.dart';
 import '../../domain/projector_node.dart';
 import '../../domain/projector_group.dart';
 import '../../domain/test_patterns.dart';
 import '../providers/alignment_provider.dart';
 import '../providers/selection_provider.dart';
+import '../providers/workspace_provider.dart';
 import 'alert_badge.dart';
 import 'common/key_caps.dart';
 import 'common/test_pattern_thumb.dart';
@@ -153,6 +156,38 @@ class _ProjectorCardState extends ConsumerState<ProjectorCard> {
         onPressed: () => _closeAndRun(widget.onEdgeBlending),
         leadingIcon: const Icon(Icons.gradient),
         child: Text(inPair ? 'Edge Blending (2 projectors)' : 'Edge Blending'),
+      ),
+      // A Consumer, so the label follows the other selected cards' locks
+      // too, not only this card's.
+      Consumer(
+        builder: (context, ref, _) {
+          final selected = ref.watch(selectionProvider);
+          final ids = selected.contains(node.id) ? selected : {node.id};
+          final allLocked =
+              lensLockState(
+                ref
+                    .watch(workspaceProvider)
+                    .where((n) => ids.contains(n.id))
+                    .map((n) => n.lensLocked),
+              ) ==
+              LensLockState.all;
+          return MenuItemButton(
+            key: const ValueKey('card-menu-lens-lock'),
+            onPressed: () => _closeAndRun(
+              () => ref
+                  .read(workspaceProvider.notifier)
+                  .setLensLocked(
+                    ids,
+                    !allLocked,
+                    source: CommandSource.controlBar,
+                  ),
+            ),
+            leadingIcon: Icon(
+              allLocked ? Icons.lock_open_outlined : Icons.lock_outline,
+            ),
+            child: Text(allLocked ? 'Unlock lens' : 'Lock lens'),
+          );
+        },
       ),
       const _MenuDivider(),
       MenuItemButton(
@@ -374,9 +409,10 @@ class _ProjectorCardState extends ConsumerState<ProjectorCard> {
       // Transform.scale wraps the RepaintBoundary (not the other way round) so
       // hit-testing stays correct at zoom > 1. Transform.scale only changes
       // paint, never layout, so the card's RenderBox keeps its unscaled
-      // 120x100 size. RepaintBoundary (a RenderProxyBox) bounds-checks pointer
-      // events against its own size before forwarding them, so if it sat above
-      // the Transform every pointer past x=120 / y=100 — i.e. the right/bottom
+      // kCardWidth × kCardHeight size. RepaintBoundary (a RenderProxyBox)
+      // bounds-checks pointer events against its own size before forwarding
+      // them, so if it sat above the Transform every pointer past the card's
+      // unscaled width / height — i.e. the right/bottom
       // of a zoomed-in card, since scaling grows from topLeft — would be
       // rejected and hover/cursor/drag would never fire there. RenderTransform
       // deliberately skips that self bounds-check and maps the pointer through
@@ -640,11 +676,35 @@ class _CardBody extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.end,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            node.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: t.body.copyWith(fontWeight: FontWeight.w700, height: 1.3),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  node.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: t.body.copyWith(
+                    fontWeight: FontWeight.w700,
+                    height: 1.3,
+                  ),
+                ),
+              ),
+              // On the model row, centred over the test pattern thumbnail,
+              // so the IP row keeps its width. In the body, never the
+              // header, where the open lock means No login.
+              if (node.lensLocked) ...[
+                const SizedBox(width: 6),
+                SizedBox(
+                  width: 20,
+                  child: Icon(
+                    Icons.lock_outline,
+                    key: const ValueKey('card-lens-locked'),
+                    size: 14,
+                    color: t.secondary,
+                  ),
+                ),
+              ],
+            ],
           ),
           SizedBox(
             height: 16,

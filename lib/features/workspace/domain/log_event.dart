@@ -51,6 +51,8 @@ class LogGroupKind {
   static const online = LogGroupKind('online', 'Came online');
   static const offline = LogGroupKind('offline', 'Went offline');
   static const auth = LogGroupKind('auth', 'Authentication failed');
+  static const lensLocked = LogGroupKind('lens-locked', 'Lens locked');
+  static const lensUnlocked = LogGroupKind('lens-unlocked', 'Lens unlocked');
 }
 
 class LogEvent {

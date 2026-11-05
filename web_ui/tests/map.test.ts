@@ -69,9 +69,9 @@ describe('map geometry', () => {
 });
 
 describe('map selection', () => {
-  const shown = [at('n1', 0, 0), at('n2', 140, 0), at('n3', 0, 140), at('n4', 140, 140)];
+  const shown = [at('n1', 0, 0), at('n2', 160, 0), at('n3', 0, 160), at('n4', 160, 160)];
   // Covers the right column: n2, and n4, which is offline.
-  const right = rectFrom(300, -10, 130, 400);
+  const right = rectFrom(310, -10, 150, 400);
 
   test('a plain marquee replaces the selection, skipping the unselectable', () => {
     expect([...marqueeSelection(right, shown, new Set(['n1']), 'replace')]).toEqual(['n2']);
@@ -95,7 +95,7 @@ describe('map selection', () => {
   });
 
   test('touching edges don’t count, like Flutter’s Rect.overlaps', () => {
-    expect(marqueeSelection(rectFrom(120, 0, 140, 50), shown, new Set(), 'replace').size).toBe(0);
+    expect(marqueeSelection(rectFrom(140, 0, 160, 50), shown, new Set(), 'replace').size).toBe(0);
   });
 
   test('tiles the filter dims stay out of a marquee', () => {

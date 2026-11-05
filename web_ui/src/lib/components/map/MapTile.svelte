@@ -113,7 +113,15 @@
           <AlertBadge id={p.id} size={15} />
         </span>
         <span class="body">
-          <b class="name">{p.name}</b>
+          <span class="namer">
+            <b class="name">{p.name}</b>
+            <!-- The app's Lens lock icon: on the model row, over the thumbnail. -->
+            {#if p.lensLocked}
+              <span class="lk" role="img" aria-label="Lens locked"
+                ><Icon name="lock" size={13} /></span
+              >
+            {/if}
+          </span>
           <span class="ipr">
             <span class="ip" style:--n={ipChars}>{p.ip}</span>
             {#if isPatternActive(p.testPattern)}
@@ -292,7 +300,24 @@
     padding: 0 8px 7px;
   }
 
+  .namer {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .lk {
+    width: 16px;
+    flex: none;
+    display: flex;
+    justify-content: center;
+    color: var(--muted);
+  }
+
   .name {
+    flex: 1;
+    min-width: 0;
     overflow: hidden;
     font-size: 14px;
     font-weight: 700;

@@ -29,6 +29,7 @@
         }
       ],
       "lastSeen": null,
+      "lensLocked": false,
       "status": {
         "level": "error",
         "online": true,
@@ -70,6 +71,7 @@
       "errors": "NO ERRORS",
       "errorItems": [],
       "lastSeen": null,
+      "lensLocked": false,
       "status": {
         "level": "none",
         "online": true,
@@ -101,6 +103,7 @@
       "errors": "-",
       "errorItems": [],
       "lastSeen": null,
+      "lensLocked": false,
       "status": {
         "level": "warning",
         "online": false,
@@ -142,6 +145,7 @@
       "errors": "-",
       "errorItems": [],
       "lastSeen": "2026-10-06T14:01:00.000Z",
+      "lensLocked": false,
       "status": {
         "level": "offline",
         "online": false,

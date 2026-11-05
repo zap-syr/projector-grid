@@ -323,7 +323,8 @@ class DropdownSendRow<T> extends StatelessWidget {
   final T value;
   final ValueChanged<T> onChanged;
 
-  final VoidCallback onSend;
+  /// Null disables the send button (Calibration on a lens-locked selection).
+  final VoidCallback? onSend;
   final String sendLabel;
   final double menuHeight;
 

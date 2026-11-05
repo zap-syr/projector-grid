@@ -71,5 +71,10 @@ abstract class ProjectorNode with _$ProjectorNode {
     /// Telemetry, so an undo never rolls it back.
     DateTime? lastSeen,
     String? groupId,
+
+    /// The app refuses lens motor commands (shift, focus, zoom, home,
+    /// calibration) to this projector; NTCONTROL has no such lock of its
+    /// own. Saved with the project, kept out of undo.
+    @Default(false) bool lensLocked,
   }) = _ProjectorNode;
 }

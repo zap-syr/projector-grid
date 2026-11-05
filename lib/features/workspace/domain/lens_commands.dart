@@ -25,3 +25,25 @@ String lensStepCommand(
 }) => 'VXX:LNSI${axis.code}=+00${speed.index}0${plus ? 0 : 1}';
 
 const String kLensHomeCommand = 'VXX:LNSI1=+00001';
+
+/// Every command that drives a lens motor shares the `VXX:LNSI` prefix:
+/// steps, Home (`LNSI1`) and calibration (`LNSI0`), whoever sends them (the
+/// control bar, OSC, the Web page, a schedule, a custom command). Lens type
+/// (`VXX:LNEI`) moves nothing and stays allowed on a locked projector.
+bool isLensMotionCommand(String cmd) => cmd.startsWith('VXX:LNSI');
+
+/// How much of a selection has its lens locked, for the lock button.
+enum LensLockState { none, some, all }
+
+/// [locked] holds one flag per selected projector; an empty selection
+/// reads as [LensLockState.none].
+LensLockState lensLockState(Iterable<bool> locked) {
+  var any = false;
+  var every = true;
+  for (final l in locked) {
+    any = any || l;
+    every = every && l;
+  }
+  if (!any) return LensLockState.none;
+  return every ? LensLockState.all : LensLockState.some;
+}

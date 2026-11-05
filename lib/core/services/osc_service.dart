@@ -146,6 +146,24 @@ typedef OscCommandCallback = Future<void> Function({
   String? sender,
 });
 
+/// `lens/lock` and `lens/unlock` after `/pgrid/all/` or
+/// `/pgrid/group/<name>/`: the app's own Lens lock, not an NTCONTROL
+/// command, so they go to [OscService.onLensLock] instead of the map above.
+const Map<String, bool> oscLensLockPaths = {
+  'lens/lock': true,
+  'lens/unlock': false,
+};
+
+/// Callback type for Lens lock on or off from OSC; the same targets and log
+/// fields as [OscCommandCallback].
+typedef OscLensLockCallback = void Function({
+  required bool locked,
+  String? groupId,
+  bool all,
+  required String address,
+  String? sender,
+});
+
 /// One outgoing OSC 1.0 message: strings as UTF-8, null-terminated and
 /// padded to 4 bytes; ints as 32-bit big-endian; doubles as 32-bit floats.
 ///
@@ -218,6 +236,9 @@ class OscService {
 
   /// Called when a valid OSC command is received and resolved.
   OscCommandCallback? onCommand;
+
+  /// Called for `lens/lock` and `lens/unlock` ([oscLensLockPaths]).
+  OscLensLockCallback? onLensLock;
 
   /// Called to get current projector status counts for outgoing messages.
   OscStatusCallback Function()? getStatus;
@@ -334,7 +355,14 @@ class OscService {
     // Also handles /pgrid/all/custom/{slug} for user-defined commands.
     if (address.startsWith('/pgrid/all/')) {
       final commandPath = address.substring('/pgrid/all/'.length);
-      if (commandPath.startsWith('custom/')) {
+      if (oscLensLockPaths[commandPath] case final locked?) {
+        onLensLock?.call(
+          locked: locked,
+          all: true,
+          address: address,
+          sender: sender,
+        );
+      } else if (commandPath.startsWith('custom/')) {
         final slug = commandPath.substring('custom/'.length);
         final ntCmd = resolveCustomCommand?.call(slug);
         if (ntCmd != null && onCommand != null) {
@@ -384,7 +412,14 @@ class OscService {
         debugPrint('OSC: No group found for address: $groupOscAddress');
         return;
       }
-      if (commandPath.startsWith('custom/')) {
+      if (oscLensLockPaths[commandPath] case final locked?) {
+        onLensLock?.call(
+          locked: locked,
+          groupId: groupId,
+          address: address,
+          sender: sender,
+        );
+      } else if (commandPath.startsWith('custom/')) {
         final slug = commandPath.substring('custom/'.length);
         final ntCmd = resolveCustomCommand?.call(slug);
         if (ntCmd != null && onCommand != null) {

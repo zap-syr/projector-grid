@@ -107,6 +107,38 @@ class OscNotifier extends _$OscNotifier {
           }
         };
 
+    _service.onLensLock =
+        ({
+          required bool locked,
+          String? groupId,
+          bool all = false,
+          required String address,
+          String? sender,
+        }) {
+          ref
+              .read(eventLogProvider.notifier)
+              .log(
+                LogEvent(
+                  severity: LogSeverity.info,
+                  type: LogEventType.osc,
+                  message: address,
+                  oscSender: sender,
+                ),
+              );
+          final ws = ref.read(workspaceProvider.notifier);
+          final nodes = ref.read(workspaceProvider);
+          ws.setLensLocked(
+            [
+              for (final n in nodes)
+                if (all || n.groupId == groupId) n.id,
+            ],
+            locked,
+            source: sender == null
+                ? CommandSource.osc
+                : CommandSource.oscFrom(sender),
+          );
+        };
+
     _service.getStatus = () {
       final nodes = ref.read(workspaceProvider);
       final online = nodes

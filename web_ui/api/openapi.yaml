@@ -119,6 +119,7 @@ components:
         - errors
         - errorItems
         - lastSeen
+        - lensLocked
         - status
       description: |
         Display strings are exactly what the app shows ('-' = not polled yet).
@@ -176,6 +177,9 @@ components:
           type: [string, 'null']
           format: date-time
           description: When an offline projector last answered this session (UTC); null while it answers.
+        lensLocked:
+          type: boolean
+          description: Lens lock is on; the server refuses lens shift, focus, zoom, home and calibration to it.
         status:
           $ref: '#/components/schemas/MonitoringStatus'
 
@@ -659,8 +663,15 @@ components:
     Action:
       description: |
         The fixed vocabulary the server maps to NTCONTROL (`web_actions.dart`).
-        Lens `dir`: `+` = right / up / far / in.
+        Lens `dir`: `+` = right / up / far / in. `lensLock` is the app's own
+        Lens lock and sends nothing to the projectors.
       oneOf:
+        - type: object
+          additionalProperties: false
+          required: [lensLock]
+          properties:
+            lensLock:
+              type: boolean
         - type: object
           additionalProperties: false
           required: [power]
@@ -770,7 +781,7 @@ components:
             $ref: '#/components/schemas/ProjectorRef'
         skipped:
           type: array
-          description: Not connected (offline / auth error) — never sent.
+          description: Not connected (offline / auth error), or a lens command to a lens-locked projector — never sent.
           items:
             $ref: '#/components/schemas/ProjectorRef'
         summary:

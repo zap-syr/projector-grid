@@ -5,7 +5,9 @@ import '../../../../../core/theme/app_theme.dart';
 import '../../../domain/command_source.dart';
 import '../../../domain/control_options.dart';
 import '../../../domain/lens_commands.dart';
+import '../../providers/selected_lens_lock_provider.dart';
 import '../../providers/workspace_provider.dart';
+import '../common/dialog_parts.dart';
 import '../custom_tooltip.dart';
 import 'control_bar_parts.dart';
 
@@ -61,6 +63,11 @@ class _LensCardState extends ConsumerState<LensCard> {
     }
   }
 
+  // The whole selection has Lens lock on: every motor button is disabled in
+  // place. A partly locked selection keeps them enabled; the dispatch skips
+  // the locked projectors.
+  bool _locked = false;
+
   Widget _step(
     String keyPrefix,
     LensDirection direction,
@@ -72,8 +79,9 @@ class _LensCardState extends ConsumerState<LensCard> {
     key: lensButtonKey(keyPrefix, direction, speed),
     asset: _asset(direction, speed),
     size: size,
-    onPressed: () =>
-        _throttledSend(lensStepCommand(axis, plus: plus, speed: speed)),
+    onPressed: _locked
+        ? null
+        : () => _throttledSend(lensStepCommand(axis, plus: plus, speed: speed)),
   );
 
   Widget _cross() {
@@ -173,8 +181,107 @@ class _LensCardState extends ConsumerState<LensCard> {
             padding: EdgeInsets.zero,
             shape: const CircleBorder(),
           ),
-          onPressed: () => sendToSelected(ref, kLensHomeCommand),
+          onPressed: _locked
+              ? null
+              : () => sendToSelected(ref, kLensHomeCommand),
           child: const Icon(Icons.home_outlined, size: 16),
+        ),
+      ),
+    );
+  }
+
+  /// Lens lock of the selection: outlined with an open lock when none of
+  /// it is locked, filled when all of it is, outlined in blue with a dot
+  /// when part of it is. A click locks all unless all is locked already.
+  Widget _lockButton(({LensLockState state, int locked, int total}) lock) {
+    final cs = Theme.of(context).colorScheme;
+    String projectors(int n) => n == 1 ? '1 projector' : '$n projectors';
+    final message = switch (lock.state) {
+      LensLockState.none =>
+        lock.total == 0 ? 'Lock lens' : 'Lock lens (${projectors(lock.total)})',
+      LensLockState.all => 'Unlock lens (${projectors(lock.total)})',
+      LensLockState.some =>
+        'Lens locked on ${lock.locked} of ${projectors(lock.total)}. '
+            'Click to lock all',
+    };
+    void toggle() => ref
+        .read(workspaceProvider.notifier)
+        .toggleLensLockOfSelected(source: CommandSource.controlBar);
+    const shape = CircleBorder();
+    final Widget button = switch (lock.state) {
+      LensLockState.all => FilledButton(
+        key: const ValueKey('lens-lock'),
+        style: FilledButton.styleFrom(
+          minimumSize: const Size.square(30),
+          maximumSize: const Size.square(30),
+          visualDensity: VisualDensity.standard,
+          padding: EdgeInsets.zero,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          shape: shape,
+          backgroundColor: cs.primaryContainer,
+          foregroundColor: cs.onPrimaryContainer,
+        ),
+        onPressed: toggle,
+        child: const Icon(Icons.lock, size: 16),
+      ),
+      LensLockState.some => OutlinedButton(
+        key: const ValueKey('lens-lock'),
+        style:
+            commandButtonStyle(
+              context,
+              height: 30,
+              padding: EdgeInsets.zero,
+              shape: shape,
+              iconColor: cs.primary,
+            ).copyWith(
+              side: WidgetStatePropertyAll(
+                BorderSide(color: cs.primary, width: 1.5),
+              ),
+            ),
+        onPressed: toggle,
+        child: const Icon(Icons.lock_outline, size: 16),
+      ),
+      LensLockState.none => OutlinedButton(
+        key: const ValueKey('lens-lock'),
+        style: commandButtonStyle(
+          context,
+          height: 30,
+          padding: EdgeInsets.zero,
+          shape: shape,
+        ),
+        onPressed: toggle,
+        child: const Icon(Icons.lock_open_outlined, size: 16),
+      ),
+    };
+    return CustomTooltip(
+      message: message,
+      child: SizedBox.square(
+        dimension: 30,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned.fill(child: button),
+            if (lock.state == LensLockState.some)
+              Positioned(
+                top: -2,
+                right: -2,
+                child: IgnorePointer(
+                  child: Container(
+                    key: const ValueKey('lens-lock-partial'),
+                    width: 9,
+                    height: 9,
+                    decoration: BoxDecoration(
+                      color: cs.primary,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: DialogSurfaces.of(context).card,
+                        width: 2,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -224,7 +331,8 @@ class _LensCardState extends ConsumerState<LensCard> {
             items: _calibrationItems,
             value: _calibration,
             onChanged: (v) => setState(() => _calibration = v),
-            onSend: () => sendToSelected(ref, _calibration),
+            // Calibration runs the lens through its whole range.
+            onSend: _locked ? null : () => sendToSelected(ref, _calibration),
           ),
           const SizedBox(height: ControlBarMetrics.settingGap),
           DropdownSendRow<String>(
@@ -241,10 +349,15 @@ class _LensCardState extends ConsumerState<LensCard> {
 
   @override
   Widget build(BuildContext context) {
+    final lock = ref.watch(selectedLensLockProvider);
+    _locked = lock.state == LensLockState.all;
     return ControlBarCard(
       icon: Icons.center_focus_weak,
       title: 'Lens shift',
-      trailing: _homeButton(),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [_lockButton(lock), const SizedBox(width: 8), _homeButton()],
+      ),
       headerGap: 6,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

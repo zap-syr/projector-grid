@@ -3,7 +3,11 @@ import 'package:projector_grid/features/workspace/domain/web_actions.dart';
 
 void main() {
   group('parseWebAction', () {
-    String? cmd(Object? json) => parseWebAction(json)?.command;
+    WebCommandAction? command(Object? json) => switch (parseWebAction(json)) {
+      final WebCommandAction a => a,
+      _ => null,
+    };
+    String? cmd(Object? json) => command(json)?.command;
 
     test('power, shutter, test pattern', () {
       expect(cmd({'power': 'on'}), 'PON');
@@ -33,20 +37,29 @@ void main() {
     );
 
     test('lens steps and home', () {
-      final step = parseWebAction({
-        'lens': 'shiftV',
-        'dir': '+',
-        'speed': 'fast',
-      });
+      final step = command({'lens': 'shiftV', 'dir': '+', 'speed': 'fast'});
       expect(step?.command, 'VXX:LNSI3=+00200');
       expect(step?.isLensStep, isTrue);
       expect(
         cmd({'lens': 'zoom', 'dir': '-', 'speed': 'slow'}),
         'VXX:LNSI5=+00001',
       );
-      final home = parseWebAction({'lens': 'home'});
+      final home = command({'lens': 'home'});
       expect(home?.command, 'VXX:LNSI1=+00001');
       expect(home?.isLensStep, isFalse);
+    });
+
+    test('lens lock on and off, nothing sent', () {
+      expect(
+        (parseWebAction({'lensLock': true}) as WebLensLockAction).locked,
+        isTrue,
+      );
+      expect(
+        (parseWebAction({'lensLock': false}) as WebLensLockAction).locked,
+        isFalse,
+      );
+      expect(parseWebAction({'lensLock': 'yes'}), isNull);
+      expect(parseWebAction({'lensLock': true, 'power': 'on'}), isNull);
     });
 
     test('anything outside the vocabulary is refused', () {

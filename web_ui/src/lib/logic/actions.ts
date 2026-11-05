@@ -1,4 +1,4 @@
-import type { Action, LensAxis } from '../api/types';
+import type { Action, DispatchResult, LensAxis } from '../api/types';
 
 export type LensSpeed = 'slow' | 'normal' | 'fast';
 
@@ -11,6 +11,8 @@ export const act = {
   lensCalibration: (code: string): Action => ({ lensCalibration: code }),
   lensType: (code: string): Action => ({ lensType: code }),
   lensHome: (): Action => ({ lens: 'home' }),
+  /** The app's own Lens lock: nothing goes to the projectors. */
+  lensLock: (locked: boolean): Action => ({ lensLock: locked }),
   /** `plus` = right / up / far / in. */
   lensStep: (axis: LensAxis, plus: boolean, speed: LensSpeed): Action => ({
     lens: axis,
@@ -34,6 +36,35 @@ export interface Confirmation {
 
 /** "1 projector" / "5 projectors". */
 export const projectorCount = (n: number): string => `${n} projector${n === 1 ? '' : 's'}`;
+
+/** A dispatch result in a few words, without names (models repeat; a phone's toast stays small). */
+export interface DispatchToast {
+  text: string;
+  ok: boolean;
+  /** Nothing went wrong but lens-locked projectors left out, which the lock button already shows. */
+  onlyLensLocked: boolean;
+}
+
+/**
+ * `Lens Shift H: 1/6 OK, 5 lens locked`, `Shutter Close: 3/4 OK, 1 skipped`.
+ * [lensLocked] tells a skip for Lens lock from one for offline or a wrong login.
+ */
+export function dispatchToast(
+  r: DispatchResult,
+  lensLocked: (id: string) => boolean,
+): DispatchToast {
+  const locked = r.skipped.filter((p) => lensLocked(p.id)).length;
+  const other = r.skipped.length - locked;
+  const parts = [`${r.ok}/${r.total} OK`];
+  if (r.failed.length > 0) parts.push(`${r.failed.length} failed`);
+  if (other > 0) parts.push(`${other} skipped`);
+  if (locked > 0) parts.push(`${locked} lens locked`);
+  return {
+    text: `${r.label}: ${parts.join(', ')}`,
+    ok: r.failed.length === 0 && r.skipped.length === 0,
+    onlyLensLocked: r.failed.length === 0 && other === 0 && locked > 0,
+  };
+}
 
 /**
  * Whether [a] needs a confirm dialog for [count] targets (ROADMAP §5):
@@ -61,6 +92,23 @@ function ask(
   always: boolean,
 ): Omit<Confirmation, 'hidden'> | null {
   const on = projectorCount(count);
+  // Moves nothing and is undone with one click: asks only for hidden targets.
+  if ('lensLock' in a) {
+    if (!always) return null;
+    return a.lensLock
+      ? {
+          title: 'Lock lens',
+          question: `Lock the lens on ${on}?`,
+          confirmLabel: 'Lock',
+          danger: false,
+        }
+      : {
+          title: 'Unlock lens',
+          question: `Unlock the lens on ${on}?`,
+          confirmLabel: 'Unlock',
+          danger: false,
+        };
+  }
   if ('osd' in a) {
     if (!always) return null;
     return {

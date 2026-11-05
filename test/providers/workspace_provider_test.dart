@@ -36,7 +36,7 @@ void main() {
           {'ip': '10.0.0.3', 'name': 'C'},
         ]);
         final nodes = c.read(workspaceProvider);
-        expect(nodes.map((n) => (n.x, n.y)), [(40, 40), (180, 40), (320, 40)]);
+        expect(nodes.map((n) => (n.x, n.y)), [(40, 40), (200, 40), (360, 40)]);
         expect(nodes.map((n) => n.connectionStatus), [
           ConnectionStatus.connected,
           ConnectionStatus.unauthorized,

@@ -78,9 +78,9 @@ const int gridColumns = 3;
 const Duration warmUp = Duration(seconds: 4);
 const Duration coolDown = Duration(seconds: 2);
 
-// Card grid matching WorkspaceNotifier.addProjectors (120×100 cards,
+// Card grid matching WorkspaceNotifier.addProjectors (140×100 cards,
 // 20 px horizontal / 40 px vertical gaps, origin 40,40).
-const double _cardWidth = 120;
+const double _cardWidth = 140;
 const double _cardHeight = 100;
 
 class SimProjector {

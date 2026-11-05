@@ -73,6 +73,25 @@ void main() {
       ]);
     });
 
+    test('lens lock and unlock go to onLensLock, not NTCONTROL', () {
+      final locks = <({bool locked, String? groupId, bool all})>[];
+      osc.onLensLock = ({
+        required locked,
+        groupId,
+        all = false,
+        required address,
+        sender,
+      }) => locks.add((locked: locked, groupId: groupId, all: all));
+      send('/pgrid/all/lens/lock');
+      send('/pgrid/group/stage/lens/unlock');
+      send('/pgrid/group/nowhere/lens/lock');
+      expect(locks, [
+        (locked: true, groupId: null, all: true),
+        (locked: false, groupId: 'g1', all: false),
+      ]);
+      expect(calls, isEmpty);
+    });
+
     test('arguments are ignored — the address alone selects the command', () {
       send('/pgrid/all/power/off', [1]);
       expect(calls.single.cmd, 'POF');

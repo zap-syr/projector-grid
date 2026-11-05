@@ -112,6 +112,7 @@ Json projectorJson(ProjectorNode n, MonitoringStatus status) => {
   ],
   // Set only while offline, for *RQ25K, last seen 16:41*.
   'lastSeen': n.lastSeen?.toUtc().toIso8601String(),
+  'lensLocked': n.lensLocked,
   'status': monitoringStatusJson(status),
 };
 
@@ -310,6 +311,22 @@ Json dispatchResultJson(DispatchResult r) {
     'failed': r.failed.map(ref).toList(),
     'skipped': r.skipped.map(ref).toList(),
     'summary': dispatchSummary(r),
+  };
+}
+
+/// The reply to a `lensLock` action, in [dispatchResultJson]'s shape so the
+/// page's toast reads it the same way. Nothing goes to the projectors, so
+/// none fails or is skipped.
+Json lensLockResultJson({required bool locked, required int count}) {
+  final label = locked ? 'Lens Lock' : 'Lens Unlock';
+  return {
+    'command': locked ? 'lensLock' : 'lensUnlock',
+    'label': label,
+    'ok': count,
+    'total': count,
+    'failed': const <Json>[],
+    'skipped': const <Json>[],
+    'summary': '$label — $count/$count OK',
   };
 }
 

@@ -1096,6 +1096,8 @@ export interface components {
              * @description When an offline projector last answered this session (UTC); null while it answers.
              */
             lastSeen: string | null;
+            /** @description Lens lock is on; the server refuses lens shift, focus, zoom, home and calibration to it. */
+            lensLocked: boolean;
             status: components["schemas"]["MonitoringStatus"];
         };
         /**
@@ -1312,9 +1314,12 @@ export interface components {
         LensAxis: "shiftH" | "shiftV" | "focus" | "zoom";
         /**
          * @description The fixed vocabulary the server maps to NTCONTROL (`web_actions.dart`).
-         *     Lens `dir`: `+` = right / up / far / in.
+         *     Lens `dir`: `+` = right / up / far / in. `lensLock` is the app's own
+         *     Lens lock and sends nothing to the projectors.
          */
         Action: {
+            lensLock: boolean;
+        } | {
             /** @enum {string} */
             power: "on" | "off";
         } | {
@@ -1360,7 +1365,7 @@ export interface components {
             ok: number;
             total: number;
             failed: components["schemas"]["ProjectorRef"][];
-            /** @description Not connected (offline / auth error) — never sent. */
+            /** @description Not connected (offline / auth error), or a lens command to a lens-locked projector — never sent. */
             skipped: components["schemas"]["ProjectorRef"][];
             /** @description The Event Log's line, e.g. "Shutter Close — 4/4 OK". */
             summary: string;

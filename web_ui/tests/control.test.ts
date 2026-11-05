@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 
 import type { Group, Projector } from '../src/lib/api/types';
-import { act, confirmationFor } from '../src/lib/logic/actions';
+import { act, confirmationFor, dispatchToast } from '../src/lib/logic/actions';
 import {
   isSelectable,
   presetSelection,
@@ -32,6 +32,7 @@ const pj = (id: string, over: Partial<Projector> = {}): Projector => ({
   errors: 'NO ERRORS',
   errorItems: [],
   lastSeen: null,
+  lensLocked: false,
   status: {
     level: 'none',
     online: true,
@@ -122,6 +123,33 @@ describe('confirmation rules', () => {
     });
     expect(confirmationFor(act.lensHome(), 4, label)?.question).toBe(
       'Move the lens to its home position on 4 projectors?',
+    );
+  });
+
+  test('the toast counts, names nobody, and tells lens-locked skips apart', () => {
+    const r = {
+      command: 'VXX:LNSI2=+00100',
+      label: 'Lens Shift H',
+      ok: 1,
+      total: 6,
+      failed: [],
+      skipped: ['1', '2', '3', '4', '5'].map((id) => ({ id, name: 'PT-RQ35K2' })),
+      summary: '',
+    };
+    const t = dispatchToast(r, (id) => id !== '5');
+    expect(t).toEqual({
+      text: 'Lens Shift H: 1/6 OK, 1 skipped, 4 lens locked',
+      ok: false,
+      onlyLensLocked: false,
+    });
+    expect(dispatchToast(r, () => true).onlyLensLocked).toBe(true);
+  });
+
+  test('lens lock asks only when some of the selection is hidden', () => {
+    expect(confirmationFor(act.lensLock(true), 4, label)).toBeNull();
+    expect(confirmationFor(act.lensLock(false), 4, label)).toBeNull();
+    expect(confirmationFor(act.lensLock(true), 4, label, ['10.0.0.9'])?.question).toBe(
+      'Lock the lens on 4 projectors?',
     );
   });
 
