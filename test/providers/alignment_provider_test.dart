@@ -99,6 +99,55 @@ void main() {
     expect(c.read(alignmentProvider).focusedId, '3');
   });
 
+  test(
+    'IP step order: enter, next and previous follow the addresses',
+    () async {
+      final c = makeContainer(fake);
+      // Addresses run right to left: 3 has the lowest.
+      c.read(workspaceProvider.notifier).setNodes([
+        node('1', ip: '10.0.0.30', x: 40),
+        node('2', ip: '10.0.0.20', x: 180),
+        node('3', ip: '10.0.0.10', x: 320),
+      ]);
+      final a = c.read(alignmentProvider.notifier);
+      a.setStepOrder(AlignmentStepOrder.ip);
+      await a.enter();
+      await settle();
+      expect(c.read(alignmentProvider).focusedId, '3');
+
+      a.next();
+      expect(c.read(alignmentProvider).focusedId, '2');
+      a.previous();
+      a.previous();
+      expect(c.read(alignmentProvider).focusedId, '1');
+      await settle();
+    },
+  );
+
+  test('changing the step order keeps the focus, sends nothing and is '
+      'remembered', () async {
+    final c = setUpRow();
+    final a = c.read(alignmentProvider.notifier);
+    await a.enter();
+    a.next();
+    await settle();
+    fake.sentCommands.clear();
+
+    a.setStepOrder(AlignmentStepOrder.ip);
+    await settle();
+    final state = c.read(alignmentProvider);
+    expect(state.stepOrder, AlignmentStepOrder.ip);
+    expect(state.focusedId, '2');
+    expect(fake.sentCommands, isEmpty);
+    expect(
+      c.read(appSettingsProvider).alignmentStepOrder,
+      AlignmentStepOrder.ip,
+    );
+
+    await a.exit();
+    expect(c.read(alignmentProvider).stepOrder, AlignmentStepOrder.ip);
+  });
+
   test('rapid presses send only what the final focus needs', () async {
     final c = setUpRow();
     final a = c.read(alignmentProvider.notifier);

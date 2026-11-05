@@ -22,6 +22,7 @@ export type ProjectEvent = Schemas['ProjectEvent'];
 export type Alignment = Schemas['Alignment'];
 export type AlignmentRole = Schemas['AlignmentRole'];
 export type AlignmentPresetId = Schemas['AlignmentPresetId'];
+export type AlignmentStepOrder = Schemas['AlignmentStepOrder'];
 export type PreviewStatus = Schemas['PreviewStatus'];
 export type PreviewFrame = Schemas['PreviewFrame'];
 export type PreShowRequest = Schemas['PreShowRequest'];
@@ -44,7 +45,8 @@ export type AlignmentOp =
   | 'showAll'
   | 'preset'
   | 'focusedPattern'
-  | 'othersPattern';
+  | 'othersPattern'
+  | 'stepOrder';
 export type MonitoringStatus = Schemas['MonitoringStatus'];
 export type Problem = Schemas['Problem'];
 export type ProblemLevel = Schemas['ProblemLevel'];

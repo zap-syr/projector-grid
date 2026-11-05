@@ -7,7 +7,7 @@
 -->
 <script lang="ts">
   import type { AlignmentPresetId, Config } from '../../api/types';
-  import { position, presetPatterns } from '../../logic/alignment';
+  import { position, presetPatterns, stepOrders } from '../../logic/alignment';
   import { testPatternLabel } from '../../logic/cells';
   import { patternSwatch } from '../../logic/patterns';
   import { alignment } from '../../state/alignment.svelte';
@@ -57,6 +57,7 @@
       <div class="who">
         <span class="tag">Alignment</span>
         <b>{focused?.ip ?? ''}</b>
+        <!-- No "by IP address": the Step order switch under the wall shows it. -->
         <span
           >{focused?.name ?? ''}, {position(alignment.order, a.focusedId).replace(
             ' / ',
@@ -92,6 +93,22 @@
       <section class="card">
         <div class="ch"><Icon name="map" size={16} />Wall</div>
         <WallMap {operator} {patternLabel} />
+        <!-- The order belongs with the wall: the map is what Layout follows. -->
+        <div class="order">
+          <span class="l">Step order</span>
+          {#if operator}
+            <div class="seg" role="group" aria-label="Step order">
+              {#each stepOrders as o (o.id)}
+                <button
+                  aria-pressed={a.stepOrder === o.id}
+                  onclick={() => alignment.setStepOrder(o.id)}>{o.label}</button
+                >
+              {/each}
+            </div>
+          {:else}
+            <span class="n">{stepOrders.find((o) => o.id === a.stepOrder)?.label}</span>
+          {/if}
+        </div>
       </section>
 
       <section class="card">
@@ -358,6 +375,32 @@
     color: var(--text);
     font-weight: 600;
     box-shadow: var(--sh-1);
+  }
+
+  .order {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 4px;
+    padding-top: 10px;
+    border-top: 1px solid var(--line);
+  }
+
+  .order .l {
+    width: 76px;
+    flex: none;
+    color: var(--muted);
+    font-size: 12.5px;
+  }
+
+  .order .seg {
+    flex: 1;
+    margin-bottom: 0;
+  }
+
+  .order .n {
+    font-size: 14px;
+    font-weight: 500;
   }
 
   .preset {

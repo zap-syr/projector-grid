@@ -361,19 +361,20 @@ export interface paths {
          *     |---|---|---|
          *     | `enter` | none, or `{"targets": [ids]}` — the page's selection | scope = the selection when it has 2+ projectors, else all; waits while projectors are read |
          *     | `exit` | none | restores shutters, patterns and shutter fades; waits until done |
-         *     | `next` / `prev` | none | step in layout order, wrapping |
+         *     | `next` / `prev` | none | step in the step order, wrapping |
          *     | `focus` | `{"id": "…"}` | focus one projector in the scope |
          *     | `neighbours` / `diagonals` / `showAll` | none | flip the toggle |
          *     | `preset` | `{"preset": "geometry" \| "color" \| "custom"}` | switch the task (its default patterns, Custom keeps them) |
          *     | `focusedPattern` | `{"code": "OTS:xx"}` | a pattern the current preset offers |
          *     | `othersPattern` | `{"code": "OTS:xx" \| null}` | null = same as focused |
+         *     | `stepOrder` | `{"order": "layout" \| "ip"}` | the order `next` / `prev` step in; the focus stays |
          */
         post: {
             parameters: {
                 query?: never;
                 header?: never;
                 path: {
-                    op: "enter" | "exit" | "next" | "prev" | "focus" | "neighbours" | "diagonals" | "showAll" | "preset" | "focusedPattern" | "othersPattern";
+                    op: "enter" | "exit" | "next" | "prev" | "focus" | "neighbours" | "diagonals" | "showAll" | "preset" | "focusedPattern" | "othersPattern" | "stepOrder";
                 };
                 cookie?: never;
             };
@@ -1218,8 +1219,16 @@ export interface components {
          */
         AlignmentRole: "focused" | "shown" | "closed";
         /**
+         * @description The order `next` / `prev` step in. `layout` — rows top to bottom, each left to
+         *     right (the order `/api/projectors` lists them in); `ip` — ascending by address,
+         *     numerically per octet, projectors sharing an address keeping their layout order.
+         * @enum {string}
+         */
+        AlignmentStepOrder: "layout" | "ip";
+        /**
          * @description The app's Alignment mode — one shared session, driven from the app or any page.
-         *     Preset, patterns and the neighbour options persist while the mode is off.
+         *     Preset, patterns, the neighbour options and the step order persist while the mode
+         *     is off.
          */
         Alignment: {
             active: boolean;
@@ -1237,6 +1246,7 @@ export interface components {
             showNeighbours: boolean;
             includeDiagonals: boolean;
             showAll: boolean;
+            stepOrder: components["schemas"]["AlignmentStepOrder"];
         };
         /** @description The app's choices for a control, in its order; `code` is what an action sends. */
         Options: {

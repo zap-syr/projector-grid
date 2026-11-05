@@ -240,6 +240,12 @@ Deviations from the design below:
   others.
 - `Ctrl+L` also lives in *Tools → Alignment Mode*; quitting the app while the mode is on runs
   Exit first (5 s cap) before closing.
+- **Step order** (owner, 2026-11-05): `<` / `>`, the `n/N` counter and the first focus on
+  entry follow *Layout* (rows, as below) or *IP address* (ascending, numerically per octet;
+  a shared IP keeps its layout order). A *Step order ›* submenu in *Presets ▾*, set apart from
+  Preset / Focused / Others by a divider (variant B of the artifact *Alignment Step Order
+  Mockup*). Global in app settings, like Neighbours. Changing it moves no focus and sends no
+  command. Neighbours stay geometric. Pure rule: `alignmentOrder` in `domain/alignment.dart`.
 
 ### Why
 When converging a multi-projector setup you constantly need "show me only this projector,
@@ -1243,6 +1249,11 @@ Only one alignment session exists at a time; a second client entering joins the 
   - The first table column shows a role marker instead of the checkbox (focused = filled,
     neighbour = ring, shown = light ring), with a legend in the toolbar.
   - Shutter-closed rows are dimmed; clicking a row focuses it; `,` / `.` step.
+  - **Step order** (2026-11-05): a round button after ▶ (same 34 px circle) opens a popover
+    with *Layout* / *IP address* radios; no on state, the tooltip names the current order.
+    On the phone and tablet a *Layout | IP address* segmented row under the Wall map. The
+    counter never names the order, on any layout or for a viewer: "3 of 8" (owner,
+    2026-11-05).
   - The control panel becomes *Lens · PJ-xx*, acting on the focused projector only.
 - **Viewer during alignment:** the session is shared, so a viewer sees a read-only banner
   ("Alignment, 192.168.0.43 focused (3 of 7), Geometry patterns" and "An operator

@@ -1,7 +1,8 @@
 <!--
   The app's Alignment banner across the page (shell canvas, *Alignment
-  banner…*): one 52 px row tinted with the mode's orange, ◀ 3 of 24 ▶ (the
-  ring on the card names the focused projector), Neighbours, Diagonals and
+  banner…*): one 52 px row tinted with the mode's orange, ◀ 3 of 24 ▶ and the
+  Step order button (the ring on the card names the focused projector),
+  Neighbours, Diagonals and
   Show all, the preset switch, Focused ▾ / Others ▾ and Exit alignment. A
   viewer gets one read-only sentence; entering or leaving, a spinner.
 -->
@@ -13,6 +14,7 @@
   import { device } from '../../state/device.svelte';
   import Icon, { type IconName } from '../Icon.svelte';
   import PatternPicker from './PatternPicker.svelte';
+  import StepOrderMenu from './StepOrderMenu.svelte';
 
   let { config, operator }: { config: Config; operator: boolean } = $props();
 
@@ -60,6 +62,8 @@
       <button class="nb" aria-label="Next projector" onclick={() => alignment.next()}>
         <Icon name="right" size={touch ? 22 : 18} />
       </button>
+      <span class="gap"></span>
+      <StepOrderMenu value={a.stepOrder} onpick={(o) => alignment.setStepOrder(o)} />
     </div>
     <span class="sep"></span>
     {#each toggles as t (t.op)}
@@ -207,6 +211,11 @@
     border: 1px solid var(--line-strong);
     border-radius: 50%;
     background: none;
+  }
+
+  /* Sets Step order a little apart from ◀ ▶ it configures. */
+  .gap {
+    width: 4px;
   }
 
   .pos {

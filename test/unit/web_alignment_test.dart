@@ -77,6 +77,20 @@ void main() {
     expect(parse('othersPattern', {'code': 'OTS:01'}), isNull);
   });
 
+  test('step order: layout or ip', () {
+    expect(
+      (parse('stepOrder', {'order': 'ip'}) as WebAlignmentStepOrder).order,
+      AlignmentStepOrder.ip,
+    );
+    expect(
+      (parse('stepOrder', {'order': 'layout'}) as WebAlignmentStepOrder).order,
+      AlignmentStepOrder.layout,
+    );
+    expect(parse('stepOrder'), isNull);
+    expect(parse('stepOrder', {'order': 'name'}), isNull);
+    expect(parse('stepOrder', {'order': 'ip', 'x': 1}), isNull);
+  });
+
   test('unknown ops and non-object bodies are refused', () {
     expect(parse('identify'), isNull);
     expect(parse('next', [1]), isNull);

@@ -351,6 +351,7 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
       showNeighbours: s.showNeighbours,
       includeDiagonals: s.includeDiagonals,
       showAll: s.showAll,
+      stepOrder: s.stepOrder,
     );
   }
 
@@ -392,6 +393,8 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
         notifier.setFocusedPattern(code);
       case WebAlignmentOthersPattern(:final code):
         notifier.setOthersPattern(code);
+      case WebAlignmentStepOrder(:final order):
+        notifier.setStepOrder(order);
     }
     return alignment();
   }

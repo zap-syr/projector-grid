@@ -77,6 +77,7 @@ class AppSettings {
   final String? alignmentOthersPattern;
   final bool alignmentShowNeighbours;
   final bool alignmentDiagonals;
+  final AlignmentStepOrder alignmentStepOrder;
 
   /// Shutter fade times Alignment mode zeroed and hasn't written back yet,
   /// keyed by projector IP. Persisted so a quit or crash mid-mode still
@@ -114,6 +115,7 @@ class AppSettings {
     this.alignmentOthersPattern = 'OTS:70',
     this.alignmentShowNeighbours = false,
     this.alignmentDiagonals = false,
+    this.alignmentStepOrder = AlignmentStepOrder.layout,
     this.pendingFadeRestores = const {},
     this.alerts = const AlertSettings(),
     this.lastProjectorLogin = '',
@@ -145,6 +147,7 @@ class AppSettings {
     bool clearAlignmentOthersPattern = false,
     bool? alignmentShowNeighbours,
     bool? alignmentDiagonals,
+    AlignmentStepOrder? alignmentStepOrder,
     Map<String, ShutterFade>? pendingFadeRestores,
     AlertSettings? alerts,
     String? lastProjectorLogin,
@@ -179,6 +182,7 @@ class AppSettings {
       alignmentShowNeighbours:
           alignmentShowNeighbours ?? this.alignmentShowNeighbours,
       alignmentDiagonals: alignmentDiagonals ?? this.alignmentDiagonals,
+      alignmentStepOrder: alignmentStepOrder ?? this.alignmentStepOrder,
       pendingFadeRestores: pendingFadeRestores ?? this.pendingFadeRestores,
       alerts: alerts ?? this.alerts,
       lastProjectorLogin: lastProjectorLogin ?? this.lastProjectorLogin,
@@ -211,6 +215,7 @@ class AppSettings {
     'alignmentOthersPattern': alignmentOthersPattern,
     'alignmentShowNeighbours': alignmentShowNeighbours,
     'alignmentDiagonals': alignmentDiagonals,
+    'alignmentStepOrder': alignmentStepOrder.name,
     'pendingFadeRestores': {
       for (final e in pendingFadeRestores.entries)
         e.key: {'in': e.value.fadeIn, 'out': e.value.fadeOut},
@@ -261,6 +266,10 @@ class AppSettings {
     alignmentShowNeighbours:
         (json['alignmentShowNeighbours'] as bool?) ?? false,
     alignmentDiagonals: (json['alignmentDiagonals'] as bool?) ?? false,
+    alignmentStepOrder: AlignmentStepOrder.values.firstWhere(
+      (o) => o.name == json['alignmentStepOrder'],
+      orElse: () => AlignmentStepOrder.layout,
+    ),
     pendingFadeRestores:
         (json['pendingFadeRestores'] as Map?)?.map(
           (k, v) => MapEntry(k as String, (
@@ -420,6 +429,11 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
 
   void setAlignmentDiagonals(bool diagonals) {
     state = state.copyWith(alignmentDiagonals: diagonals);
+    _save(state);
+  }
+
+  void setAlignmentStepOrder(AlignmentStepOrder order) {
+    state = state.copyWith(alignmentStepOrder: order);
     _save(state);
   }
 

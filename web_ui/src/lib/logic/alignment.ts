@@ -1,9 +1,15 @@
-import type { Alignment, AlignmentRole, Config, Projector } from '../api/types';
+import type { Alignment, AlignmentRole, AlignmentStepOrder, Config, Projector } from '../api/types';
+import { sortByIp } from './sort';
 
-/** The mode's projectors in layout order (the API sends projectors that way). */
+/**
+ * The mode's projectors in its step order. The API sends projectors in layout
+ * order, and `sortByIp` is stable, so projectors sharing an address keep their
+ * layout order, as in the app's `alignmentOrder`.
+ */
 export function scopeOrder(projectors: readonly Projector[], a: Alignment | null): Projector[] {
   if (!a?.active) return [];
-  return projectors.filter((p) => a.roles[p.id] !== undefined);
+  const scope = projectors.filter((p) => a.roles[p.id] !== undefined);
+  return a.stepOrder === 'ip' ? sortByIp(scope) : scope;
 }
 
 /** A projector's role while the mode is on; null outside the mode or its scope. */
@@ -21,3 +27,9 @@ export function position(order: readonly Projector[], focusedId: string | null):
   const i = order.findIndex((p) => p.id === focusedId);
   return `${i + 1} / ${order.length}`;
 }
+
+/** The step orders, as the app's *Step order* submenu names them. */
+export const stepOrders: readonly { id: AlignmentStepOrder; label: string }[] = [
+  { id: 'layout', label: 'Layout' },
+  { id: 'ip', label: 'IP address' },
+];

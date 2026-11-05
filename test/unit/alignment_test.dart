@@ -63,6 +63,40 @@ void main() {
     });
   });
 
+  group('alignmentOrder', () {
+    ProjectorNode at(String id, String ip, double x, double y) =>
+        ProjectorNode(id: id, name: id, ipAddress: ip, x: x, y: y);
+    // Two rows; the addresses run against the layout.
+    final wall = [
+      at('a', '10.0.0.10', 0, 0),
+      at('b', '10.0.0.9', 160, 0),
+      at('c', '10.0.0.2', 0, 140),
+      at('d', '10.0.0.100', 160, 140),
+    ];
+    List<String> ids(AlignmentStepOrder o) => [
+      for (final n in alignmentOrder(wall, o)) n.id,
+    ];
+
+    test('layout: rows top to bottom, each left to right', () {
+      expect(ids(AlignmentStepOrder.layout), ['a', 'b', 'c', 'd']);
+    });
+
+    test('ip: numeric per octet, .9 before .10', () {
+      expect(ids(AlignmentStepOrder.ip), ['c', 'b', 'a', 'd']);
+    });
+
+    test('ip: one address on several ports keeps the layout order', () {
+      final shared = [
+        for (var i = 0; i < 12; i++) at('p$i', '10.0.0.5', i * 160.0, 0),
+        at('first', '10.0.0.1', 0, 140),
+      ];
+      expect(
+        [for (final n in alignmentOrder(shared, AlignmentStepOrder.ip)) n.id],
+        ['first', for (var i = 0; i < 12; i++) 'p$i'],
+      );
+    });
+  });
+
   group('outputs and commands', () {
     test('Others falls back to the focused pattern', () {
       expect(

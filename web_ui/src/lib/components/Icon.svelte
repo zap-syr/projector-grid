@@ -52,6 +52,7 @@
     neighbours: '<rect x="8.5" y="6" width="7" height="12" rx="1.5"/><path d="M5 8v8M19 8v8"/>',
     diagonal:
       '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><path d="M10 10l4 4"/>',
+    stepOrder: '<path d="M4 6h9M4 12h7M4 18h5M17 5v14M14 16l3 3 3-3"/>',
     apps: '<g fill="currentColor" stroke="none"><rect x="4" y="4" width="4" height="4" rx="1"/><rect x="10" y="4" width="4" height="4" rx="1"/><rect x="16" y="4" width="4" height="4" rx="1"/><rect x="4" y="10" width="4" height="4" rx="1"/><rect x="10" y="10" width="4" height="4" rx="1"/><rect x="16" y="10" width="4" height="4" rx="1"/><rect x="4" y="16" width="4" height="4" rx="1"/><rect x="10" y="16" width="4" height="4" rx="1"/><rect x="16" y="16" width="4" height="4" rx="1"/></g>',
     all: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
     preview:

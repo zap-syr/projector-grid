@@ -236,8 +236,8 @@ Json configJson({
 };
 
 /// Alignment mode as the banner sees it. `roles` covers the mode's scope,
-/// in no particular order — the page orders it by the projectors' layout
-/// order.
+/// in no particular order — the page orders it by `stepOrder`, starting
+/// from the projectors' layout order.
 Json alignmentJson({
   required bool active,
   required bool busy,
@@ -249,6 +249,7 @@ Json alignmentJson({
   required bool showNeighbours,
   required bool includeDiagonals,
   required bool showAll,
+  required AlignmentStepOrder stepOrder,
 }) => {
   'active': active,
   'busy': busy,
@@ -260,6 +261,7 @@ Json alignmentJson({
   'showNeighbours': showNeighbours,
   'includeDiagonals': includeDiagonals,
   'showAll': showAll,
+  'stepOrder': stepOrder.name,
 };
 
 /// SSE event names on `/api/preview/{id}`.
