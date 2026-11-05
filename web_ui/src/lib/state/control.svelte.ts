@@ -1,6 +1,6 @@
 import { api, ApiError } from '../api/client';
 import type { Action, DispatchResult } from '../api/types';
-import { type Confirmation, confirmationFor, isLensStep } from '../logic/actions';
+import { type Confirmation, confirmationFor, dispatchToast, isLensStep } from '../logic/actions';
 import { selection } from './selection.svelte';
 import { view } from './view.svelte';
 
@@ -45,6 +45,8 @@ class ControlState {
   }
 
   async #send(action: Action, ids: string[]): Promise<void> {
+    // Read before the await: the lock may change while the request is out.
+    const locked = new Set(selection.projectors.filter((p) => p.lensLocked).map((p) => p.id));
     let result: DispatchResult;
     try {
       result = await api.act({ targets: ids, action });
@@ -55,10 +57,12 @@ class ControlState {
       this.notify({ text: 'Not sent, control is locked', ok: false });
       return;
     }
-    const allOk = result.failed.length === 0 && result.skipped.length === 0;
-    // A held lens button fires every few hundred ms; only a problem is worth a toast.
-    if (isLensStep(action) && allOk) return;
-    this.notify({ text: result.summary, ok: allOk });
+    const toast = dispatchToast(result, (id) => locked.has(id));
+    // A held lens button fires every few hundred ms; only a problem is worth
+    // a toast, and a lens-locked projector left out isn't one: the lock
+    // button already says part of the selection is locked.
+    if (isLensStep(action) && (toast.ok || toast.onlyLensLocked)) return;
+    this.notify({ text: toast.text, ok: toast.ok });
   }
 
   notify(t: Toast): void {

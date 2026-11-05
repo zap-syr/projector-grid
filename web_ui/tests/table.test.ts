@@ -45,6 +45,7 @@ const pj = (id: string, over: Partial<Projector> = {}): Projector => ({
   errors: 'NO ERRORS',
   errorItems: [],
   lastSeen: null,
+  lensLocked: false,
   status: {
     level: 'none',
     online: true,

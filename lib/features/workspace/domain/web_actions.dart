@@ -25,14 +25,26 @@ class WebTargetAll extends WebTargets {
   const WebTargetAll();
 }
 
-class WebAction {
+sealed class WebAction {
+  const WebAction();
+}
+
+/// An action the server sends to the projectors as [command].
+class WebCommandAction extends WebAction {
   final String command;
 
   /// A lens motor step: never confirmed, repeated while a button is held,
   /// and throttled per projector by the server.
   final bool isLensStep;
 
-  const WebAction(this.command, {this.isLensStep = false});
+  const WebCommandAction(this.command, {this.isLensStep = false});
+}
+
+/// `{"lensLock": true | false}`: the app's own Lens lock, nothing is sent
+/// to the projectors.
+class WebLensLockAction extends WebAction {
+  final bool locked;
+  const WebLensLockAction(this.locked);
 }
 
 typedef WebActionRequest = ({WebTargets targets, WebAction action});
@@ -74,29 +86,33 @@ WebAction? parseWebAction(Object? json) {
   final pattern = json['testPattern'];
   final lens = json['lens'];
 
+  if (json.length == 1 && json.containsKey('lensLock')) {
+    final locked = json['lensLock'];
+    return locked is bool ? WebLensLockAction(locked) : null;
+  }
   if (json.length == 1 && power != null) {
     return switch (power) {
-      'on' => const WebAction('PON'),
-      'off' => const WebAction('POF'),
+      'on' => const WebCommandAction('PON'),
+      'off' => const WebCommandAction('POF'),
       _ => null,
     };
   }
   if (json.length == 1 && shutter != null) {
     return switch (shutter) {
-      'open' => const WebAction('OSH:0'),
-      'close' => const WebAction('OSH:1'),
+      'open' => const WebCommandAction('OSH:0'),
+      'close' => const WebCommandAction('OSH:1'),
       _ => null,
     };
   }
   if (json.length == 1 && pattern is String) {
     final known =
         pattern == kTestPatternOff || kTestPatternLabels.containsKey(pattern);
-    return known ? WebAction(pattern) : null;
+    return known ? WebCommandAction(pattern) : null;
   }
   if (json.length == 1 && json['osd'] != null) {
     return switch (json['osd']) {
-      'on' => const WebAction('OOS:1'),
-      'off' => const WebAction('OOS:0'),
+      'on' => const WebCommandAction('OOS:1'),
+      'off' => const WebCommandAction('OOS:0'),
       _ => null,
     };
   }
@@ -109,12 +125,12 @@ WebAction? parseWebAction(Object? json) {
     final code = json[key];
     if (json.length == 1 && code != null) {
       return code is String && options.containsKey(code)
-          ? WebAction(code)
+          ? WebCommandAction(code)
           : null;
     }
   }
   if (json.length == 1 && lens == 'home') {
-    return const WebAction(kLensHomeCommand);
+    return const WebCommandAction(kLensHomeCommand);
   }
   final axis = _lensAxes[lens];
   final dir = json['dir'];
@@ -123,7 +139,7 @@ WebAction? parseWebAction(Object? json) {
       .firstOrNull;
   if (json.length == 3 && axis != null && speed != null) {
     if (dir != '+' && dir != '-') return null;
-    return WebAction(
+    return WebCommandAction(
       lensStepCommand(axis, plus: dir == '+', speed: speed),
       isLensStep: true,
     );

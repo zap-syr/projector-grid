@@ -324,6 +324,30 @@ class QuickStatusContent extends ConsumerWidget {
                   ],
                 ),
               ),
+              // Always there, so locking doesn't change the popover's height.
+              _StatusRow(
+                label: 'Lens',
+                child: node.lensLocked
+                    ? Row(
+                        key: const ValueKey('quick-status-lens-locked'),
+                        spacing: 6,
+                        children: [
+                          Icon(
+                            Icons.lock_outline,
+                            size: 16,
+                            color: t.secondary,
+                          ),
+                          Text(
+                            'Locked',
+                            style: t.body.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      )
+                    : Text(
+                        'Not locked',
+                        style: t.body.copyWith(color: t.tertiary),
+                      ),
+              ),
               _StatusRow(
                 label: 'Temperature',
                 child: Row(

@@ -5,7 +5,7 @@
 -->
 <script lang="ts">
   import type { Action, Config, LensAxis } from '../../api/types';
-  import { act, type LensSpeed } from '../../logic/actions';
+  import { act, projectorCount, type LensSpeed } from '../../logic/actions';
   import { testPatternLabel } from '../../logic/cells';
   import { MAIN_PATTERNS, patternSwatch } from '../../logic/patterns';
   import { alignment } from '../../state/alignment.svelte';
@@ -112,6 +112,19 @@
   ] as const;
   const dirNames = { up: 'up', down: 'down', left: 'left', right: 'right' } as const;
 
+  /** Lens lock of the selection, as on the app's Lens shift card. */
+  const lockedCount = $derived(selection.projectors.filter((p) => p.lensLocked).length);
+  const lockState = $derived(lockedCount === 0 ? 'none' : lockedCount === count ? 'all' : 'some');
+  /** All of the selection locked: the motor buttons are disabled in place. */
+  const lensLocked = $derived(lockState === 'all');
+  const lockTitle = $derived(
+    lockState === 'all'
+      ? `Unlock lens (${projectorCount(count)})`
+      : lockState === 'some'
+        ? `Lens locked on ${lockedCount} of ${projectorCount(count)}. Click to lock all`
+        : 'Lock lens',
+  );
+
   const send = (a: Action) => control.request(a, codeLabel);
   const step = (axis: LensAxis, plus: boolean, s: LensSpeed) => () =>
     send(act.lensStep(axis, plus, s));
@@ -126,11 +139,36 @@
 )}
   <HoldButton
     label="{axis === 'shiftH' || axis === 'shiftV' ? 'Shift' : cap(axis)} {name}, {s}"
-    disabled={false}
+    disabled={lensLocked}
     onstep={step(axis, plus, s)}
   >
     <LensIcon {dir} speed={s} />
   </HoldButton>
+{/snippet}
+
+{#snippet lockButton(size: number)}
+  <!-- Outlined with an open lock when none of the selection is locked, filled
+       when all of it is, blue with a dot when part of it is. -->
+  <button
+    class="hbtn lockb"
+    class:all={lockState === 'all'}
+    class:some={lockState === 'some'}
+    aria-label={lockTitle}
+    aria-pressed={lockState === 'all'}
+    title={touchLens ? undefined : lockTitle}
+    onclick={() => send(act.lensLock(lockState !== 'all'))}
+    ><Icon name={lockState === 'none' ? 'unlock' : 'lock'} {size} /></button
+  >
+{/snippet}
+
+{#snippet homeButton(size: number)}
+  <button
+    class="hbtn"
+    aria-label="Home position"
+    title={touchLens ? undefined : 'Home position'}
+    disabled={lensLocked}
+    onclick={() => send(act.lensHome())}><Icon name="home" {size} /></button
+  >
 {/snippet}
 
 <aside
@@ -259,12 +297,8 @@
     <div class="ch">
       <Icon name="lens" size={16} />Lens shift
       {#if hiddenCount > 0}<span class="lhid">{count} projectors, {hiddenCount} hidden</span>{/if}
-      <button
-        class="hbtn"
-        aria-label="Home position"
-        title="Home position"
-        onclick={() => send(act.lensHome())}><Icon name="home" size={16} /></button
-      >
+      {@render lockButton(16)}
+      {@render homeButton(16)}
     </div>
     <!-- The app's cross: per direction slow, normal, fast from the centre out. -->
     <div class="xpad">
@@ -305,6 +339,7 @@
         <OptionRow
           label="Calibration"
           showLabel
+          disabled={lensLocked}
           options={config.lensCalibrations}
           onset={(code) => send(act.lensCalibration(code))}
         />
@@ -352,9 +387,8 @@
          Home in its header as on the Control sheet. -->
     <div class="ch tall">
       <Icon name="lens" size={16} />Lens, <span class="mono">{alignment.focused?.ip ?? ''}</span>
-      <button class="hbtn" aria-label="Home position" onclick={() => send(act.lensHome())}
-        ><Icon name="home" size={20} /></button
-      >
+      {@render lockButton(20)}
+      {@render homeButton(20)}
     </div>
     {@render touchLensBody()}
     {@render touchSetup()}
@@ -363,9 +397,8 @@
       <div class="ch tall">
         <Icon name="lens" size={16} />Lens
         {#if hiddenCount > 0}<span class="lhid">{count} projectors, {hiddenCount} hidden</span>{/if}
-        <button class="hbtn" aria-label="Home position" onclick={() => send(act.lensHome())}
-          ><Icon name="home" size={20} /></button
-        >
+        {@render lockButton(20)}
+        {@render homeButton(20)}
       </div>
       {@render touchLensBody()}
       {@render touchSetup()}
@@ -383,19 +416,19 @@
   </div>
   <div class="dpad">
     <span></span>
-    <HoldButton label="Shift up" onstep={step('shiftV', true, speed)}
+    <HoldButton label="Shift up" disabled={lensLocked} onstep={step('shiftV', true, speed)}
       ><Icon name="up" size={26} /></HoldButton
     >
     <span></span>
-    <HoldButton label="Shift left" onstep={step('shiftH', false, speed)}
+    <HoldButton label="Shift left" disabled={lensLocked} onstep={step('shiftH', false, speed)}
       ><Icon name="left" size={26} /></HoldButton
     >
-    <span class="hub">Shift</span>
-    <HoldButton label="Shift right" onstep={step('shiftH', true, speed)}
+    <span class="hub">{lensLocked ? 'Locked' : 'Shift'}</span>
+    <HoldButton label="Shift right" disabled={lensLocked} onstep={step('shiftH', true, speed)}
       ><Icon name="right" size={26} /></HoldButton
     >
     <span></span>
-    <HoldButton label="Shift down" onstep={step('shiftV', false, speed)}
+    <HoldButton label="Shift down" disabled={lensLocked} onstep={step('shiftV', false, speed)}
       ><Icon name="down" size={26} /></HoldButton
     >
     <span></span>
@@ -403,10 +436,16 @@
   {#each axes as a (a.axis)}
     <div class="big">
       <span class="l">{a.label}</span>
-      <HoldButton label="{a.label} {a.minus}" onstep={step(a.axis, false, speed)}
+      <HoldButton
+        label="{a.label} {a.minus}"
+        disabled={lensLocked}
+        onstep={step(a.axis, false, speed)}
         ><span class="bl"><Icon name="left" size={20} />{a.minus}</span></HoldButton
       >
-      <HoldButton label="{a.label} {a.plus}" onstep={step(a.axis, true, speed)}
+      <HoldButton
+        label="{a.label} {a.plus}"
+        disabled={lensLocked}
+        onstep={step(a.axis, true, speed)}
         ><span class="bl">{a.plus}<Icon name="right" size={20} /></span></HoldButton
       >
     </div>
@@ -426,6 +465,7 @@
         label="Calibration"
         showLabel
         touch
+        disabled={lensLocked}
         options={config.lensCalibrations}
         onset={(code) => send(act.lensCalibration(code))}
       />
@@ -1058,6 +1098,48 @@
     background: none;
     color: var(--muted);
     cursor: pointer;
+  }
+
+  .hbtn:disabled {
+    opacity: 0.38;
+    cursor: default;
+  }
+
+  .hbtn:disabled:hover {
+    background: none;
+  }
+
+  /* The lock sits before Home and takes the push to the right. */
+  .lockb + .hbtn {
+    margin-left: 6px;
+  }
+
+  .lockb {
+    position: relative;
+  }
+
+  .lockb.all {
+    border-color: var(--accent-line);
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+
+  .lockb.some {
+    border: 1.5px solid var(--accent);
+    color: var(--accent);
+  }
+
+  .lockb.some::after {
+    content: '';
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    width: 9px;
+    height: 9px;
+    box-sizing: border-box;
+    border: 2px solid var(--card);
+    border-radius: 50%;
+    background: var(--accent);
   }
 
   .xpad {

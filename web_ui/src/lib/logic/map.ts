@@ -2,7 +2,7 @@ import type { Projector } from '../api/types';
 import { isSelectable } from './selection';
 
 /** The app's card size on the Controls canvas (`card_layout.dart`). */
-export const CARD_W = 120;
+export const CARD_W = 140;
 export const CARD_H = 100;
 /** Margin around the wall, in canvas px. */
 export const PAD = 20;

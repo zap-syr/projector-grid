@@ -6,7 +6,9 @@ import 'dart:math' show max, min;
 
 import 'projector_node.dart';
 
-const double kCardWidth = 120;
+// 140 × 100 (owner, 2026-11-04): room for the Lens lock icon beside a model
+// like PT-RQ35K2 without cutting it; the height stays as it was.
+const double kCardWidth = 140;
 const double kCardHeight = 100;
 
 /// Cards sorted left→right, top→bottom. Cards whose tops are within half a

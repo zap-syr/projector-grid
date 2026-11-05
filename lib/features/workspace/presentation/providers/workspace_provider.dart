@@ -9,6 +9,7 @@ import '../../domain/card_layout.dart';
 import '../../domain/command_log.dart';
 import '../../domain/dispatch_result.dart';
 import '../../domain/event_log_rows.dart';
+import '../../domain/lens_commands.dart';
 import '../../domain/projector_node.dart';
 import '../../domain/projector_group.dart';
 import '../../domain/log_event.dart';
@@ -133,6 +134,8 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
           signal: live.signal,
           testPattern: live.testPattern,
           lastSeen: live.lastSeen,
+          // A safety lock: a run of Ctrl+Z must never quietly lift it.
+          lensLocked: live.lensLocked,
         );
       }
       return saved;
@@ -973,8 +976,17 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     final all = nodes.toList();
     final targets = <ProjectorNode>[];
     final skipped = <ProjectorNode>[];
+    // Checked here, the one funnel every source goes through, so OSC, the
+    // Web page, a schedule or a custom command can't move a locked lens.
+    final lensMotion = isLensMotionCommand(cmd);
+    bool lensBlocked(ProjectorNode n) => lensMotion && n.lensLocked;
+    String skipReason(ProjectorNode n) => lensBlocked(n)
+        ? lensLockedSkipReason
+        : commandSkipReason(n.connectionStatus);
     for (final n in all) {
-      if (n.connectionStatus == ConnectionStatus.connected ||
+      if (lensBlocked(n)) {
+        skipped.add(n);
+      } else if (n.connectionStatus == ConnectionStatus.connected ||
           n.connectionStatus == ConnectionStatus.unprotected) {
         targets.add(n);
       } else {
@@ -1007,7 +1019,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
             message: singleCommandMessage(
               cmd,
               outcome,
-              skipReason: commandSkipReason(node.connectionStatus),
+              skipReason: skipReason(node),
             ),
             projectorIp: node.ipAddress,
             projectorName: node.name,
@@ -1032,9 +1044,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
             reason: switch (outcome) {
               CommandOutcome.sent => null,
               CommandOutcome.failed => commandFailedReason,
-              CommandOutcome.skipped => commandSkipReason(
-                node.connectionStatus,
-              ),
+              CommandOutcome.skipped => skipReason(node),
             },
           ),
           projectorIp: node.ipAddress,
@@ -1190,6 +1200,54 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     String cmd, {
     required CommandSource source,
   }) => _dispatchToNodes(state, cmd, source: source);
+
+  /// Turns Lens lock on or off for the projectors with [ids]. A project
+  /// edit (it marks the project changed) but no undo step: see
+  /// [_mergeWithTelemetry]. One log line per projector that changed, of one
+  /// kind, so a selection folds into one row.
+  void setLensLocked(
+    Iterable<String> ids,
+    bool locked, {
+    required CommandSource source,
+  }) {
+    final wanted = ids.toSet();
+    final changed = [
+      for (final n in state)
+        if (wanted.contains(n.id) && n.lensLocked != locked) n,
+    ];
+    if (changed.isEmpty) return;
+    final changedIds = {for (final n in changed) n.id};
+    state = [
+      for (final n in state)
+        changedIds.contains(n.id) ? n.copyWith(lensLocked: locked) : n,
+    ];
+    _notifyStateChanged();
+    final kind = locked ? LogGroupKind.lensLocked : LogGroupKind.lensUnlocked;
+    for (final n in changed) {
+      _logEvent(
+        LogEvent(
+          severity: LogSeverity.info,
+          type: LogEventType.command,
+          message: kind.title,
+          projectorIp: n.ipAddress,
+          projectorName: n.name,
+          source: source,
+          nodeId: n.id,
+          groupKind: kind,
+          projectorGroup: projectorGroupName(n, _groups),
+        ),
+      );
+    }
+  }
+
+  /// [setLensLocked] for the selection: locks all of it unless all of it
+  /// is locked already, the way a mixed checkbox turns on first.
+  void toggleLensLockOfSelected({required CommandSource source}) {
+    final selected = ref.read(selectionProvider);
+    final nodes = state.where((n) => selected.contains(n.id));
+    final lockState = lensLockState(nodes.map((n) => n.lensLocked));
+    setLensLocked(selected, lockState != LensLockState.all, source: source);
+  }
 
   // How long a power-transition tracking loop (below) may keep polling
   // before giving up and leaving the node on the regular poll cycle — well

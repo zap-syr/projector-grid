@@ -453,25 +453,32 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
       ],
       WebTargetAll() => [for (final n in nodes) n.id],
     };
-    // Same rule as the control bar's _throttledSend (drop a step while the
-    // last one is still going), but per projector, so a laggy phone
-    // repeating a held button can't queue up a burst.
-    final lens = request.action.isLensStep;
-    if (lens) {
-      ids = ids.where((id) => !_lensBusy.contains(id)).toList();
-      _lensBusy.addAll(ids);
-    }
-    try {
-      final result = await ref
-          .read(workspaceProvider.notifier)
-          .sendCommandToNodes(
-            ids,
-            request.action.command,
-            source: CommandSource.web(ip: session.ip, role: session.role.name),
-          );
-      return dispatchResultJson(result);
-    } finally {
-      if (lens) _lensBusy.removeAll(ids);
+    final source = CommandSource.web(ip: session.ip, role: session.role.name);
+    final action = request.action;
+    switch (action) {
+      case WebLensLockAction(:final locked):
+        final known = {for (final n in nodes) n.id};
+        final targets = ids.where(known.contains).toList();
+        ref
+            .read(workspaceProvider.notifier)
+            .setLensLocked(targets, locked, source: source);
+        return lensLockResultJson(locked: locked, count: targets.length);
+      case WebCommandAction(:final command, :final isLensStep):
+        // Same rule as the control bar's _throttledSend (drop a step while
+        // the last one is still going), but per projector, so a laggy phone
+        // repeating a held button can't queue up a burst.
+        if (isLensStep) {
+          ids = ids.where((id) => !_lensBusy.contains(id)).toList();
+          _lensBusy.addAll(ids);
+        }
+        try {
+          final result = await ref
+              .read(workspaceProvider.notifier)
+              .sendCommandToNodes(ids, command, source: source);
+          return dispatchResultJson(result);
+        } finally {
+          if (isLensStep) _lensBusy.removeAll(ids);
+        }
     }
   }
 
