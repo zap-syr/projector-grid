@@ -10,10 +10,22 @@ void main() {
       lensStepCommand(LensAxis.zoom, plus: false, speed: LensSpeed.normal),
       kLensHomeCommand,
       'VXX:LNSI0=+00001',
+      'VXX:LNSI7=+00120',
+      'VXX:LNSSD=+00000 +00000 +01000 +00500',
+      'VXX:LNMI1=+00002',
+      'vxx:lnsi3=+00000',
     ]) {
       expect(isLensMotionCommand(cmd), isTrue, reason: cmd);
     }
-    for (final cmd in ['VXX:LNEI1=+00001', 'OSH:1', 'PON', 'OTS:07']) {
+    for (final cmd in [
+      'VXX:LNEI1=+00001',
+      'VXX:LNMI2=+00002',
+      'VXX:LNMI3=+00002',
+      'QVX:LNSSD',
+      'OSH:1',
+      'PON',
+      'OTS:07',
+    ]) {
       expect(isLensMotionCommand(cmd), isFalse, reason: cmd);
     }
   });
