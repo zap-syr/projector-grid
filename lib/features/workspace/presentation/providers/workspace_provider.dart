@@ -1174,16 +1174,6 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     return response;
   }
 
-  Future<DispatchResult> sendCommandToGroup(
-    String groupId,
-    String cmd, {
-    required CommandSource source,
-  }) => _dispatchToNodes(
-    state.where((n) => n.groupId == groupId),
-    cmd,
-    source: source,
-  );
-
   /// One dispatch to the projectors of all [groupIds], so the concurrency
   /// cap spans them rather than applying per group.
   Future<DispatchResult> sendCommandToGroups(
