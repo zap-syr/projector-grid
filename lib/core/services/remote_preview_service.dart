@@ -66,6 +66,8 @@ class RemotePreviewController {
   // Bumped on every (re)connect so a stale socket's callbacks are ignored.
   int _attempt = 0;
   int _endpointIndex = 0;
+  // _endpointIndex has served the preview on this projector at least once.
+  bool _endpointConfirmed = false;
 
   /// Opens the socket. Safe to call once; further calls are no-ops.
   void start() {
@@ -137,13 +139,17 @@ class RemotePreviewController {
       try {
         final ws = await connectFuture.timeout(_connectTimeout);
         _endpointIndex = index;
+        _endpointConfirmed = true;
         return ws;
       } on WebSocketException {
         // Answered without upgrading. Usually a 404 (this firmware serves the
         // preview elsewhere), but dart:io doesn't reliably say which status,
         // so a full projector (RQ25K answers 500 past 2 viewers) also costs
-        // one quick try at the next endpoint before failing.
+        // one try at the next endpoint before failing; that try can wait out
+        // the whole connect timeout behind a firewall that drops packets.
+        // Once this endpoint has served the preview, a refusal means full.
         if (_disposed || attempt != _attempt) return null;
+        if (_endpointConfirmed && i == 0) return null;
       } catch (_) {
         // The timed-out connect may still complete later — make sure that
         // socket is closed and any error is swallowed.

@@ -29,6 +29,13 @@ class ProjectorWebStatusService {
   // paid once per service, not on every SIGNAL event.
   final _pageByHost = <String, int>{};
 
+  // Per host: when both pages answered 404, not before this time again.
+  // Firmware without either page would otherwise cost two digest-auth
+  // round trips on every poll; it expires so a projector whose web server
+  // answered 404 while booting isn't written off for the session.
+  final _missingUntil = <String, DateTime>{};
+  static const _missingRetry = Duration(minutes: 10);
+
   // Reused across calls so Digest auth's credential/nonce cache actually
   // helps — a fresh HttpClient per call paid the 401-challenge round trip
   // every single time, doubling latency on the SIGNAL-event-driven fetch
@@ -58,6 +65,10 @@ class ProjectorWebStatusService {
     String login,
     String password,
   ) async {
+    final missingUntil = _missingUntil[ip];
+    if (missingUntil != null && DateTime.now().isBefore(missingUntil)) {
+      return null;
+    }
     final client = _clientFor(login, password);
     final first = _pageByHost[ip] ?? 0;
     try {
@@ -75,9 +86,11 @@ class ProjectorWebStatusService {
           return null;
         }
         _pageByHost[ip] = page;
+        _missingUntil.remove(ip);
         final body = await res.transform(utf8.decoder).join();
         return parseWebSignalStatus(body);
       }
+      _missingUntil[ip] = DateTime.now().add(_missingRetry);
       return null;
     } catch (_) {
       return null;
