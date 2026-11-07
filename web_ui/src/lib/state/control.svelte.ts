@@ -1,6 +1,7 @@
 import { api, ApiError } from '../api/client';
 import type { Action, DispatchResult } from '../api/types';
 import { type Confirmation, confirmationFor, dispatchToast, isLensStep } from '../logic/actions';
+import { live } from './live.svelte';
 import { selection } from './selection.svelte';
 import { view } from './view.svelte';
 
@@ -46,7 +47,11 @@ class ControlState {
 
   async #send(action: Action, ids: string[]): Promise<void> {
     // Read before the await: the lock may change while the request is out.
-    const locked = new Set(selection.projectors.filter((p) => p.lensLocked).map((p) => p.id));
+    // From [ids], not the selection: it can change while a confirm is open.
+    const sent = new Set(ids);
+    const locked = new Set(
+      live.projectors.filter((p) => sent.has(p.id) && p.lensLocked).map((p) => p.id),
+    );
     let result: DispatchResult;
     try {
       result = await api.act({ targets: ids, action });
