@@ -7,14 +7,11 @@ import '../../../../core/services/external_links.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../domain/alignment.dart';
 import '../../domain/card_layout.dart';
-import '../../domain/command_source.dart';
-import '../../domain/lens_commands.dart';
 import '../../domain/projector_node.dart';
 import '../../domain/projector_group.dart';
 import '../../domain/test_patterns.dart';
 import '../providers/alignment_provider.dart';
 import '../providers/selection_provider.dart';
-import '../providers/workspace_provider.dart';
 import 'alert_badge.dart';
 import 'common/key_caps.dart';
 import 'common/test_pattern_thumb.dart';
@@ -156,38 +153,6 @@ class _ProjectorCardState extends ConsumerState<ProjectorCard> {
         onPressed: () => _closeAndRun(widget.onEdgeBlending),
         leadingIcon: const Icon(Icons.gradient),
         child: Text(inPair ? 'Edge Blending (2 projectors)' : 'Edge Blending'),
-      ),
-      // A Consumer, so the label follows the other selected cards' locks
-      // too, not only this card's.
-      Consumer(
-        builder: (context, ref, _) {
-          final selected = ref.watch(selectionProvider);
-          final ids = selected.contains(node.id) ? selected : {node.id};
-          final allLocked =
-              lensLockState(
-                ref
-                    .watch(workspaceProvider)
-                    .where((n) => ids.contains(n.id))
-                    .map((n) => n.lensLocked),
-              ) ==
-              LensLockState.all;
-          return MenuItemButton(
-            key: const ValueKey('card-menu-lens-lock'),
-            onPressed: () => _closeAndRun(
-              () => ref
-                  .read(workspaceProvider.notifier)
-                  .setLensLocked(
-                    ids,
-                    !allLocked,
-                    source: CommandSource.controlBar,
-                  ),
-            ),
-            leadingIcon: Icon(
-              allLocked ? Icons.lock_open_outlined : Icons.lock_outline,
-            ),
-            child: Text(allLocked ? 'Unlock lens' : 'Lock lens'),
-          );
-        },
       ),
       const _MenuDivider(),
       MenuItemButton(
