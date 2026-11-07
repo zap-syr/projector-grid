@@ -1,5 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:projector_grid/core/theme/app_theme.dart';
@@ -8,49 +9,64 @@ import 'package:projector_grid/features/workspace/presentation/widgets/projector
 
 void main() {
   late List<String> invoked;
+  late FocusNode canvas;
 
   Future<void> pumpCard(WidgetTester tester, {bool hasGroup = true}) async {
     invoked = [];
     VoidCallback record(String name) =>
         () => invoked.add(name);
+    canvas = FocusNode(debugLabel: 'canvas');
+    addTearDown(canvas.dispose);
     await tester.pumpWidget(
       ProviderScope(
         child: MaterialApp(
           theme: AppTheme.darkTheme,
-          home: Scaffold(
-            body: Stack(
-              children: [
-                ProjectorCard(
-                  node: const ProjectorNode(
-                    id: '1',
-                    name: 'PT-RQ25K',
-                    ipAddress: '10.0.0.1',
-                    x: 40,
-                    y: 40,
-                  ),
-                  dragOverrides: ValueNotifier(const {}),
-                  zoom: 1,
-                  onTap: record('tap'),
-                  onPanDown: (_) {},
-                  onPanUpdate: (_) {},
-                  onPanEnd: (_) {},
-                  onEdit: record('edit'),
-                  onQuickStatus: record('quickStatus'),
-                  onDelete: record('delete'),
-                  onColorCorrection: record('color'),
-                  onBrightnessControl: record('brightness'),
-                  onGeometryCorrection: record('geometry'),
-                  onEdgeBlending: record('edgeBlending'),
-                  onRemotePreview: record('preview'),
-                  onSelectGroup: hasGroup ? record('selectGroup') : null,
-                  buildGroupMenuItems: () => [
-                    MenuItemButton(
-                      onPressed: record('assign'),
-                      child: const Text('Stage'),
+          // Stands in for the canvas: holds focus and has its own Esc.
+          home: CallbackShortcuts(
+            bindings: {
+              const SingleActivator(LogicalKeyboardKey.escape): record(
+                'canvasEscape',
+              ),
+            },
+            child: Focus(
+              focusNode: canvas,
+              autofocus: true,
+              child: Scaffold(
+                body: Stack(
+                  children: [
+                    ProjectorCard(
+                      node: const ProjectorNode(
+                        id: '1',
+                        name: 'PT-RQ25K',
+                        ipAddress: '10.0.0.1',
+                        x: 40,
+                        y: 40,
+                      ),
+                      dragOverrides: ValueNotifier(const {}),
+                      zoom: 1,
+                      onTap: record('tap'),
+                      onPanDown: (_) {},
+                      onPanUpdate: (_) {},
+                      onPanEnd: (_) {},
+                      onEdit: record('edit'),
+                      onQuickStatus: record('quickStatus'),
+                      onDelete: record('delete'),
+                      onColorCorrection: record('color'),
+                      onBrightnessControl: record('brightness'),
+                      onGeometryCorrection: record('geometry'),
+                      onEdgeBlending: record('edgeBlending'),
+                      onRemotePreview: record('preview'),
+                      onSelectGroup: hasGroup ? record('selectGroup') : null,
+                      buildGroupMenuItems: () => [
+                        MenuItemButton(
+                          onPressed: record('assign'),
+                          child: const Text('Stage'),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
@@ -108,6 +124,19 @@ void main() {
       expect(find.text('Edit'), findsNothing);
     });
   }
+
+  testWidgets('Esc closes the menu, not the canvas, and focus goes back', (
+    tester,
+  ) async {
+    await pumpCard(tester);
+    expect(canvas.hasPrimaryFocus, isTrue);
+    await openMenu(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.text('Edit'), findsNothing);
+    expect(invoked, isEmpty);
+    expect(canvas.hasPrimaryFocus, isTrue);
+  });
 
   testWidgets('Assign to Group opens the group submenu', (tester) async {
     await pumpCard(tester);
