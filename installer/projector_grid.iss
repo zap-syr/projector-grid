@@ -41,11 +41,14 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: deskto
 ; rule allows the program, not a port. Many machines have firewall
 ; notifications off and block it silently; where the prompt does show, a
 ; Cancel leaves a block rule for the exe that outranks any allow rule, so
-; every rule for this exe goes first. Sites' show networks are usually
-; unidentified, i.e. Public, hence any profile, limited to the local subnet.
-Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=all program=""{app}\{#AppExeName}"""; StatusMsg: "Configuring Windows Firewall..."; Flags: runhidden
+; that goes first. Windows names the prompt's rules after the exe's
+; FileDescription, the same name as ours, so deleting by that name clears
+; both and keeps rules an admin added under another name. Sites' show
+; networks are usually unidentified, i.e. Public, hence any profile, limited
+; to the local subnet.
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""{#AppName}"" program=""{app}\{#AppExeName}"""; StatusMsg: "Configuring Windows Firewall..."; Flags: runhidden
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""{#AppName}"" dir=in action=allow program=""{app}\{#AppExeName}"" enable=yes profile=any remoteip=localsubnet"; StatusMsg: "Configuring Windows Firewall..."; Flags: runhidden
 Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]
-Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=all program=""{app}\{#AppExeName}"""; Flags: runhidden; RunOnceId: "RemoveFirewallRule"
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""{#AppName}"" program=""{app}\{#AppExeName}"""; Flags: runhidden; RunOnceId: "RemoveFirewallRule"

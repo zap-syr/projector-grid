@@ -306,7 +306,7 @@ const String oscReferenceHtml = '''<!DOCTYPE html>
       <tr><td><code>lens/shift/right/fast</code></td><td>Shift lens right — fast speed</td></tr>
       <tr><td><code>lens/home</code></td><td>Move lens to home position</td></tr>
       <tr><td><code>lens/calibration</code></td><td>Run lens calibration</td></tr>
-      <tr><td><code>lens/lock</code></td><td>Lens lock on: the app refuses lens shift, focus, zoom, home and calibration to these projectors, from any source</td></tr>
+      <tr><td><code>lens/lock</code></td><td>Lens lock on: the app refuses lens shift, focus, zoom, home, calibration, lens position and lens memory load to these projectors, from any source</td></tr>
       <tr><td><code>lens/unlock</code></td><td>Lens lock off</td></tr>
     </tbody>
   </table>

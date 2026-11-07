@@ -265,7 +265,7 @@ void main() {
       final ws = c.read(workspaceProvider.notifier);
       ws.setNodes([node('1', groupId: 'g'), node('2', groupId: 'g')]);
       ws.addGroup(const ProjectorGroup(id: 'g', name: 'Stage', color: 0));
-      await ws.sendCommandToGroup('g', 'OSH:1', source: CommandSource.osc);
+      await ws.sendCommandToGroups({'g'}, 'OSH:1', source: CommandSource.osc);
       final summary = c.read(eventLogProvider).first;
       expect(summary.batch!.target, 'Stage, 2 projectors');
       expect(summary.severity, LogSeverity.info);
@@ -306,7 +306,7 @@ void main() {
       ]);
       await c
           .read(workspaceProvider.notifier)
-          .sendCommandToGroup('g', 'POF', source: _bar);
+          .sendCommandToGroups({'g'}, 'POF', source: _bar);
       expect(fake.sentCommands, [('10.0.0.1', 'POF')]);
       // Cancels the poll/power-transition timers before the pending-timer check.
       c.dispose();

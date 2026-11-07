@@ -63,32 +63,43 @@ class _LensCardState extends ConsumerState<LensCard> {
     }
   }
 
-  // The whole selection has Lens lock on: every motor button is disabled in
-  // place. A partly locked selection keeps them enabled; the dispatch skips
-  // the locked projectors.
-  bool _locked = false;
-
+  // [locked]: the whole selection has Lens lock on, so every motor button is
+  // disabled in place. A partly locked selection keeps them enabled; the
+  // dispatch skips the locked projectors.
   Widget _step(
     String keyPrefix,
     LensDirection direction,
     LensAxis axis,
     LensSpeed speed, {
     required bool plus,
+    required bool locked,
     double size = _crossButton,
   }) => LensStepButton(
     key: lensButtonKey(keyPrefix, direction, speed),
     asset: _asset(direction, speed),
     size: size,
-    onPressed: _locked
+    onPressed: locked
         ? null
         : () => _throttledSend(lensStepCommand(axis, plus: plus, speed: speed)),
   );
 
-  Widget _cross() {
-    Widget v(LensDirection d, LensSpeed s) =>
-        _step('lens', d, LensAxis.shiftV, s, plus: d == LensDirection.up);
-    Widget h(LensDirection d, LensSpeed s) =>
-        _step('lens', d, LensAxis.shiftH, s, plus: d == LensDirection.right);
+  Widget _cross({required bool locked}) {
+    Widget v(LensDirection d, LensSpeed s) => _step(
+      'lens',
+      d,
+      LensAxis.shiftV,
+      s,
+      plus: d == LensDirection.up,
+      locked: locked,
+    );
+    Widget h(LensDirection d, LensSpeed s) => _step(
+      'lens',
+      d,
+      LensAxis.shiftH,
+      s,
+      plus: d == LensDirection.right,
+      locked: locked,
+    );
     const rowGap = SizedBox(height: _crossRowGap);
     const columnGap = SizedBox(width: _crossColumnGap);
     return Column(
@@ -128,7 +139,7 @@ class _LensCardState extends ConsumerState<LensCard> {
 
   /// Focus or Zoom: three steps towards near / out, a gap, three towards
   /// far / in, fast on the outside.
-  Widget _linear(String label, LensAxis axis) {
+  Widget _linear(String label, LensAxis axis, {required bool locked}) {
     final prefix = label.toLowerCase();
     Widget b(LensDirection d, LensSpeed s) => _step(
       prefix,
@@ -136,6 +147,7 @@ class _LensCardState extends ConsumerState<LensCard> {
       axis,
       s,
       plus: d == LensDirection.right,
+      locked: locked,
       size: _linearButton,
     );
     const gap = SizedBox(width: _crossColumnGap);
@@ -168,7 +180,7 @@ class _LensCardState extends ConsumerState<LensCard> {
     );
   }
 
-  Widget _homeButton() {
+  Widget _homeButton({required bool locked}) {
     return CustomTooltip(
       message: 'Home position',
       child: SizedBox.square(
@@ -181,7 +193,7 @@ class _LensCardState extends ConsumerState<LensCard> {
             padding: EdgeInsets.zero,
             shape: const CircleBorder(),
           ),
-          onPressed: _locked
+          onPressed: locked
               ? null
               : () => sendToSelected(ref, kLensHomeCommand),
           child: const Icon(Icons.home_outlined, size: 16),
@@ -320,7 +332,7 @@ class _LensCardState extends ConsumerState<LensCard> {
     );
   }
 
-  Widget _setup() {
+  Widget _setup({required bool locked}) {
     return Padding(
       padding: const EdgeInsets.only(top: 4),
       child: Column(
@@ -332,7 +344,7 @@ class _LensCardState extends ConsumerState<LensCard> {
             value: _calibration,
             onChanged: (v) => setState(() => _calibration = v),
             // Calibration runs the lens through its whole range.
-            onSend: _locked ? null : () => sendToSelected(ref, _calibration),
+            onSend: locked ? null : () => sendToSelected(ref, _calibration),
           ),
           const SizedBox(height: ControlBarMetrics.settingGap),
           DropdownSendRow<String>(
@@ -350,24 +362,28 @@ class _LensCardState extends ConsumerState<LensCard> {
   @override
   Widget build(BuildContext context) {
     final lock = ref.watch(selectedLensLockProvider);
-    _locked = lock.state == LensLockState.all;
+    final locked = lock.state == LensLockState.all;
     return ControlBarCard(
       icon: Icons.center_focus_weak,
       title: 'Lens shift',
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
-        children: [_lockButton(lock), const SizedBox(width: 8), _homeButton()],
+        children: [
+          _lockButton(lock),
+          const SizedBox(width: 8),
+          _homeButton(locked: locked),
+        ],
       ),
       headerGap: 6,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _cross(),
+          _cross(locked: locked),
           const SizedBox(height: 16),
           const CardRowDivider(),
-          _linear('Focus', LensAxis.focus),
+          _linear('Focus', LensAxis.focus, locked: locked),
           const CardRowDivider(),
-          _linear('Zoom', LensAxis.zoom),
+          _linear('Zoom', LensAxis.zoom, locked: locked),
           const CardRowDivider(),
           _setupToggle(),
           AnimatedSize(
@@ -375,7 +391,7 @@ class _LensCardState extends ConsumerState<LensCard> {
             curve: Curves.easeOut,
             alignment: Alignment.topCenter,
             child: _setupOpen
-                ? _setup()
+                ? _setup(locked: locked)
                 : const SizedBox(width: double.infinity),
           ),
         ],

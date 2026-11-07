@@ -26,11 +26,19 @@ String lensStepCommand(
 
 const String kLensHomeCommand = 'VXX:LNSI1=+00001';
 
-/// Every command that drives a lens motor shares the `VXX:LNSI` prefix:
-/// steps, Home (`LNSI1`) and calibration (`LNSI0`), whoever sends them (the
-/// control bar, OSC, the Web page, a schedule, a custom command). Lens type
-/// (`VXX:LNEI`) moves nothing and stays allowed on a locked projector.
-bool isLensMotionCommand(String cmd) => cmd.startsWith('VXX:LNSI');
+/// Commands that drive a lens motor: `VXX:LNSI` (steps, Home `LNSI1`,
+/// calibration `LNSI0`, absolute position `LNSI7` to `LNSIA`), `VXX:LNSS`
+/// (absolute position of several axes at once) and `VXX:LNMI1` (lens memory
+/// load). Saving or deleting a lens memory (`LNMI2`, `LNMI3`) and lens type
+/// (`VXX:LNEI`) move nothing and stay allowed on a locked projector.
+const _lensMotionPrefixes = ['VXX:LNSI', 'VXX:LNSS', 'VXX:LNMI1'];
+
+/// Whoever sends [cmd] (the control bar, OSC, the Web page, a schedule, a
+/// custom command). Upper-cased first: a custom command is stored as typed.
+bool isLensMotionCommand(String cmd) {
+  final upper = cmd.toUpperCase();
+  return _lensMotionPrefixes.any(upper.startsWith);
+}
 
 /// How much of a selection has its lens locked, for the lock button.
 enum LensLockState { none, some, all }

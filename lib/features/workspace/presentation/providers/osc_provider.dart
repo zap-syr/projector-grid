@@ -69,6 +69,16 @@ class OscNotifier extends _$OscNotifier {
     ]);
   }
 
+  /// The projectors an OSC address names, the same for commands and Lens
+  /// lock: every projector, or one group's.
+  List<String> _targetIds({String? groupId, required bool all}) => [
+    for (final n in ref.read(workspaceProvider))
+      if (all || n.groupId == groupId) n.id,
+  ];
+
+  static CommandSource _source(String? sender) =>
+      sender == null ? CommandSource.osc : CommandSource.oscFrom(sender);
+
   void _wireCallbacks() {
     _service.onCommand =
         ({
@@ -92,19 +102,11 @@ class OscNotifier extends _$OscNotifier {
                   oscSender: sender,
                 ),
               );
-          final source = sender == null
-              ? CommandSource.osc
-              : CommandSource.oscFrom(sender);
-
-          if (all) {
-            await wsNotifier.sendCommandToAll(ntcontrolCmd, source: source);
-          } else if (groupId != null) {
-            await wsNotifier.sendCommandToGroup(
-              groupId,
-              ntcontrolCmd,
-              source: source,
-            );
-          }
+          await wsNotifier.sendCommandToNodes(
+            _targetIds(groupId: groupId, all: all),
+            ntcontrolCmd,
+            source: _source(sender),
+          );
         };
 
     _service.onLensLock =
@@ -125,18 +127,13 @@ class OscNotifier extends _$OscNotifier {
                   oscSender: sender,
                 ),
               );
-          final ws = ref.read(workspaceProvider.notifier);
-          final nodes = ref.read(workspaceProvider);
-          ws.setLensLocked(
-            [
-              for (final n in nodes)
-                if (all || n.groupId == groupId) n.id,
-            ],
-            locked,
-            source: sender == null
-                ? CommandSource.osc
-                : CommandSource.oscFrom(sender),
-          );
+          ref
+              .read(workspaceProvider.notifier)
+              .setLensLocked(
+                _targetIds(groupId: groupId, all: all),
+                locked,
+                source: _source(sender),
+              );
         };
 
     _service.getStatus = () {

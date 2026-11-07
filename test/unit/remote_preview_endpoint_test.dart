@@ -71,6 +71,58 @@ void main() {
       expect(state, isA<RemotePreviewUnavailable>());
     });
 
+    test('once an endpoint served, its refusal skips the fallback', () async {
+      // Serves one viewer, then answers 500 like a full RQ25K.
+      final once = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(() => once.close(force: true));
+      var served = false;
+      once.listen((req) async {
+        if (served) {
+          req.response.statusCode = HttpStatus.internalServerError;
+          await req.response.close();
+          return;
+        }
+        served = true;
+        final ws = await WebSocketTransformer.upgrade(
+          req,
+          protocolSelector: (protocols) => protocols.first,
+        );
+        ws.listen((msg) {
+          if (msg == 'start') ws.add(<int>[0xff, 0xd8, 0xff, 0xd9]);
+        });
+      });
+      var fallbackHits = 0;
+      final fallback = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(() => fallback.close(force: true));
+      fallback.listen((req) {
+        fallbackHits++;
+        req.response.statusCode = HttpStatus.notFound;
+        req.response.close();
+      });
+
+      final controller = RemotePreviewController(
+        host: '127.0.0.1',
+        endpoints: [
+          RemotePreviewEndpoint(once.port, '/remotepreview'),
+          RemotePreviewEndpoint(fallback.port, '/'),
+        ],
+      );
+      addTearDown(controller.dispose);
+      final frame = controller.states.first;
+      controller.start();
+      expect(
+        await frame.timeout(const Duration(seconds: 5)),
+        isA<RemotePreviewFrame>(),
+      );
+
+      final unavailable = controller.states.firstWhere(
+        (s) => s is RemotePreviewUnavailable,
+      );
+      controller.retry();
+      await unavailable.timeout(const Duration(seconds: 5));
+      expect(fallbackHits, 0);
+    });
+
     test('a refused connect does not try the next endpoint', () async {
       final closed = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
       final port = closed.port;
@@ -81,6 +133,25 @@ void main() {
       ]);
       expect(state, isA<RemotePreviewUnavailable>());
     });
+  });
+
+  test('a host without either status page is not probed again', () async {
+    var hits = 0;
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(() => server.close(force: true));
+    server.listen((req) {
+      hits++;
+      req.response.statusCode = HttpStatus.notFound;
+      req.response.close();
+    });
+    final service = ProjectorWebStatusService();
+    addTearDown(service.dispose);
+    final host = '127.0.0.1:${server.port}';
+
+    expect(await service.fetchSignalStatus(host, 'admin', 'pw'), isNull);
+    expect(hits, 2);
+    expect(await service.fetchSignalStatus(host, 'admin', 'pw'), isNull);
+    expect(hits, 2);
   });
 
   group('parseWebSignalStatus', () {

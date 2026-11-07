@@ -1,7 +1,11 @@
-import { describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 
+import { api } from '../src/lib/api/client';
 import type { Group, Projector } from '../src/lib/api/types';
 import { act, confirmationFor, dispatchToast } from '../src/lib/logic/actions';
+import { control } from '../src/lib/state/control.svelte';
+import { live } from '../src/lib/state/live.svelte';
+import { selection } from '../src/lib/state/selection.svelte';
 import {
   isSelectable,
   presetSelection,
@@ -176,5 +180,39 @@ describe('confirmation rules', () => {
 
   test('lens steps never ask', () => {
     expect(confirmationFor(act.lensStep('shiftH', true, 'fast'), 12, label)).toBeNull();
+  });
+});
+
+describe('sending', () => {
+  afterEach(() => {
+    control.cancel();
+    control.toast = null;
+    selection.clear();
+    live.projectors = [];
+    vi.restoreAllMocks();
+  });
+
+  test('lens-locked skips count from the projectors sent, not the selection now', async () => {
+    live.projectors = [pj('1', { lensLocked: true }), pj('2', { lensLocked: true }), pj('3')];
+    const sent = vi.spyOn(api, 'act').mockResolvedValue({
+      command: 'VXX:LNSI1=+00000',
+      label: 'Lens Home',
+      ok: 0,
+      total: 2,
+      failed: [],
+      skipped: ['1', '2'].map((id) => ({ id, name: 'PT-RQ35K2' })),
+      summary: '',
+    });
+    selection.set(new Set(['1', '2']));
+    control.request(act.lensHome(), (c) => c);
+    expect(control.pending?.ids).toEqual(['1', '2']);
+
+    // The operator picks another projector while the dialog is open.
+    selection.set(new Set(['3']));
+    control.confirm();
+
+    await vi.waitFor(() => expect(control.toast).not.toBeNull());
+    expect(sent).toHaveBeenCalledWith(expect.objectContaining({ targets: ['1', '2'] }));
+    expect(control.toast?.text).toBe('Lens Home: 0/2 OK, 2 lens locked');
   });
 });

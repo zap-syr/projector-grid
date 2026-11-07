@@ -7,14 +7,11 @@ import '../../../../core/services/external_links.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../domain/alignment.dart';
 import '../../domain/card_layout.dart';
-import '../../domain/command_source.dart';
-import '../../domain/lens_commands.dart';
 import '../../domain/projector_node.dart';
 import '../../domain/projector_group.dart';
 import '../../domain/test_patterns.dart';
 import '../providers/alignment_provider.dart';
 import '../providers/selection_provider.dart';
-import '../providers/workspace_provider.dart';
 import 'alert_badge.dart';
 import 'common/key_caps.dart';
 import 'common/test_pattern_thumb.dart';
@@ -103,8 +100,34 @@ class _ProjectorCardState extends ConsumerState<ProjectorCard> {
   static const double _ringWidth = 5;
 
   final _menuController = MenuController();
+  // A right-click opens the menu with focus left on the canvas, where Esc
+  // never reaches the menu's own Dismiss (and in Alignment mode would leave
+  // the mode instead). Focus moves into the menu on open and back on close:
+  // MenuAnchor doesn't restore it, and the canvas shortcuts need it.
+  final _menuFocus = FocusNode(debugLabel: 'Card menu', skipTraversal: true);
+  FocusNode? _focusBeforeMenu;
   bool _isHovered = false;
   double? _lastZoom;
+
+  @override
+  void dispose() {
+    _menuFocus.dispose();
+    super.dispose();
+  }
+
+  void _onMenuOpen() {
+    _focusBeforeMenu = FocusManager.instance.primaryFocus;
+    // The items mount with the overlay, after this frame.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _menuController.isOpen) _menuFocus.requestFocus();
+    });
+  }
+
+  void _onMenuClose() {
+    final previous = _focusBeforeMenu;
+    _focusBeforeMenu = null;
+    if (previous != null && previous.context != null) previous.requestFocus();
+  }
 
   void _closeAndRun(VoidCallback action) {
     _menuController.close();
@@ -117,7 +140,12 @@ class _ProjectorCardState extends ConsumerState<ProjectorCard> {
   }) {
     final node = widget.node;
     return [
-      _MenuHeader(model: node.name, ip: node.ipAddress),
+      // Holds the menu's focus without being an item: a focused item would
+      // open the group submenu on focus, and the click then shut it.
+      Focus(
+        focusNode: _menuFocus,
+        child: _MenuHeader(model: node.name, ip: node.ipAddress),
+      ),
       const _MenuDivider(),
       MenuItemButton(
         onPressed: () => _closeAndRun(widget.onEdit),
@@ -156,38 +184,6 @@ class _ProjectorCardState extends ConsumerState<ProjectorCard> {
         onPressed: () => _closeAndRun(widget.onEdgeBlending),
         leadingIcon: const Icon(Icons.gradient),
         child: Text(inPair ? 'Edge Blending (2 projectors)' : 'Edge Blending'),
-      ),
-      // A Consumer, so the label follows the other selected cards' locks
-      // too, not only this card's.
-      Consumer(
-        builder: (context, ref, _) {
-          final selected = ref.watch(selectionProvider);
-          final ids = selected.contains(node.id) ? selected : {node.id};
-          final allLocked =
-              lensLockState(
-                ref
-                    .watch(workspaceProvider)
-                    .where((n) => ids.contains(n.id))
-                    .map((n) => n.lensLocked),
-              ) ==
-              LensLockState.all;
-          return MenuItemButton(
-            key: const ValueKey('card-menu-lens-lock'),
-            onPressed: () => _closeAndRun(
-              () => ref
-                  .read(workspaceProvider.notifier)
-                  .setLensLocked(
-                    ids,
-                    !allLocked,
-                    source: CommandSource.controlBar,
-                  ),
-            ),
-            leadingIcon: Icon(
-              allLocked ? Icons.lock_open_outlined : Icons.lock_outline,
-            ),
-            child: Text(allLocked ? 'Unlock lens' : 'Lock lens'),
-          );
-        },
       ),
       const _MenuDivider(),
       MenuItemButton(
@@ -431,6 +427,8 @@ class _ProjectorCardState extends ConsumerState<ProjectorCard> {
           child: MenuAnchor(
             controller: _menuController,
             consumeOutsideTap: true,
+            onOpen: _onMenuOpen,
+            onClose: _onMenuClose,
             menuChildren: _menuChildren(
               inPair: inPair,
               alignmentActive: alignmentActive,
