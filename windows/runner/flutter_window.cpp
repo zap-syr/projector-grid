@@ -7,7 +7,12 @@
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
 
-FlutterWindow::~FlutterWindow() {}
+FlutterWindow::~FlutterWindow() {
+  // window_manager's destroy() only posts WM_QUIT, so OnDestroy never ran:
+  // release the engine here while the pointer reads null, or messages sent
+  // during engine shutdown reach the half-destroyed controller and crash.
+  flutter_controller_ = nullptr;
+}
 
 bool FlutterWindow::OnCreate() {
   if (!Win32Window::OnCreate()) {
