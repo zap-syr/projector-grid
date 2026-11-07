@@ -6,9 +6,12 @@ import '../../../domain/command_source.dart';
 import '../../../domain/control_options.dart';
 import '../../../domain/lens_commands.dart';
 import '../../providers/selected_lens_lock_provider.dart';
+import '../../providers/selection_provider.dart';
 import '../../providers/workspace_provider.dart';
+import '../common/confirm_dialog.dart';
 import '../common/dialog_parts.dart';
 import '../custom_tooltip.dart';
+import '../dialog_title_bar.dart';
 import 'control_bar_parts.dart';
 
 /// Direction of one lens step button, named after its chevron SVG.
@@ -61,6 +64,58 @@ class _LensCardState extends ConsumerState<LensCard> {
     } finally {
       if (mounted) setState(() => _isSending = false);
     }
+  }
+
+  /// Home position and calibration move every lens of the selection, which
+  /// can undo a wall's alignment, so they ask first. The command goes to
+  /// the projectors the question named, even if the selection changed
+  /// while it was open.
+  Future<void> _confirmLensMove({
+    required String cmd,
+    required IconData icon,
+    required String title,
+    required String confirmLabel,
+    String? note,
+  }) async {
+    final selected = ref.read(selectionProvider);
+    final nodes = [
+      for (final n in ref.read(workspaceProvider))
+        if (selected.contains(n.id)) n,
+    ];
+    if (nodes.isEmpty) return;
+    final locked = nodes.where((n) => n.lensLocked).length;
+    final on = nodes.length == 1
+        ? projectorLabel(nodes.single.name, nodes.single.ipAddress)
+        : '${nodes.length} projectors';
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => ConfirmDialog<bool>(
+        icon: icon,
+        title: title,
+        subtitle: [
+          'On $on.',
+          if (locked > 0)
+            '$locked lens locked ${locked == 1 ? 'is' : 'are'} skipped.',
+          ?note,
+        ].join(' '),
+        actions: [
+          const ConfirmAction(label: 'Cancel', value: false),
+          ConfirmAction(
+            label: confirmLabel,
+            value: true,
+            kind: ConfirmActionKind.filled,
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await ref
+        .read(workspaceProvider.notifier)
+        .sendCommandToNodes(
+          [for (final n in nodes) n.id],
+          cmd,
+          source: CommandSource.controlBar,
+        );
   }
 
   // [locked]: the whole selection has Lens lock on, so every motor button is
@@ -195,7 +250,12 @@ class _LensCardState extends ConsumerState<LensCard> {
           ),
           onPressed: locked
               ? null
-              : () => sendToSelected(ref, kLensHomeCommand),
+              : () => _confirmLensMove(
+                  cmd: kLensHomeCommand,
+                  icon: Icons.home_outlined,
+                  title: 'Move the lens to its home position?',
+                  confirmLabel: 'Move lens',
+                ),
           child: const Icon(Icons.home_outlined, size: 16),
         ),
       ),
@@ -344,7 +404,17 @@ class _LensCardState extends ConsumerState<LensCard> {
             value: _calibration,
             onChanged: (v) => setState(() => _calibration = v),
             // Calibration runs the lens through its whole range.
-            onSend: locked ? null : () => sendToSelected(ref, _calibration),
+            onSend: locked
+                ? null
+                : () => _confirmLensMove(
+                    cmd: _calibration,
+                    icon: Icons.center_focus_weak,
+                    title:
+                        'Run lens calibration '
+                        '(${kLensCalibrationOptions[_calibration]})?',
+                    note: 'The lens runs through its whole range.',
+                    confirmLabel: 'Calibrate',
+                  ),
           ),
           const SizedBox(height: ControlBarMetrics.settingGap),
           DropdownSendRow<String>(

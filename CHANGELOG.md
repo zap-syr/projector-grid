@@ -4,6 +4,61 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2.0.1] - 2026-11-07
+
+### For Users
+
+#### Added
+- **Lens lock**: lock the lens of one or more projectors so nothing moves
+  it by accident. The lock button sits next to Home position in the Control
+  bar's Lens card (locked, unlocked, or partly locked for a mixed
+  selection). While locked, lens shift, focus, zoom, Home position, lens
+  calibration, lens position and lens memory load are skipped for that
+  projector from every source (Control bar, keyboard, OSC, Web Access,
+  scheduled tasks, custom commands) and logged as "lens locked". Lens type
+  and saving or deleting a lens memory still work
+  - Locked cards show a lock next to the model name; Quick status has a
+    Lens row
+  - OSC: `/pgrid/all/lens/lock`, `/pgrid/all/lens/unlock` and the
+    `/pgrid/group/<name>/lens/…` forms
+  - Web Access: operators can lock and unlock, map tiles show the lock and
+    lens controls are disabled while locked
+  - The lock is saved in the project and is not part of undo
+- **Alignment mode step order**: Presets ▾, *Step order* chooses whether
+  `<` / `>` go through the projectors in layout order (as before) or by IP
+  address (.9 before .10). Saved in the app settings; on the Web Access
+  page too
+- **Windows installer opens the firewall** for Web Access and OSC: an
+  inbound rule for the app on any port and network profile, local subnet
+  only. Before, on machines with firewall notifications off, the ports were
+  blocked silently and had to be opened by hand. The installer also removes
+  the block rule Windows leaves when its firewall prompt is cancelled; rules
+  you added yourself under another name are kept. Uninstall removes the rule
+
+#### Changed
+- Projector cards are 140 px wide (were 120) so the model name fits beside
+  the lock; new projectors are laid out on a 160 px step. Saved layouts are
+  not moved
+- Home position and lens calibration in the Control bar ask before they
+  move the lenses, so a stray click doesn't undo a wall's alignment. The
+  question names the projectors and how many of them are lens locked
+
+#### Fixed
+- Windows: closing the app took up to 2 seconds with the window still on
+  screen, and crashed in the background on every close. It now closes at
+  once
+- Remote Preview on a PT-RZ34K showed "Preview not available"; its preview
+  and the signal status above it now work
+- Esc closes a projector card's context menu
+
+### For Developers
+
+#### Changed
+- The release workflow runs the CI checks before it builds anything;
+  release assets have fixed names, so the README links to
+  `releases/latest/download/…`
+- Tests pass on the macOS CI runner
+
 ## [2.0.0] - 2026-10-25
 
 This version brings a massive update to the app: a full redesign of every

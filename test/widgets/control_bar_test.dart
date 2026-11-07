@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:projector_grid/core/services/panasonic_protocol_service.dart';
 import 'package:projector_grid/core/theme/app_theme.dart';
+import 'package:projector_grid/features/workspace/domain/command_source.dart';
 import 'package:projector_grid/features/workspace/domain/lens_commands.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/custom_commands_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/protocol_service_provider.dart';
@@ -106,11 +107,52 @@ void main() {
     expect(tester.getSize(find.byType(ControlBar)).width, 344);
   });
 
-  testWidgets('Home position in the Lens shift header sends the home '
-      'command', (tester) async {
+  testWidgets('Home position in the Lens shift header asks, then sends the '
+      'home command', (tester) async {
     await pumpBar(tester);
     await tapAndSettle(tester, find.byKey(const ValueKey('lens-home')));
+    expect(find.text('Move the lens to its home position?'), findsOneWidget);
+    expect(find.text('On Proj 1 (10.0.0.1).'), findsOneWidget);
+    expect(sent(), isEmpty);
+    await tapAndSettle(tester, find.text('Move lens'));
     expect(sent(), [kLensHomeCommand]);
+    expect(find.byType(ConfirmDialog<bool>), findsNothing);
+  });
+
+  testWidgets('Cancel or Esc on the Home position question sends nothing', (
+    tester,
+  ) async {
+    await pumpBar(tester);
+    final home = find.byKey(const ValueKey('lens-home'));
+    await tapAndSettle(tester, home);
+    await tapAndSettle(tester, find.text('Cancel'));
+    await tapAndSettle(tester, home);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.byType(ConfirmDialog<bool>), findsNothing);
+    expect(sent(), isEmpty);
+  });
+
+  testWidgets('the lens question names the count, the lens-locked skips, and '
+      'sends to the projectors it named', (tester) async {
+    fake.pollResults['10.0.0.2'] = (ProbeResult.online, telemetry());
+    fake.pollResults['10.0.0.3'] = (ProbeResult.online, telemetry());
+    await pumpBar(tester);
+    final ws = container.read(workspaceProvider.notifier);
+    ws.setNodes([node('1'), node('2'), node('3')]);
+    ws.setLensLocked(['2'], true, source: CommandSource.controlBar);
+    container.read(selectionProvider.notifier).set({'1', '2'});
+    await tester.pumpAndSettle();
+
+    await tapAndSettle(tester, find.byKey(const ValueKey('lens-home')));
+    expect(
+      find.text('On 2 projectors. 1 lens locked is skipped.'),
+      findsOneWidget,
+    );
+    // The selection changes while the question is open.
+    container.read(selectionProvider.notifier).set({'3'});
+    await tapAndSettle(tester, find.text('Move lens'));
+    expect(fake.sentCommands, [('10.0.0.1', kLensHomeCommand)]);
   });
 
   testWidgets('each lens button sends its axis, direction and speed', (
@@ -210,8 +252,11 @@ void main() {
       greaterThan(0),
     );
 
-    // Input's Set comes first, then Calibration's.
+    // Input's Set comes first, then Calibration's. It asks first.
     await tapAndSettle(tester, button('Set').at(1));
+    expect(find.text('Run lens calibration (All)?'), findsOneWidget);
+    expect(sent(), isEmpty);
+    await tapAndSettle(tester, find.text('Calibrate'));
     expect(sent(), ['VXX:LNSI0=+00001']);
   });
 
