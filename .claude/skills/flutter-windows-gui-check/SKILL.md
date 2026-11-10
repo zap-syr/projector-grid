@@ -8,7 +8,12 @@ description: >
   make naive PowerShell screenshot/click scripts silently capture the wrong window: Windows'
   foreground-lock blocking `SetForegroundWindow`, and focus reverting to the calling terminal
   between separate tool calls.
+disable-model-invocation: true
 ---
+
+> **Manual only.** Driving the real window costs a screenshot per step and is slow; agents don't
+> load this skill on their own. Run it with `/flutter-windows-gui-check` when a change really
+> needs to be seen in the running app and the owner can't look at it.
 
 # Flutter Windows GUI check
 
@@ -51,7 +56,7 @@ Get-Process -Name "projector_grid" -ErrorAction SilentlyContinue
 If nothing's running, launch the existing debug build directly (no rebuild):
 
 ```powershell
-Start-Process "D:\Flutter\projector-grid\build\windows\x64\runner\Debug\projector_grid.exe"
+Start-Process "D:\Flutter Dev\projector-grid\build\windows\x64\runner\Debug\projector_grid.exe"
 Start-Sleep -Seconds 2
 ```
 
@@ -59,7 +64,7 @@ If there's no debug build yet, or the change needs a rebuild to show up, use the
 (not PowerShell) with `run_in_background: true`:
 
 ```bash
-cd "D:/Flutter/projector-grid" && flutter run -d windows
+cd "D:/Flutter Dev/projector-grid" && flutter run -d windows
 ```
 
 ### 2. Activate + screenshot the whole window (one script)

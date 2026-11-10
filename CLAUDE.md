@@ -10,6 +10,18 @@ and **OSC** over UDP to/from show-control systems.
 
 See `DEVELOPMENT.md` for the contributor-facing setup guide; this file is the quick reference for working in the code.
 
+### Agent skills
+
+- **In this repo** (`.claude/skills/`): `projector-grid-visual-rules` (the UI rules; they win over
+  `flutter-desktop-ui`) and `flutter-windows-gui-check` (drives the running Windows app; manual
+  only, run it with `/flutter-windows-gui-check`).
+- **From the owner's private `my-skills` marketplace**, enabled in the owner's
+  `.claude/settings.local.json`: `flutter-desktop-arch` and `flutter-desktop-ui` (plugin
+  `flutter`), `panasonic-ntcontrol` (plugin `projectors`). A fork doesn't have them. Without
+  them, use this file (Network protocols, Deliberate deviations), the comments in
+  `panasonic_protocol_service.dart`, and Panasonic's command list for the projector model.
+  Never guess an NTCONTROL command string: take it from that list or ask.
+
 ## Commands
 
 ```bash
@@ -129,10 +141,25 @@ undoing a layout change never rolls back power/temperature readings.
 - **`panasonic_protocol_service.dart`** — opens a **new** TCP connection per command and closes it
   right after the response; there is no persistent per-projector socket. Auth = MD5 hash of a
   challenge token. Commands are plain text (`PON` power on, `OSH:1` shutter close). See the
-  `panasonic-ntcontrol` skill for the full wire format and connection-concurrency limits.
+  `panasonic-ntcontrol` skill (`projectors` plugin) for the wire format, the command set per
+  model and the connection-concurrency limits.
   The app's instance (`protocolServiceProvider`) is an `IsolateProtocolService`
   (`isolate_protocol_service.dart`) that runs every call on a worker isolate so polling
   doesn't stall the UI — a new public method on the service must be routed there too.
+  - **Which method:** `sendCommand()` for control commands (`bool`); `sendRawCommand()` for a
+    query where any `ERxxx` means "couldn't get it" (`null`); `sendRawCommandPreservingErrorCodes()`
+    when an `ERxxx` reply is data (e.g. `ER401` = no signal) — `null` only on a transport failure.
+  - **Adding a telemetry field:** add the query to `pollProjectorTelemetry()`'s `_runBounded` list
+    (positional: the `results[N]` index must match), read it with `valueOrNull`, parse it in
+    `WorkspaceNotifier._pollSingleProjector`, and add the field to `ProjectorNode` (Freezed) if
+    the UI needs it.
+  - **Concurrency caps in this app:** polling runs 3 queries per projector at a time, 2 above 40
+    projectors (`_telemetryConcurrencyFor`); one-off bursts go in chunks of ≤8 (`_loadCorner()` in
+    `geometry_correction_dialog.dart`). Before raising a cap for a model, measure it with
+    `dart run tool/projector_stress_test.dart <ip> <login> <password>`.
+  - **Keep the wait for the projector's close** (up to 200 ms, before `destroy()`) in
+    `_sendSingleCommandEx` when changing the send path — the comment there explains the
+    TIME_WAIT port exhaustion it prevents.
 - **`osc_service.dart`** — UDP. Inbound: maps OSC addresses to projector actions; custom commands get slugs
   like `/pgrid/all/custom/dynamic-contrast` (or `/pgrid/group/<group-name>/custom/<slug>`). Outbound: broadcasts `/pgrid/status/{online,offline,critical,warning}` to a
   configured send IP/port on every status change (`critical`/`warning` count unacknowledged alerts), and
