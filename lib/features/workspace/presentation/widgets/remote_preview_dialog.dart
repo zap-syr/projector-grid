@@ -19,9 +19,9 @@ import 'dialog_title_bar.dart';
 import 'preview_viewport.dart';
 
 /// Opens the Remote Preview dialog for [nodes] — one projector shows a single
-/// viewport, several show a grid (§5.2 of REMOTE_PREVIEW_PLAN.md). Modal for
+/// viewport, several show a grid. Modal for
 /// now; the same body moves into a real OS window once Flutter's windowing API
-/// stabilises (§5.3).
+/// stabilises.
 void showRemotePreviewDialog(
   BuildContext context,
   List<ProjectorNode> nodes, {

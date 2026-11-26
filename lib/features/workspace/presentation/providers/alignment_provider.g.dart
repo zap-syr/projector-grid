@@ -8,7 +8,7 @@ part of 'alignment_provider.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// Alignment mode (ROADMAP_PLAN.md §3.2): one focused projector open with
+/// Alignment mode: one focused projector open with
 /// its pattern, neighbours or everyone optionally open with the Others
 /// pattern, the rest of the scope closed. Holds no widget state so the web
 /// API (§5) can drive the same methods.
@@ -16,13 +16,13 @@ part of 'alignment_provider.dart';
 @ProviderFor(AlignmentNotifier)
 final alignmentProvider = AlignmentNotifierProvider._();
 
-/// Alignment mode (ROADMAP_PLAN.md §3.2): one focused projector open with
+/// Alignment mode: one focused projector open with
 /// its pattern, neighbours or everyone optionally open with the Others
 /// pattern, the rest of the scope closed. Holds no widget state so the web
 /// API (§5) can drive the same methods.
 final class AlignmentNotifierProvider
     extends $NotifierProvider<AlignmentNotifier, AlignmentState> {
-  /// Alignment mode (ROADMAP_PLAN.md §3.2): one focused projector open with
+  /// Alignment mode: one focused projector open with
   /// its pattern, neighbours or everyone optionally open with the Others
   /// pattern, the rest of the scope closed. Holds no widget state so the web
   /// API (§5) can drive the same methods.
@@ -53,9 +53,9 @@ final class AlignmentNotifierProvider
   }
 }
 
-String _$alignmentNotifierHash() => r'c0defb085c339cbea3cf7aa169b20ea96e116be0';
+String _$alignmentNotifierHash() => r'241f1abfbd952af5749f36ea64809cbd38454024';
 
-/// Alignment mode (ROADMAP_PLAN.md §3.2): one focused projector open with
+/// Alignment mode: one focused projector open with
 /// its pattern, neighbours or everyone optionally open with the Others
 /// pattern, the rest of the scope closed. Holds no widget state so the web
 /// API (§5) can drive the same methods.

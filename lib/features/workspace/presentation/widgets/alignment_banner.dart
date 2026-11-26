@@ -26,8 +26,8 @@ void toggleAlignmentMode(WidgetRef ref) {
   ref.read(alignmentProvider.notifier).toggle();
 }
 
-/// The one-row Alignment mode bar above the canvas (ROADMAP_PLAN.md §3.2,
-/// Variant A). Collapses to nothing when the mode is off.
+/// The one-row Alignment mode bar above the canvas. Collapses to nothing
+/// when the mode is off.
 class AlignmentBanner extends ConsumerWidget {
   const AlignmentBanner({super.key});
 

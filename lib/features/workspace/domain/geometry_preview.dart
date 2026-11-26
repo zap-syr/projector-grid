@@ -3,9 +3,9 @@ import 'dart:ui' show Offset;
 
 // Where Keystone and Curved Correction put the image on the panel, for the
 // Geometry Correction preview. A port of tool/geometry_measure/geo_model.py,
-// the model fitted to camera measurements of a PT-RQ25K on 2026-10-16
-// (projector-grid-notes/GEOMETRY_PREVIEW_PLAN.md). Keep the two in step: the
-// unit test checks this file against outlines exported from the Python model.
+// the model fitted to camera measurements of a PT-RQ25K on 2026-10-16. Keep
+// the two in step: the unit test checks this file against outlines exported
+// from the Python model.
 //
 // The projector treats the settings as a description of the screen: a surface
 // of circular arcs (Arc), tilted by the keystone angles, at a focal distance

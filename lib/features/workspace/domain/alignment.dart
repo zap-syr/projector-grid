@@ -1,4 +1,4 @@
-/// Pure rules for Alignment mode (ROADMAP_PLAN.md §3.2): pattern presets,
+/// Pure rules for Alignment mode: pattern presets,
 /// each projector's role, and what that role puts on screen.
 library;
 

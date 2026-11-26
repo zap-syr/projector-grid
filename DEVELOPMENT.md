@@ -111,7 +111,7 @@ Logic that can be tested on its own goes into pure functions under `domain/` (fo
 
 **OSC** (`osc_service.dart`): UDP-based. Receives commands on a configurable port and maps OSC addresses to projector actions. Custom commands produce slugs like `/pgrid/all/custom/dynamic-contrast` or `/pgrid/group/<group-name>/custom/dynamic-contrast`. The service also broadcasts projector status outbound (`/pgrid/status/online`, `/pgrid/status/offline`, and the unacknowledged alert counts `/pgrid/status/critical`, `/pgrid/status/warning`) to a configurable send IP and port whenever status changes, plus one `/pgrid/alert/<rule>` or `/pgrid/alert/acknowledged` message per alert change.
 
-**Remote Preview** (`remote_preview_service.dart`): a WebSocket to the projector's own web UI on port 80 (not the NTCONTROL port), receiving about one JPEG frame per second. Design in `projector-grid-notes/REMOTE_PREVIEW_PLAN.md`.
+**Remote Preview** (`remote_preview_service.dart`): a WebSocket to the projector's own web UI on port 80 (not the NTCONTROL port), receiving about one JPEG frame per second.
 
 **Web Access** (`web_server_service.dart`): an HTTP server in the app that serves the `web_ui/` page and its API (see below).
 

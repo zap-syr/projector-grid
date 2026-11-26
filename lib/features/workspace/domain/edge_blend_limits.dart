@@ -1,5 +1,4 @@
-/// Edge Blending raster and value limits
-/// (projector-grid-notes/EDGE_BLENDING_PLAN.md §8).
+/// Edge Blending raster and value limits.
 /// The app follows VSS, which is stricter than the projector itself;
 /// anything set elsewhere that breaks the rule shows up as ER402 or a
 /// read-back.

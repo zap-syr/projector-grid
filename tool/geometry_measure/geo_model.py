@@ -7,7 +7,7 @@ parametrised by arc lengths (X, Y), tilted by the keystone angles
 shifts the optical axis on the panel (ox, oy). The image is the largest
 screen-space rectangle (b / a = panel aspect when the aspect is kept; a and b
 free otherwise) whose projection stays inside the panel. Panel coordinates are
-0..1 on both axes. Plan: projector-grid-notes/GEOMETRY_PREVIEW_PLAN.md."""
+0..1 on both axes."""
 import numpy as np
 from scipy.optimize import minimize
 

@@ -16,7 +16,7 @@ enum _Op {
 /// [PanasonicProtocolService] with every NTCONTROL exchange run on a
 /// long-lived worker isolate. A poll cycle at 150 projectors is ~2,000 TCP
 /// connections; on the UI isolate their socket events kept it busy for the
-/// whole cycle and card drags stalled (OPTIMIZATION_PLAN.md §3.3). Here the
+/// whole cycle and card drags stalled. Here the
 /// UI isolate only sees one message per call.
 ///
 /// Overrides every public method except [scanNetwork], which the Add

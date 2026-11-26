@@ -117,7 +117,7 @@ class _Managed {
   });
 }
 
-/// Alignment mode (ROADMAP_PLAN.md §3.2): one focused projector open with
+/// Alignment mode: one focused projector open with
 /// its pattern, neighbours or everyone optionally open with the Others
 /// pattern, the rest of the scope closed. Holds no widget state so the web
 /// API (§5) can drive the same methods.

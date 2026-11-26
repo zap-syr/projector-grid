@@ -37,7 +37,7 @@ String mapInputCode(String input) => switch (input) {
 };
 
 // The web status page uses its own compact spelling for INPUT — confirmed
-// as `HDMI1` (see REMOTE_PREVIEW_PLAN.md §3.4), not NTCONTROL's short codes
+// as `HDMI1`, not NTCONTROL's short codes
 // (`HD1`) that mapInputCode handles, so that map's default case was
 // passing it through unchanged — "HDMI1" in the Monitoring table right
 // next to NTCONTROL-sourced rows reading "HDMI 1". Reuses mapInputCode

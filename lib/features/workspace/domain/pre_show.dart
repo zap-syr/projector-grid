@@ -1,4 +1,4 @@
-/// Remote Preview's pre-show mode (REMOTE_PREVIEW_PLAN.md §4.3): the
+/// Remote Preview's pre-show mode: the
 /// projector keeps its input alive for the preview while staying off.
 library;
 

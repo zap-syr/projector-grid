@@ -388,7 +388,7 @@ class PanasonicProtocolService {
     // this device class's embedded TCP/IP stack commonly supports only a
     // handful of connections total, shared across its web UI, control port,
     // etc., so a 10-wide burst risked ERR3 ["busy"] and false-offline
-    // classifications; see OPTIMIZATION_PLAN.md item 3.1). [concurrency] is
+    // classifications). [concurrency] is
     // chosen by the caller based on how many nodes are being polled overall.
     final queries = <(String, String)>[
       if (withSerial) ('serialNumber', 'QSN'),

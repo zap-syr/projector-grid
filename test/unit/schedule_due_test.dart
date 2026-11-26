@@ -110,7 +110,7 @@ void main() {
     });
   });
 
-  // IMPROVEMENT_PLAN.md item 10: on the spring-forward night the scheduler
+  // Known bug: on the spring-forward night the scheduler
   // never ticks at 02:xx, so a 02:30 daily task is skipped with no log
   // entry. Simulates the ticks the scheduler actually sees (01:59 → 03:00)
   // rather than relying on the test machine's time zone.
@@ -121,5 +121,5 @@ void main() {
       for (var m = 0; m < 60; m++) DateTime(2026, 3, 29, 3, m),
     ];
     expect(ticks.where((now) => isTaskDue(t, now)), hasLength(1));
-  }, skip: 'Known bug, IMPROVEMENT_PLAN.md item 10 — unskip once fixed');
+  }, skip: 'Known bug: the DST-skipped hour - unskip once fixed');
 }

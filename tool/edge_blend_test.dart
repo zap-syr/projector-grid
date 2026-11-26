@@ -2,9 +2,8 @@
 //
 //   dart run tool/edge_blend_test.dart [ip] [login] [password]
 //
-// Talks to a REAL projector. Backs the open questions in
-// projector-grid-notes/EDGE_BLENDING_PLAN.md §7 before the Edge Blending
-// dialog is built:
+// Talks to a REAL projector. Answered the open Edge Blending questions
+// before the dialog was built:
 //
 //   Phase 1 (read-only, always runs): query every edge-blending register from
 //     the command sheet and print the raw reply, so the reply shape of each
@@ -15,8 +14,8 @@
 //     record what max+1 does (ERR2 vs silent clamp), check whether the
 //     projector constrains Start+Width, round-trip the RGBW tuples, check what
 //     Interlocked does to R/G/B, and check which registers answer while
-//     Edge Blending is Off (the QPDI1 ER401 trap from
-//     projector-grid-notes/QUAD_PIXEL_DRIVE_CORNER_LIMITS.md).
+//     Edge Blending is Off (QPDI1 replies ER401 unless geometry mode is
+//     Off).
 //   Phase 2f (probeOpposite): own Start vs the opposite edge's zone, whether
 //     zone-end lines may cross, and whether enabling an edge changes the
 //     shared-raster cap. To run only this phase, set the other probe* flags
@@ -452,8 +451,7 @@ Future<void> probeWhileOff() async {
 Reg enableReg(int i) =>
     Reg('${edges[i]} enable', enableKeys[i], Fmt.legacyBool);
 
-/// What Phase 2a' left open
-/// (projector-grid-notes/EDGE_BLENDING_PLAN.md §8 "Not probed"):
+/// What Phase 2a' left open:
 /// does an edge's own Start count against the opposite edge's zone, can the
 /// two zone-end lines cross once Starts are non-zero (Geometry Manager Pro
 /// stops a width line at the opposite one), and does enabling either edge
@@ -538,8 +536,7 @@ String ask(String label, String prompt) {
 }
 
 /// Geometry Manager Pro shows only R/G/B for every black level, while the
-/// protocol carries W,R,G,B
-/// (projector-grid-notes/EDGE_BLENDING_PLAN.md §8 "W channel").
+/// protocol carries W,R,G,B.
 /// Either W is only the OSD's "all channels" slider and the image uses R/G/B,
 /// or W is an offset on top of them. The projector can't tell us which, so a
 /// person watching the screen does.
@@ -625,8 +622,7 @@ Future<void> probeWMeaning() async {
 
 // ── Phase 2: black levels on a disabled edge (interactive) ──────────────────
 /// The bands each level covers on an enabled edge are known
-/// (projector-grid-notes/EDGE_BLENDING_PLAN.md §8 "Black level zones"). The
-/// canvas keeps the border handle on disabled edges (the projector accepts the
+/// (`black_level_zones.dart`). The canvas keeps the border handle on disabled edges (the projector accepts the
 /// width there); this asks whether a disabled edge's levels still show.
 Future<void> probeBlackZones() async {
   header('Phase 2h — black levels on a disabled edge (interactive)');
@@ -672,7 +668,7 @@ Reg overlapIlReg(int i) =>
 // ── Phase 2: Quad Pixel Drive on vs off ──────────────────────────────────────
 /// Measures Upper/Left ceilings in both QPD states, and whether toggling QPD
 /// rescales stored values. QPDI1 only answers while geometry mode (GMMI0) is
-/// Off — see projector-grid-notes/QUAD_PIXEL_DRIVE_CORNER_LIMITS.md.
+/// Off.
 Future<void> probeQuadPixelDrive() async {
   header('Phase 2e — Quad Pixel Drive on vs off');
   const gmReg = Reg('Geometry mode', 'GMMI0', Fmt.vxxInt);
@@ -843,10 +839,7 @@ Future<void> main(List<String> args) async {
     stdout.writeln('\n(write tests disabled — set runWriteTests = true)');
   }
 
-  header(
-    'Findings (paste into projector-grid-notes/EDGE_BLENDING_PLAN.md → '
-    'Live test)',
-  );
+  header('Findings');
   if (findings.isEmpty) stdout.writeln('  none');
   for (final f in findings) {
     stdout.writeln('- $f');

@@ -1,5 +1,5 @@
-/// `POST /api/alignment/{op}`: the web's handle on the app's Alignment mode
-/// (ROADMAP_PLAN.md §5). Each op maps to one `AlignmentNotifier` method, so
+/// `POST /api/alignment/{op}`: the web's handle on the app's Alignment mode.
+/// Each op maps to one `AlignmentNotifier` method, so
 /// the web drives the same session as the banner. See
 /// `web_ui/api/openapi.yaml` (`AlignmentOp`).
 library;

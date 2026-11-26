@@ -1,5 +1,5 @@
 /// Pair mode of the Edge Blending dialog: two projectors that meet along one
-/// edge pair (projector-grid-notes/EDGE_BLENDING_PLAN.md §9).
+/// edge pair.
 library;
 
 import 'dart:math';

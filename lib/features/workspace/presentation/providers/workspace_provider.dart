@@ -491,8 +491,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
   /// worse (see tool/projector_stress_test.dart), so 3 is the ceiling. Total
   /// in-flight sockets for one poll cycle stay bounded by roughly
   /// `min(totalNodes, _networkBatchSize) * concurrency`; larger projects drop
-  /// to 2 so that product doesn't grow unbounded — see OPTIMIZATION_PLAN.md
-  /// item 3.1.
+  /// to 2 so that product doesn't grow unbounded.
   static int _telemetryConcurrencyFor(int totalNodes) {
     if (totalNodes <= 40) return 3;
     return 2;

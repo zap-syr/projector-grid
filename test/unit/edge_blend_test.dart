@@ -45,8 +45,7 @@ void main() {
     });
   });
 
-  // projector-grid-notes/EDGE_BLENDING_PLAN.md §8 "Limits rule": border lines
-  // never cross.
+  // Limits rule: border lines never cross.
   group('limits', () {
     test('the border line sits the border width in from the zone end', () {
       // RQ25K in VSS: Left Start 391, Width 763, border 544.
