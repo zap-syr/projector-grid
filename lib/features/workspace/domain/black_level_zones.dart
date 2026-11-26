@@ -1,5 +1,6 @@
 /// Which part of the image each black level covers, as the projector applies
-/// it (plan/EDGE_BLENDING_PLAN.md §8 "Black level zones", RQ25K by eye):
+/// it (projector-grid-notes/EDGE_BLENDING_PLAN.md §8 "Black level zones",
+/// RQ25K by eye):
 /// from an enabled edge inwards, the raster edge to Start stays black, Start
 /// to the zone end gets the overlapped level, the zone end to the border
 /// line gets the overlapped and border levels added up, and everything

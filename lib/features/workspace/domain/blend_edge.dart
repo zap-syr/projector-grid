@@ -1,6 +1,6 @@
 /// The four edges of an Edge Blending setup, each with its NTCONTROL keys,
-/// so the whole command table lives in one place (plan/EDGE_BLENDING_PLAN.md
-/// §1).
+/// so the whole command table lives in one place
+/// (projector-grid-notes/EDGE_BLENDING_PLAN.md §1).
 enum BlendEdge {
   upper(
     label: 'Upper',

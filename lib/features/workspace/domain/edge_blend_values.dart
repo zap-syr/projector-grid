@@ -1,5 +1,6 @@
 /// Wire formats specific to Edge Blending: the legacy 4-digit values and the
-/// `W,R,G,B` black level tuples (plan/EDGE_BLENDING_PLAN.md §1, §8).
+/// `W,R,G,B` black level tuples
+/// (projector-grid-notes/EDGE_BLENDING_PLAN.md §1, §8).
 library;
 
 typedef Rgbw = ({int w, int r, int g, int b});

@@ -2,7 +2,7 @@
 
 Measures what a projector's Keystone and Curved Correction do to the image, with a
 webcam, and fits the model the Geometry Correction preview draws
-(`plan/GEOMETRY_PREVIEW_PLAN.md`). Python, not part of the app build or CI.
+(`projector-grid-notes/GEOMETRY_PREVIEW_PLAN.md`). Python, not part of the app build or CI.
 
 `data/pt-rq25k-2026-10-16/` holds the analysed result of the first run (PT-RQ25KE,
 319 frames): `shapes.json` (corners and edge profiles per frame, in panel units) and

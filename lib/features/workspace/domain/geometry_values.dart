@@ -49,7 +49,8 @@ String formatNtThrow(double v) {
 // (vs the WUXGA-class standard 480 H / 300 V). Outward limits (384/240)
 // never change, on any model. Matched by numeric model code only (trailing
 // lens/body-variant letters like K/K2/L stripped) — see
-// plan/QUAD_PIXEL_DRIVE_CORNER_LIMITS.md for the full model survey.
+// projector-grid-notes/QUAD_PIXEL_DRIVE_CORNER_LIMITS.md for the full model
+// survey.
 const _tierAModels = [
   'PT-RQ25',
   'PT-RQ45',

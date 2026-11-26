@@ -6,7 +6,7 @@ description: >
   colours and sizes, icon tiles, buttons, card surfaces and corner radii, and layout
   stability (fixed size and order of elements across tabs, modes and dialogs). Use this skill
   whenever you add or change any widget, dialog, card, field, button, icon or text in
-  lib/ of this project, redesign a dialog from plan/DIALOG_REDESIGN_PLAN.md, or draw a
+  lib/ of this project, redesign a dialog from projector-grid-notes/DIALOG_REDESIGN_PLAN.md, or draw a
   mockup of the app. It overrides the generic flutter-desktop-ui guidance where they
   differ.
 ---

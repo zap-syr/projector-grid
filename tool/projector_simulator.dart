@@ -188,8 +188,8 @@ class SimProjector {
 
 /// Edge Blending and Black Level registers of a 3840x2400 (Tier A) model,
 /// in the three wire families and with the limits measured live
-/// (plan/EDGE_BLENDING_PLAN.md §1, §8): a write that breaks one is refused
-/// with ER402 and the value stays.
+/// (projector-grid-notes/EDGE_BLENDING_PLAN.md §1, §8): a write that breaks one
+/// is refused with ER402 and the value stays.
 class EdgeBlendSim {
   EdgeBlendSim({required bool demo}) {
     if (!demo) return;

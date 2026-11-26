@@ -11,7 +11,7 @@ import 'dart:typed_data';
 /// [RemotePreviewState]. Transport only — no Riverpod, no UI. The endpoint is
 /// unauthenticated `ws://`, never the NTCONTROL port, and its address depends
 /// on the firmware: see [defaultEndpoints]. Full write-up in
-/// plan/REMOTE_PREVIEW_PLAN.md.
+/// projector-grid-notes/REMOTE_PREVIEW_PLAN.md.
 class RemotePreviewController {
   RemotePreviewController({
     required this.host,

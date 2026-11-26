@@ -10,6 +10,10 @@ and **OSC** over UDP to/from show-control systems.
 
 See `DEVELOPMENT.md` for the contributor-facing setup guide; this file is the quick reference for working in the code.
 
+Design plans and research notes (`*_PLAN.md`, `REVIEW_BACKLOG.md`, …) live in the owner's private
+`projector-grid-notes` repo, checked out next to this one (`../projector-grid-notes/`). References
+like `projector-grid-notes/EDGE_BLENDING_PLAN.md` point there; a fork doesn't have them.
+
 ### Agent skills
 
 - **In this repo** (`.claude/skills/`): `projector-grid-visual-rules` (the UI rules; they win over
@@ -91,7 +95,7 @@ It also takes `ERRS2` error codes for alert testing: `--demo-errors` at start, o
 `tool/svg2png/` is a Node helper for regenerating lens-shift icons; `tool/generate_icon.dart` builds the app icon.
 `tool/geometry_measure/` is Python (own venv, see its README): it films a projector's Keystone / Curved
 Correction with a webcam and fits `geo_model.py`, the reference model for the Geometry preview
-(`plan/GEOMETRY_PREVIEW_PLAN.md`); `export_fixture.py` writes the preview's test fixture.
+(`projector-grid-notes/GEOMETRY_PREVIEW_PLAN.md`); `export_fixture.py` writes the preview's test fixture.
 
 ## Architecture
 
@@ -170,7 +174,7 @@ undoing a layout change never rolls back power/temperature readings.
   receiving ~1fps JPEG frames and text status messages. Transport-only, no Riverpod/UI in this
   file — `remote_preview_provider.dart` and `preview_signal_status_provider.dart` wrap it for
   state, `remote_preview_dialog.dart`/`preview_viewport.dart` render it. Full design in
-  `plan/REMOTE_PREVIEW_PLAN.md`.
+  `projector-grid-notes/REMOTE_PREVIEW_PLAN.md`.
 
 ### Persistence
 
