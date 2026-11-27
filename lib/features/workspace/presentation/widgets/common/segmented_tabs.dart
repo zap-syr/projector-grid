@@ -10,9 +10,15 @@ class SegmentedTab<T> {
     this.icon,
     this.pill,
     this.content,
+    this.marker,
   });
 
   final T value;
+
+  /// A small amber dot after the label for state the tab carries (unstored
+  /// edits). Null has no dot and no room for one; false keeps the room, so
+  /// the label does not move when the dot comes.
+  final bool? marker;
 
   /// Shown, or with [content] read out by a screen reader.
   final String label;
@@ -38,6 +44,8 @@ class SegmentedTabs<T> extends StatelessWidget {
     required this.onChanged,
     this.expand = true,
     this.iconOnly = false,
+    this.dense = false,
+    this.enabled = true,
   });
 
   final List<SegmentedTab<T>> tabs;
@@ -51,18 +59,26 @@ class SegmentedTabs<T> extends StatelessWidget {
   /// grouping switch, in a 52 px header).
   final bool iconOnly;
 
-  double get _height => iconOnly ? 32 : 40;
-  double get _tabRadius => iconOnly ? 8 : 9;
+  /// A 32 px strip of text tabs, 26 px each, for a row of a controls card
+  /// (the Free grid's PC-1 / PC-2 / PC-3).
+  final bool dense;
+
+  /// False dims the strip and takes its clicks away.
+  final bool enabled;
+
+  bool get _short => iconOnly || dense;
+  double get _height => _short ? 32 : 40;
+  double get _tabRadius => _short ? 8 : 9;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Container(
+    final strip = Container(
       height: _height,
-      padding: const EdgeInsets.all(3),
+      padding: EdgeInsets.all(dense ? 2 : 3),
       decoration: BoxDecoration(
         color: cs.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(iconOnly ? 10 : 12),
+        borderRadius: BorderRadius.circular(_short ? 10 : 12),
         border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.6)),
       ),
       child: Row(
@@ -73,6 +89,9 @@ class SegmentedTabs<T> extends StatelessWidget {
         ],
       ),
     );
+    // Always the same wrapper, so the tabs' elements survive a switch
+    // between enabled and disabled.
+    return Opacity(opacity: enabled ? 1 : 0.38, child: strip);
   }
 
   Widget _tab(BuildContext context, SegmentedTab<T> t) {
@@ -98,10 +117,16 @@ class SegmentedTabs<T> extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(_tabRadius),
-          onTap: isSelected ? null : () => onChanged(t.value),
+          onTap: isSelected || !enabled ? null : () => onChanged(t.value),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
-            padding: EdgeInsets.symmetric(horizontal: iconOnly ? 8 : 12),
+            padding: EdgeInsets.symmetric(
+              horizontal: iconOnly
+                  ? 8
+                  : dense
+                  ? 10
+                  : 12,
+            ),
             alignment: Alignment.center,
             // No shadow: a BoxShadow paints a blurred filled box under the
             // whole tab, which showed through as a dark flash while the fill
@@ -142,6 +167,21 @@ class SegmentedTabs<T> extends StatelessWidget {
                           ),
                         ),
                       ),
+                      if (t.marker != null) ...[
+                        const SizedBox(width: 6),
+                        // Same size shown or not, so the label stays put.
+                        SizedBox.square(
+                          dimension: 6,
+                          child: t.marker!
+                              ? DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    color: AppStatusColors.of(context).warning,
+                                    shape: BoxShape.circle,
+                                  ),
+                                )
+                              : null,
+                        ),
+                      ],
                       if (t.pill != null) ...[
                         const SizedBox(width: 6),
                         Container(

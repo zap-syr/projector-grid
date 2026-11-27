@@ -27,6 +27,10 @@ class CustomTooltip extends StatefulWidget {
   /// only then.
   final WidgetBuilder? body;
 
+  /// The widest the bubble gets; a table of keys needs more than the
+  /// default.
+  final double maxWidth;
+
   const CustomTooltip({
     super.key,
     required this.message,
@@ -36,6 +40,7 @@ class CustomTooltip extends StatefulWidget {
     this.warning = false,
     this.placement = TooltipPlacement.top,
     this.body,
+    this.maxWidth = _maxBubbleWidth,
   });
 
   @override
@@ -70,6 +75,7 @@ class _CustomTooltipState extends State<CustomTooltip> {
                 shortcut: widget.shortcut,
                 warning: widget.warning,
                 body: widget.body,
+                maxWidth: widget.maxWidth,
               ),
             ),
           ),
@@ -139,6 +145,7 @@ class TooltipBubble extends StatelessWidget {
     this.shortcut,
     this.warning = false,
     this.body,
+    this.maxWidth = _maxBubbleWidth,
   });
 
   final String message;
@@ -146,6 +153,7 @@ class TooltipBubble extends StatelessWidget {
   final List<String>? shortcut;
   final bool warning;
   final WidgetBuilder? body;
+  final double maxWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -161,7 +169,7 @@ class TooltipBubble extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: Container(
-        constraints: const BoxConstraints(maxWidth: _maxBubbleWidth),
+        constraints: BoxConstraints(maxWidth: maxWidth),
         padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
         decoration: BoxDecoration(
           color: sc.tooltipBackground,

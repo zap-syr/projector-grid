@@ -18,6 +18,9 @@ class SleekStepperInput extends StatefulWidget {
   final void Function(String) onValueChanged;
   final bool autofocus;
 
+  /// The field's width; the Free grid's H and V fields are 60.
+  final double width;
+
   const SleekStepperInput({
     super.key,
     required this.initialValue,
@@ -26,6 +29,7 @@ class SleekStepperInput extends StatefulWidget {
     required this.onValueChanged,
     this.step = 1.0,
     this.autofocus = false,
+    this.width = 72,
   });
 
   @override
@@ -153,7 +157,7 @@ class _SleekStepperInputState extends State<SleekStepperInput> {
     final arrowColor = t.secondary;
 
     return Container(
-      width: 72,
+      width: widget.width,
       height: 32,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(

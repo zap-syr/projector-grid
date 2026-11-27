@@ -12,9 +12,13 @@ class ModeTileData<T> {
     this.shortLabel,
     this.detail,
     this.gapBefore = false,
+    this.enabled = true,
   });
 
   final T value;
+
+  /// False dims this tile alone (the other modes while a write runs).
+  final bool enabled;
   final IconData icon;
   final String label;
 
@@ -87,7 +91,7 @@ class ModeTileRow<T> extends StatelessWidget {
                     detail: t.detail,
                     iconAbove: iconAbove,
                     selected: t.value == selected,
-                    onTap: onSelected == null
+                    onTap: onSelected == null || !t.enabled
                         ? null
                         : () => onSelected!(t.value),
                   ),
