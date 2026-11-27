@@ -97,7 +97,12 @@ class _GeometryCorrectionDialogState
     _tier = quadPixelTierFor(model ?? '');
     _corners.extended = _tier == QuadPixelTier.a;
     setState(() {
-      if (modeRaw != null) _mode = GeometryMode.fromProtocol(modeRaw);
+      if (modeRaw != null) {
+        final read = GeometryMode.fromProtocol(modeRaw);
+        // The Free grid has no tile or controls here yet: a projector in
+        // PC-1 to PC-3 shows like Off, as it always did.
+        _mode = read.isFreeGrid ? GeometryMode.off : read;
+      }
       _loading = false;
     });
     await _ensureModeLoaded(_mode);
@@ -112,7 +117,10 @@ class _GeometryCorrectionDialogState
         await _loadKeystone();
       case GeometryMode.curved:
         await _loadCurved();
-      case GeometryMode.off:
+      case GeometryMode.off ||
+          GeometryMode.pc1 ||
+          GeometryMode.pc2 ||
+          GeometryMode.pc3:
         break;
     }
     if (!mounted) return;
@@ -325,7 +333,11 @@ class _GeometryCorrectionDialogState
                   onChanged: () => setState(() {}),
                 ),
         ),
-        GeometryMode.curved || GeometryMode.off => (
+        GeometryMode.curved ||
+        GeometryMode.off ||
+        GeometryMode.pc1 ||
+        GeometryMode.pc2 ||
+        GeometryMode.pc3 => (
           GeometryPreviewCard(
             preview: curvedPreview(
               throwRatio: _curved.throwRatio,
