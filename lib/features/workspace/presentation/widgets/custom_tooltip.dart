@@ -155,12 +155,7 @@ class TooltipBubble extends StatelessWidget {
     final titleColor = warning ? sc.warning : cs.onSurface;
     final title = Text(
       message,
-      style: TextStyle(
-        color: titleColor,
-        fontSize: 12.5,
-        fontWeight: FontWeight.w600,
-        height: 1.3,
-      ),
+      style: AppText.of(context).label.copyWith(color: titleColor, height: 1.3),
     );
     final shortcut = this.shortcut;
     return Material(
