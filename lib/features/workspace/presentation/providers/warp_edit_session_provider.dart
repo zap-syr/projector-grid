@@ -134,12 +134,24 @@ class WarpEditSession extends _$WarpEditSession {
 
   // ----------------------------------------------------------------- open
 
+  /// Whether the next write to the current memory first saves a backup of
+  /// it: true until this session has written to that memory once.
+  bool get takesBackupOnNextWrite => !_backedUp.contains(state.slot);
+
   /// Finds out the model and loads a memory: the one the projector is in when
   /// that is PC-1 to PC-3, else PC-1. Reading does not change the mode.
-  Future<void> open() async {
+  ///
+  /// With [switchTo] the projector is put in that memory first, with one
+  /// `GMMI0` write after the model is known and before the read: the editor
+  /// opens it from another geometry mode. A model the session cannot use is
+  /// never written to.
+  Future<void> open({WarpSlot? switchTo}) async {
     if (_working) return;
     _working = true;
     try {
+      // A session opened again (the tile clicked after leaving the mode)
+      // must not show the memory it held before.
+      _beginLoad(state.slot);
       state = state.copyWith(
         phase: WarpSessionPhase.detecting,
         unsupportedReason: null,
@@ -152,6 +164,7 @@ class WarpEditSession extends _$WarpEditSession {
       }
       WarpModelCaps? caps;
       String? modeReply;
+      var switched = true;
       try {
         final mids = await _service.sendRawCommand(
           node.ipAddress,
@@ -162,13 +175,23 @@ class WarpEditSession extends _$WarpEditSession {
         );
         caps = mids == null ? null : warpModelCapsFromMids(mids);
         if (caps != null && warpModelSupported(caps)) {
-          modeReply = await _service.sendRawCommand(
-            node.ipAddress,
-            node.port,
-            node.login,
-            node.password,
-            'QVX:GMMI0',
-          );
+          if (switchTo == null) {
+            modeReply = await _service.sendRawCommand(
+              node.ipAddress,
+              node.port,
+              node.login,
+              node.password,
+              'QVX:GMMI0',
+            );
+          } else {
+            switched = await _service.sendCommand(
+              node.ipAddress,
+              node.port,
+              node.login,
+              node.password,
+              'VXX:GMMI0=${GeometryMode.forWarpSlot(switchTo).protocolValue}',
+            );
+          }
         }
       } finally {
         _release();
@@ -189,12 +212,23 @@ class WarpEditSession extends _$WarpEditSession {
         );
         return;
       }
+      state = state.copyWith(caps: caps);
+      if (switchTo != null) {
+        if (!switched) {
+          _fail(
+            'Could not switch the projector to '
+            '${GeometryMode.forWarpSlot(switchTo).label}.',
+          );
+          return;
+        }
+        await _load(switchTo);
+        return;
+      }
       // A failed mode read is not handled here: the load reads it again and
       // reports the failure.
       final mode = modeReply == null
           ? null
           : GeometryMode.fromProtocol(modeReply.split('=').last);
-      state = state.copyWith(caps: caps);
       await _load(mode?.warpSlot ?? WarpSlot.pc1);
     } finally {
       _working = false;

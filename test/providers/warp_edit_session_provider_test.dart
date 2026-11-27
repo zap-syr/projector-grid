@@ -342,6 +342,131 @@ void main() {
     });
   });
 
+  group('open with switchTo', () {
+    List<String> gmmiWrites() => [
+      for (final (_, cmd) in [...fake.sentCommands, ...fake.sentRaw])
+        if (cmd.startsWith('VXX:GMMI0')) cmd,
+    ];
+
+    test('writes GMMI0 once, then loads that memory', () async {
+      projector().mode = 0;
+      seed(WarpSlot.pc2, _gridTable(_caps, dx: 25), _caps);
+      final c = newContainer();
+      keep(c);
+      await session(c).open(switchTo: WarpSlot.pc2);
+
+      expect(gmmiWrites(), ['VXX:GMMI0=+00004']);
+      expect(projector().mode, 4);
+      expect(stateOf(c).slot, WarpSlot.pc2);
+      expect(stateOf(c).phase, WarpSessionPhase.ready);
+      expect(stateOf(c).rawBlock, isNotNull);
+      expect(frames().where(_isRead).map((f) => f[4]).toSet(), {0x74});
+      expect(isBusy(c), isFalse);
+    });
+
+    test('does not ask for the mode: the write decides the memory', () async {
+      projector().mode = 5;
+      seed(WarpSlot.pc1, _gridTable(_caps), _caps);
+      int modeQueries() => [
+        for (final (_, cmd) in fake.sentRaw)
+          if (cmd == 'QVX:GMMI0') cmd,
+      ].length;
+      final plain = newContainer();
+      keep(plain);
+      await session(plain).open();
+      final withoutSwitch = modeQueries();
+      expect(stateOf(plain).slot, WarpSlot.pc3, reason: 'it follows the mode');
+
+      fake.sentRaw.clear();
+      final c = newContainer();
+      keep(c);
+      await session(c).open(switchTo: WarpSlot.pc1);
+      expect(stateOf(c).slot, WarpSlot.pc1);
+      expect(projector().mode, 3, reason: 'PC-1 is mode +00003');
+      expect(modeQueries(), lessThan(withoutSwitch));
+    });
+
+    test('a model that cannot be used is never written to', () async {
+      fake.rawResponses['QVX:MIDS1'] = 'MIDS1=0027:00:26';
+      projector().mode = 0;
+      final c = newContainer();
+      keep(c);
+      await session(c).open(switchTo: WarpSlot.pc1);
+      expect(stateOf(c).phase, WarpSessionPhase.unsupported);
+      expect(gmmiWrites(), isEmpty);
+      expect(projector().mode, 0);
+      expect(frames(), isEmpty);
+    });
+
+    test('a model with an unsupported format is never written to', () async {
+      // 0024 rows cannot hold a neutral table.
+      fake.rawResponses['QVX:MIDS1'] = 'MIDS1=0024:00:30';
+      final c = newContainer();
+      keep(c);
+      await session(c).open(switchTo: WarpSlot.pc1);
+      expect(stateOf(c).unsupportedReason, WarpUnsupportedReason.format);
+      expect(gmmiWrites(), isEmpty);
+    });
+
+    test('a refused switch fails without reading', () async {
+      fake.commandSucceeds[_ip] = false;
+      final c = newContainer();
+      keep(c);
+      await session(c).open(switchTo: WarpSlot.pc3);
+      expect(stateOf(c).phase, WarpSessionPhase.failed);
+      expect(stateOf(c).failureMessage, contains('PC-3'));
+      expect(stateOf(c).table, isNull);
+      expect(frames(), isEmpty);
+      expect(isBusy(c), isFalse);
+    });
+
+    test('opening again forgets the memory it held', () async {
+      seed(WarpSlot.pc1, _gridTable(_caps, dx: 10), _caps);
+      final c = await opened();
+      expect(stateOf(c).table, isNotNull);
+      final held = Completer<void>();
+      fake.holdBinary[_ip] = held;
+      final again = session(c).open(switchTo: WarpSlot.pc1);
+      await until(() => stateOf(c).phase == WarpSessionPhase.loading);
+      expect(stateOf(c).table, isNull);
+      expect(stateOf(c).controlGrid, isNull);
+      held.complete();
+      await again;
+      expect(stateOf(c).phase, WarpSessionPhase.ready);
+    });
+  });
+
+  group('takesBackupOnNextWrite', () {
+    setUp(() => seed(WarpSlot.pc1, _gridTable(_caps), _caps));
+
+    test('is true until the memory has been written in this session', () async {
+      final c = await opened();
+      expect(session(c).takesBackupOnNextWrite, isTrue);
+      await session(c)
+          .store(_gridTable(_caps, dx: 5), gridColumns: 3, gridRows: 3);
+      expect(session(c).takesBackupOnNextWrite, isFalse);
+      await session(c).reload();
+      expect(session(c).takesBackupOnNextWrite, isFalse);
+    });
+
+    test('is per memory', () async {
+      seed(WarpSlot.pc2, _gridTable(_caps), _caps);
+      final c = await opened();
+      await session(c).resetToNeutral(gridColumns: 3, gridRows: 3);
+      expect(session(c).takesBackupOnNextWrite, isFalse);
+      await session(c).selectMemory(WarpSlot.pc2);
+      expect(session(c).takesBackupOnNextWrite, isTrue);
+    });
+
+    test('a failed backup does not count as one', () async {
+      final c = await opened(store: _FailingBackups(backups.root));
+      await session(c)
+          .store(_gridTable(_caps, dx: 5), gridColumns: 3, gridRows: 3);
+      expect(stateOf(c).phase, WarpSessionPhase.failed);
+      expect(session(c).takesBackupOnNextWrite, isTrue);
+    });
+  });
+
   group('selectMemory', () {
     test('switches the projector to the memory, then reads it', () async {
       seed(WarpSlot.pc3, _gridTable(_caps, dx: 30), _caps);
