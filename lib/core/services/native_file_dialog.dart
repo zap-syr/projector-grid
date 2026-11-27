@@ -100,7 +100,7 @@ String macSaveDialogScript({
 }) {
   final location = initialDirectory == null
       ? ''
-      : ' default location POSIX file ${_asQuoted(initialDirectory)}';
+      : ' default location (POSIX file ${_asQuoted(initialDirectory)})';
   return 'POSIX path of (choose file name with prompt ${_asQuoted(title)} '
       'default name ${_asQuoted(defaultName)}$location)';
 }

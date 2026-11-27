@@ -65,8 +65,8 @@ void main() {
       expect(
         script,
         contains(
-          'default location POSIX file '
-          '"/Users/me/Library/Application Support/Logs"',
+          'default location (POSIX file '
+          '"/Users/me/Library/Application Support/Logs")',
         ),
       );
     });
