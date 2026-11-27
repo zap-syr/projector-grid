@@ -41,6 +41,9 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
   bool _isDragging = false;
 
   List<ProjectorGroup> _groups = [];
+  // The notifier's read API is used by the OSC, Web and schedule code; moving
+  // it into state is a larger refactor.
+  // ignore: riverpod_lint/avoid_public_notifier_properties
   List<ProjectorGroup> get groups => List.unmodifiable(_groups);
 
   @override
@@ -68,7 +71,9 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
 
   // ── Undo / Redo ──────────────────────────────────────────────────────────
 
+  // ignore: riverpod_lint/avoid_public_notifier_properties
   bool get canUndo => _undoStack.isNotEmpty;
+  // ignore: riverpod_lint/avoid_public_notifier_properties
   bool get canRedo => _redoStack.isNotEmpty;
 
   /// Strips transient fields so snapshots only capture user-editable state.
@@ -222,6 +227,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
         .toList();
   }
 
+  // ignore: riverpod_lint/avoid_public_notifier_properties
   /// Invoked whenever projector connection/status state changes (used by OSC to push status).
   void Function()? onStateChanged;
 
@@ -354,6 +360,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
   final _commandsSent =
       StreamController<({String nodeId, String cmd})>.broadcast();
 
+  // ignore: riverpod_lint/avoid_public_notifier_properties
   /// Every command the app got through to a projector, from any source
   /// (controls, OSC, schedule, Web, Alignment mode).
   Stream<({String nodeId, String cmd})> get commandsSent =>

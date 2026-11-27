@@ -419,6 +419,9 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
   bool previewRetry(String id) {
     final node = _node(id);
     if (node == null || !_previews.isOpen(id)) return false;
+    // The per-projector preview instances live only while a dialog or page
+    // has the preview open (checked above), so they stay auto-dispose.
+    // ignore: riverpod_lint/only_use_keep_alive_inside_keep_alive
     ref.read(remotePreviewProvider(node.ipAddress).notifier).retry();
     return true;
   }
@@ -434,6 +437,8 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
     if (on is! bool || node == null || !_previews.isOpen(id)) return null;
     // As in the app's dialog: Standby with the feed up, or the command is
     // silently dropped and never confirmed.
+    // Auto-dispose on purpose, see previewRetry.
+    // ignore: riverpod_lint/only_use_keep_alive_inside_keep_alive
     final feed = ref.read(remotePreviewProvider(node.ipAddress));
     final live = feed is RemotePreviewFrame || feed is RemotePreviewNotice;
     if (node.powerStatus != PowerStatus.standby || !live) return null;
@@ -441,6 +446,8 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
       LogSeverity.info,
       '${_who(session)}: Pre-show ${on ? 'on' : 'off'} for ${node.ipAddress}',
     );
+    // Auto-dispose on purpose, see previewRetry.
+    // ignore: riverpod_lint/only_use_keep_alive_inside_keep_alive
     unawaited(ref.read(preShowProvider(id).notifier).set(on));
     return {'on': on};
   }

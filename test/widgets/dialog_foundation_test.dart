@@ -18,6 +18,8 @@ import '../helpers/provider_harness.dart';
 import '../helpers/test_config_dir.dart';
 
 Widget _app(Widget child) => ProviderScope(
+  // The root scope of the test app, not a nested one.
+  // ignore: riverpod_lint/scoped_providers_should_specify_dependencies
   overrides: [protocolServiceProvider.overrideWithValue(FakeProtocolService())],
   child: MaterialApp(
     theme: AppTheme.darkTheme,

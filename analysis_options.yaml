@@ -3,7 +3,8 @@
 #
 # The issues identified by the analyzer are surfaced in the UI of Dart-enabled
 # IDEs (https://dart.dev/tools#ides-and-editors). The analyzer can also be
-# invoked from the command line by running `flutter analyze`.
+# invoked from the command line by running `dart analyze --fatal-infos .`
+# (`flutter analyze` does not report analyzer-plugin diagnostics).
 
 # The following line activates a set of recommended lints for Flutter apps,
 # packages, and plugins designed to encourage good coding practices.
@@ -16,7 +17,16 @@ analyzer:
     - windows/**
     - macos/**
     - linux/**
+    # Analyzer plugins only report when the analyzed target is the package root
+    # (or single files), so CI runs `dart analyze .`; these folders are not
+    # part of the linted app code.
+    - tool/**
+    - web_ui/**
+    - .claude/**
 include: package:flutter_lints/flutter.yaml
+
+plugins:
+  riverpod_lint: ^3.2.0
 
 linter:
   # The lint rules applied to this project can be customized in the

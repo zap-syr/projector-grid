@@ -36,7 +36,11 @@ dart run build_runner build --delete-conflicting-outputs
 dart run build_runner watch --delete-conflicting-outputs   # auto-regen during active work
 
 flutter run -d windows        # or: -d macos
-flutter analyze               # must be clean before committing
+dart analyze --fatal-infos .  # must be clean before committing; runs riverpod_lint
+# Suppress a riverpod_lint finding with `// ignore: riverpod_lint/<rule>` (the plain rule
+# name does not work), above the doc comment if the member has one.
+# (not `flutter analyze`: on Flutter 3.47 it skips analyzer-plugin diagnostics; and
+# not `dart analyze lib test`: plugins only report for the package root or single files)
 dart format .                 # must be run before committing
 flutter test                  # full suite: test/unit, test/providers, test/widgets
 flutter test test/unit/telemetry_parsing_test.dart   # a single file
@@ -80,7 +84,7 @@ re-run `build_runner` first.
   debug app (see below) — a batch of "did not complete" tests with no error. Rerun, or use
   `flutter test --concurrency=1`.
 - CI (`.github/workflows/ci.yml`) runs codegen, `dart format --set-exit-if-changed lib test`,
-  `flutter analyze lib test` and `flutter test` on Windows and macOS, and a `web` job that
+  `dart analyze --fatal-infos .` and `flutter test` on Windows and macOS, and a `web` job that
   checks `types.gen.ts` matches `openapi.yaml`, then `check`, `lint`, `test` and `build`
   in `web_ui/`. The release workflow builds `web_ui/` before the Flutter build.
 - CI and release pin Flutter 3.47.9 (`flutter-version` in both workflows); lift the pin when
