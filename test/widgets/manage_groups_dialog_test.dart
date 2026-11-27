@@ -227,7 +227,7 @@ void main() {
       await tester.tap(find.byTooltip('Delete Left wall'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Delete “Left wall”?'), findsOneWidget);
+      expect(find.text('Delete "Left wall"?'), findsOneWidget);
       expect(find.textContaining('stay in the project'), findsOneWidget);
       expect(
         find.textContaining('Shutter close, 22:30 is paused'),

@@ -7,7 +7,7 @@ const _indexKey = '$webAssetRoot/index.html';
 const _hashedDir = '$webAssetRoot/assets/';
 
 const webUiNotBuiltMessage =
-    'Web UI not built — run `npm run build` in web_ui/, then rebuild the app.';
+    'Web UI not built: run `npm run build` in web_ui/, then rebuild the app.';
 
 /// Asset key for a request path (relative, no leading slash): `/` is the
 /// page itself, anything else maps one-to-one into [webAssetRoot].

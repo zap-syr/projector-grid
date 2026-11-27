@@ -744,8 +744,9 @@ void main() {
             protocolServiceProvider.overrideWithValue(FakeProtocolService()),
             oscProvider.overrideWith(() => _FakeOsc(const OscListening(9000))),
           ],
-          child: const MaterialApp(
-            home: Scaffold(
+          child: MaterialApp(
+            theme: AppTheme.darkTheme,
+            home: const Scaffold(
               body: PreferencesDialog(section: PreferencesSection.osc),
             ),
           ),

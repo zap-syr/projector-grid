@@ -518,7 +518,7 @@ class AlignmentNotifier extends _$AlignmentNotifier {
     if (ok) {
       _log(
         LogSeverity.info,
-        'Shutter fade ${fade.fadeIn}/${fade.fadeOut} s → 0 for alignment',
+        'Shutter fade ${fade.fadeIn}/${fade.fadeOut} s to 0 for alignment',
         ip: m.ip,
         name: m.name,
       );

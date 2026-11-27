@@ -34,6 +34,11 @@ class DialogSurfaces {
 
 /// Monospace text for IP, port, command and OSC fields; its placeholder is
 /// mono too (the placeholder takes the font of the value it stands for).
+///
+/// Like [plainFieldStyle], it sets size and font but no colour on purpose: a
+/// field's disabled and error states choose the colour, and these styles are
+/// context-free (an `AppText` role needs a BuildContext), so they stay out of
+/// the type scale.
 final monoFieldStyle = AppTheme.mono(const TextStyle(fontSize: 13.5));
 
 /// Word fields (names, search): the UI font at 14 px, so a field is 40 px
@@ -404,7 +409,7 @@ class SentRightAwayNote extends StatelessWidget {
         Flexible(
           child: Text(
             loading
-                ? 'Reading current values from the projector…'
+                ? 'Reading current values from the projector'
                 : 'Changes are sent to the projector right away',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,

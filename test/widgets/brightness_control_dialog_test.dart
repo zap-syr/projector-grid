@@ -282,7 +282,7 @@ void main() {
     );
     expect(find.byType(Skeleton), findsWidgets);
     expect(
-      find.text('Reading current values from the projector…'),
+      find.text('Reading current values from the projector'),
       findsOneWidget,
     );
     expect(find.text('Light output'), findsOneWidget);

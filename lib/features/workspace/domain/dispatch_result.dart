@@ -23,17 +23,17 @@ class DispatchResult {
 
 /// Summary line of the Web API's dispatch response (the Event Log shows a
 /// batch row instead, `event_log_rows.dart`), e.g.
-/// `Power On — 28/30 OK · 2 failed · 1 skipped. Failed: A, B. Skipped: C`.
+/// `Power On - 28/30 OK, 2 failed, 1 skipped. Failed: A, B. Skipped: C`.
 String dispatchSummary(DispatchResult r) {
   final counts = [
     '${r.ok}/${r.total} OK',
     if (r.failed.isNotEmpty) '${r.failed.length} failed',
     if (r.skipped.isNotEmpty) '${r.skipped.length} skipped',
-  ].join(' · ');
+  ].join(', ');
   String names(List<ProjectorNode> nodes) =>
       nodes.map((n) => n.name).join(', ');
   return [
-    '${commandLabel(r.command)} — $counts',
+    '${commandLabel(r.command)} - $counts',
     if (r.failed.isNotEmpty) 'Failed: ${names(r.failed)}',
     if (r.skipped.isNotEmpty) 'Skipped: ${names(r.skipped)}',
   ].join('. ');

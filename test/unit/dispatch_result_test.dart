@@ -7,7 +7,7 @@ void main() {
   test('all OK shows only the count', () {
     const r = DispatchResult(command: 'PON', ok: 3);
     expect(r.allOk, isTrue);
-    expect(dispatchSummary(r), 'Power On — 3/3 OK');
+    expect(dispatchSummary(r), 'Power On - 3/3 OK');
   });
 
   test('lists failed and skipped projectors by name', () {
@@ -21,7 +21,7 @@ void main() {
     expect(r.allOk, isFalse);
     expect(
       dispatchSummary(r),
-      'Shutter Close — 2/5 OK · 2 failed · 1 skipped. '
+      'Shutter Close - 2/5 OK, 2 failed, 1 skipped. '
       'Failed: Proj 1, Proj 2. Skipped: Proj 3',
     );
   });
@@ -30,7 +30,7 @@ void main() {
     final r = DispatchResult(command: 'POF', ok: 1, skipped: [node('2')]);
     expect(
       dispatchSummary(r),
-      'Power Standby — 1/2 OK · 1 skipped. Skipped: Proj 2',
+      'Power Standby - 1/2 OK, 1 skipped. Skipped: Proj 2',
     );
   });
 }

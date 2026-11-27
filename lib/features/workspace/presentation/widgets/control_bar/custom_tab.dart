@@ -57,7 +57,7 @@ class CustomTab extends ConsumerWidget {
                       onDelete: () async {
                         final confirmed = await confirmDestructive(
                           context,
-                          title: 'Delete “${cmd.name}”?',
+                          title: 'Delete "${cmd.name}"?',
                           subtitle: 'The command is removed from this app.',
                           confirmLabel: 'Delete',
                           changes: [

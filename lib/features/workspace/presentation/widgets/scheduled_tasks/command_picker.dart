@@ -206,7 +206,7 @@ class _CommandPickerState extends State<CommandPicker> {
                     onPressed: widget.onCommandString,
                     icon: const Icon(Icons.code, size: 18),
                     label: const Text(
-                      'Enter a command string…',
+                      'Enter a command string',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),

@@ -52,14 +52,7 @@ class TopMenuBar extends ConsumerWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(label),
-              Text(
-                shortcutLabel,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Theme.of(context).colorScheme.onSurface
-                      .withValues(alpha: 0.45),
-                ),
-              ),
+              Text(shortcutLabel, style: AppText.of(context).caption),
             ],
           );
     return MenuItemButton(

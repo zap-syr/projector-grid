@@ -84,7 +84,7 @@ class _ScheduledTasksDialogState extends ConsumerState<ScheduledTasksDialog> {
         icon: Icons.edit_off_outlined,
         title: _creating || task == null
             ? 'Discard the new task?'
-            : 'Discard changes to “${taskShortLabel(task)}”?',
+            : 'Discard changes to "${taskShortLabel(task)}"?',
         subtitle: 'What you changed in the editor is not saved.',
         destructive: true,
         actions: const [
@@ -202,8 +202,8 @@ class _ScheduledTasksDialogState extends ConsumerState<ScheduledTasksDialog> {
     final task = _taskById(_selectedId)!;
     final confirmed = await confirmDestructive(
       context,
-      title: 'Delete “${taskShortLabel(task)}”?',
-      subtitle: 'The task is removed from this project and won’t run again.',
+      title: 'Delete "${taskShortLabel(task)}"?',
+      subtitle: "The task is removed from this project and won't run again.",
       confirmLabel: 'Delete task',
     );
     if (!confirmed || !mounted) return;

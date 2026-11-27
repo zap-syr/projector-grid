@@ -202,7 +202,7 @@ void main() {
       );
       expect(find.text('Corners'), findsOneWidget);
       expect(
-        find.text('Reading current values from the projector…'),
+        find.text('Reading current values from the projector'),
         findsOneWidget,
       );
       fake.release();
