@@ -330,8 +330,8 @@ WarpControlGrid resampleControlGrid(
 }
 
 /// The dense table of a grid: the bilinear surface over the panel, and the
-/// nominal lattice outside it. Rebuilt tables match what Panasonic's
-/// software stores to within 0.02 px.
+/// nominal lattice outside it. Rebuilt tables match tables stored on real
+/// projectors to within 0.02 px.
 WarpPlane denseFromControl(WarpControlGrid grid, WarpGeometry geometry) =>
     WarpPlane.generate(
       name: 'W',

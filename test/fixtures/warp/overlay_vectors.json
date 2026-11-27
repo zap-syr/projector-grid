@@ -1,5 +1,5 @@
 {
-  "_comment": "Frames Panasonic's own software sent while points were selected and dragged. 'marked' lists the control point indexes with mark value 1; 'values' has one digit per control point.",
+  "_comment": "Reference frames for points being selected and dragged. 'marked' lists the control point indexes with mark value 1; 'values' has one digit per control point.",
   "frames": [
     {"kind": "cursor", "on": false, "x": 3389, "y": 1112, "cursorKind": 0, "frame": "0200AC07000D3D04580003"},
     {"kind": "marks", "points": "9x5", "marked": [], "values": "000000000000000000000000000000000000000000000", "frame": "0200A9C0000F9000030000000000000000000000009303"},

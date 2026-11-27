@@ -1,5 +1,5 @@
 {
-  "_comment": "Slices of tables that Panasonic's own software stored on real projectors. 'rows' holds the encoded bytes of single table rows (hex); 'rowSha256' holds digests of encoded rows that the test must reproduce. 'frames' describes the full chunked write: count, first/middle/last frame prefix (nine bytes) and the frame lengths.",
+  "_comment": "Slices of tables stored on real projectors. 'rows' holds the encoded bytes of single table rows (hex); 'rowSha256' holds digests of encoded rows that the test must reproduce. 'frames' describes the full chunked write: count, first/middle/last frame prefix (nine bytes) and the frame lengths.",
   "tables": [
     {
       "name": "store_4k_full",

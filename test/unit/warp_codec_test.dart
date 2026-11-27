@@ -333,7 +333,7 @@ void main() {
     });
   });
 
-  group('store tables stored by Panasonic software', () {
+  group('store tables stored on real projectors', () {
     for (final name in tables.keys) {
       final table = tables[name]!;
       final encoding = _encodingOf(table);

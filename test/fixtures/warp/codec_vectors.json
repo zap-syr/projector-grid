@@ -1,5 +1,5 @@
 {
-  "_comment": "Scalar codec cases are [codec, bits, value, expected bytes, expected raw decode]. Frames and wire lines were captured from Panasonic's own software talking to real projectors.",
+  "_comment": "Scalar codec cases are [codec, bits, value, expected bytes, expected raw decode]. Frames and wire lines are reference exchanges with real projectors.",
   "scalarCodecs": [
     ["triple", 4, 0, "000000", 0],
     ["triple", 4, 1, "001000", 1],

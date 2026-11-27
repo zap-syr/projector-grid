@@ -7,8 +7,8 @@ import 'warp_codec.dart';
 // selected ones. They only build bytes; sending them is up to the caller.
 
 /// DISPLAY CURSOR: shows the cursor at the panel position ([x], [y]) in
-/// integer pixels, or hides it. Panasonic's software sends the current
-/// position of the selected control point and kind 0. Coordinates are 16 bit
+/// integer pixels, or hides it. The app sends the current position of the
+/// selected control point and kind 0. Coordinates are 16 bit
 /// big-endian, a negative one is sent as two's complement.
 Uint8List buildCursorFrame({
   required bool on,
@@ -79,6 +79,6 @@ Uint8List packGridPointMarks(List<int> marks) {
 }
 
 /// WRITE GRID POINT (type 0x90): highlights the control points whose mark is
-/// 1. Panasonic's software sends the cursor frame first, then this one.
+/// 1. Send the cursor frame first, then this one.
 Uint8List buildGridPointMarksFrame(List<int> marks) =>
     buildWriteFrame(0x90, 0x00, 3, packGridPointMarks(marks));

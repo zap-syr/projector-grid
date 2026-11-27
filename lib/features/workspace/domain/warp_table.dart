@@ -110,7 +110,7 @@ const int warpHeaderLastFull = 0x21;
 /// Last header byte of an FPGA (delta) table.
 const int warpHeaderLastFpga = 0xA1;
 
-/// The header that Panasonic's software writes for a table it creates:
+/// The header for a newly created table:
 /// group 0 is 20, group 15 is 100, group 17 is 1, the rest are 0. The
 /// meaning of the fields is unknown, so prefer the header read from the
 /// projector whenever there is one.
@@ -170,7 +170,7 @@ WarpTable identityWarpTable(
 
 /// The FPGA table of a full table: unchanged inside the panel, and outside
 /// it the value of the nearest inside node plus the overshoot in pixels.
-/// Panasonic's software sends exactly this next to every stored table.
+/// It is sent next to every stored table.
 WarpPlane fpgaPlaneFromFull(WarpPlane full, WarpGeometry geometry) {
   final lastColumn = geometry.lastInsideColumn;
   final lastRow = geometry.lastInsideRow;

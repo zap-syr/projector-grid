@@ -734,9 +734,9 @@ WarpEncodableCheck checkWarpEncodable(WarpTable table, int bits) {
   );
 }
 
-/// Panasonic's own software reads bits-4 tables with the sign split at
-/// -512 px, so values below it come out wrong there even though the
-/// projector shows them correctly. Null when the bit type has no such limit.
+/// Other tools may read bits-4 tables with the sign split at -512 px, so
+/// values below it can come out wrong there even though the projector shows
+/// them correctly. Null when the bit type has no such limit.
 int? warpLegacyReaderLimit(int bits) => bits == 4 ? -512 : null;
 
 /// Whether some node is below [warpLegacyReaderLimit], so the vendor software

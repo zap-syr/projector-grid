@@ -4,7 +4,7 @@ import 'warp_table.dart';
 export 'warp_model_caps_table.dart' show warpModelCapsTable;
 
 /// What the free-form warp memories (PC-1 to PC-3) need to know about one
-/// projector model, taken from the parameter file Panasonic ships for it.
+/// projector model, from its warp parameter file.
 /// The rows are generated into `warp_model_caps_table.dart`.
 ///
 /// [bits] is never inferred: a wrong value silently scales a table by 2 to

@@ -55,8 +55,8 @@ class WarpCurves {
     ],
   );
 
-  /// Every edge curved, with the handles Panasonic's software gives an edge
-  /// that is switched to a curve without being dragged: a third of the
+  /// Every edge curved, with the default handles of an edge that is
+  /// switched to a curve without being dragged: a third of the
   /// nominal cell along the edge. On a grid that has not been moved this
   /// leaves the image unchanged.
   factory WarpCurves.defaults(
@@ -181,8 +181,7 @@ _EdgeSamples _edgeSamples(
   return out;
 }
 
-/// The dense table of a curve grid, computed the way Panasonic's own engine
-/// does it: each edge is sampled where it crosses a table line and rounded to
+/// The dense table of a curve grid: each edge is sampled where it crosses a table line and rounded to
 /// 1/64 px, then every cell is filled from its four edges and rounded to
 /// 1/256 px. Nodes outside the panel stay on the nominal lattice. With four
 /// straight edges per cell this is bilinear interpolation apart from the
