@@ -328,7 +328,7 @@ Json lensLockResultJson({required bool locked, required int count}) {
     'total': count,
     'failed': const <Json>[],
     'skipped': const <Json>[],
-    'summary': '$label — $count/$count OK',
+    'summary': '$label - $count/$count OK',
   };
 }
 

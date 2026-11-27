@@ -238,7 +238,7 @@ void main() {
 
       await tester.tap(_card('b'));
       await tester.pumpAndSettle();
-      expect(find.text('Discard changes to “Power on, 08:00”?'), findsOne);
+      expect(find.text('Discard changes to "Power on, 08:00"?'), findsOne);
 
       await tester.tap(find.text('Keep editing'));
       await tester.pumpAndSettle();
@@ -383,7 +383,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('command-field')));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Enter a command string…'));
+      await tester.tap(find.text('Enter a command string'));
       await tester.pumpAndSettle();
 
       await tester.tap(_primary);

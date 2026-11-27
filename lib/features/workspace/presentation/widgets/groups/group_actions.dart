@@ -47,7 +47,7 @@ Future<bool> confirmDeleteGroup(
 
   final confirmed = await confirmDestructive(
     context,
-    title: 'Delete “${group.name}”?',
+    title: 'Delete "${group.name}"?',
     subtitle: 'The group is removed from this project.',
     confirmLabel: 'Delete group',
     changes: [
