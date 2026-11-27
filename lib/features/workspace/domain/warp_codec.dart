@@ -60,6 +60,19 @@ class WarpProtocolException implements Exception {
   String toString() => 'WarpProtocolException: $message';
 }
 
+/// Raised when a binary command did not get an answer from the projector at
+/// all: the connection, the handshake or the reply failed. Unlike a
+/// [WarpProtocolException] it says nothing about the projector's state, so a
+/// transfer cut short by it may have been applied in part.
+class WarpTransportException implements Exception {
+  const WarpTransportException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => 'WarpTransportException: $message';
+}
+
 /// What the projector means by an error code of an `FF xx` frame.
 String warpErrorMeaning(int code) => switch (code) {
   0x8B => 'no data in this slot / type not available',
@@ -318,6 +331,38 @@ void checkWriteAck(Uint8List reply) {
   }
   throw WarpProtocolException(
     'unexpected WRITE reply: ${warpBytesToHex(reply)}',
+  );
+}
+
+/// The ack of SAVE DATA is `02 00 AA E<n> 00 03`: the sub byte echoes the
+/// request and the status must be 0.
+void checkSaveAck(Uint8List reply, WarpSlot slot) =>
+    _checkStatusAck(reply, 0xAA, slot.saveByte, 'SAVE');
+
+/// The ack of DISPLAY CURSOR is `02 00 AC 07 00 03`.
+void checkCursorAck(Uint8List reply) =>
+    _checkStatusAck(reply, 0xAC, 0x07, 'DISPLAY CURSOR');
+
+/// The ack of DISPLAY GRID is `02 00 AB 07 00 03`.
+void checkGridOverlayAck(Uint8List reply) =>
+    _checkStatusAck(reply, 0xAB, 0x07, 'DISPLAY GRID');
+
+void _checkStatusAck(Uint8List reply, int command, int sub, String what) {
+  if (reply.length >= 6 &&
+      reply[0] == 0x02 &&
+      reply[2] == command &&
+      reply[3] == sub &&
+      reply[5] == 0x03) {
+    if (reply[4] != 0) {
+      throw WarpProtocolException(
+        '$what rejected, status 0x${reply[4].toRadixString(16)}',
+        code: reply[4],
+      );
+    }
+    return;
+  }
+  throw WarpProtocolException(
+    'unexpected $what reply: ${warpBytesToHex(reply)}',
   );
 }
 

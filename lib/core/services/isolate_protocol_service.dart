@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:isolate';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show visibleForTesting;
 
+import '../../features/workspace/domain/warp_codec.dart';
 import 'app_log_file.dart';
 import 'panasonic_protocol_service.dart';
 
@@ -12,6 +14,7 @@ enum _Op {
   sendRawCommand,
   sendRawCommandPreservingErrorCodes,
   sendQuickQuery,
+  sendBinaryCommand,
   pollProjectorTelemetry,
 }
 
@@ -207,6 +210,15 @@ class IsolateProtocolService extends PanasonicProtocolService {
   ) => _call(_Op.sendQuickQuery, [ip, port, login, password, cmd]);
 
   @override
+  Future<Uint8List> sendBinaryCommand(
+    String ip,
+    int port,
+    String login,
+    String password,
+    Uint8List frame,
+  ) => _call(_Op.sendBinaryCommand, [ip, port, login, password, frame]);
+
+  @override
   Future<(ProbeResult, Map<String, dynamic>?)> pollProjectorTelemetry(
     String ip,
     int port,
@@ -233,8 +245,16 @@ class IsolateProtocolService extends PanasonicProtocolService {
         final result = await _dispatch(service, op, a);
         replies.send((id, true, result));
       } catch (e, stack) {
-        // Without a reply the caller's future would never complete.
-        replies.send((id, false, e.toString()));
+        // Without a reply the caller's future would never complete. The warp
+        // exceptions go across as objects: the caller tells a projector error
+        // (and its code) from a transport failure by type.
+        replies.send((
+          id,
+          false,
+          e is WarpProtocolException || e is WarpTransportException
+              ? e
+              : e.toString(),
+        ));
         replies.send((e.toString(), stack.toString()));
       }
     });
@@ -255,6 +275,13 @@ class IsolateProtocolService extends PanasonicProtocolService {
       _Op.sendRawCommandPreservingErrorCodes =>
         s.sendRawCommandPreservingErrorCodes(ip, port, str(2), str(3), str(4)),
       _Op.sendQuickQuery => s.sendQuickQuery(ip, port, str(2), str(3), str(4)),
+      _Op.sendBinaryCommand => s.sendBinaryCommand(
+        ip,
+        port,
+        str(2),
+        str(3),
+        a[4] as Uint8List,
+      ),
       _Op.pollProjectorTelemetry => s.pollProjectorTelemetry(
         ip,
         port,
