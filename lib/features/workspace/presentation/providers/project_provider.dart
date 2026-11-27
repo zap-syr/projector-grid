@@ -6,6 +6,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../../../core/services/app_config_dir.dart';
 import '../../../../core/services/app_log_file.dart';
 import '../../../../core/services/atomic_file.dart';
+import '../../../../core/services/native_file_dialog.dart';
 import '../../domain/log_event.dart';
 import '../../domain/projector_group.dart';
 import '../../domain/projector_node.dart';
@@ -245,7 +246,12 @@ class ProjectStateNotifier extends _$ProjectStateNotifier {
 
     String? path;
     try {
-      path = await _showSaveDialog(defaultName);
+      path = await showNativeSaveDialog(
+        title: 'Save Project',
+        defaultName: defaultName,
+        filterLabel: 'Projector Grid Project',
+        extension: 'pgrid',
+      );
     } catch (e) {
       if (!ref.mounted) return false;
       // Same reasoning as pickAndOpenProject: the native picker process
@@ -292,47 +298,6 @@ if ($r -eq 'OK') { Write-Output $dialog.FileName }
       final result = await Process.run('osascript', [
         '-e',
         'POSIX path of (choose file with prompt "Open Project" of type {"pgrid"})',
-      ]);
-      final path = result.stdout.toString().trim();
-      return path.isEmpty ? null : path;
-    }
-    return null;
-  }
-
-  static Future<String?> _showSaveDialog(String defaultName) async {
-    final safeName = defaultName.endsWith('.pgrid')
-        ? defaultName
-        : '$defaultName.pgrid';
-
-    if (Platform.isWindows) {
-      // Escape single quotes for PowerShell single-quoted string literals.
-      final escaped = safeName.replaceAll("'", "''");
-      final result = await Process.run('powershell', [
-        '-NoProfile',
-        '-NonInteractive',
-        '-Command',
-        '''
-Add-Type -AssemblyName System.Windows.Forms
-\$owner = New-Object System.Windows.Forms.Form
-\$owner.TopMost = \$true
-\$dialog = New-Object System.Windows.Forms.SaveFileDialog
-\$dialog.Filter = 'Projector Grid Project (*.pgrid)|*.pgrid'
-\$dialog.DefaultExt = 'pgrid'
-\$dialog.FileName = '$escaped'
-\$dialog.Title = 'Save Project'
-\$r = \$dialog.ShowDialog(\$owner)
-\$owner.Dispose()
-if (\$r -eq 'OK') { Write-Output \$dialog.FileName }
-''',
-      ]);
-      final path = result.stdout.toString().trim();
-      return path.isEmpty ? null : path;
-    } else if (Platform.isMacOS) {
-      // Escape double quotes for the AppleScript string literal.
-      final escaped = safeName.replaceAll('"', '\\"');
-      final result = await Process.run('osascript', [
-        '-e',
-        'POSIX path of (choose file name with prompt "Save Project" default name "$escaped")',
       ]);
       final path = result.stdout.toString().trim();
       return path.isEmpty ? null : path;
