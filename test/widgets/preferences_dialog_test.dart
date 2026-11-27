@@ -4,10 +4,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:projector_grid/core/theme/app_theme.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/protocol_service_provider.dart';
+import 'package:projector_grid/features/workspace/presentation/providers/web_server_provider.dart';
+import 'package:projector_grid/features/workspace/presentation/widgets/settings_rows.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/preferences_dialog.dart';
 
 import '../helpers/fake_protocol_service.dart';
 import '../helpers/test_config_dir.dart';
+
+class _RunningWeb extends WebServerNotifier {
+  @override
+  bool build() => true;
+}
 
 void main() {
   useTempConfigDir();
@@ -138,6 +145,44 @@ void main() {
       for (final icon in icons) {
         expect(icon.color, AppStatusColors.light.warning);
       }
+    });
+  });
+
+  group('status colours come from the theme', () {
+    testWidgets('the critical alert icon is the scheme error colour', (
+      tester,
+    ) async {
+      await pumpDialog(tester, theme: AppTheme.darkTheme);
+      await openSection(tester, 'Alerts');
+      final icons = tester.widgetList<Icon>(find.byIcon(Icons.error));
+      expect(icons, isNotEmpty);
+      for (final icon in icons) {
+        expect(icon.color, AppTheme.darkTheme.colorScheme.error);
+      }
+    });
+
+    testWidgets('a running service dot is the status success colour', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(800, 600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            protocolServiceProvider.overrideWithValue(FakeProtocolService()),
+            webServerProvider.overrideWith(_RunningWeb.new),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.darkTheme,
+            home: const Scaffold(body: PreferencesDialog()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final dots = tester.widgetList<StatusDot>(find.byType(StatusDot));
+      expect(dots.map((d) => d.color), contains(AppStatusColors.dark.success));
+      expect(dots.map((d) => d.color), isNot(contains(Colors.green)));
     });
   });
 

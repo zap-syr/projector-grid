@@ -347,7 +347,8 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
           SettingsRow(
             label: 'Update interval',
             hint:
-                '${AppSettings.minPollingIntervalSeconds}–${AppSettings.maxPollingIntervalSeconds} s',
+                '${AppSettings.minPollingIntervalSeconds} to '
+                '${AppSettings.maxPollingIntervalSeconds} s',
             controlWidth: 120,
             control: _numberField(_intervalController, unit: 's'),
           ),
@@ -816,7 +817,7 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
       _Section.general => null,
       _Section.alerts => _alertsHaveError ? theme.colorScheme.error : null,
       _Section.osc => switch (oscStatus) {
-        OscListening() => Colors.green,
+        OscListening() => AppStatusColors.of(context).success,
         OscBindFailed() => theme.colorScheme.error,
         OscOff() => theme.colorScheme.outline,
       },
@@ -824,7 +825,7 @@ class _PreferencesDialogState extends ConsumerState<PreferencesDialog> {
         _webHasError
             ? theme.colorScheme.error
             : webRunning
-            ? Colors.green
+            ? AppStatusColors.of(context).success
             : theme.colorScheme.outline,
     };
 
@@ -938,7 +939,11 @@ class _SeverityIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => severity == AlertSeverity.critical
-      ? Icon(Icons.error, size: size, color: Colors.red)
+      ? Icon(
+          Icons.error,
+          size: size,
+          color: Theme.of(context).colorScheme.error,
+        )
       : Icon(
           Icons.warning,
           size: size,
@@ -955,7 +960,7 @@ class _ClientDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (online) return const StatusDot(color: Colors.green);
+    if (online) return StatusDot(color: AppStatusColors.of(context).success);
     return Container(
       width: 8,
       height: 8,
@@ -990,9 +995,7 @@ class _LinkField extends StatelessWidget {
             child: SelectableText(
               url,
               maxLines: 1,
-              style: AppTheme.mono(
-                theme.textTheme.bodyMedium?.copyWith(fontSize: 12.5),
-              ),
+              style: AppText.of(context).mono,
             ),
           ),
           IconButton(
@@ -1095,7 +1098,7 @@ class _ServiceCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         spacing: 8,
         children: [
-          _row(theme, error != null),
+          _row(theme, AppStatusColors.of(context), error != null),
           if (error != null)
             Text(
               error,
@@ -1108,7 +1111,7 @@ class _ServiceCard extends StatelessWidget {
     );
   }
 
-  Widget _row(ThemeData theme, bool failed) => Row(
+  Widget _row(ThemeData theme, AppStatusColors colors, bool failed) => Row(
     children: [
       Expanded(
         child: Column(
@@ -1126,7 +1129,7 @@ class _ServiceCard extends StatelessWidget {
               children: [
                 StatusDot(
                   color: running
-                      ? Colors.green
+                      ? colors.success
                       : failed
                       ? theme.colorScheme.error
                       : theme.colorScheme.outline,
