@@ -1,8 +1,11 @@
 import 'dart:io';
 import 'dart:convert';
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
+
+import '../../features/workspace/domain/warp_codec.dart';
 
 enum ProbeResult { online, unauthorized, offline, unprotected }
 
@@ -131,6 +134,12 @@ class PanasonicProtocolService {
   /// Sends a single command and returns both the response and whether the connection
   /// used protected (auth-required) mode. Handles the NTCONTROL handshake, computes
   /// the MD5 hash for protected mode, and strips the response prefix deterministically.
+  ///
+  /// The line sent is the hash (protected mode only), [commandMarker] and
+  /// [cmd]. An ASCII command has the marker `00`; a binary one passes an empty
+  /// marker and a [cmd] that already starts with `01` (see
+  /// [warpBinaryCommandBody]), and keeps the reply as it came
+  /// ([stripReplyPrefix] false) because its hex starts with the reply marker.
   Future<(String, bool)> _sendSingleCommandEx(
     String ip,
     int port,
@@ -139,6 +148,8 @@ class PanasonicProtocolService {
     String cmd, {
     Duration connectTimeout = const Duration(seconds: 4),
     Duration replyTimeout = const Duration(seconds: 5),
+    String commandMarker = '00',
+    bool stripReplyPrefix = true,
   }) async {
     Socket? socket;
     StreamSubscription? subscription;
@@ -185,7 +196,7 @@ class PanasonicProtocolService {
 
       // Detect protected mode from the handshake: "NTCONTROL 1 TOKEN" vs "NTCONTROL 0"
       final isProtected = initResponse.contains(' 1 ');
-      String commandPrefix = '00';
+      var commandPrefix = commandMarker;
       if (isProtected) {
         final tokenMatch = RegExp(r'NTCONTROL\s1\s([0-9a-fA-F]{8})')
             .firstMatch(initResponse);
@@ -200,7 +211,7 @@ class PanasonicProtocolService {
         }
         final token = tokenMatch.group(1)!;
         final hashStr = '$login:$password:$token';
-        commandPrefix = '${md5.convert(utf8.encode(hashStr))}00';
+        commandPrefix = '${md5.convert(utf8.encode(hashStr))}$commandMarker';
       }
 
       currentCompleter = Completer<String>();
@@ -225,7 +236,8 @@ class PanasonicProtocolService {
       // Strip exactly 2 chars from the front rather than searching for '00',
       // which could match inside a model name and strip the wrong amount.
       final trimmed = response.trim();
-      final result = trimmed.startsWith('00') && trimmed.length > 2
+      final result =
+          stripReplyPrefix && trimmed.startsWith('00') && trimmed.length > 2
           ? trimmed.substring(2)
           : trimmed;
 
@@ -333,6 +345,41 @@ class PanasonicProtocolService {
       replyTimeout: const Duration(milliseconds: 1500),
     );
     return _isTransportFailure(response) ? null : response;
+  }
+
+  /// Sends one binary frame (the warp table transfer) and returns the frame
+  /// of the reply, `02 00 ... 03`. The line sent is the same as for an ASCII
+  /// command, with `01` and the frame as hex in place of `00` and the text.
+  ///
+  /// Throws a [WarpTransportException] when there was no usable reply
+  /// (connection, handshake, authentication token or timeout), and a
+  /// [WarpProtocolException] when the projector answered with an error: an
+  /// `FF xx` frame (with its code), an `ERxx` text such as `ERRA`, or a reply
+  /// that is not a frame.
+  Future<Uint8List> sendBinaryCommand(
+    String ip,
+    int port,
+    String login,
+    String password,
+    Uint8List frame,
+  ) async {
+    final (response, _) = await _sendSingleCommandEx(
+      ip,
+      port,
+      login,
+      password,
+      warpBinaryCommandBody(frame),
+      commandMarker: '',
+      stripReplyPrefix: false,
+    );
+    if (_isTransportFailure(response)) {
+      throw WarpTransportException(response);
+    }
+    try {
+      return parseWarpBinaryReply(response);
+    } on FormatException {
+      throw WarpProtocolException('unexpected reply: $response');
+    }
   }
 
   /// Polls all essential telemetry points for the Monitoring Table, and

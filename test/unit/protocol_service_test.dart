@@ -1,7 +1,12 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:projector_grid/core/services/panasonic_protocol_service.dart';
+import 'package:projector_grid/core/services/warp_transfer.dart';
+import 'package:projector_grid/features/workspace/domain/warp_codec.dart';
+import 'package:projector_grid/features/workspace/domain/warp_model_caps.dart';
+import 'package:projector_grid/features/workspace/domain/warp_table.dart';
 
 import '../helpers/fake_projector_server.dart';
 
@@ -160,6 +165,144 @@ void main() {
         await service.sendCommand(projector.host, port, '', '', 'PON'),
         isFalse,
       );
+    });
+  });
+
+  group('sendBinaryCommand', () {
+    final save = buildSaveFrame(WarpSlot.pc1);
+
+    Future<Uint8List> binary(Uint8List frame, {int? port}) =>
+        service.sendBinaryCommand(
+          projector.host,
+          port ?? projector.port,
+          'admin1',
+          'panasonic',
+          frame,
+        );
+
+    test(
+      'unprotected: the line is 01 and the frame as upper-case hex',
+      () async {
+        final reply = await binary(save);
+        expect(projector.received.single, '010200AAE103');
+        expect(reply, warpHexToBytes('0200AAE10003'));
+      },
+    );
+
+    test('protected: the MD5 hash, then 01 and the hex', () async {
+      projector.greeting = 'NTCONTROL 1 1a2b3c4d';
+      await binary(save);
+      final hash = FakeProjectorServer.md5Prefix(
+        'admin1',
+        'panasonic',
+        '1a2b3c4d',
+      );
+      expect(projector.received.single, '${hash}010200AAE103');
+    });
+
+    test('a 4096-byte READ reply arrives whole', () async {
+      final block = Uint8List.fromList([
+        for (var i = 0; i < 4096; i++) (i * 13 + 5) & 0xFF,
+      ]);
+      projector.warp.setBlock(0x72, block);
+      final reply = await binary(buildReadFrame(0x72, top: true));
+      expect(reply.length, 9 + 4096 + 2);
+      final packet = parseReadReply(reply);
+      expect(packet.checksumOk, isTrue);
+      expect(packet.location, 3);
+      expect(packet.data, block);
+    });
+
+    test('FF 8B is a WarpProtocolException with its code', () async {
+      await expectLater(
+        binary(buildReadFrame(0x72, top: true)),
+        throwsA(
+          isA<WarpProtocolException>().having((e) => e.code, 'code', 0x8B),
+        ),
+      );
+    });
+
+    test('an ASCII error reply is a WarpProtocolException', () async {
+      projector.warp.script(0, 'ERRA');
+      await expectLater(
+        binary(save),
+        throwsA(
+          isA<WarpProtocolException>().having((e) => e.code, 'code', isNull),
+        ),
+      );
+    });
+
+    test('a reply that is not hex is a WarpProtocolException', () async {
+      projector.warp.script(0, '01ZZ');
+      await expectLater(binary(save), throwsA(isA<WarpProtocolException>()));
+    });
+
+    test('connection refused is a WarpTransportException', () async {
+      await expectLater(
+        binary(save, port: await closedPort()),
+        throwsA(isA<WarpTransportException>()),
+      );
+    });
+
+    test('a bad handshake is a WarpTransportException', () async {
+      projector.greeting = 'HELLO';
+      await expectLater(binary(save), throwsA(isA<WarpTransportException>()));
+      expect(projector.received, isEmpty);
+    });
+
+    test('an unreadable auth token is a WarpTransportException', () async {
+      projector.greeting = 'NTCONTROL 1 nothex!!';
+      await expectLater(binary(save), throwsA(isA<WarpTransportException>()));
+      expect(projector.received, isEmpty);
+    });
+
+    test('a dropped connection is a WarpTransportException', () async {
+      projector.warp.dropFrame(0);
+      await expectLater(binary(save), throwsA(isA<WarpTransportException>()));
+      // The wait is the reply timeout of the service.
+    }, timeout: const Timeout(Duration(seconds: 20)));
+
+    test('ASCII commands still use the 00 marker', () async {
+      projector.responses['QID'] = 'PT-RQ25K';
+      expect(await raw('QID'), 'PT-RQ25K');
+      expect(projector.received.single, '00QID');
+    });
+
+    test('a store and a reload round trip over the wire', () async {
+      final caps = lookupWarpModelCaps('001c_00_26')!;
+      final link = ProtocolWarpLink(
+        service,
+        ip: projector.host,
+        port: projector.port,
+        login: 'admin1',
+        password: 'panasonic',
+      );
+      final full = identityWarpTable(caps.geometry);
+      final result = await storeWarpMemory(
+        link,
+        slot: WarpSlot.pc1,
+        caps: caps,
+        full: full,
+        gridColumns: 9,
+        gridRows: 5,
+        now: DateTime.utc(2026, 11, 28, 9, 30, 5),
+      );
+      expect(result.complete, isTrue);
+      expect(result.frames, 21);
+      // Every frame and command went over its own connection.
+      expect(projector.warp.frames, hasLength(21));
+      expect(projector.received, hasLength(23));
+
+      final reloaded = await reloadWarpMemory(link, WarpSlot.pc1, caps);
+      expect(reloaded.storedAt, DateTime.utc(2026, 11, 28, 9, 30, 5));
+      expect(reloaded.gridCounts, (columns: 9, rows: 5));
+      final table = decodeTable(
+        (reloaded.read as WarpBlockRead).block,
+        WarpEncoding.triple,
+        caps.bits,
+      );
+      expect(table.planes.single.points, full.planes.single.points);
+      expect(table.header, defaultWarpHeader(1));
     });
   });
 

@@ -3,6 +3,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
+import 'package:projector_grid/features/workspace/domain/warp_codec.dart';
+
+import 'fake_warp_projector.dart';
 
 /// A loopback NTCONTROL "projector": one TCP connection per command, the same
 /// lifecycle `PanasonicProtocolService` expects from real hardware.
@@ -20,6 +23,12 @@ class FakeProjectorServer {
 
   /// Every raw line the client sent (prefix included, `\r` stripped).
   final List<String> received = [];
+
+  /// The warp tables of this projector: a binary line (`01` and hex) is
+  /// answered from it, and so are the `GMMI0`, `GDTS1` and `GGNS1` commands
+  /// that [responses] does not script. Its injection hooks (an error frame,
+  /// a rejected write, a dropped connection) reach the client as on the wire.
+  final FakeWarpProjector warp = FakeWarpProjector();
 
   /// When set, only this many connections get a valid [greeting]; every later
   /// one gets a garbage handshake — a fast transport failure on the client
@@ -69,8 +78,20 @@ class FakeProjectorServer {
       // Strip the 32-hex MD5 hash (protected mode) and the `00` header.
       final body = RegExp(r'^(?:[0-9a-f]{32})?00(.*)$').firstMatch(line);
       final cmd = body?.group(1) ?? line;
+      // A binary command: the hash, `01` and the frame as upper-case hex.
+      final binary = body == null
+          ? RegExp(r'^(?:[0-9a-f]{32})?01((?:[0-9A-F]{2})+)$').firstMatch(line)
+          : null;
       void reply() {
-        socket.add(ascii.encode('00${responses[cmd] ?? 'ER401'}\r'));
+        if (binary != null) {
+          final answer = warp.handleBinary(warpHexToBytes(binary.group(1)!));
+          if (answer != null) socket.add(ascii.encode('$answer\r'));
+        } else if (warp.dropsAscii(cmd) && !responses.containsKey(cmd)) {
+          // No reply, just a closed connection.
+        } else {
+          final scripted = responses[cmd] ?? warp.handleAscii(cmd) ?? 'ER401';
+          socket.add(ascii.encode('00$scripted\r'));
+        }
         socket.close().ignore();
       }
 
