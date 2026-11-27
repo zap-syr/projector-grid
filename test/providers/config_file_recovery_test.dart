@@ -23,10 +23,14 @@ void main() {
   final configDir = useTempConfigDir();
 
   final logged = <String>[];
+  final stacks = <Object?>[];
   setUp(() {
     logged.clear();
-    AppLog.debugOnError = (source, error, stack) =>
-        logged.add('$source: $error');
+    stacks.clear();
+    AppLog.debugOnError = (source, error, stack) {
+      logged.add('$source: $error');
+      stacks.add(stack);
+    };
   });
   tearDown(() => AppLog.debugOnError = null);
 
@@ -68,6 +72,7 @@ void main() {
         expect(logged, hasLength(1));
         expect(logged.single, contains(file(fileName).path));
         expect(logged.single, contains(bad.single.path));
+        expect(stacks.single, isNull);
 
         // The next save writes a fresh valid file; the bad copy stays.
         save(c);
@@ -190,6 +195,7 @@ void main() {
       );
       expect(logged, isNotEmpty);
       expect(logged.last, startsWith('App settings save: '));
+      expect(stacks.last, isNull);
     });
   });
 

@@ -41,8 +41,10 @@ Future<void> writeFileAtomic(String path, String contents) async {
 void saveConfigFileSync(String path, String what, String contents) {
   try {
     writeFileAtomicSync(path, contents);
-  } catch (e, stack) {
-    AppLog.error('$what save', e, stack);
+  } catch (e) {
+    // No stack: the exception text names the path and the OS error, and the
+    // stack only shows the caller's widget tree.
+    AppLog.error('$what save', e, null);
   }
 }
 
@@ -64,16 +66,17 @@ T? readJsonConfigOrQuarantine<T>(
   try {
     if (!file.existsSync()) return null;
     return parse(jsonDecode(file.readAsStringSync()));
-  } catch (e, stack) {
-    _quarantine(file, what, e, stack);
+  } catch (e) {
+    _quarantine(file, what, e);
     return null;
   }
 }
 
-void _quarantine(File file, String what, Object cause, StackTrace stack) {
-  // The reason is part of the logged error, not only of the stack: the log
-  // collapses a repeated error, and two bad files can fail with the same
-  // text.
+// Logged without a stack: the message names the file, the reason and the new
+// path, and the stack of a provider build runs to hundreds of lines. The
+// file name is in the message because the log collapses a repeated error by
+// its first line, and two bad files can fail with the same text.
+void _quarantine(File file, String what, Object cause) {
   final String outcome;
   try {
     final bad = _badCopyPath(file.path, DateTime.now());
@@ -84,14 +87,14 @@ void _quarantine(File file, String what, Object cause, StackTrace stack) {
       '$what load',
       '${file.path} is unusable ($cause), and it could not be moved aside '
           '($renameError)',
-      stack,
+      null,
     );
     return;
   }
   AppLog.error(
     '$what load',
     '${file.path} is unusable ($cause), $outcome, defaults are used',
-    stack,
+    null,
   );
 }
 

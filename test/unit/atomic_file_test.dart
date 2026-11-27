@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:projector_grid/core/services/app_log_file.dart';
 import 'package:projector_grid/core/services/atomic_file.dart';
+import 'package:projector_grid/core/services/log_files.dart';
 import 'package:projector_grid/core/services/window_prefs_service.dart';
 
 import '../helpers/test_config_dir.dart';
@@ -12,10 +13,17 @@ void main() {
   final configDir = useTempConfigDir();
 
   final logged = <String>[];
+  final stacks = <Object?>[];
+  final keys = <String>[];
   setUp(() {
     logged.clear();
-    AppLog.debugOnError = (source, error, stack) =>
-        logged.add('$source: $error');
+    stacks.clear();
+    keys.clear();
+    AppLog.debugOnError = (source, error, stack) {
+      logged.add('$source: $error');
+      stacks.add(stack);
+      keys.add(errorRepeatKey(error, stack));
+    };
   });
   tearDown(() => AppLog.debugOnError = null);
 
@@ -136,6 +144,7 @@ void main() {
       );
       expect(logged, hasLength(1));
       expect(logged.single, startsWith('App settings save: '));
+      expect(stacks.single, isNull, reason: 'the exception names the path');
     });
 
     test('a good path writes the file and logs nothing', () {
@@ -206,6 +215,23 @@ void main() {
       expect(line, contains(path('app_settings.json')));
       expect(line, contains('FormatException'));
       expect(line, contains(badCopies('app_settings.json').single.path));
+      expect(
+        stacks.single,
+        isNull,
+        reason: 'a build stack is hundreds of lines',
+      );
+    });
+
+    test('two bad files with the same parse error are two log entries', () {
+      File(path('a.json')).writeAsStringSync('{"x":');
+      File(path('b.json')).writeAsStringSync('{"x":');
+      readJsonConfigOrQuarantine(path('a.json'), 'Thing', asMap);
+      readJsonConfigOrQuarantine(path('b.json'), 'Thing', asMap);
+
+      expect(keys, hasLength(2));
+      final gate = ErrorRepeatGate();
+      final now = DateTime(2026, 11, 27);
+      expect(keys.map((k) => gate.admit(k, now)), everyElement(isNotNull));
     });
 
     test('a wrong shape that throws in parse counts as a failed load', () {
