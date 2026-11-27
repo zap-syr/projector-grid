@@ -46,7 +46,7 @@ class AlignmentBanner extends ConsumerWidget {
       child: IconTheme.merge(
         data: IconThemeData(color: onColor, size: 18),
         child: DefaultTextStyle.merge(
-          style: TextStyle(color: onColor, fontSize: 13),
+          style: AppText.of(context).description.copyWith(color: onColor),
           child: state.active
               ? LayoutBuilder(
                   builder: (_, constraints) => _ActiveRow(
@@ -78,7 +78,7 @@ class _BusyRow extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 10),
-        const Text('Alignment — reading / restoring projectors…'),
+        const Text('Alignment: reading and restoring projectors'),
       ],
     );
   }
@@ -117,8 +117,10 @@ class _ActiveRow extends ConsumerWidget {
         const Icon(Icons.center_focus_strong),
         const SizedBox(width: 4),
         _BannerIcon(icon: Icons.chevron_left, onPressed: notifier.previous),
-        SizedBox(
-          width: 40,
+        ConstrainedBox(
+          // Sized to its content so a long wall ("100/120") never overflows,
+          // never narrower than 40 so short counters keep the arrows put.
+          constraints: const BoxConstraints(minWidth: 40),
           // Digits have no descenders, so the line box's centre sits below
           // theirs; the bottom inset lines them up with the arrow icons.
           child: Padding(

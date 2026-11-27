@@ -1,6 +1,8 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
+import '../../../../core/theme/app_theme.dart';
+
 /// The Preferences text field: filled, no outline at rest, a 2px primary
 /// border while editing, the unit inside. Focusing it selects the whole
 /// value; Enter keeps the edit and leaves, Esc puts the old value back and
@@ -113,16 +115,16 @@ class _SettingsValueFieldState extends State<SettingsValueField> {
         : base;
     final borderWidth = editing ? 2.0 : (widget.hasError ? 1.0 : 0.0);
 
-    final valueStyle = theme.textTheme.bodyMedium?.copyWith(
+    final baseStyle = theme.textTheme.bodyMedium?.copyWith(
       fontWeight: widget.numeric ? FontWeight.w600 : FontWeight.w500,
       fontFeatures: const [FontFeature.tabularFigures()],
+    );
+    final valueStyle = baseStyle?.copyWith(
       letterSpacing: widget.obscureText ? 2.5 : null,
     );
-    final hintStyle = theme.textTheme.bodySmall?.copyWith(
-      fontSize: 12.5,
-      fontStyle: FontStyle.italic,
-      color: colors.onSurfaceVariant.withValues(alpha: 0.6),
-    );
+    // The value's own style in the placeholder colour, without the PIN dots'
+    // wide spacing: a placeholder is words, not masked digits.
+    final hintStyle = baseStyle?.copyWith(color: AppText.of(context).tertiary);
 
     final field = TextField(
       controller: widget.controller,

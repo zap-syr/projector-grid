@@ -65,7 +65,9 @@ height or decoration, never for size.
 | `monoSmall` | 12 Plex Mono | 400 | secondary | model + IP under a title, IP and OSC chips, a dropdown's detail |
 
 Pills: `caption` at `w600` in the pill's colour. Key caps (`key_caps.dart`) keep their own
-small mono size: they are a fixed-height component.
+small mono size: they are a fixed-height component. `monoFieldStyle` and `plainFieldStyle`
+(`dialog_parts.dart`) keep their own size too: they are context-free and carry no colour
+so a field's disabled and error states set it.
 
 ## 3. Text colours
 

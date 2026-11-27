@@ -203,11 +203,7 @@ class TooltipBubble extends StatelessWidget {
               const SizedBox(height: 2),
               Text(
                 detail!,
-                style: TextStyle(
-                  color: cs.onSurfaceVariant,
-                  fontSize: 12,
-                  height: 1.35,
-                ),
+                style: AppText.of(context).description.copyWith(height: 1.35),
               ),
             ],
             if (body case final body?) ...[

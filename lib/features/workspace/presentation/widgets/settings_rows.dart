@@ -1,5 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../../../../core/theme/app_theme.dart';
+
 /// Building blocks of the Preferences dialog: titled groups of label/control
 /// rows, the same layout Windows Settings and macOS System Settings use, so
 /// labels line up down the left and controls down the right.
@@ -148,13 +150,11 @@ class SettingsRow extends StatelessWidget {
                           if (note != null)
                             Text(
                               note,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                fontSize: 11.5,
+                              style: AppText.of(context).caption.copyWith(
                                 height: 1.3,
                                 color: error != null
                                     ? theme.colorScheme.error
-                                    : theme.colorScheme.onSurfaceVariant
-                                          .withValues(alpha: 0.75),
+                                    : null,
                               ),
                             ),
                         ],
