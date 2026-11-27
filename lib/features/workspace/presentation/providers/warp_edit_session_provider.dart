@@ -136,7 +136,7 @@ class WarpEditSession extends _$WarpEditSession {
 
   /// Whether the next write to the current memory first saves a backup of
   /// it: true until this session has written to that memory once.
-  bool get takesBackupOnNextWrite => !_backedUp.contains(state.slot);
+  bool takesBackupOnNextWrite() => !_backedUp.contains(state.slot);
 
   /// Finds out the model and loads a memory: the one the projector is in when
   /// that is PC-1 to PC-3, else PC-1. Reading does not change the mode.
