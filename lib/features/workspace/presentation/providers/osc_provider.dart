@@ -187,8 +187,9 @@ class OscNotifier extends _$OscNotifier {
       sendIp: settings.oscSendIp,
       sendPort: settings.oscSendPort,
     );
-    // A newer start or stop owns the state now.
-    if (!current) return;
+    // A newer start or stop owns the state now (disposal stops the service
+    // too, which lands here as the same false; the check is for the rest).
+    if (!current || !ref.mounted) return;
     // Only an explicit bind result sets the failure, so "on in the settings
     // but not listening yet" (launch, restart) never reads as port busy.
     state = _service.isActive
@@ -222,6 +223,7 @@ class OscNotifier extends _$OscNotifier {
 
   Future<void> stop() async {
     await _service.stop();
+    if (!ref.mounted) return;
     state = const OscOff();
     ref.read(appSettingsProvider.notifier).setOscActive(false);
     ref.read(workspaceProvider.notifier).onStateChanged = null;
@@ -240,6 +242,7 @@ class OscNotifier extends _$OscNotifier {
   /// since neither is picked up by an already-bound socket on its own.
   Future<void> restart() async {
     await stop();
+    if (!ref.mounted) return;
     await start();
   }
 

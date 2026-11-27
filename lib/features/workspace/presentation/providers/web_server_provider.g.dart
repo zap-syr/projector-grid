@@ -50,7 +50,7 @@ final class WebServerNotifierProvider
   }
 }
 
-String _$webServerNotifierHash() => r'18088addd9201146dd32ece4813fc46ed0bdc41e';
+String _$webServerNotifierHash() => r'ae957736c45872601ab6ff76349c27480add507f';
 
 /// Web Access server lifecycle; state = whether it's listening. Also the
 /// [WebApiSource] the routes read from, so the API reports exactly what the

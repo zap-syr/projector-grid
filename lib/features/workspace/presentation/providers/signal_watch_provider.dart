@@ -80,7 +80,9 @@ class SignalWatchNotifier extends _$SignalWatchNotifier {
         .commandsSent
         .listen(_onCommand);
     // Another provider's state can't change during build.
-    Future.microtask(() => _sync(ref.read(workspaceProvider)));
+    Future.microtask(() {
+      if (ref.mounted) _sync(ref.read(workspaceProvider));
+    });
     return const {};
   }
 
@@ -208,6 +210,7 @@ class SignalWatchNotifier extends _$SignalWatchNotifier {
     } finally {
       _inFlight.remove(id);
     }
+    if (!ref.mounted) return;
     final current = _node(id);
     if (raw == null || current == null || !_due.containsKey(id)) return;
     if (!_stillCurrent(id, switches)) return;
@@ -231,6 +234,7 @@ class SignalWatchNotifier extends _$SignalWatchNotifier {
       node.password,
       'QIN',
     );
+    if (!ref.mounted) return;
     if (raw == null || raw.startsWith('ER') || !_due.containsKey(node.id)) {
       return;
     }
@@ -277,6 +281,7 @@ class SignalWatchNotifier extends _$SignalWatchNotifier {
     } finally {
       _confirming.remove(node.id);
     }
+    if (!ref.mounted) return;
     if (!_due.containsKey(node.id) || !_armed.contains(node.id)) return;
     if (!_stillCurrent(node.id, switches)) return;
     final power = parsePowerStatus(raw);

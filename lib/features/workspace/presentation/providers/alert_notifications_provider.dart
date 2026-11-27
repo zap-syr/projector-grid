@@ -110,6 +110,7 @@ class AlertNotificationsNotifier extends _$AlertNotificationsNotifier {
   Future<void> _onClick() async {
     await windowManager.show();
     await windowManager.focus();
+    if (!ref.mounted) return;
     ref.read(activeAlertsRequestProvider.notifier).open();
   }
 }

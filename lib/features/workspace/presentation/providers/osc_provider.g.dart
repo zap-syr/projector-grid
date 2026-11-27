@@ -41,7 +41,7 @@ final class OscNotifierProvider
   }
 }
 
-String _$oscNotifierHash() => r'0fa4bc20a8507e9f20397e486014d955b1015c45';
+String _$oscNotifierHash() => r'1e198c79167dcd5495fb0b85357b37c3620b3622';
 
 abstract class _$OscNotifier extends $Notifier<OscStatus> {
   OscStatus build();

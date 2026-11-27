@@ -53,7 +53,7 @@ final class AlignmentNotifierProvider
   }
 }
 
-String _$alignmentNotifierHash() => r'241f1abfbd952af5749f36ea64809cbd38454024';
+String _$alignmentNotifierHash() => r'e817f8795a45a1dd2164bffb3834901ab41b7763';
 
 /// Alignment mode: one focused projector open with
 /// its pattern, neighbours or everyone optionally open with the Others

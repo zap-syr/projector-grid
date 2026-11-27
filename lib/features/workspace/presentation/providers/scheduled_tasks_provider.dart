@@ -47,6 +47,8 @@ class ScheduledTasksNotifier extends _$ScheduledTasksNotifier {
       if (!task.enabled) continue;
       if (!isTaskDue(task, now)) continue;
       await _execute(task, now);
+      // The next task's _execute reads a provider first thing.
+      if (!ref.mounted) return;
     }
   }
 
@@ -64,6 +66,7 @@ class ScheduledTasksNotifier extends _$ScheduledTasksNotifier {
         source: source,
       );
     }
+    if (!ref.mounted) return;
 
     state = state.map((t) {
       if (t.id != task.id) return t;
