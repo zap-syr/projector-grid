@@ -17,9 +17,16 @@ class FakeProtocolService extends PanasonicProtocolService {
   /// a projector that stopped responding mid-command.
   final Map<String, Completer<void>> holdCommands = {};
 
+  /// `pollProjectorTelemetry` to these IPs doesn't answer until the
+  /// completer does.
+  final Map<String, Completer<void>> holdPolls = {};
+
   /// `sendRawCommand` / `sendRawCommandPreservingErrorCodes` reply per
   /// command. Unset commands return null (transport failure).
   final Map<String, String?> rawResponses = {};
+
+  /// `sendRawCommand` to these IPs doesn't answer until the completer does.
+  final Map<String, Completer<void>> holdRaw = {};
 
   /// Per-IP overrides of [rawResponses], checked first.
   final Map<String, Map<String, String?>> rawResponsesByIp = {};
@@ -60,6 +67,8 @@ class FakeProtocolService extends PanasonicProtocolService {
     String cmd,
   ) async {
     sentRaw.add((ip, cmd));
+    final hold = holdRaw[ip];
+    if (hold != null) await hold.future;
     return _raw(ip, cmd);
   }
 
@@ -108,6 +117,10 @@ class FakeProtocolService extends PanasonicProtocolService {
   }) async {
     pollCount++;
     polls.add((ip, withSerial));
+    // Not `await holdPolls[ip]?.future`: that would add a microtask turn for
+    // every poll, which tests counting turns would notice.
+    final hold = holdPolls[ip];
+    if (hold != null) await hold.future;
     final (probe, t) = pollResults[ip] ?? (ProbeResult.offline, null);
     // Like the real service: no QSN, no `serialNumber` key.
     if (t == null || withSerial) return (probe, t);
