@@ -38,7 +38,19 @@ enum WarpUnsupportedReason {
   /// The model has no stored free grid memories: its first read answered
   /// "not available" although the model does not skip that table.
   notAvailable,
+
+  /// The model's table format is not understood: even its neutral table is
+  /// out of range for the row's bits, so nothing could be read or written
+  /// reliably. See [warpModelSupported].
+  format,
 }
+
+/// Whether the free grid may touch a model's memories. A row whose neutral
+/// table cannot be encoded with its own bits is not understood (a table read
+/// with those bits would decode wrong, and every write would be refused), so
+/// the model is left alone until it is verified on hardware.
+bool warpModelSupported(WarpModelCaps caps) =>
+    checkWarpEncodable(identityWarpTable(caps.geometry), caps.bits).ok;
 
 /// Why a loaded memory cannot be edited.
 enum WarpReadOnlyReason {

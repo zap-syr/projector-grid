@@ -685,21 +685,52 @@ void main() {
     });
   });
 
+  // The neutral table of these rows is out of range for their own bits (the
+  // outer nodes reach 3840 px, a table of 4 bits holds up to 3072), so the
+  // format is not understood and the models are left alone.
   group('a model whose neutral table the format cannot hold', () {
-    test('a store is refused before anything is sent', () async {
-      // 61 x 31 nodes of 64 px: the outer nodes reach 3840 px, above what a
-      // table of 4 bits can encode.
-      fake.rawResponses['QVX:MIDS1'] = 'MIDS1=0027:00:24';
-      final c = await opened();
-      final caps = stateOf(c).caps!;
-      expect(caps.id, '001b_00_24');
-      expect(stateOf(c).phase, WarpSessionPhase.ready);
+    const unsupportedIds = {
+      '0018_00_30': 'MIDS1=0024:00:30',
+      '0018_01_30': 'MIDS1=0024:01:30',
+      '0018_02_30': 'MIDS1=0024:02:30',
+      '001b_00_24': 'MIDS1=0027:00:24',
+      '001b_01_24': 'MIDS1=0027:01:24',
+    };
 
-      await session(c).resetToNeutral(gridColumns: 3, gridRows: 3);
-      expect(stateOf(c).phase, WarpSessionPhase.failed);
-      expect(stateOf(c).failureMessage, contains('Nothing was sent'));
-      expect(writeFrames(), isEmpty);
-      expect(isBusy(c), isFalse);
+    for (final MapEntry(key: id, value: mids) in unsupportedIds.entries) {
+      test('$id is unsupported and gets no read', () async {
+        fake.rawResponses['QVX:MIDS1'] = mids;
+        final c = await opened();
+        expect(stateOf(c).caps!.id, id);
+        expect(stateOf(c).phase, WarpSessionPhase.unsupported);
+        expect(stateOf(c).unsupportedReason, WarpUnsupportedReason.format);
+        expect(fake.sentBinary, isEmpty);
+        expect(fake.sentRaw.map((r) => r.$2), ['QVX:MIDS1']);
+        expect(isBusy(c), isFalse);
+        await expectLater(
+          session(c).resetToNeutral(gridColumns: 3, gridRows: 3),
+          throwsStateError,
+        );
+      });
+    }
+
+    test('the RQ25K and the RZ34KE rows are still supported', () async {
+      for (final (mids, id) in [
+        ('MIDS1=0028:00:26', '001c_00_26'),
+        ('MIDS1=0022:00:26', '0016_00_26'),
+      ]) {
+        fake.rawResponses['QVX:MIDS1'] = mids;
+        final c = await opened();
+        expect(stateOf(c).caps!.id, id);
+        expect(stateOf(c).phase, WarpSessionPhase.ready);
+      }
+    });
+
+    test('exactly these rows of the table are unsupported', () {
+      expect({
+        for (final caps in warpModelCapsTable.values)
+          if (!warpModelSupported(caps)) caps.id,
+      }, unsupportedIds.keys.toSet());
     });
   });
 

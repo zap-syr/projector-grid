@@ -161,7 +161,7 @@ class WarpEditSession extends _$WarpEditSession {
           'QVX:MIDS1',
         );
         caps = mids == null ? null : warpModelCapsFromMids(mids);
-        if (caps != null) {
+        if (caps != null && warpModelSupported(caps)) {
           modeReply = await _service.sendRawCommand(
             node.ipAddress,
             node.port,
@@ -178,6 +178,14 @@ class WarpEditSession extends _$WarpEditSession {
         state = state.copyWith(
           phase: WarpSessionPhase.unsupported,
           unsupportedReason: WarpUnsupportedReason.noModel,
+        );
+        return;
+      }
+      if (!warpModelSupported(caps)) {
+        state = state.copyWith(
+          caps: caps,
+          phase: WarpSessionPhase.unsupported,
+          unsupportedReason: WarpUnsupportedReason.format,
         );
         return;
       }
