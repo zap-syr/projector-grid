@@ -23,13 +23,39 @@ class FreeGridIcons {
   static const IconData zoomOut = Icons.remove;
   static const IconData zoomIn = Icons.add;
   static const IconData fitPanel = Icons.fit_screen;
-  static const IconData fitRange = Icons.zoom_out_map;
+
+  /// Not the glyph of the Corner Correction tile.
+  static const IconData fitRange = Icons.open_in_full;
   static const IconData reload = Icons.refresh;
   static const IconData moreMemory = Icons.more_vert;
   static const IconData store = Icons.save_outlined;
   static const IconData info = Icons.info_outline;
   static const IconData warning = Icons.warning_amber_rounded;
   static const IconData error = Icons.error_outline;
+}
+
+/// Tells a state whether the keyboard is what moves focus now: a focus ring
+/// shows for keyboard focus only, and it has to appear when a key is pressed
+/// while the widget already has focus from a click.
+mixin FreeGridKeyboardHighlight<T extends StatefulWidget> on State<T> {
+  bool get keyboardHighlight =>
+      FocusManager.instance.highlightMode == FocusHighlightMode.traditional;
+
+  @override
+  void initState() {
+    super.initState();
+    FocusManager.instance.addHighlightModeListener(_onHighlightMode);
+  }
+
+  @override
+  void dispose() {
+    FocusManager.instance.removeHighlightModeListener(_onHighlightMode);
+    super.dispose();
+  }
+
+  void _onHighlightMode(FocusHighlightMode mode) {
+    if (mounted) setState(() {});
+  }
 }
 
 /// Control or Command: the key that zooms with the wheel and adds to a
@@ -40,7 +66,7 @@ String get freeGridModifierName => freeGridIsMac ? 'Cmd' : 'Ctrl';
 
 /// A round icon button of the editor's headers and zoom cluster: no ink on a
 /// click, a soft fill under the pointer, the whole [size] square hit area.
-class FreeGridIconButton extends StatelessWidget {
+class FreeGridIconButton extends StatefulWidget {
   const FreeGridIconButton({
     super.key,
     required this.icon,
@@ -52,10 +78,14 @@ class FreeGridIconButton extends StatelessWidget {
     this.placement = TooltipPlacement.bottom,
     this.tooltipBody,
     this.tooltipMaxWidth = 260,
+    this.showTooltip = true,
   });
 
   final IconData icon;
   final String tooltip;
+
+  /// False hides the tooltip (a button whose menu is open).
+  final bool showTooltip;
 
   /// Lines under the tooltip's title (the keyboard help's table).
   final WidgetBuilder? tooltipBody;
@@ -71,37 +101,60 @@ class FreeGridIconButton extends StatelessWidget {
   final TooltipPlacement placement;
 
   @override
+  State<FreeGridIconButton> createState() => _FreeGridIconButtonState();
+}
+
+class _FreeGridIconButtonState extends State<FreeGridIconButton>
+    with FreeGridKeyboardHighlight {
+  bool _focused = false;
+
+  @override
   Widget build(BuildContext context) {
     final t = AppText.of(context);
-    final enabled = onPressed != null;
+    final w = widget;
+    final enabled = w.onPressed != null;
+    // The ring shows for keyboard focus only: a click leaves none.
+    final ring = _focused && keyboardHighlight;
     return CustomTooltip(
-      message: tooltip,
-      placement: placement,
-      body: tooltipBody,
-      maxWidth: tooltipMaxWidth,
+      message: w.tooltip,
+      placement: w.placement,
+      body: w.tooltipBody,
+      maxWidth: w.tooltipMaxWidth,
+      enabled: w.showTooltip,
       child: Semantics(
         button: true,
         enabled: enabled,
-        label: tooltip,
+        label: w.tooltip,
         child: SizedBox.square(
-          dimension: size,
-          child: Material(
-            type: MaterialType.transparency,
-            child: InkResponse(
-              onTap: onPressed,
-              containedInkWell: true,
-              customBorder: const CircleBorder(),
-              splashFactory: NoSplash.splashFactory,
-              highlightColor: Colors.transparent,
-              hoverColor: t.primary.withValues(alpha: 0.08),
-              focusColor: t.primary.withValues(alpha: 0.08),
-              child: Center(
-                child: RotatedBox(
-                  quarterTurns: quarterTurns,
-                  child: Icon(
-                    icon,
-                    size: iconSize,
-                    color: enabled ? t.secondary : t.disabled,
+          dimension: w.size,
+          child: DecoratedBox(
+            position: DecorationPosition.foreground,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: ring ? t.primary : Colors.transparent,
+                width: 2,
+              ),
+            ),
+            child: Material(
+              type: MaterialType.transparency,
+              child: InkResponse(
+                onTap: w.onPressed,
+                onFocusChange: (focused) => setState(() => _focused = focused),
+                containedInkWell: true,
+                customBorder: const CircleBorder(),
+                splashFactory: NoSplash.splashFactory,
+                highlightColor: Colors.transparent,
+                hoverColor: t.primary.withValues(alpha: 0.08),
+                focusColor: t.primary.withValues(alpha: 0.2),
+                child: Center(
+                  child: RotatedBox(
+                    quarterTurns: w.quarterTurns,
+                    child: Icon(
+                      w.icon,
+                      size: w.iconSize,
+                      color: enabled ? t.secondary : t.disabled,
+                    ),
                   ),
                 ),
               ),
@@ -130,6 +183,11 @@ class FreeGridSplit extends StatelessWidget {
 
   static double canvasWidth(double width) =>
       math.min(maxCanvas, math.max(0, width - gap - controlsWidth));
+
+  /// Whether the canvas card is compact in a dialog [dialogWidth] wide: the
+  /// body keeps 24 px at each side.
+  static bool isCompact(double dialogWidth) =>
+      canvasWidth(dialogWidth - 48) < compactBelow;
 
   @override
   Widget build(BuildContext context) {

@@ -31,6 +31,10 @@ class CustomTooltip extends StatefulWidget {
   /// default.
   final double maxWidth;
 
+  /// False hides the tooltip and keeps it from showing (a button whose menu
+  /// is open: the tooltip would cover the menu).
+  final bool enabled;
+
   const CustomTooltip({
     super.key,
     required this.message,
@@ -41,6 +45,7 @@ class CustomTooltip extends StatefulWidget {
     this.placement = TooltipPlacement.top,
     this.body,
     this.maxWidth = _maxBubbleWidth,
+    this.enabled = true,
   });
 
   @override
@@ -52,7 +57,7 @@ class _CustomTooltipState extends State<CustomTooltip> {
   OverlayEntry? _entry;
 
   void _show() {
-    if (_entry != null || !mounted) return;
+    if (_entry != null || !mounted || !widget.enabled) return;
     final box = _key.currentContext?.findRenderObject() as RenderBox?;
     if (box == null || !box.hasSize) return;
     final position = box.localToGlobal(Offset.zero);
@@ -102,6 +107,12 @@ class _CustomTooltipState extends State<CustomTooltip> {
   @override
   void didUpdateWidget(CustomTooltip oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!widget.enabled && _entry != null) {
+      // Not while building: the overlay is rebuilt by the removal.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !widget.enabled) _hide();
+      });
+    }
     // A tooltip that changes while shown (Copy's "Copied 42 events") is
     // redrawn with the new text instead of keeping the old one.
     if (_entry != null &&

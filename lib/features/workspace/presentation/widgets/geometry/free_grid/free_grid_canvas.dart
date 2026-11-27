@@ -53,7 +53,8 @@ class FreeGridCanvas extends StatefulWidget {
   State<FreeGridCanvas> createState() => _FreeGridCanvasState();
 }
 
-class _FreeGridCanvasState extends State<FreeGridCanvas> {
+class _FreeGridCanvasState extends State<FreeGridCanvas>
+    with FreeGridKeyboardHighlight {
   FreeGridView? _view;
   Size? _lastSize;
 
@@ -62,6 +63,7 @@ class _FreeGridCanvasState extends State<FreeGridCanvas> {
   bool _touched = false;
 
   bool? _rangeReported;
+  bool _focused = false;
   bool _spaceDown = false;
   int? _panPointer;
   double _lastScale = 1;
@@ -92,7 +94,29 @@ class _FreeGridCanvasState extends State<FreeGridCanvas> {
       rangeX: caps.movableRangeX,
       rangeY: caps.movableRangeY,
       canvas: size,
+      avoid: _clusterRect(size),
     );
+  }
+
+  /// Where the zoom cluster sits on a canvas of [size], with a few px round
+  /// it: the first view keeps the drawing out of it.
+  Rect _clusterRect(Size size) {
+    final compact = widget.compact;
+    // Three buttons and a separator; the help button and another separator
+    // follow in a compact canvas.
+    final button = compact ? 26.0 : 28.0;
+    final buttons = compact ? 4 : 3;
+    final separators = compact ? 2 : 1;
+    final width = buttons * button + separators * 9 + 6;
+    final height = button + 6;
+    final right = compact ? 8.0 : 10.0;
+    final bottom = compact ? 6.0 : 8.0;
+    return Rect.fromLTWH(
+      size.width - right - width,
+      size.height - bottom - height,
+      width,
+      height,
+    ).inflate(6);
   }
 
   bool get _modifierDown => freeGridIsMac
@@ -236,9 +260,10 @@ class _FreeGridCanvasState extends State<FreeGridCanvas> {
           child: Focus(
             focusNode: widget.focusNode,
             onKeyEvent: _onKey,
-            onFocusChange: (focused) {
-              if (!focused && _spaceDown) setState(() => _spaceDown = false);
-            },
+            onFocusChange: (focused) => setState(() {
+              _focused = focused;
+              if (!focused) _spaceDown = false;
+            }),
             child: MouseRegion(
               cursor: cursor,
               child: Semantics(
@@ -250,6 +275,21 @@ class _FreeGridCanvasState extends State<FreeGridCanvas> {
                         child: CustomPaint(
                           key: const ValueKey('free-grid-paint'),
                           painter: painter,
+                        ),
+                      ),
+                      // The canvas takes keys (Space, later arrows and B R H
+                      // V): a 2 px ring inside its edge says it has them,
+                      // for keyboard focus only.
+                      Positioned.fill(
+                        child: IgnorePointer(
+                          child: DecoratedBox(
+                            key: const ValueKey('free-grid-focus-ring'),
+                            decoration: BoxDecoration(
+                              border: _focused && keyboardHighlight
+                                  ? Border.all(color: cs.primary, width: 2)
+                                  : null,
+                            ),
+                          ),
                         ),
                       ),
                       Positioned(

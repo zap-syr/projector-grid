@@ -51,7 +51,13 @@ class FreeGridFrame {
     required this.rangeX,
     required this.rangeY,
     required this.canvas,
+    this.avoid,
   });
+
+  /// A part of the canvas the drawing must stay clear of at the first view
+  /// (the zoom cluster), in canvas px. When the panel fit would put the
+  /// panel under it, the fit is made in the canvas above it instead.
+  final Rect? avoid;
 
   final int panelWidth;
   final int panelHeight;
@@ -92,23 +98,35 @@ class FreeGridFrame {
 
   Rect get canvasRect => Offset.zero & canvas;
 
-  FreeGridView _fit(Rect target, double margin) {
-    if (canvas.isEmpty || target.isEmpty) {
+  FreeGridView _fit(Rect target, double margin, {Rect? area}) {
+    final within = area ?? canvasRect;
+    if (within.isEmpty || target.isEmpty) {
       return const FreeGridView(zoom: 1, offset: Offset.zero);
     }
     final usable = 1 - 2 * margin;
     final zoom = math.min(
-      canvas.width * usable / target.width,
-      canvas.height * usable / target.height,
+      within.width * usable / target.width,
+      within.height * usable / target.height,
     );
     return FreeGridView(
       zoom: zoom,
-      offset: canvas.center(Offset.zero) - target.center * zoom,
+      offset: within.center - target.center * zoom,
     );
   }
 
-  /// The panel centred with [panelMargin] on each side: the first view.
-  FreeGridView fitPanel() => _fit(panel, panelMargin);
+  /// The panel centred with [panelMargin] on each side: the first view. It
+  /// keeps clear of [avoid]: when the panel would reach it, the panel is
+  /// fitted in the canvas above it.
+  FreeGridView fitPanel() {
+    final view = _fit(panel, panelMargin);
+    final avoid = this.avoid;
+    if (avoid == null || !view.rectToScreen(panel).overlaps(avoid)) return view;
+    return _fit(
+      panel,
+      panelMargin,
+      area: Rect.fromLTRB(0, 0, canvas.width, math.max(1, avoid.top)),
+    );
+  }
 
   /// The whole movable range in view.
   FreeGridView fitRange() => _fit(range, rangeMargin);
@@ -238,6 +256,9 @@ enum FreeGridNoteKind {
   /// A memory is being written.
   storingBackup,
 
+  /// The memory could not be read: there is nothing to edit.
+  notRead,
+
   /// Nothing to warn about: how to select.
   hint,
 }
@@ -257,7 +278,35 @@ class FreeGridNote {
     FreeGridNoteKind.folded => true,
     FreeGridNoteKind.loadingBackup ||
     FreeGridNoteKind.storingBackup ||
+    FreeGridNoteKind.notRead ||
     FreeGridNoteKind.hint => false,
+  };
+}
+
+/// The text of a warning note (the five kinds with [FreeGridNote.isWarning]);
+/// the empty string for the others. It is the canvas card's note line, and the
+/// footer's message in a compact window.
+String freeGridWarningText(FreeGridNote note, WarpSessionState s) {
+  final counts = s.gridCounts;
+  return switch (note.kind) {
+    FreeGridNoteKind.readOnlyFit =>
+      'This memory cannot be shown as a grid. Reset it to neutral to edit it.',
+    FreeGridNoteKind.readOnlyPlanes =>
+      'This memory holds one table per color, the editor cannot change it.',
+    FreeGridNoteKind.undescribed =>
+      'This table has detail a ${counts.columns} x ${counts.rows} grid '
+          'cannot describe. Editing will replace it with the grid shape. '
+          'Try a larger grid first.',
+    FreeGridNoteKind.belowLegacyLimit =>
+      'Some points are below ${warpLegacyReaderLimit(s.caps!.bits)} px. '
+          'The projector shows them correctly, but other Panasonic tools '
+          'may read this memory as broken.',
+    FreeGridNoteKind.folded =>
+      note.foldedCells == 1
+          ? '1 cell is folded, the image shows it mirrored.'
+          : '${note.foldedCells} cells are folded, the image shows them '
+                'mirrored.',
+    _ => '',
   };
 }
 
@@ -287,6 +336,9 @@ FreeGridNote freeGridNote(WarpSessionState s) {
     if (folded > 0) {
       return FreeGridNote(FreeGridNoteKind.folded, foldedCells: folded);
     }
+  }
+  if (s.phase == WarpSessionPhase.failed && table == null) {
+    return const FreeGridNote(FreeGridNoteKind.notRead);
   }
   return switch (s.phase) {
     WarpSessionPhase.detecting || WarpSessionPhase.loading =>

@@ -28,7 +28,8 @@ class FreeGridHelpButton extends StatelessWidget {
     // The tooltip is the help: a click has nothing more to show.
     onPressed: enabled ? () {} : null,
     tooltipBody: (_) => const FreeGridHelpTable(),
-    tooltipMaxWidth: 380,
+    // Wide enough for every description on one line.
+    tooltipMaxWidth: 420,
   );
 }
 
@@ -42,15 +43,16 @@ class FreeGridHelpTable extends StatelessWidget {
     final mod = freeGridModifierName;
     final textStyle = t.description.copyWith(color: t.primary);
 
-    Widget keys(List<Object> parts) => Wrap(
+    // A Row, never a Wrap: the keys stay on one line and the column is as
+    // wide as the widest of them.
+    Widget keys(List<Object> parts) => Row(
+      mainAxisSize: MainAxisSize.min,
       spacing: 4,
-      runSpacing: 2,
-      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         for (final p in parts)
           p is _Key
               ? KeyCap(p.label, small: true)
-              : Text(p as String, style: textStyle),
+              : Text(p as String, style: textStyle, softWrap: false),
       ],
     );
 
@@ -67,8 +69,9 @@ class FreeGridHelpTable extends StatelessWidget {
                 const TextSpan(text: ' 10 px'),
               ],
             ),
+            softWrap: false,
           )
-        : Text(text, style: t.description);
+        : Text(text, style: t.description, softWrap: false);
 
     final rows = <(List<Object>, Widget)>[
       ([const _Key('Arrows')], does('', withShift: true)),

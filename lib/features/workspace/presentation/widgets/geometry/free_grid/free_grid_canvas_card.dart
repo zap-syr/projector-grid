@@ -13,6 +13,7 @@ import '../../common/key_caps.dart';
 import '../geometry_loading.dart';
 import 'free_grid_canvas.dart';
 import 'free_grid_help.dart';
+import '../../custom_tooltip.dart';
 import 'free_grid_painter.dart';
 import 'free_grid_parts.dart';
 
@@ -33,12 +34,16 @@ class FreeGridCanvasCard extends StatefulWidget {
     super.key,
     required this.session,
     required this.compact,
+    required this.onRetry,
   });
 
   final WarpSessionState session;
 
   /// The card is narrower than [FreeGridSplit.compactBelow].
   final bool compact;
+
+  /// Reads the memory again: the button of a read that failed.
+  final VoidCallback onRetry;
 
   @override
   State<FreeGridCanvasCard> createState() => _FreeGridCanvasCardState();
@@ -111,7 +116,12 @@ class _FreeGridCanvasCardState extends State<FreeGridCanvasCard> {
     if (!_hasTable) {
       return _ReadFailed(
         title: 'Could not read $label',
-        detail: _s.failureMessage ?? '',
+        detail:
+            _s.failureMessage ??
+            'The projector did not answer the read. Try again, or check '
+                'that it is not busy.',
+        reason: _s.failureDetail,
+        onRetry: widget.onRetry,
       );
     }
     final storing = _s.phase == WarpSessionPhase.storing;
@@ -158,7 +168,8 @@ class _Header extends StatelessWidget {
     final String? pill = switch (session.phase) {
       _ when compact => null,
       WarpSessionPhase.storing => 'Storing',
-      _ when session.table != null && !session.busy =>
+      // A read-only memory has no control grid to count.
+      _ when session.table != null && !session.busy && !session.readOnly =>
         '${counts.columns} x ${counts.rows} points',
       _ => null,
     };
@@ -244,15 +255,31 @@ class _Header extends StatelessWidget {
 
 /// The canvas' place while a memory could not be read.
 class _ReadFailed extends StatelessWidget {
-  const _ReadFailed({required this.title, required this.detail});
+  const _ReadFailed({
+    required this.title,
+    required this.detail,
+    required this.reason,
+    required this.onRetry,
+  });
 
   final String title;
+
+  /// What to do, in words.
   final String detail;
+
+  /// The reason as the projector gave it: a tooltip on the detail.
+  final String? reason;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
     final t = AppText.of(context);
     final cs = Theme.of(context).colorScheme;
+    final text = Text(
+      detail,
+      textAlign: TextAlign.center,
+      style: t.description,
+    );
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -269,11 +296,21 @@ class _ReadFailed extends StatelessWidget {
             const SizedBox(height: 4),
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 320),
-              child: Text(
-                detail,
-                textAlign: TextAlign.center,
-                style: t.description,
-              ),
+              child: reason == null
+                  ? text
+                  : CustomTooltip(
+                      message: reason!,
+                      placement: TooltipPlacement.top,
+                      maxWidth: 340,
+                      child: text,
+                    ),
+            ),
+            const SizedBox(height: 14),
+            // The in-place secondary action, as Scan again in Discover.
+            FilledButton.tonal(
+              key: const ValueKey('free-grid-try-again'),
+              onPressed: onRetry,
+              child: const Text('Try again'),
             ),
           ],
         ),
@@ -381,8 +418,12 @@ class _Footer extends StatelessWidget {
         children: [
           ValueListenableBuilder<bool>(
             valueListenable: rangeVisible,
-            builder: (context, visible, _) =>
-                _Legend(compact: compact, showRange: visible && !compact),
+            builder: (context, visible, _) => _Legend(
+              compact: compact,
+              showRange: visible && !compact,
+              // A read-only memory has no control grid to explain.
+              showGrid: !session.readOnly,
+            ),
           ),
           if (!compact) _NoteLine(session: session),
         ],
@@ -392,10 +433,15 @@ class _Footer extends StatelessWidget {
 }
 
 class _Legend extends StatelessWidget {
-  const _Legend({required this.compact, required this.showRange});
+  const _Legend({
+    required this.compact,
+    required this.showRange,
+    required this.showGrid,
+  });
 
   final bool compact;
   final bool showRange;
+  final bool showGrid;
 
   @override
   Widget build(BuildContext context) {
@@ -413,10 +459,11 @@ class _Legend extends StatelessWidget {
           ),
           'Panel',
         ),
-        (
-          Center(child: Container(height: 2, color: cs.primary)),
-          compact ? 'Grid' : 'Control grid',
-        ),
+        if (showGrid)
+          (
+            Center(child: Container(height: 2, color: cs.primary)),
+            compact ? 'Grid' : 'Control grid',
+          ),
         if (showRange)
           (
             DashedBorder(
@@ -504,35 +551,14 @@ class _NoteLine extends StatelessWidget {
         child: KeyCap(key, small: true),
       ),
     );
-    final counts = s.gridCounts;
     return switch (note.kind) {
-      FreeGridNoteKind.readOnlyFit => const TextSpan(
-        text:
-            'This memory cannot be shown as a grid. Reset it to neutral to '
-            'edit it.',
-      ),
-      FreeGridNoteKind.readOnlyPlanes => const TextSpan(
-        text:
-            'This memory holds one table per colour, the editor cannot '
-            'change it.',
-      ),
-      FreeGridNoteKind.undescribed => TextSpan(
-        text:
-            'This table has detail a ${counts.columns} x ${counts.rows} grid '
-            'cannot describe. Editing will replace it with the grid shape. '
-            'Try a larger grid first.',
-      ),
-      FreeGridNoteKind.belowLegacyLimit => TextSpan(
-        text:
-            'Some points are below ${warpLegacyReaderLimit(s.caps!.bits)} px. '
-            'The projector shows them correctly, but other Panasonic tools '
-            'may read this memory as broken.',
-      ),
-      FreeGridNoteKind.folded => TextSpan(
-        text: note.foldedCells == 1
-            ? '1 cell is folded, the image shows it mirrored.'
-            : '${note.foldedCells} cells are folded, the image shows them '
-                  'mirrored.',
+      FreeGridNoteKind.readOnlyFit ||
+      FreeGridNoteKind.readOnlyPlanes ||
+      FreeGridNoteKind.undescribed ||
+      FreeGridNoteKind.belowLegacyLimit ||
+      FreeGridNoteKind.folded => TextSpan(text: freeGridWarningText(note, s)),
+      FreeGridNoteKind.notRead => TextSpan(
+        text: 'There is nothing to edit until $label has been read.',
       ),
       FreeGridNoteKind.loadingBackup => const TextSpan(
         text:

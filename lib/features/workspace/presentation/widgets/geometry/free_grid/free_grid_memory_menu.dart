@@ -67,6 +67,8 @@ class FreeGridMemoryMenu extends StatelessWidget {
         key: const ValueKey('free-grid-memory-more'),
         icon: FreeGridIcons.moreMemory,
         tooltip: 'More memory actions',
+        // Its tooltip would lie over the menu it opens.
+        showTooltip: !controller.isOpen,
         size: 28,
         onPressed: enabled
             ? () => controller.isOpen ? controller.close() : controller.open()
@@ -109,7 +111,9 @@ class _Item extends StatelessWidget {
         minimumSize: const Size(0, 0),
       ),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minWidth: 268),
+        // The menu is 300 wide with its 6 px inset and the item's 10 px
+        // padding; a longer description wraps.
+        constraints: const BoxConstraints.tightFor(width: 268),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -133,7 +137,7 @@ class _Item extends StatelessWidget {
                   Text(
                     title,
                     style: t.body.copyWith(
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w500,
                       color: titleColor,
                     ),
                   ),
@@ -222,6 +226,7 @@ Future<bool> confirmFreeGridRestore(
   required String slotLabel,
   required String projector,
   required DateTime backupTakenAt,
+  bool backupOfUnstored = false,
   bool unstoredChanges = false,
 }) async {
   final result = await showDialog<bool>(
@@ -232,12 +237,26 @@ Future<bool> confirmFreeGridRestore(
       subtitle: projector,
       monoSubtitle: true,
       changes: [
+        // A backup of a memory that was never stored holds no correction:
+        // restoring it is no "as it was on".
+        if (backupOfUnstored)
+          ConfirmChange(
+            icon: Icons.history,
+            lead: '$slotLabel goes back to no correction',
+            rest: ', as it was before the first Store',
+          )
+        else
+          ConfirmChange(
+            icon: Icons.history,
+            lead:
+                '$slotLabel is stored as it was on '
+                '${freeGridTimeLabel(backupTakenAt)}',
+            rest: ', from the backup on this computer',
+          ),
         ConfirmChange(
-          icon: Icons.history,
-          lead:
-              '$slotLabel is stored as it was on '
-              '${freeGridTimeLabel(backupTakenAt)}',
-          rest: ', from the backup on this computer',
+          icon: Icons.layers_clear_outlined,
+          lead: 'The current $slotLabel table is replaced',
+          rest: ', it is not backed up',
         ),
         if (unstoredChanges)
           const ConfirmChange(

@@ -19,6 +19,7 @@ import 'geometry/corner_controls.dart';
 import 'geometry/curved_controls.dart';
 import 'geometry/free_grid/free_grid_editor.dart';
 import 'geometry/free_grid/free_grid_footer.dart';
+import 'geometry/free_grid/free_grid_parts.dart';
 import 'geometry/geometry_loading.dart';
 import 'geometry/geometry_mode_tiles.dart';
 import 'geometry/geometry_off_state.dart';
@@ -138,7 +139,10 @@ class _GeometryCorrectionDialogState
       _loading = false;
     });
     // The projector is in a memory already: read it, change nothing.
-    if (_mode.isFreeGrid) await _ensureSession().open();
+    if (_mode.isFreeGrid) {
+      await _ensureSession().open();
+      _leaveIfNoMemories(GeometryMode.off);
+    }
     if (!mounted) return;
     await _ensureModeLoaded(_mode);
   }
@@ -226,6 +230,11 @@ class _GeometryCorrectionDialogState
     if (m.isFreeGrid) return _selectFreeGrid();
     if (m == _mode || _leavingFreeGrid) return;
     if (_mode.isFreeGrid) {
+      // Not while the session reads or writes: its own GMMI0 could land
+      // after this one and leave the projector in a memory.
+      if (_container.read(warpEditSessionProvider(widget.node.id)).busy) {
+        return;
+      }
       // The grid overlay and the cursor go off before the mode changes, so
       // the projector is not left showing them over another correction.
       _leavingFreeGrid = true;
@@ -256,15 +265,35 @@ class _GeometryCorrectionDialogState
   /// write that is.
   Future<void> _selectFreeGrid() async {
     if (_mode.isFreeGrid) return;
-    final wasOff = _mode == GeometryMode.off;
+    final previous = _mode;
+    final wasOff = previous == GeometryMode.off;
     final session = _ensureSession();
     final slot = _container.read(warpEditSessionProvider(widget.node.id)).slot;
     setState(() => _mode = GeometryModeTiles.freeGridTile);
-    if (_tier != QuadPixelTier.none && wasOff) {
-      await _client.writeBool('QPDI1', true);
-    }
+    await session.open(
+      switchTo: slot,
+      // After the session has found the memory there, and before it switches
+      // the projector: a model without memories is never written to.
+      beforeSwitch: () async {
+        if (_tier != QuadPixelTier.none && wasOff) {
+          await _client.writeBool('QPDI1', true);
+        }
+      },
+    );
+    _leaveIfNoMemories(previous);
+  }
+
+  /// A model whose first read says it has no memories: the projector was not
+  /// switched, so the dialog goes back to the mode it was in and the tile is
+  /// gone for the rest of the dialog.
+  void _leaveIfNoMemories(GeometryMode previous) {
     if (!mounted) return;
-    await session.open(switchTo: slot);
+    final s = _container.read(warpEditSessionProvider(widget.node.id));
+    if (s.phase != WarpSessionPhase.unsupported) return;
+    setState(() {
+      _mode = previous;
+      _freeGridAvailable = false;
+    });
   }
 
   Future<void> _writeResets(List<(String, bool)> registers) async {
@@ -312,50 +341,68 @@ class _GeometryCorrectionDialogState
     final session = freeGrid
         ? ref.watch(warpEditSessionProvider(widget.node.id))
         : null;
-    return Dialog(
-      clipBehavior: Clip.antiAlias,
-      // A cap the dialog fills: one size in every mode and while loading;
-      // the smallest window (800×600) leaves about 720×550 inside the insets.
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(
-          maxWidth: GeometryCorrectionDialog.maxWidth,
-          maxHeight: GeometryCorrectionDialog.maxHeight,
-        ),
-        child: SizedBox.expand(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              DialogTitleBar(
-                icon: Icons.crop_free,
-                title: 'Geometry Correction',
-                projectorId: widget.node.id,
-              ),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      GeometryModeTiles(
-                        mode: _loading ? null : _mode,
-                        onSelected: _selectMode,
-                        showFreeGrid: _freeGridAvailable,
-                        othersEnabled:
-                            session?.phase != WarpSessionPhase.storing,
-                      ),
-                      const SizedBox(height: 16),
-                      Expanded(child: _buildBody()),
-                    ],
+    // A Store, Restore or Reset that is running is not left unseen: the
+    // dialog stays (Esc, a click outside and the close button all ask the
+    // route to pop, which is refused) until the write has ended.
+    final writing = session?.phase == WarpSessionPhase.storing;
+    return PopScope(
+      canPop: !writing,
+      child: Dialog(
+        clipBehavior: Clip.antiAlias,
+        // A cap the dialog fills: one size in every mode and while loading;
+        // the smallest window (800×600) leaves about 720×550 inside the
+        // insets.
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: GeometryCorrectionDialog.maxWidth,
+            maxHeight: GeometryCorrectionDialog.maxHeight,
+          ),
+          child: LayoutBuilder(
+            builder: (context, constraints) => SizedBox.expand(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  DialogTitleBar(
+                    icon: Icons.crop_free,
+                    title: 'Geometry Correction',
+                    projectorId: widget.node.id,
+                    onClose: () => Navigator.of(context).maybePop(),
                   ),
-                ),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          GeometryModeTiles(
+                            mode: _loading ? null : _mode,
+                            onSelected: _selectMode,
+                            showFreeGrid: _freeGridAvailable,
+                            // While the session reads or writes, the other
+                            // modes wait: a GMMI0 of this dialog must not
+                            // race the session's.
+                            othersEnabled: !(session?.busy ?? false),
+                          ),
+                          const SizedBox(height: 16),
+                          Expanded(child: _buildBody()),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (session != null)
+                    FreeGridFooter(
+                      session: session,
+                      compact: FreeGridSplit.isCompact(constraints.maxWidth),
+                    )
+                  else
+                    DialogFooter(
+                      message: SentRightAwayNote(
+                        loading: _loading || _modeLoading,
+                      ),
+                    ),
+                ],
               ),
-              if (session != null)
-                FreeGridFooter(session: session)
-              else
-                DialogFooter(
-                  message: SentRightAwayNote(loading: _loading || _modeLoading),
-                ),
-            ],
+            ),
           ),
         ),
       ),

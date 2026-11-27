@@ -1,8 +1,10 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../../../../../../core/theme/app_theme.dart';
+import '../../../../domain/free_grid_view.dart';
 import '../../../../domain/warp_session_state.dart';
 import '../../common/dialog_parts.dart';
+import '../../custom_tooltip.dart';
 import 'free_grid_canvas_card.dart';
 import 'free_grid_parts.dart';
 
@@ -10,9 +12,17 @@ import 'free_grid_parts.dart';
 /// filled button, `Store to PC-n`. The footer keeps the height every mode
 /// has.
 class FreeGridFooter extends StatelessWidget {
-  const FreeGridFooter({super.key, required this.session});
+  const FreeGridFooter({
+    super.key,
+    required this.session,
+    required this.compact,
+  });
 
   final WarpSessionState session;
+
+  /// The canvas card is compact: it has no note line, so a warning that
+  /// applies is the footer's message.
+  final bool compact;
 
   static const double storeMinWidth = 150;
 
@@ -36,14 +46,23 @@ class FreeGridFooter extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final failure = session.failureMessage;
     // A write that failed leaves the memory on screen: say what happened, in
-    // the error colour, where the operator is looking.
+    // the error colour, where the operator is looking. One line that ends
+    // with what to do; the reason is the tooltip's.
     if (session.phase == WarpSessionPhase.failed &&
         session.table != null &&
         failure != null) {
       return _Line(
         leading: Icon(FreeGridIcons.error, size: 16, color: cs.error),
         text: failure,
+        tooltip: session.failureDetail,
         style: t.description.copyWith(color: cs.error),
+      );
+    }
+    // A read that failed has its say on the canvas; nothing can be edited.
+    if (session.phase == WarpSessionPhase.failed) {
+      return _Line(
+        leading: Icon(FreeGridIcons.info, size: 16, color: t.secondary),
+        text: '$label was not read',
       );
     }
     // A grid overlay or a cursor the projector did not take: the switch says
@@ -70,6 +89,34 @@ class FreeGridFooter extends StatelessWidget {
         text: 'Storing to $label, about 1 second',
       );
     }
+    final warning = AppStatusColors.of(context).warning;
+    // The table is in the projector, but its stored time or grid size is
+    // not: until the next read or write the operator is told.
+    if (session.lastStoreIncomplete) {
+      return _Line(
+        leading: Icon(FreeGridIcons.warning, size: 16, color: warning),
+        text:
+            '$label is stored, but the projector did not keep its stored '
+            'time or grid size. Reload to check.',
+        tooltip:
+            '$label is stored, but the projector did not keep its stored '
+            'time or grid size. Reload to check.',
+        style: t.description.copyWith(color: t.primary),
+      );
+    }
+    // A compact canvas has no note line: what it would warn about goes here,
+    // with the whole text in a tooltip.
+    final note = freeGridNote(session);
+    if (compact && note.isWarning) {
+      final text = freeGridWarningText(note, session);
+      return _Line(
+        key: const ValueKey('free-grid-footer-warning'),
+        leading: Icon(FreeGridIcons.warning, size: 16, color: warning),
+        text: text,
+        tooltip: text,
+        style: t.description.copyWith(color: t.primary),
+      );
+    }
     return _Line(
       leading: Icon(FreeGridIcons.info, size: 16, color: t.secondary),
       text: 'Edits show on the projector live, Store keeps them in $label',
@@ -78,29 +125,48 @@ class FreeGridFooter extends StatelessWidget {
 }
 
 class _Line extends StatelessWidget {
-  const _Line({required this.leading, required this.text, this.style});
+  const _Line({
+    super.key,
+    required this.leading,
+    required this.text,
+    this.style,
+    this.tooltip,
+  });
 
   final Widget leading;
   final String text;
   final TextStyle? style;
 
+  /// The whole text or the reason behind it, for a line that is cut short.
+  final String? tooltip;
+
   @override
-  Widget build(BuildContext context) => Row(
-    children: [
-      // The spinner sits in the icon's 16 px box, so the text keeps its
-      // place when one gives way to the other.
-      SizedBox.square(dimension: 16, child: Center(child: leading)),
-      const SizedBox(width: 8),
-      Flexible(
-        child: Text(
-          text,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: style,
+  Widget build(BuildContext context) {
+    final line = Text(
+      text,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: style,
+    );
+    return Row(
+      children: [
+        // The spinner sits in the icon's 16 px box, so the text keeps its
+        // place when one gives way to the other.
+        SizedBox.square(dimension: 16, child: Center(child: leading)),
+        const SizedBox(width: 8),
+        Flexible(
+          child: tooltip == null
+              ? line
+              : CustomTooltip(
+                  message: tooltip!,
+                  placement: TooltipPlacement.top,
+                  maxWidth: 380,
+                  child: line,
+                ),
         ),
-      ),
-    ],
-  );
+      ],
+    );
+  }
 }
 
 class _Spinner extends StatelessWidget {

@@ -66,29 +66,36 @@ class FreeGridEditorState extends ConsumerState<FreeGridEditor> {
   // ----------------------------------------------------------- projector
 
   /// Sends the grid overlay and the cursor off, when this editor turned them
-  /// on. Waits for a running read or write first: they would drop the
-  /// command.
+  /// on, whatever the session is doing: after a read that failed, behind a
+  /// poll that holds the projector (it waits for up to 5 s), behind a
+  /// transfer. The session logs it when the overlay may still be on.
   Future<void> turnOffProjectorOverlays() async {
     if (!_overlayShown && !_cursorShown) return;
-    for (var i = 0; i < 50 && _state.busy; i++) {
-      await Future<void>.delayed(const Duration(milliseconds: 100));
-    }
-    if (_cursorShown) {
-      _cursorShown = false;
-      await _session.showCursor(on: false, x: 0, y: 0);
-    }
-    if (_overlayShown) {
-      _overlayShown = false;
-      await _sendOverlay(on: false, rgb: _settings.overlayRgb);
-    }
+    final overlay = _overlayShown;
+    final cursor = _cursorShown;
+    _overlayShown = false;
+    _cursorShown = false;
+    await _session.switchOffOverlay(
+      overlay: overlay,
+      cursor: cursor,
+      columns: _overlayColumns,
+      rows: _overlayRows,
+      rgb: _settings.overlayRgb,
+    );
   }
+
+  /// The grid size the overlay was last sent with.
+  int _overlayColumns = 0;
+  int _overlayRows = 0;
 
   Future<void> _sendOverlay({required bool on, required int rgb}) {
     final s = _state;
+    _overlayColumns = s.controlGrid?.columns ?? s.gridCounts.columns;
+    _overlayRows = s.controlGrid?.rows ?? s.gridCounts.rows;
     return _session.showGridOverlay(
       on: on,
-      columns: s.controlGrid?.columns ?? s.gridCounts.columns,
-      rows: s.controlGrid?.rows ?? s.gridCounts.rows,
+      columns: _overlayColumns,
+      rows: _overlayRows,
       rgb: rgb,
     );
   }
@@ -136,9 +143,14 @@ class FreeGridEditorState extends ConsumerState<FreeGridEditor> {
       slotLabel: freeGridSlotLabel(s.slot),
       projector: _projectorLabel,
       backupTakenAt: taken,
+      backupOfUnstored: s.backupOfUnstored,
     );
     if (!confirmed || !mounted) return;
-    await _session.restoreBackup();
+    try {
+      await _session.restoreBackup();
+    } on StateError {
+      // The memory went away while the confirm was open: nothing to restore.
+    }
   }
 
   Future<void> _reset() async {
@@ -151,10 +163,14 @@ class FreeGridEditorState extends ConsumerState<FreeGridEditor> {
       backupTakenAt: s.backupTakenAt,
     );
     if (!confirmed || !mounted) return;
-    await _session.resetToNeutral(
-      gridColumns: s.gridCounts.columns,
-      gridRows: s.gridCounts.rows,
-    );
+    try {
+      await _session.resetToNeutral(
+        gridColumns: s.gridCounts.columns,
+        gridRows: s.gridCounts.rows,
+      );
+    } on StateError {
+      // The memory went away while the confirm was open: nothing to reset.
+    }
   }
 
   // --------------------------------------------------------------- build
@@ -163,24 +179,33 @@ class FreeGridEditorState extends ConsumerState<FreeGridEditor> {
   Widget build(BuildContext context) {
     final session = ref.watch(warpEditSessionProvider(_id));
     return FreeGridSplit(
+      // One focus group per card: Tab goes through the canvas card, then the
+      // controls card, each top to bottom, then on to the footer.
       builder: (compact) => (
-        FreeGridCanvasCard(session: session, compact: compact),
-        FreeGridControlsCard(
-          session: session,
-          compact: compact,
-          settings: _settings,
-          onSelectMemory: _selectMemory,
-          onReload: _reload,
-          onRestoreBackup: _restoreBackup,
-          // There are no edits to discard until editing exists.
-          onDiscardChanges: null,
-          onReset: _reset,
-          onCursor: (on) =>
-              setState(() => _settings = _settings.copyWith(cursorOn: on)),
-          onGridOverlay: _setOverlay,
-          onOverlayColor: _setOverlayColor,
-          onLivePreview: (on) =>
-              setState(() => _settings = _settings.copyWith(livePreview: on)),
+        FocusTraversalGroup(
+          child: FreeGridCanvasCard(
+            session: session,
+            compact: compact,
+            onRetry: _reload,
+          ),
+        ),
+        FocusTraversalGroup(
+          child: FreeGridControlsCard(
+            session: session,
+            settings: _settings,
+            onSelectMemory: _selectMemory,
+            onReload: _reload,
+            onRestoreBackup: _restoreBackup,
+            // There are no edits to discard until editing exists.
+            onDiscardChanges: null,
+            onReset: _reset,
+            onCursor: (on) =>
+                setState(() => _settings = _settings.copyWith(cursorOn: on)),
+            onGridOverlay: _setOverlay,
+            onOverlayColor: _setOverlayColor,
+            onLivePreview: (on) =>
+                setState(() => _settings = _settings.copyWith(livePreview: on)),
+          ),
         ),
       ),
     );
