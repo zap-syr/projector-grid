@@ -441,21 +441,21 @@ void main() {
 
     test('is true until the memory has been written in this session', () async {
       final c = await opened();
-      expect(session(c).takesBackupOnNextWrite, isTrue);
+      expect(session(c).takesBackupOnNextWrite(), isTrue);
       await session(c)
           .store(_gridTable(_caps, dx: 5), gridColumns: 3, gridRows: 3);
-      expect(session(c).takesBackupOnNextWrite, isFalse);
+      expect(session(c).takesBackupOnNextWrite(), isFalse);
       await session(c).reload();
-      expect(session(c).takesBackupOnNextWrite, isFalse);
+      expect(session(c).takesBackupOnNextWrite(), isFalse);
     });
 
     test('is per memory', () async {
       seed(WarpSlot.pc2, _gridTable(_caps), _caps);
       final c = await opened();
       await session(c).resetToNeutral(gridColumns: 3, gridRows: 3);
-      expect(session(c).takesBackupOnNextWrite, isFalse);
+      expect(session(c).takesBackupOnNextWrite(), isFalse);
       await session(c).selectMemory(WarpSlot.pc2);
-      expect(session(c).takesBackupOnNextWrite, isTrue);
+      expect(session(c).takesBackupOnNextWrite(), isTrue);
     });
 
     test('a failed backup does not count as one', () async {
@@ -463,7 +463,7 @@ void main() {
       await session(c)
           .store(_gridTable(_caps, dx: 5), gridColumns: 3, gridRows: 3);
       expect(stateOf(c).phase, WarpSessionPhase.failed);
-      expect(session(c).takesBackupOnNextWrite, isTrue);
+      expect(session(c).takesBackupOnNextWrite(), isTrue);
     });
   });
 
