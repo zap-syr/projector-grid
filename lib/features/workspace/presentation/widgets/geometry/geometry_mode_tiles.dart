@@ -28,6 +28,8 @@ class GeometryModeTiles extends StatelessWidget {
     GeometryMode.keystone => Icons.transform,
     GeometryMode.curved => Icons.vrpano_outlined,
     GeometryMode.corner => Icons.zoom_out_map,
+    // No tile of their own yet: the Free grid tile comes with its editor.
+    GeometryMode.pc1 || GeometryMode.pc2 || GeometryMode.pc3 => Icons.grid_on,
   };
 
   @override
@@ -41,7 +43,7 @@ class GeometryModeTiles extends StatelessWidget {
           child: Row(
             spacing: 8,
             children: [
-              for (final _ in GeometryMode.values)
+              for (final _ in GeometryMode.tileModes)
                 const Expanded(child: Skeleton(height: height, radius: 10)),
             ],
           ),
@@ -56,7 +58,7 @@ class GeometryModeTiles extends StatelessWidget {
       selected: current,
       onSelected: onSelected,
       tiles: [
-        for (final m in GeometryMode.values)
+        for (final m in GeometryMode.tileModes)
           ModeTileData(
             value: m,
             icon: iconOf(m),
