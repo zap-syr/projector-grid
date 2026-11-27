@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Canvas left (5 parts) + scrollable controls right (4 parts). Both panels
 /// grow proportionally so the canvas stays large at any dialog width.

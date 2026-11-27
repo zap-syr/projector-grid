@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../../domain/projector_group.dart';
 import '../../../domain/scheduled_task.dart';

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Leading slot of a dropdown menu row. Every row — plain action, checkable
 /// toggle, or submenu — reserves the width a checkmark would take, so labels

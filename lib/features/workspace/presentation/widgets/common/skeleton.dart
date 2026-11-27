@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// A placeholder block shown where a value is still being read from the
 /// projector, so a dialog opens at its final layout instead of a spinner.

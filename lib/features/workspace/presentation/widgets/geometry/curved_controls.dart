@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../common/controls_card.dart';
 import '../common/projector_settings_client.dart';

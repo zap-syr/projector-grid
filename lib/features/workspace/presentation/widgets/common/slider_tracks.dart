@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// A slider track that can fill from a centre zero instead of from the
 /// start, and hatch the part above a limit the thumb can't pass.
