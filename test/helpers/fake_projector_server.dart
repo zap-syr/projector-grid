@@ -27,6 +27,9 @@ class FakeProjectorServer {
   int? validHandshakes;
   int _connections = 0;
 
+  /// Wait this long before answering a command, to keep a call in flight.
+  Duration? replyDelay;
+
   int get port => _server.port;
   String get host => InternetAddress.loopbackIPv4.address;
 
@@ -66,8 +69,17 @@ class FakeProjectorServer {
       // Strip the 32-hex MD5 hash (protected mode) and the `00` header.
       final body = RegExp(r'^(?:[0-9a-f]{32})?00(.*)$').firstMatch(line);
       final cmd = body?.group(1) ?? line;
-      socket.add(ascii.encode('00${responses[cmd] ?? 'ER401'}\r'));
-      socket.close().ignore();
+      void reply() {
+        socket.add(ascii.encode('00${responses[cmd] ?? 'ER401'}\r'));
+        socket.close().ignore();
+      }
+
+      final delay = replyDelay;
+      if (delay == null) {
+        reply();
+      } else {
+        Timer(delay, reply);
+      }
     }, onError: (_) {});
   }
 

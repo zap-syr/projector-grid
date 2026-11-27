@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:isolate';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
+
 import 'app_log_file.dart';
 import 'panasonic_protocol_service.dart';
 
@@ -11,6 +13,19 @@ enum _Op {
   sendRawCommandPreservingErrorCodes,
   sendQuickQuery,
   pollProjectorTelemetry,
+}
+
+class _Worker {
+  final replies = ReceivePort();
+  final errors = ReceivePort();
+  final exits = ReceivePort();
+  late final Future<Isolate> isolate;
+
+  void close() {
+    replies.close();
+    errors.close();
+    exits.close();
+  }
 }
 
 /// [PanasonicProtocolService] with every NTCONTROL exchange run on a
@@ -26,35 +41,53 @@ enum _Op {
 /// isolate again.
 class IsolateProtocolService extends PanasonicProtocolService {
   IsolateProtocolService() {
-    _replies.listen(_onReply);
-    _errors.listen(_onUncaught);
+    _spawnWorker();
+  }
+
+  final _pending = <int, Completer<Object?>>{};
+  // Calls made before the worker has sent its port. They are sent when it
+  // arrives, not awaited per call: a call parked on a port that never comes
+  // (worker died first) could not be failed by the exit handler.
+  final _queued = <(int, _Op, List<Object?>)>[];
+  SendPort? _workerPort;
+  _Worker? _worker;
+  var _nextId = 0;
+  var _disposed = false;
+
+  // Fresh ports per worker: once a dead worker's ports are closed, none of
+  // its late messages can reach the replacement.
+  void _spawnWorker() {
+    final worker = _worker = _Worker();
+    worker.replies.listen((message) => _onReply(worker, message));
+    worker.errors.listen(_onUncaught);
+    worker.exits.listen((_) => _onExit(worker));
     // Not fatal: an uncaught error in one exchange would otherwise kill the
     // worker, and every call after it would wait forever.
-    _worker = Isolate.spawn(
+    worker.isolate = Isolate.spawn(
       _workerMain,
-      _replies.sendPort,
+      worker.replies.sendPort,
       errorsAreFatal: false,
-      onError: _errors.sendPort,
+      onError: worker.errors.sendPort,
+      onExit: worker.exits.sendPort,
     );
   }
 
-  final _replies = ReceivePort();
-  final _errors = ReceivePort();
-  final _pending = <int, Completer<Object?>>{};
-  final _workerPort = Completer<SendPort>();
-  late final Future<Isolate> _worker;
-  var _nextId = 0;
-
-  void _onReply(Object? message) {
+  void _onReply(_Worker worker, Object? message) {
+    if (!identical(worker, _worker)) return;
     switch (message) {
       case final SendPort port:
-        _workerPort.complete(port);
+        _workerPort = port;
+        for (final queued in _queued) {
+          port.send(queued);
+        }
+        _queued.clear();
       // A call that threw in the worker: the caller gets the error, the app
       // log gets the worker's stack, which the caller's doesn't show.
       case (String error, String stack):
         AppLog.error('Protocol worker', error, stack);
       case (int id, bool ok, Object? value):
-        final completer = _pending.remove(id)!;
+        final completer = _pending.remove(id);
+        if (completer == null) return;
         if (ok) {
           completer.complete(value);
         } else {
@@ -69,18 +102,62 @@ class IsolateProtocolService extends PanasonicProtocolService {
     AppLog.error('Protocol worker, uncaught', error!, stack);
   }
 
+  // The worker ended although nobody asked it to (out of memory, an error it
+  // could not survive). Without this every pending call waits forever and
+  // polling stops silently.
+  void _onExit(_Worker worker) {
+    worker.close();
+    if (_disposed || !identical(worker, _worker)) return;
+    final failed = _failPending('Protocol worker exited');
+    AppLog.error(
+      'Protocol worker',
+      'Worker isolate exited unexpectedly, $failed pending calls failed, '
+          'starting a new one',
+      null,
+    );
+    _spawnWorker();
+  }
+
+  int _failPending(String reason) {
+    final calls = _pending.values.toList();
+    _pending.clear();
+    _queued.clear();
+    _workerPort = null;
+    for (final completer in calls) {
+      completer.completeError(StateError(reason));
+    }
+    return calls.length;
+  }
+
   Future<T> _call<T>(_Op op, List<Object?> args) async {
+    if (_disposed) throw StateError('Protocol service disposed');
     final id = _nextId++;
     final completer = Completer<Object?>();
     _pending[id] = completer;
-    (await _workerPort.future).send((id, op, args));
+    final message = (id, op, args);
+    final port = _workerPort;
+    if (port == null) {
+      _queued.add(message);
+    } else {
+      port.send(message);
+    }
     return await completer.future as T;
   }
 
+  /// Ends the current worker as a crash would, so tests can exercise the
+  /// recovery path.
+  @visibleForTesting
+  Future<void> debugKillWorker() async {
+    (await _worker!.isolate).kill(priority: Isolate.immediate);
+  }
+
   Future<void> dispose() async {
-    (await _worker).kill(priority: Isolate.immediate);
-    _replies.close();
-    _errors.close();
+    if (_disposed) return;
+    _disposed = true;
+    _failPending('Protocol service disposed');
+    final worker = _worker!;
+    (await worker.isolate).kill(priority: Isolate.immediate);
+    worker.close();
   }
 
   @override
