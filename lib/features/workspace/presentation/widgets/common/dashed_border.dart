@@ -1,6 +1,6 @@
 import 'dart:ui' show PathMetric;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// A dashed rounded-rectangle outline around [child], drawn along the path
 /// with [PathMetric] (no package). Used for the New task card, the empty

@@ -53,6 +53,7 @@ dependencies:
   shelf_router: ^1.1.4
   flutter_local_notifications: ^22.3.1
   audioplayers: ^6.8.1
+  material_ui: ^1.11.1
 
 dev_dependencies:
   flutter_test:

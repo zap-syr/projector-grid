@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../domain/geometry_preview.dart';
 import 'common/dialog_parts.dart';

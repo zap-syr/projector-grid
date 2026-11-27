@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Status colours M3's [ColorScheme] has no roles for: success green, warning
 /// amber, the muted red / green of the − / + step buttons, and the raised

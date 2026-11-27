@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:math' show max, min;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/services/remote_preview_service.dart';

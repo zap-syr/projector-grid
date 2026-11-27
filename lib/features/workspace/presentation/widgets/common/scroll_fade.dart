@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Fades the top and bottom edges of a vertical scroll view while there is
 /// more content past them, so a list that continues says so. Wrap the

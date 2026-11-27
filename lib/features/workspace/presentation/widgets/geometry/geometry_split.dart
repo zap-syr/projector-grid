@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// The body below the mode tiles: the preview or canvas card on the left,
 /// the controls card on the right (§7.1). The left card is 480 wide in a

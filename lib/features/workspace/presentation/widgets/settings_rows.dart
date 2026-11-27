@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Building blocks of the Preferences dialog: titled groups of label/control
 /// rows, the same layout Windows Settings and macOS System Settings use, so

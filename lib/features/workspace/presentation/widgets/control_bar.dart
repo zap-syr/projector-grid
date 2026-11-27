@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'common/dialog_parts.dart';
 import 'common/segmented_tabs.dart';

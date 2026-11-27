@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// The outlined, rounded chip of the mockups' bars: the Monitoring quick
 /// filters and Group by, the event log's filters. Selected, it fills with
