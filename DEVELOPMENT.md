@@ -145,7 +145,7 @@ dart run build_runner watch --delete-conflicting-outputs
 The project uses `flutter_lints`. Run the analyzer before committing; only `lib/` and `test/` are linted:
 
 ```bash
-flutter analyze
+dart analyze --fatal-infos .
 ```
 
 ### Formatting
@@ -172,7 +172,7 @@ On Windows, `flutter_tester` occasionally crashes in the Dart VM profiler, showi
 
 ### Continuous Integration
 
-`.github/workflows/ci.yml` runs on Windows and macOS for pushes and pull requests to `main`: code generation, `dart format --set-exit-if-changed lib test`, `flutter analyze lib test` and `flutter test`. A `web` job checks that `types.gen.ts` matches `openapi.yaml`, then runs `check`, `lint`, `test` and `build` in `web_ui/`.
+`.github/workflows/ci.yml` runs on Windows and macOS for pushes and pull requests to `main`: code generation, `dart format --set-exit-if-changed lib test`, `dart analyze --fatal-infos .` and `flutter test`. A `web` job checks that `types.gen.ts` matches `openapi.yaml`, then runs `check`, `lint`, `test` and `build` in `web_ui/`.
 
 ### Testing Without Projectors
 
@@ -247,7 +247,7 @@ Before opening a pull request, please open an issue first to discuss the change.
 
 For new PRs, please go through the following checklist:
 
-- [ ] `flutter analyze` reports no issues.
+- [ ] `dart analyze --fatal-infos .` reports no issues.
 - [ ] `dart format .` has been run and all changed files are formatted.
 - [ ] `flutter test` passes, and new logic comes with tests.
 - [ ] If `web_ui/` changed: `npm run check`, `npm run lint` and `npm test` pass there.
