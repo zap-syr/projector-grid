@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../../core/services/app_config_dir.dart';
+import '../../../../../core/services/atomic_file.dart';
 import '../../../../../core/theme/app_theme.dart';
 import '../../../domain/test_patterns.dart';
 import '../common/dashed_border.dart';
@@ -58,26 +58,26 @@ class _TestPatternCardState extends ConsumerState<TestPatternCard> {
   }
 
   void _loadFavorites() {
-    try {
-      final file = File(_favoritesFilePath);
-      if (!file.existsSync()) return;
-      final list = jsonDecode(file.readAsStringSync()) as List<dynamic>;
-      for (int i = 0; i < _favorites.length && i < list.length; i++) {
-        final val = list[i];
-        if (val is String && kTestPatternLabels.containsKey(val)) {
-          _favorites[i] = val;
+    readJsonConfigOrQuarantine<void>(
+      _favoritesFilePath,
+      'Test pattern favorites',
+      (json) {
+        final list = json as List<dynamic>;
+        for (int i = 0; i < _favorites.length && i < list.length; i++) {
+          final val = list[i];
+          if (val is String && kTestPatternLabels.containsKey(val)) {
+            _favorites[i] = val;
+          }
         }
-      }
-    } catch (_) {}
+      },
+    );
   }
 
-  void _saveFavorites() {
-    try {
-      final file = File(_favoritesFilePath);
-      file.parent.createSync(recursive: true);
-      file.writeAsStringSync(jsonEncode(_favorites));
-    } catch (_) {}
-  }
+  void _saveFavorites() => saveConfigFileSync(
+    _favoritesFilePath,
+    'Test pattern favorites',
+    jsonEncode(_favorites),
+  );
 
   void _addFavorite(int index) {
     if (_favorites[index] != null) return;

@@ -1,10 +1,10 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../../core/services/app_config_dir.dart';
+import '../../../../core/services/atomic_file.dart';
 import '../../domain/alert_rule.dart';
 import '../../domain/alignment.dart';
 
@@ -295,24 +295,19 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
   @override
   AppSettings build() => _load();
 
-  AppSettings _load() {
-    try {
-      final file = File(_filePath);
-      if (!file.existsSync()) return const AppSettings();
-      final json = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
-      return AppSettings.fromJson(json);
-    } catch (_) {
-      return const AppSettings();
-    }
-  }
+  AppSettings _load() =>
+      readJsonConfigOrQuarantine(
+        _filePath,
+        'App settings',
+        (json) => AppSettings.fromJson(json as Map<String, dynamic>),
+      ) ??
+      const AppSettings();
 
-  void _save(AppSettings settings) {
-    try {
-      final file = File(_filePath);
-      file.parent.createSync(recursive: true);
-      file.writeAsStringSync(jsonEncode(settings.toJson()));
-    } catch (_) {}
-  }
+  void _save(AppSettings settings) => saveConfigFileSync(
+    _filePath,
+    'App settings',
+    jsonEncode(settings.toJson()),
+  );
 
   void setPollingInterval(int seconds) {
     final clamped = seconds.clamp(

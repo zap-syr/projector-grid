@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
+
 import 'app_config_dir.dart';
 import 'log_files.dart';
 
@@ -106,6 +108,13 @@ abstract final class AppLog {
 
   static const _appCapBytes = 20 * 1024 * 1024;
 
+  /// Sees every [error] call, before the repeat gate and even when the log
+  /// is not started, so tests can assert on what would be logged without
+  /// writing files.
+  @visibleForTesting
+  static void Function(String source, Object error, Object? stack)?
+  debugOnError;
+
   /// Prunes files past the 14 days and opens both logs with a session
   /// header.
   static void start({required String appVersion, required String os}) {
@@ -142,6 +151,7 @@ abstract final class AppLog {
   /// once a minute. [stack] is a [StackTrace] or, from the protocol worker
   /// isolate, its text.
   static void error(String source, Object error, Object? stack) {
+    debugOnError?.call(source, error, stack);
     final app = _app;
     if (app == null) return;
     final now = DateTime.now();

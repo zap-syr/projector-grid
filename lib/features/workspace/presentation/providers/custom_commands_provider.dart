@@ -1,9 +1,9 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../../core/services/app_config_dir.dart';
+import '../../../../core/services/atomic_file.dart';
 import '../../domain/custom_command.dart';
 
 part 'custom_commands_provider.g.dart';
@@ -15,38 +15,28 @@ class CustomCommandsNotifier extends _$CustomCommandsNotifier {
   @override
   List<CustomCommand> build() => _load();
 
-  List<CustomCommand> _load() {
-    try {
-      final file = File(_filePath);
-      if (!file.existsSync()) return [];
-      final list = jsonDecode(file.readAsStringSync()) as List<dynamic>;
-      // Parse each entry independently so one malformed command (e.g. from
-      // a partial write during a crash) doesn't discard every other
-      // previously-saved command — only that one entry is dropped.
-      final commands = <CustomCommand>[];
-      for (final e in list) {
-        try {
-          commands.add(CustomCommand.fromJson(e as Map<String, dynamic>));
-        } catch (_) {
-          // Skip just this entry; the rest of the file may still be valid.
+  List<CustomCommand> _load() =>
+      readJsonConfigOrQuarantine(_filePath, 'Custom commands', (json) {
+        // Parse each entry independently so one malformed command (e.g. from
+        // a partial write during a crash) doesn't discard every other
+        // previously-saved command, only that one entry is dropped.
+        final commands = <CustomCommand>[];
+        for (final e in json as List<dynamic>) {
+          try {
+            commands.add(CustomCommand.fromJson(e as Map<String, dynamic>));
+          } catch (_) {
+            // Skip just this entry; the rest of the file may still be valid.
+          }
         }
-      }
-      return commands;
-    } catch (_) {
-      // The file itself isn't valid JSON at all — nothing to salvage.
-      return [];
-    }
-  }
+        return commands;
+      }) ??
+      [];
 
-  void _save(List<CustomCommand> commands) {
-    try {
-      final file = File(_filePath);
-      file.parent.createSync(recursive: true);
-      file.writeAsStringSync(
-        jsonEncode(commands.map((c) => c.toJson()).toList()),
-      );
-    } catch (_) {}
-  }
+  void _save(List<CustomCommand> commands) => saveConfigFileSync(
+    _filePath,
+    'Custom commands',
+    jsonEncode(commands.map((c) => c.toJson()).toList()),
+  );
 
   bool _slugExists(String slug, {String? excludeId}) => state.any(
     (c) => c.oscSlug == slug && (excludeId == null || c.id != excludeId),

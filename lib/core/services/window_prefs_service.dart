@@ -1,7 +1,7 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'app_config_dir.dart';
+import 'atomic_file.dart';
 
 /// Persisted window geometry (size, position, maximized state).
 ///
@@ -71,22 +71,12 @@ class WindowPrefs {
 class WindowPrefsService {
   static String get _filePath => appConfigFilePath('window_prefs.json');
 
-  static WindowPrefs? load() {
-    try {
-      final file = File(_filePath);
-      if (!file.existsSync()) return null;
-      final json = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
-      return WindowPrefs.fromJson(json);
-    } catch (_) {
-      return null;
-    }
-  }
+  static WindowPrefs? load() => readJsonConfigOrQuarantine<WindowPrefs?>(
+    _filePath,
+    'Window prefs',
+    (json) => WindowPrefs.fromJson(json as Map<String, dynamic>),
+  );
 
-  static void save(WindowPrefs prefs) {
-    try {
-      final file = File(_filePath);
-      file.parent.createSync(recursive: true);
-      file.writeAsStringSync(jsonEncode(prefs.toJson()));
-    } catch (_) {}
-  }
+  static void save(WindowPrefs prefs) =>
+      saveConfigFileSync(_filePath, 'Window prefs', jsonEncode(prefs.toJson()));
 }
