@@ -41,13 +41,13 @@ final class EventLogNotifierProvider
   }
 }
 
-String _$eventLogNotifierHash() => r'eaca60e991de65b86d350b93a03cfa3f189fdea1';
+String _$eventLogNotifierHash() => r'994a4b28c741f94df301fa824663092a06e568af';
 
 abstract class _$EventLogNotifier extends $Notifier<List<LogEvent>> {
   List<LogEvent> build();
   @$mustCallSuper
   @override
-  void runBuild() {
+  WhenComplete runBuild() {
     final ref = this.ref as $Ref<List<LogEvent>, List<LogEvent>>;
     final element =
         ref.element
@@ -57,6 +57,6 @@ abstract class _$EventLogNotifier extends $Notifier<List<LogEvent>> {
               Object?,
               Object?
             >;
-    element.handleCreate(ref, build);
+    return element.handleCreate(ref, build);
   }
 }

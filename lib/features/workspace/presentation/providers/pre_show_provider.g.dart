@@ -118,7 +118,7 @@ abstract class _$PreShow extends $Notifier<PreShowState> {
   PreShowState build(String nodeId);
   @$mustCallSuper
   @override
-  void runBuild() {
+  WhenComplete runBuild() {
     final ref = this.ref as $Ref<PreShowState, PreShowState>;
     final element =
         ref.element
@@ -128,6 +128,6 @@ abstract class _$PreShow extends $Notifier<PreShowState> {
               Object?,
               Object?
             >;
-    element.handleCreate(ref, () => build(_$args));
+    return element.handleCreate(ref, () => build(_$args));
   }
 }

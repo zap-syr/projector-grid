@@ -61,7 +61,7 @@ abstract class _$PollStatusNotifier extends $Notifier<PollStatus> {
   PollStatus build();
   @$mustCallSuper
   @override
-  void runBuild() {
+  WhenComplete runBuild() {
     final ref = this.ref as $Ref<PollStatus, PollStatus>;
     final element =
         ref.element
@@ -71,6 +71,6 @@ abstract class _$PollStatusNotifier extends $Notifier<PollStatus> {
               Object?,
               Object?
             >;
-    element.handleCreate(ref, build);
+    return element.handleCreate(ref, build);
   }
 }

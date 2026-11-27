@@ -149,7 +149,7 @@ abstract class _$RemotePreview extends $Notifier<RemotePreviewState> {
   RemotePreviewState build(String host);
   @$mustCallSuper
   @override
-  void runBuild() {
+  WhenComplete runBuild() {
     final ref = this.ref as $Ref<RemotePreviewState, RemotePreviewState>;
     final element =
         ref.element
@@ -159,6 +159,6 @@ abstract class _$RemotePreview extends $Notifier<RemotePreviewState> {
               Object?,
               Object?
             >;
-    element.handleCreate(ref, () => build(_$args));
+    return element.handleCreate(ref, () => build(_$args));
   }
 }

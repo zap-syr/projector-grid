@@ -47,7 +47,7 @@ abstract class _$WorkspaceNotifier extends $Notifier<List<ProjectorNode>> {
   List<ProjectorNode> build();
   @$mustCallSuper
   @override
-  void runBuild() {
+  WhenComplete runBuild() {
     final ref = this.ref as $Ref<List<ProjectorNode>, List<ProjectorNode>>;
     final element =
         ref.element
@@ -57,6 +57,6 @@ abstract class _$WorkspaceNotifier extends $Notifier<List<ProjectorNode>> {
               Object?,
               Object?
             >;
-    element.handleCreate(ref, build);
+    return element.handleCreate(ref, build);
   }
 }

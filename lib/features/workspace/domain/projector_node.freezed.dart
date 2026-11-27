@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // coverage:ignore-file
-// ignore_for_file: type=lint
+// ignore_for_file: type=lint, type=warning, deprecated_member_use, deprecated_member_use_from_same_package
 // ignore_for_file: unused_element, deprecated_member_use, deprecated_member_use_from_same_package, use_function_type_syntax_for_parameters, unnecessary_const, avoid_init_to_null, invalid_override_different_default_values_named, prefer_expression_function_bodies, annotate_overrides, invalid_annotation_target, unnecessary_question_mark
 
 part of 'projector_node.dart';
@@ -9,6 +9,7 @@ part of 'projector_node.dart';
 // FreezedGenerator
 // **************************************************************************
 
+// GENERATED CODE - DO NOT MODIFY BY HAND
 // dart format off
 T _$identity<T>(T value) => value;
 /// @nodoc
@@ -37,16 +38,21 @@ $ProjectorNodeCopyWith<ProjectorNode> get copyWith => _$ProjectorNodeCopyWithImp
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is ProjectorNode&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.ipAddress, ipAddress) || other.ipAddress == ipAddress)&&(identical(other.port, port) || other.port == port)&&(identical(other.login, login) || other.login == login)&&(identical(other.password, password) || other.password == password)&&(identical(other.x, x) || other.x == x)&&(identical(other.y, y) || other.y == y)&&(identical(other.powerStatus, powerStatus) || other.powerStatus == powerStatus)&&(identical(other.shutterStatus, shutterStatus) || other.shutterStatus == shutterStatus)&&(identical(other.connectionStatus, connectionStatus) || other.connectionStatus == connectionStatus)&&(identical(other.polled, polled) || other.polled == polled)&&(identical(other.serialNumber, serialNumber) || other.serialNumber == serialNumber)&&(identical(other.runtime, runtime) || other.runtime == runtime)&&(identical(other.lightRuntime, lightRuntime) || other.lightRuntime == lightRuntime)&&(identical(other.intakeTemp, intakeTemp) || other.intakeTemp == intakeTemp)&&(identical(other.exhaustTemp, exhaustTemp) || other.exhaustTemp == exhaustTemp)&&(identical(other.acVoltage, acVoltage) || other.acVoltage == acVoltage)&&(identical(other.errors, errors) || other.errors == errors)&&(identical(other.input, input) || other.input == input)&&(identical(other.signal, signal) || other.signal == signal)&&(identical(other.testPattern, testPattern) || other.testPattern == testPattern)&&(identical(other.lastSeen, lastSeen) || other.lastSeen == lastSeen)&&(identical(other.groupId, groupId) || other.groupId == groupId)&&(identical(other.lensLocked, lensLocked) || other.lensLocked == lensLocked));
+  final _this = this as ProjectorNode;
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ProjectorNode&&(identical(other.id, _this.id) || other.id == _this.id)&&(identical(other.name, _this.name) || other.name == _this.name)&&(identical(other.ipAddress, _this.ipAddress) || other.ipAddress == _this.ipAddress)&&(identical(other.port, _this.port) || other.port == _this.port)&&(identical(other.login, _this.login) || other.login == _this.login)&&(identical(other.password, _this.password) || other.password == _this.password)&&(identical(other.x, _this.x) || other.x == _this.x)&&(identical(other.y, _this.y) || other.y == _this.y)&&(identical(other.powerStatus, _this.powerStatus) || other.powerStatus == _this.powerStatus)&&(identical(other.shutterStatus, _this.shutterStatus) || other.shutterStatus == _this.shutterStatus)&&(identical(other.connectionStatus, _this.connectionStatus) || other.connectionStatus == _this.connectionStatus)&&(identical(other.polled, _this.polled) || other.polled == _this.polled)&&(identical(other.serialNumber, _this.serialNumber) || other.serialNumber == _this.serialNumber)&&(identical(other.runtime, _this.runtime) || other.runtime == _this.runtime)&&(identical(other.lightRuntime, _this.lightRuntime) || other.lightRuntime == _this.lightRuntime)&&(identical(other.intakeTemp, _this.intakeTemp) || other.intakeTemp == _this.intakeTemp)&&(identical(other.exhaustTemp, _this.exhaustTemp) || other.exhaustTemp == _this.exhaustTemp)&&(identical(other.acVoltage, _this.acVoltage) || other.acVoltage == _this.acVoltage)&&(identical(other.errors, _this.errors) || other.errors == _this.errors)&&(identical(other.input, _this.input) || other.input == _this.input)&&(identical(other.signal, _this.signal) || other.signal == _this.signal)&&(identical(other.testPattern, _this.testPattern) || other.testPattern == _this.testPattern)&&(identical(other.lastSeen, _this.lastSeen) || other.lastSeen == _this.lastSeen)&&(identical(other.groupId, _this.groupId) || other.groupId == _this.groupId)&&(identical(other.lensLocked, _this.lensLocked) || other.lensLocked == _this.lensLocked));
 }
 
 
 @override
-int get hashCode => Object.hashAll([runtimeType,id,name,ipAddress,port,login,password,x,y,powerStatus,shutterStatus,connectionStatus,polled,serialNumber,runtime,lightRuntime,intakeTemp,exhaustTemp,acVoltage,errors,input,signal,testPattern,lastSeen,groupId,lensLocked]);
+int get hashCode {
+  final _this = this as ProjectorNode;
+  return Object.hashAll([runtimeType,_this.id,_this.name,_this.ipAddress,_this.port,_this.login,_this.password,_this.x,_this.y,_this.powerStatus,_this.shutterStatus,_this.connectionStatus,_this.polled,_this.serialNumber,_this.runtime,_this.lightRuntime,_this.intakeTemp,_this.exhaustTemp,_this.acVoltage,_this.errors,_this.input,_this.signal,_this.testPattern,_this.lastSeen,_this.groupId,_this.lensLocked]);
+}
 
 @override
 String toString() {
-  return 'ProjectorNode(id: $id, name: $name, ipAddress: $ipAddress, port: $port, login: $login, password: $password, x: $x, y: $y, powerStatus: $powerStatus, shutterStatus: $shutterStatus, connectionStatus: $connectionStatus, polled: $polled, serialNumber: $serialNumber, runtime: $runtime, lightRuntime: $lightRuntime, intakeTemp: $intakeTemp, exhaustTemp: $exhaustTemp, acVoltage: $acVoltage, errors: $errors, input: $input, signal: $signal, testPattern: $testPattern, lastSeen: $lastSeen, groupId: $groupId, lensLocked: $lensLocked)';
+  final _this = this as ProjectorNode;
+  return 'ProjectorNode(id: ${_this.id}, name: ${_this.name}, ipAddress: ${_this.ipAddress}, port: ${_this.port}, login: ${_this.login}, password: ${_this.password}, x: ${_this.x}, y: ${_this.y}, powerStatus: ${_this.powerStatus}, shutterStatus: ${_this.shutterStatus}, connectionStatus: ${_this.connectionStatus}, polled: ${_this.polled}, serialNumber: ${_this.serialNumber}, runtime: ${_this.runtime}, lightRuntime: ${_this.lightRuntime}, intakeTemp: ${_this.intakeTemp}, exhaustTemp: ${_this.exhaustTemp}, acVoltage: ${_this.acVoltage}, errors: ${_this.errors}, input: ${_this.input}, signal: ${_this.signal}, testPattern: ${_this.testPattern}, lastSeen: ${_this.lastSeen}, groupId: ${_this.groupId}, lensLocked: ${_this.lensLocked})';
 }
 
 
@@ -75,7 +81,7 @@ class _$ProjectorNodeCopyWithImpl<$Res>
 /// Create a copy of ProjectorNode
 /// with the given fields replaced by the non-null parameter values.
 @pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? ipAddress = null,Object? port = null,Object? login = null,Object? password = null,Object? x = null,Object? y = null,Object? powerStatus = null,Object? shutterStatus = null,Object? connectionStatus = null,Object? polled = null,Object? serialNumber = null,Object? runtime = null,Object? lightRuntime = null,Object? intakeTemp = null,Object? exhaustTemp = null,Object? acVoltage = null,Object? errors = null,Object? input = null,Object? signal = null,Object? testPattern = freezed,Object? lastSeen = freezed,Object? groupId = freezed,Object? lensLocked = null,}) {
-  return _then(_self.copyWith(
+  return _then(ProjectorNode(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,ipAddress: null == ipAddress ? _self.ipAddress : ipAddress // ignore: cast_nullable_to_non_nullable
@@ -293,16 +299,18 @@ _$ProjectorNodeCopyWith<_ProjectorNode> get copyWith => __$ProjectorNodeCopyWith
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ProjectorNode&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.ipAddress, ipAddress) || other.ipAddress == ipAddress)&&(identical(other.port, port) || other.port == port)&&(identical(other.login, login) || other.login == login)&&(identical(other.password, password) || other.password == password)&&(identical(other.x, x) || other.x == x)&&(identical(other.y, y) || other.y == y)&&(identical(other.powerStatus, powerStatus) || other.powerStatus == powerStatus)&&(identical(other.shutterStatus, shutterStatus) || other.shutterStatus == shutterStatus)&&(identical(other.connectionStatus, connectionStatus) || other.connectionStatus == connectionStatus)&&(identical(other.polled, polled) || other.polled == polled)&&(identical(other.serialNumber, serialNumber) || other.serialNumber == serialNumber)&&(identical(other.runtime, runtime) || other.runtime == runtime)&&(identical(other.lightRuntime, lightRuntime) || other.lightRuntime == lightRuntime)&&(identical(other.intakeTemp, intakeTemp) || other.intakeTemp == intakeTemp)&&(identical(other.exhaustTemp, exhaustTemp) || other.exhaustTemp == exhaustTemp)&&(identical(other.acVoltage, acVoltage) || other.acVoltage == acVoltage)&&(identical(other.errors, errors) || other.errors == errors)&&(identical(other.input, input) || other.input == input)&&(identical(other.signal, signal) || other.signal == signal)&&(identical(other.testPattern, testPattern) || other.testPattern == testPattern)&&(identical(other.lastSeen, lastSeen) || other.lastSeen == lastSeen)&&(identical(other.groupId, groupId) || other.groupId == groupId)&&(identical(other.lensLocked, lensLocked) || other.lensLocked == lensLocked));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _ProjectorNode&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.ipAddress, ipAddress) || other.ipAddress == ipAddress)&&(identical(other.port, port) || other.port == port)&&(identical(other.login, login) || other.login == login)&&(identical(other.password, password) || other.password == password)&&(identical(other.x, x) || other.x == x)&&(identical(other.y, y) || other.y == y)&&(identical(other.powerStatus, powerStatus) || other.powerStatus == powerStatus)&&(identical(other.shutterStatus, shutterStatus) || other.shutterStatus == shutterStatus)&&(identical(other.connectionStatus, connectionStatus) || other.connectionStatus == connectionStatus)&&(identical(other.polled, polled) || other.polled == polled)&&(identical(other.serialNumber, serialNumber) || other.serialNumber == serialNumber)&&(identical(other.runtime, runtime) || other.runtime == runtime)&&(identical(other.lightRuntime, lightRuntime) || other.lightRuntime == lightRuntime)&&(identical(other.intakeTemp, intakeTemp) || other.intakeTemp == intakeTemp)&&(identical(other.exhaustTemp, exhaustTemp) || other.exhaustTemp == exhaustTemp)&&(identical(other.acVoltage, acVoltage) || other.acVoltage == acVoltage)&&(identical(other.errors, errors) || other.errors == errors)&&(identical(other.input, input) || other.input == input)&&(identical(other.signal, signal) || other.signal == signal)&&(identical(other.testPattern, testPattern) || other.testPattern == testPattern)&&(identical(other.lastSeen, lastSeen) || other.lastSeen == lastSeen)&&(identical(other.groupId, groupId) || other.groupId == groupId)&&(identical(other.lensLocked, lensLocked) || other.lensLocked == lensLocked));
 }
 
 
 @override
-int get hashCode => Object.hashAll([runtimeType,id,name,ipAddress,port,login,password,x,y,powerStatus,shutterStatus,connectionStatus,polled,serialNumber,runtime,lightRuntime,intakeTemp,exhaustTemp,acVoltage,errors,input,signal,testPattern,lastSeen,groupId,lensLocked]);
+int get hashCode {
+    return Object.hashAll([runtimeType,id,name,ipAddress,port,login,password,x,y,powerStatus,shutterStatus,connectionStatus,polled,serialNumber,runtime,lightRuntime,intakeTemp,exhaustTemp,acVoltage,errors,input,signal,testPattern,lastSeen,groupId,lensLocked]);
+}
 
 @override
 String toString() {
-  return 'ProjectorNode(id: $id, name: $name, ipAddress: $ipAddress, port: $port, login: $login, password: $password, x: $x, y: $y, powerStatus: $powerStatus, shutterStatus: $shutterStatus, connectionStatus: $connectionStatus, polled: $polled, serialNumber: $serialNumber, runtime: $runtime, lightRuntime: $lightRuntime, intakeTemp: $intakeTemp, exhaustTemp: $exhaustTemp, acVoltage: $acVoltage, errors: $errors, input: $input, signal: $signal, testPattern: $testPattern, lastSeen: $lastSeen, groupId: $groupId, lensLocked: $lensLocked)';
+    return 'ProjectorNode(id: $id, name: $name, ipAddress: $ipAddress, port: $port, login: $login, password: $password, x: $x, y: $y, powerStatus: $powerStatus, shutterStatus: $shutterStatus, connectionStatus: $connectionStatus, polled: $polled, serialNumber: $serialNumber, runtime: $runtime, lightRuntime: $lightRuntime, intakeTemp: $intakeTemp, exhaustTemp: $exhaustTemp, acVoltage: $acVoltage, errors: $errors, input: $input, signal: $signal, testPattern: $testPattern, lastSeen: $lastSeen, groupId: $groupId, lensLocked: $lensLocked)';
 }
 
 

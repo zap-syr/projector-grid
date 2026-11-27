@@ -176,7 +176,7 @@ abstract class _$PreviewSignalStatus extends $Notifier<WebSignalStatus?> {
   WebSignalStatus? build(String host, String login, String password);
   @$mustCallSuper
   @override
-  void runBuild() {
+  WhenComplete runBuild() {
     final ref = this.ref as $Ref<WebSignalStatus?, WebSignalStatus?>;
     final element =
         ref.element
@@ -186,6 +186,9 @@ abstract class _$PreviewSignalStatus extends $Notifier<WebSignalStatus?> {
               Object?,
               Object?
             >;
-    element.handleCreate(ref, () => build(_$args.$1, _$args.$2, _$args.$3));
+    return element.handleCreate(
+      ref,
+      () => build(_$args.$1, _$args.$2, _$args.$3),
+    );
   }
 }

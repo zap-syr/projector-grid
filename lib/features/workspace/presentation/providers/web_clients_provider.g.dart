@@ -56,7 +56,7 @@ abstract class _$WebClients extends $Notifier<List<WebClient>> {
   List<WebClient> build();
   @$mustCallSuper
   @override
-  void runBuild() {
+  WhenComplete runBuild() {
     final ref = this.ref as $Ref<List<WebClient>, List<WebClient>>;
     final element =
         ref.element
@@ -66,6 +66,6 @@ abstract class _$WebClients extends $Notifier<List<WebClient>> {
               Object?,
               Object?
             >;
-    element.handleCreate(ref, build);
+    return element.handleCreate(ref, build);
   }
 }

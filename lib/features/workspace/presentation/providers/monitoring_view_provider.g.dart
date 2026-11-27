@@ -48,7 +48,7 @@ final class MonitoringViewNotifierProvider
 }
 
 String _$monitoringViewNotifierHash() =>
-    r'70fe9547699866f01333339093329d0b4119f7e7';
+    r'950d6edfa6d4fbcdee8fefd629f73dfefbf0eb29';
 
 /// The Monitoring view's layout ([MonitoringViewSettings]), saved to
 /// `monitoring_view.json` on every change.
@@ -58,7 +58,7 @@ abstract class _$MonitoringViewNotifier
   MonitoringViewSettings build();
   @$mustCallSuper
   @override
-  void runBuild() {
+  WhenComplete runBuild() {
     final ref =
         this.ref as $Ref<MonitoringViewSettings, MonitoringViewSettings>;
     final element =
@@ -69,6 +69,6 @@ abstract class _$MonitoringViewNotifier
               Object?,
               Object?
             >;
-    element.handleCreate(ref, build);
+    return element.handleCreate(ref, build);
   }
 }
