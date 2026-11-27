@@ -608,7 +608,7 @@ Future<void> _seedWarp(SimProjector p) async {
     full: tableFromControlGrid(grid, caps.geometry),
     gridColumns: columns,
     gridRows: rows,
-    now: DateTime.now(),
+    now: DateTime.now().toUtc(),
   );
   fake.frames.clear();
   fake.asciiCommands.clear();
