@@ -1,0 +1,107 @@
+{
+  "_comment": "Scalar codec cases are [codec, bits, value, expected bytes, expected raw decode]. Frames and wire lines are reference exchanges with real projectors.",
+  "scalarCodecs": [
+    ["triple", 4, 0, "000000", 0],
+    ["triple", 4, 1, "001000", 1],
+    ["triple", 4, -1, "FFF000", -1],
+    ["triple", 4, 32, "020000", 32],
+    ["triple", 4, 1919.5, "77F800", 1919.5],
+    ["triple", 4, 2020, "7E4000", 2020],
+    ["triple", 4, 2632, "A48000", 2632],
+    ["triple", 4, 3071.5, "BFF800", 3071.5],
+    ["triple", 4, -600, "DA8000", -600],
+    ["triple", 4, -1024, "C00000", -1024],
+    ["triple", 4, -0.0001, "000000", 0],
+    ["triple", 4, 0.0001220703125, "000001", 0.000244140625],
+    ["triple", 4, 123.456, "07B74C", 123.4560546875],
+    ["triple", 3, 0, "000000", 0],
+    ["triple", 3, 1, "000100", 1],
+    ["triple", 3, -1, "FFFF00", -1],
+    ["triple", 3, 32, "002000", 32],
+    ["triple", 3, 1919.5, "077F80", 1919.5],
+    ["triple", 3, 2020, "07E400", 2020],
+    ["triple", 3, 3840, "0F0000", 3840],
+    ["triple", 3, 4064, "0FE000", 4064],
+    ["triple", 3, -0.0001, "000000", 0],
+    ["triple", 3, 123.456, "007B75", 123.45703125],
+    ["word", 4, 0, "0000", 0],
+    ["word", 3, 0, "0000", 0],
+    ["word", 2, 0, "0000", 0],
+    ["word", 4, 1, "1000", 1],
+    ["word", 3, 1, "0800", 1],
+    ["word", 2, 1, "0400", 1],
+    ["word", 4, -3.5, "C8FF", -3.5],
+    ["word", 3, -3.5, "E4FF", -3.5],
+    ["word", 2, 3.5, "0E00", 3.5],
+    ["word", 4, 32, "0002", 32],
+    ["word", 3, 32, "0001", 32],
+    ["word", 2, 32, "8000", 32],
+    ["word", 4, 100.25, "4406", 100.25],
+    ["word", 3, 100.25, "2203", 100.25],
+    ["word", 2, 100.25, "9101", 100.25],
+    ["word", 4, 1920, "0078", 1920],
+    ["word", 3, 1920, "003C", 1920],
+    ["word", 2, 1920, "001E", 1920],
+    ["word", 4, 2400, "0096", 2400],
+    ["word", 3, 2400, "004B", 2400],
+    ["word", 2, 2400, "8025", 2400],
+    ["word", 4, -600, "80DA", -600],
+    ["word", 3, -600, "40ED", -600],
+    ["word", 2, 600, "6009", 600],
+    ["fpga64", 3, 0, "0000", 0],
+    ["fpga64", 3, 32, "0008", 32],
+    ["fpga64", 3, 1024, "0000", 0],
+    ["fpga64", 3, 3840, "00C0", 768],
+    ["fpga64", 3, 158.984375, "BF27", 158.984375]
+  ],
+  "frames": [
+    {
+      "name": "write single packet",
+      "type": 18,
+      "method": 16,
+      "location": 3,
+      "data": "010203",
+      "frame": "0200A9C000061210030102032B03"
+    },
+    {"name": "read top, PC-1 table", "type": 114, "top": true, "frame": "0200A8C07201100303"},
+    {"name": "read continue, PC-1 table", "type": 114, "top": false, "frame": "0200A8C07200100303"},
+    {"name": "save RAM to the current memory", "slot": "ram", "frame": "0200AAE003"},
+    {"name": "save to PC-3", "slot": "pc3", "frame": "0200AAE303"}
+  ],
+  "wire": [
+    {
+      "kind": "binary",
+      "bytes": "0200AAE103",
+      "body": "010200AAE103",
+      "replyLine": "010200AAE10003",
+      "replyBytes": "0200AAE10003"
+    },
+    {
+      "kind": "binary-error",
+      "replyLine": "010200FF8B03",
+      "errorCode": 139
+    },
+    {
+      "kind": "ascii-error",
+      "replyLine": "00ER401"
+    }
+  ],
+  "readReply": {
+    "_comment": "A real last-packet reply of rows 74 to 77 of a WUXGA identity table; the test rebuilds the line from the formula and checks it against this digest.",
+    "lineLength": 5340,
+    "lineSha256": "baf5aee4c66f27b9907181f02f019e87460e20d76dc03d47a3aa8ae21aeaf362",
+    "size": 2661,
+    "type": 114,
+    "method": 0,
+    "location": 2,
+    "dataLength": 2658,
+    "checksumOk": true
+  },
+  "identityBlock": {
+    "_comment": "A real read of a never-written PC-1 slot (type 0x12, word encoding, bits 3); the test rebuilds the block from the formula and checks it against this digest.",
+    "columns": 128,
+    "rows": 78,
+    "length": 39979,
+    "sha256": "d7006862cd29e74d80340c27224c0b3ab5fb252897db6b51f041eaccba26735f"
+  }
+}
