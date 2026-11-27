@@ -38,6 +38,7 @@ class RemotePreview extends _$RemotePreview {
   /// Enter / leave pre-show (`preshow:1` / `preshow:0`) over the socket.
   void setPreshow(bool on) => _controller?.setPreshow(on);
 
+  // ignore: riverpod_lint/avoid_public_notifier_properties
   /// Fires on every WebSocket `SIGNAL` message — see
   /// [RemotePreviewController.signalEvents].
   Stream<void> get signalEvents =>

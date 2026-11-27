@@ -30,6 +30,7 @@ class AlertsNotifier extends _$AlertsNotifier {
 
   final _events = StreamController<AlertEvent>.broadcast();
 
+  // ignore: riverpod_lint/avoid_public_notifier_properties
   /// Raised, cleared and acknowledged alerts, one event each, as they
   /// happen.
   Stream<AlertEvent> get events => _events.stream;

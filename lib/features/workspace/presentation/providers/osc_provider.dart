@@ -35,6 +35,9 @@ class OscNotifier extends _$OscNotifier {
 
     // Acknowledging changes the counts without touching the workspace, so
     // the workspace's onStateChanged alone would miss it.
+    // alertCountsProvider is auto-dispose on purpose; keepAlive would change
+    // its lifetime.
+    // ignore: riverpod_lint/only_use_keep_alive_inside_keep_alive
     ref.listen(alertCountsProvider, (_, _) => _service.sendStatusIfActive());
     final alertEvents = ref
         .read(alertsProvider.notifier)
@@ -150,6 +153,7 @@ class OscNotifier extends _$OscNotifier {
           .length;
       // Unacknowledged alerts, not projectors: /pgrid/status/warning used to
       // count projectors with errors, which are critical alerts now.
+      // ignore: riverpod_lint/only_use_keep_alive_inside_keep_alive
       final alerts = ref.read(alertCountsProvider);
       return (
         online: online,

@@ -76,6 +76,9 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
     // can run before this provider sees the change, so a just-added node
     // would have no status yet. It rebuilds on every workspace change, and
     // on alerts without a poll.
+    // Auto-dispose providers read here are only live while the server runs;
+    // making them keepAlive would change their lifetime.
+    // ignore: riverpod_lint/only_use_keep_alive_inside_keep_alive
     ref.listen(monitoringStatusProvider, (_, _) => _pushProjectors());
     // Raised, cleared or acknowledged (in the app or on any page).
     ref.listen(alertsProvider, (_, _) {
@@ -273,6 +276,7 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
   @override
   List<Json> projectors() => projectorsJson(
     ref.read(workspaceProvider),
+    // ignore: riverpod_lint/only_use_keep_alive_inside_keep_alive
     ref.read(monitoringStatusProvider),
   );
 
@@ -419,6 +423,7 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
   bool previewRetry(String id) {
     final node = _node(id);
     if (node == null || !_previews.isOpen(id)) return false;
+    // ignore: riverpod_lint/only_use_keep_alive_inside_keep_alive
     ref.read(remotePreviewProvider(node.ipAddress).notifier).retry();
     return true;
   }
@@ -434,6 +439,7 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
     if (on is! bool || node == null || !_previews.isOpen(id)) return null;
     // As in the app's dialog: Standby with the feed up, or the command is
     // silently dropped and never confirmed.
+    // ignore: riverpod_lint/only_use_keep_alive_inside_keep_alive
     final feed = ref.read(remotePreviewProvider(node.ipAddress));
     final live = feed is RemotePreviewFrame || feed is RemotePreviewNotice;
     if (node.powerStatus != PowerStatus.standby || !live) return null;
@@ -441,6 +447,7 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
       LogSeverity.info,
       '${_who(session)}: Pre-show ${on ? 'on' : 'off'} for ${node.ipAddress}',
     );
+    // ignore: riverpod_lint/only_use_keep_alive_inside_keep_alive
     unawaited(ref.read(preShowProvider(id).notifier).set(on));
     return {'on': on};
   }
