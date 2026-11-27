@@ -104,11 +104,16 @@ void main() {
       expect(c.read(projectStateProvider).currentFilePath, file.path);
     });
 
+    // App settings and custom commands save to disk on every change, so a
+    // rebuilt one would reload the same values: the notifier instance is what
+    // shows it was kept.
     test('app settings: a changed setting', () async {
-      c.read(appSettingsProvider.notifier).setPollingInterval(45);
+      final settings = c.read(appSettingsProvider.notifier)
+        ..setPollingInterval(45);
 
       await letDisposalsRun();
 
+      expect(c.read(appSettingsProvider.notifier), same(settings));
       expect(c.read(appSettingsProvider).pollingIntervalSeconds, 45);
     });
 
@@ -129,13 +134,12 @@ void main() {
     });
 
     test('custom commands: the list', () async {
-      expect(
-        c.read(customCommandsProvider.notifier).add('Lights', 'VXX:A'),
-        isTrue,
-      );
+      final commands = c.read(customCommandsProvider.notifier);
+      expect(commands.add('Lights', 'VXX:A'), isTrue);
 
       await letDisposalsRun();
 
+      expect(c.read(customCommandsProvider.notifier), same(commands));
       expect(c.read(customCommandsProvider).single.name, 'Lights');
     });
   });
