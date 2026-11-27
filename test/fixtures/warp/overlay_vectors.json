@@ -1,0 +1,30 @@
+{
+  "_comment": "Frames Panasonic's own software sent while points were selected and dragged. 'marked' lists the control point indexes with mark value 1; 'values' has one digit per control point.",
+  "frames": [
+    {"kind": "cursor", "on": false, "x": 3389, "y": 1112, "cursorKind": 0, "frame": "0200AC07000D3D04580003"},
+    {"kind": "marks", "points": "9x5", "marked": [], "values": "000000000000000000000000000000000000000000000", "frame": "0200A9C0000F9000030000000000000000000000009303"},
+    {"kind": "cursor", "on": true, "x": 3389, "y": 1112, "cursorKind": 0, "frame": "0200AC07010D3D04580003"},
+    {"kind": "marks", "points": "9x5", "marked": [25], "values": "000000000000000000000000010000000000000000000", "frame": "0200A9C0000F9000030000000000000400000000009703"},
+    {"kind": "cursor", "on": true, "x": 960, "y": 0, "cursorKind": 0, "frame": "0200AC070103C000000003"},
+    {"kind": "marks", "points": "9x5", "marked": [2], "values": "001000000000000000000000000000000000000000000", "frame": "0200A9C0000F9000030100000000000000000000009403"},
+    {"kind": "cursor", "on": true, "x": 1440, "y": 0, "cursorKind": 0, "frame": "0200AC070105A000000003"},
+    {"kind": "marks", "points": "9x5", "marked": [3], "values": "000100000000000000000000000000000000000000000", "frame": "0200A9C0000F900003004000000000000000000000D303"},
+    {"kind": "cursor", "on": true, "x": 2400, "y": 0, "cursorKind": 0, "frame": "0200AC0701096000000003"},
+    {"kind": "marks", "points": "9x5", "marked": [5], "values": "000001000000000000000000000000000000000000000", "frame": "0200A9C0000F9000030004000000000000000000009703"},
+    {"kind": "cursor", "on": true, "x": 2400, "y": 600, "cursorKind": 0, "frame": "0200AC0701096002580003"},
+    {"kind": "marks", "points": "9x5", "marked": [14], "values": "000000000000001000000000000000000000000000000", "frame": "0200A9C0000F9000030000000100000000000000009403"},
+    {"kind": "cursor", "on": true, "x": 2447, "y": 511, "cursorKind": 0, "frame": "0200AC0701098F01FF0003"},
+    {"kind": "cursor", "on": true, "x": 2467, "y": 484, "cursorKind": 0, "frame": "0200AC070109A301E40003"},
+    {"kind": "cursor", "on": true, "x": 2406, "y": 491, "cursorKind": 0, "frame": "0200AC0701096601EB0003"},
+    {"kind": "cursor", "on": true, "x": 2352, "y": 504, "cursorKind": 0, "frame": "0200AC0701093001F80003"},
+    {"kind": "cursor", "on": true, "x": 2338, "y": 504, "cursorKind": 0, "frame": "0200AC0701092201F80003"},
+    {"kind": "grid", "on": true, "columns": 9, "rows": 5, "color": "FF0000", "frame": "0200AB07010905FF000003"},
+    {"kind": "grid", "on": true, "columns": 9, "rows": 5, "color": "FF00FF", "frame": "0200AB07010905FF00FF03"},
+    {"kind": "cursor", "on": true, "x": 3840, "y": 600, "cursorKind": 0, "frame": "0200AC07010F0002580003"},
+    {"kind": "marks", "points": "9x5", "marked": [17], "values": "000000000000000001000000000000000000000000000", "frame": "0200A9C0000F9000030000000004000000000000009703"},
+    {"kind": "cursor", "on": true, "x": 3751, "y": 559, "cursorKind": 0, "frame": "0200AC07010EA7022F0003"},
+    {"kind": "cursor", "on": true, "x": 3731, "y": 538, "cursorKind": 0, "frame": "0200AC07010E93021A0003"},
+    {"kind": "grid", "on": false, "columns": 9, "rows": 5, "color": "FF0000", "frame": "0200AB07000905FF000003"},
+    {"kind": "cursor", "on": false, "x": 3731, "y": 538, "cursorKind": 0, "frame": "0200AC07000E93021A0003"}
+  ]
+}
