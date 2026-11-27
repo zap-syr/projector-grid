@@ -14,6 +14,7 @@ import 'package:projector_grid/features/workspace/domain/warp_codec.dart';
 import 'package:projector_grid/features/workspace/domain/warp_control_grid.dart';
 import 'package:projector_grid/features/workspace/domain/warp_model_caps.dart';
 import 'package:projector_grid/features/workspace/domain/warp_table.dart';
+import 'package:projector_grid/features/workspace/presentation/providers/event_log_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/protocol_service_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/warp_backup_store_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/workspace_provider.dart';
@@ -248,8 +249,8 @@ void main() {
       .singleWhere((t) => t.selected)
       .label;
 
-  WarpSlot selectedSlot(WidgetTester tester) => tester
-      .widget<SegmentedTabs<WarpSlot>>(find.byType(SegmentedTabs<WarpSlot>))
+  WarpSlot? selectedSlot(WidgetTester tester) => tester
+      .widget<SegmentedTabs<WarpSlot?>>(find.byType(SegmentedTabs<WarpSlot?>))
       .selected;
 
   final tilesKey = find.byKey(const ValueKey('geometry-mode-tiles'));
@@ -789,7 +790,7 @@ void main() {
       expect(painter(tester).plane, isNotNull, reason: 'the table still shows');
       expect(
         find.text(
-          'This memory holds one table per colour, the editor cannot change it.',
+          'This memory holds one table per color, the editor cannot change it.',
         ),
         findsOneWidget,
       );
@@ -940,8 +941,8 @@ void main() {
       );
       expect(
         tester
-            .widget<SegmentedTabs<WarpSlot>>(
-              find.byType(SegmentedTabs<WarpSlot>),
+            .widget<SegmentedTabs<WarpSlot?>>(
+              find.byType(SegmentedTabs<WarpSlot?>),
             )
             .enabled,
         isFalse,
@@ -992,7 +993,7 @@ void main() {
       expect(find.text('PC-1'), findsWidgets);
       expect(find.text('PC-2'), findsOneWidget);
       expect(find.text('PC-3'), findsOneWidget);
-      expect(tester.getSize(find.byType(SegmentedTabs<WarpSlot>)).height, 32);
+      expect(tester.getSize(find.byType(SegmentedTabs<WarpSlot?>)).height, 32);
     });
 
     dialogTest('a memory that was never stored says so', (tester) async {
@@ -1313,6 +1314,8 @@ void main() {
     ) async {
       final original = _gridTable(dx: 80);
       _seed(fake, WarpSlot.pc1, original);
+      // A memory that was stored once.
+      fake.warpFor(_ip).storedTimes[1] = '20261120143200';
       await openDialog(tester, mode: 3);
       await resetTo(tester);
       await settle(tester);
@@ -1560,21 +1563,11 @@ void main() {
       _seed(fake, WarpSlot.pc1, _gridTable());
       await openDialog(tester, mode: 3, size: minimum);
       expect(tester.takeException(), isNull);
-      // No pill in the card header...
-      final card = find.byKey(freeGridCanvasCardKey);
-      expect(
-        find.descendant(of: card, matching: find.text('3 x 3 points')),
-        findsNothing,
-      );
-      // ...it is in the controls card instead.
-      expect(
-        find.descendant(
-          of: find.byKey(freeGridControlsCardKey),
-          matching: find.text('3 x 3 points'),
-        ),
-        findsOneWidget,
-      );
-      expect(find.text('none'), findsNothing);
+      // No pill in the card header, and none in the controls card either
+      // (UI-R-9): the Selected points caption is the caption it is at the
+      // full size, and the Grid fields show the size.
+      expect(find.text('3 x 3 points'), findsNothing);
+      expect(find.text('none'), findsOneWidget);
       // The help sits in the zoom cluster, not in the header.
       expect(
         find.descendant(
@@ -1641,6 +1634,751 @@ void main() {
         greaterThan(view.height),
         reason: 'it needs the scroll',
       );
+    });
+  });
+
+  // -------------------------------------------------------------- fix round
+
+  Future<void> tab(WidgetTester tester) async {
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+  }
+
+  bool inside(BuildContext context, Key key) {
+    var found = false;
+    context.visitAncestorElements((e) {
+      if (e.widget.key == key) {
+        found = true;
+        return false;
+      }
+      return true;
+    });
+    return found;
+  }
+
+  Future<TestGesture> hover(WidgetTester tester, Finder target) async {
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: Offset.zero);
+    addTearDown(mouse.removePointer);
+    await mouse.moveTo(tester.getCenter(target));
+    await tester.pump();
+    return mouse;
+  }
+
+  group('the memory menu (UI-R-1, UI-R-14, QA-011)', () {
+    dialogTest('is 300 wide, its right edge at the button, inside the dialog', (
+      tester,
+    ) async {
+      _seed(fake, WarpSlot.pc1, _gridTable());
+      await openDialog(tester, mode: 3);
+      await resetTo(tester);
+      await settle(tester);
+      await openMemoryMenu(tester);
+      final item = tester.getRect(
+        find.byKey(const ValueKey('free-grid-menu-restore')),
+      );
+      final dialog = tester.getRect(find.byType(GeometryCorrectionDialog));
+      expect(item.width, 288, reason: '300 with the 6 px inset on each side');
+      expect(dialog.contains(item.topLeft), isTrue);
+      expect(dialog.contains(item.bottomRight), isTrue);
+      final button = tester.getRect(moreButton);
+      expect(item.right + 6, closeTo(button.right, 1));
+      expect(tester.takeException(), isNull);
+    });
+
+    dialogTest('stays inside the smallest dialog, a long line wraps', (
+      tester,
+    ) async {
+      _seed(fake, WarpSlot.pc1, _gridTable());
+      await openDialog(tester, mode: 3, size: minimum);
+      await resetTo(tester);
+      await settle(tester);
+      await openMemoryMenu(tester);
+      final item = tester.getRect(
+        find.byKey(const ValueKey('free-grid-menu-restore')),
+      );
+      final dialog = tester.getRect(find.byType(GeometryCorrectionDialog));
+      expect(item.width, 288);
+      expect(item.right, lessThanOrEqualTo(dialog.right));
+      expect(item.left, greaterThanOrEqualTo(dialog.left));
+      final description = tester.getSize(
+        find.textContaining(', saved on this computer'),
+      );
+      expect(description.height, greaterThan(16), reason: 'two lines');
+      expect(tester.takeException(), isNull);
+    });
+
+    dialogTest('item titles are w500', (tester) async {
+      _seed(fake, WarpSlot.pc1, _gridTable());
+      await openDialog(tester, mode: 3);
+      await openMemoryMenu(tester);
+      for (final title in [
+        'Restore backup',
+        'Discard changes',
+        'Reset PC-1 to neutral',
+      ]) {
+        expect(
+          tester.widget<Text>(find.text(title)).style!.fontWeight,
+          FontWeight.w500,
+          reason: title,
+        );
+      }
+    });
+
+    dialogTest('its tooltip does not cover the menu it opens', (tester) async {
+      _seed(fake, WarpSlot.pc1, _gridTable());
+      await openDialog(tester, mode: 3);
+      final mouse = await hover(tester, moreButton);
+      expect(find.text('More memory actions'), findsOneWidget);
+      // Click with the pointer still on the button.
+      await mouse.down(tester.getCenter(moreButton));
+      await mouse.up();
+      await tester.pumpAndSettle();
+      expect(find.text('Restore backup'), findsOneWidget, reason: 'open');
+      expect(find.text('More memory actions'), findsNothing);
+    });
+  });
+
+  group('closing while a write runs (decision 14.2)', () {
+    dialogTest('Esc, the barrier and the close button are refused', (
+      tester,
+    ) async {
+      _seed(fake, WarpSlot.pc1, _gridTable());
+      await openDialog(tester, mode: 3);
+      fake.holdFrameAfter(3);
+      await resetTo(tester);
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(
+        find.byKey(const ValueKey('free-grid-storing-chip')),
+        findsOneWidget,
+      );
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.byType(GeometryCorrectionDialog), findsOneWidget);
+      await tester.tapAt(const Offset(4, 4));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.byType(GeometryCorrectionDialog), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.close));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.byType(GeometryCorrectionDialog), findsOneWidget);
+
+      fake.release();
+      await settle(tester);
+      // The write is done: the dialog closes as it always does.
+      await tester.tap(find.byIcon(Icons.close));
+      await settle(tester);
+      expect(find.byType(GeometryCorrectionDialog), findsNothing);
+    });
+
+    dialogTest('the barrier and Esc close it when nothing is written', (
+      tester,
+    ) async {
+      _seed(fake, WarpSlot.pc1, _gridTable());
+      await openDialog(tester, mode: 3);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await settle(tester);
+      expect(find.byType(GeometryCorrectionDialog), findsNothing);
+    });
+  });
+
+  group('messages (UI-R-3, UI-R-12, QA-010, UI-R-20, lastStoreIncomplete)', () {
+    dialogTest('a failed write: one line that ends with the action', (
+      tester,
+    ) async {
+      _seed(fake, WarpSlot.pc1, _gridTable());
+      await openDialog(tester, mode: 3);
+      fake.warpFor(_ip).failFrame(fake.warpFor(_ip).frames.length + 1, 0x8C);
+      await resetTo(tester);
+      await settle(tester);
+      final line = find.textContaining('Resetting PC-1 failed at step');
+      expect(line, findsOneWidget);
+      final text = tester.widget<Text>(line).data!;
+      expect(text, endsWith('it may be partly written. Reload to check.'));
+      expect(text, isNot(contains('0x')));
+      // The reason is in the tooltip and in the event log.
+      final tooltip = tester.widget<CustomTooltip>(
+        find.ancestor(of: line, matching: find.byType(CustomTooltip)),
+      );
+      expect(tooltip.message, isNotEmpty);
+      expect(tooltip.message, isNot(equals(text)));
+      final events = container.read(eventLogProvider);
+      expect(
+        events.where((e) => e.message.contains('reset failed at step')),
+        hasLength(1),
+      );
+    });
+
+    dialogTest('a store that did not keep its time says so, until Reload', (
+      tester,
+    ) async {
+      _seed(fake, WarpSlot.pc1, _gridTable());
+      await openDialog(tester, mode: 3);
+      fake.warpFor(_ip).droppedAscii.add('VXX:GDTS1');
+      await resetTo(tester);
+      await settle(tester);
+      const warning =
+          'PC-1 is stored, but the projector did not keep its stored time or '
+          'grid size. Reload to check.';
+      final line = find.text(warning);
+      expect(line, findsOneWidget);
+      final warningColor = AppStatusColors.of(tester.element(line)).warning;
+      final icon = tester.widget<Icon>(
+        find.descendant(
+          of: find.ancestor(of: line, matching: find.byType(Row)).first,
+          matching: find.byIcon(Icons.warning_amber_rounded),
+        ),
+      );
+      expect(icon.color, warningColor);
+      fake.warpFor(_ip).droppedAscii.clear();
+      await tester.tap(reloadButton);
+      await settle(tester);
+      expect(find.text(warning), findsNothing);
+    });
+
+    dialogTest('a read that failed: words, one title, Try again, no stale '
+        'values', (tester) async {
+      _seed(fake, WarpSlot.pc1, _gridTable(columns: 5, rows: 4));
+      fake.warpFor(_ip).gridCounts[1] = '5:4';
+      fake.warpFor(_ip).failFrame(0, 0x8C);
+      await openDialog(tester, mode: 3);
+      expect(find.text('Could not read PC-1'), findsOneWidget);
+      const detail =
+          'The projector did not answer the read. Try again, or check that '
+          'it is not busy.';
+      expect(find.text(detail), findsOneWidget);
+      // The reason is behind the detail, never in the line itself.
+      expect(find.textContaining('0x8c'), findsNothing);
+      final reason = tester.widget<CustomTooltip>(
+        find.ancestor(
+          of: find.text(detail),
+          matching: find.byType(CustomTooltip),
+        ),
+      );
+      expect(reason.message, startsWith('Could not read PC-1: '));
+      // The Grid fields show nothing, the note and the footer are neutral.
+      final fields = tester.widgetList<TextField>(find.byType(TextField));
+      expect([for (final f in fields) f.controller!.text], everyElement(''));
+      expect(find.text('PC-1 was not read'), findsOneWidget);
+      expect(find.textContaining('Drag a point'), findsNothing);
+      expect(
+        find.text('There is nothing to edit until PC-1 has been read.'),
+        findsOneWidget,
+      );
+      // No memory is selected: any segment switches the projector and reads.
+      expect(selectedSlot(tester), isNull);
+
+      await tester.tap(find.byKey(const ValueKey('free-grid-try-again')));
+      await settle(tester);
+      expect(find.text('Could not read PC-1'), findsNothing);
+      expect(painter(tester).grid, isNotNull);
+      expect(selectedSlot(tester), WarpSlot.pc1);
+    });
+
+    dialogTest('a failed read names the geometry mode when it has none', (
+      tester,
+    ) async {
+      _seed(fake, WarpSlot.pc1, _gridTable());
+      await openDialog(tester, mode: 3);
+      fake.rawResponsesByIp[_ip] = {'QVX:GMMI0': 'ER401'};
+      await tester.tap(reloadButton);
+      await settle(tester);
+      expect(
+        find.text('The projector did not report its geometry mode.'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('null'), findsNothing);
+    });
+
+    dialogTest('a memory the projector is not in: Reload says so, a click '
+        'on a segment switches', (tester) async {
+      _seed(fake, WarpSlot.pc1, _gridTable());
+      await openDialog(tester, mode: 3);
+      fake.warpFor(_ip).mode = 0;
+      await tester.tap(reloadButton);
+      await settle(tester);
+      expect(
+        find.text('The projector is not in PC-1. Select PC-1 to switch it.'),
+        findsOneWidget,
+      );
+      expect(fake.warpFor(_ip).mode, 0, reason: 'Reload never switches');
+      await tester.tap(find.text('PC-1'));
+      await settle(tester);
+      expect(fake.warpFor(_ip).mode, 3);
+      expect(painter(tester).grid, isNotNull);
+    });
+
+    dialogTest('Restore of a never-stored memory says it goes back to no '
+        'correction', (tester) async {
+      _seed(fake, WarpSlot.pc1, _gridTable());
+      // No stored time: the memory was never stored.
+      await openDialog(tester, mode: 3);
+      await resetTo(tester);
+      await settle(tester);
+      await openMemoryMenu(tester);
+      await tester.tap(find.byKey(const ValueKey('free-grid-menu-restore')));
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining(
+          'PC-1 goes back to no correction, as it was before the first Store',
+        ),
+        findsOneWidget,
+      );
+      expect(find.textContaining('is stored as it was on'), findsNothing);
+      expect(
+        find.textContaining(
+          'The current PC-1 table is replaced, it is not backed up',
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+    });
+
+    dialogTest('Restore of a stored memory keeps its date and says what is '
+        'replaced', (tester) async {
+      _seed(fake, WarpSlot.pc1, _gridTable());
+      fake.warpFor(_ip).storedTimes[1] = '20261120143200';
+      await openDialog(tester, mode: 3);
+      await resetTo(tester);
+      await settle(tester);
+      await openMemoryMenu(tester);
+      await tester.tap(find.byKey(const ValueKey('free-grid-menu-restore')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('is stored as it was on'), findsOneWidget);
+      expect(find.textContaining('goes back to no correction'), findsNothing);
+      expect(
+        find.textContaining('The current PC-1 table is replaced'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+    });
+  });
+
+  group('a model without memories (decision 14.3, QA-005)', () {
+    dialogTest('the tile click changes nothing and the tile is gone', (
+      tester,
+    ) async {
+      fake.rawResponses['QVX:MIDS1'] = 'MIDS1=0010:00:26';
+      await openDialog(tester, mode: 0);
+      await tester.tap(tileOf('Free grid'));
+      await settle(tester);
+      expect(selectedTile(tester), 'Off', reason: 'back to the earlier mode');
+      expect(tileLabels(tester), isNot(contains('Free grid')));
+      expect(fake.warpFor(_ip).mode, 0);
+      expect(gmmiWrites(), isEmpty);
+      expect(
+        [
+          for (final (_, cmd) in fake.sentRaw)
+            if (cmd.startsWith('VXX:')) cmd,
+        ],
+        isEmpty,
+        reason: 'not even the Quad Pixel Drive step',
+      );
+      expect(fake.sentCommands, isEmpty);
+      expect(find.text('Could not read PC-1'), findsNothing);
+    });
+
+    dialogTest('from Keystone it goes back to Keystone', (tester) async {
+      fake.rawResponses['QVX:MIDS1'] = 'MIDS1=0010:00:26';
+      await openDialog(tester, mode: 1);
+      await tester.tap(tileOf('Free grid'));
+      await settle(tester);
+      expect(selectedTile(tester), 'Keystone');
+      expect(tileLabels(tester), isNot(contains('Free grid')));
+      expect(gmmiWrites(), isEmpty);
+    });
+  });
+
+  group('the other modes wait while the session works (QA-003)', () {
+    dialogTest('while reading, the tiles but the selected one are disabled', (
+      tester,
+    ) async {
+      _seed(fake, WarpSlot.pc1, _gridTable());
+      await openDialog(tester, mode: 3);
+      fake.holdBinary[_ip] = Completer<void>();
+      await tester.tap(reloadButton);
+      await tester.pump(const Duration(milliseconds: 50));
+      for (final label in ['Off', 'Keystone', 'Curved Correction']) {
+        expect(
+          tester.widget<ModeTile>(tileOf(label)).onTap,
+          isNull,
+          reason: label,
+        );
+      }
+      fake.holdBinary[_ip]!.complete();
+      await settle(tester);
+      expect(tester.widget<ModeTile>(tileOf('Off')).onTap, isNotNull);
+    });
+  });
+
+  group('the compact window (UI-R-2)', () {
+    dialogTest('a warning takes the footer message, with a tooltip', (
+      tester,
+    ) async {
+      _seed(fake, WarpSlot.pc1, _gridTable(dx: -3000));
+      await openDialog(tester, mode: 3, size: minimum);
+      final warning = find.byKey(const ValueKey('free-grid-footer-warning'));
+      expect(warning, findsOneWidget);
+      final text = tester
+          .widget<Text>(
+            find.descendant(of: warning, matching: find.byType(Text)),
+          )
+          .data!;
+      expect(text, contains('folded'));
+      expect(
+        find.text('Edits show on the projector live, Store keeps them in PC-1'),
+        findsNothing,
+      );
+      final tooltip = tester.widget<CustomTooltip>(
+        find.descendant(of: warning, matching: find.byType(CustomTooltip)),
+      );
+      expect(tooltip.message, text);
+      final warningColor = AppStatusColors.of(tester.element(warning)).warning;
+      final icon = tester.widget<Icon>(
+        find.descendant(
+          of: warning,
+          matching: find.byIcon(Icons.warning_amber_rounded),
+        ),
+      );
+      expect(icon.color, warningColor);
+      expect(tester.takeException(), isNull);
+    });
+
+    dialogTest('no warning: the usual footer message', (tester) async {
+      _seed(fake, WarpSlot.pc1, _gridTable());
+      await openDialog(tester, mode: 3, size: minimum);
+      expect(
+        find.byKey(const ValueKey('free-grid-footer-warning')),
+        findsNothing,
+      );
+      expect(
+        find.text('Edits show on the projector live, Store keeps them in PC-1'),
+        findsOneWidget,
+      );
+    });
+
+    dialogTest('the full-size dialog keeps the note line, not the footer', (
+      tester,
+    ) async {
+      _seed(fake, WarpSlot.pc1, _gridTable(dx: -3000));
+      await openDialog(tester, mode: 3);
+      expect(
+        find.byKey(const ValueKey('free-grid-footer-warning')),
+        findsNothing,
+      );
+      expect(find.byKey(const ValueKey('free-grid-note')), findsOneWidget);
+    });
+  });
+
+  group(
+    'the controls card (UI-R-4, UI-R-5, UI-R-6, UI-R-7, UI-R-8, UI-R-18)',
+    () {
+      dialogTest('Tab never lands in a disabled field', (tester) async {
+        _seed(fake, WarpSlot.pc1, _gridTable());
+        await openDialog(tester, mode: 3);
+        for (var i = 0; i < 40; i++) {
+          await tab(tester);
+          final context = FocusManager.instance.primaryFocus?.context;
+          if (context == null) continue;
+          expect(
+            context.findAncestorWidgetOfExactType<EditableText>(),
+            isNull,
+            reason: 'stop $i is inside a text field',
+          );
+        }
+      });
+
+      dialogTest('Tab goes through the canvas card, then the controls card', (
+        tester,
+      ) async {
+        _seed(fake, WarpSlot.pc1, _gridTable());
+        await openDialog(tester, mode: 3);
+        final regions = <String>[];
+        for (var i = 0; i < 40; i++) {
+          await tab(tester);
+          final context = FocusManager.instance.primaryFocus?.context;
+          final region = context == null
+              ? 'none'
+              : inside(context, freeGridCanvasCardKey)
+              ? 'canvas'
+              : inside(context, freeGridControlsCardKey)
+              ? 'controls'
+              : 'other';
+          if (regions.isEmpty || regions.last != region) regions.add(region);
+        }
+        // The title bar and the tiles, the canvas card, the controls card, and
+        // round again: never back and forth between the two cards.
+        expect(regions.take(4), ['other', 'canvas', 'controls', 'other']);
+        expect(
+          regions.where((r) => r == 'canvas').length,
+          regions.where((r) => r == 'controls').length,
+        );
+      });
+
+      dialogTest('the colors are one stop that the arrow keys move', (
+        tester,
+      ) async {
+        _seed(fake, WarpSlot.pc1, _gridTable());
+        await openDialog(tester, mode: 3);
+        await tester.tap(
+          find.byKey(const ValueKey('free-grid-switch-overlay')),
+        );
+        await settle(tester);
+        expect(overlayFrames().last.sublist(7, 10), [0x00, 0xFF, 0x00]);
+        for (var i = 0; i < 60; i++) {
+          await tab(tester);
+          if (FocusManager.instance.primaryFocus?.debugLabel ==
+              'overlay color') {
+            break;
+          }
+        }
+        expect(FocusManager.instance.primaryFocus?.debugLabel, 'overlay color');
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+        await settle(tester);
+        expect(overlayFrames().last.sublist(7, 10), [
+          0x00,
+          0x00,
+          0xFF,
+        ], reason: 'Blue');
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+        await settle(tester);
+        expect(overlayFrames().last.sublist(7, 10), [
+          0xFF,
+          0x00,
+          0x00,
+        ], reason: 'Red');
+        // The ends stop the choice.
+        for (var i = 0; i < 10; i++) {
+          await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+        }
+        await settle(tester);
+        expect(overlayFrames().last.sublist(7, 10), [
+          0xFF,
+          0x00,
+          0xFF,
+        ], reason: 'Magenta');
+        // While the keyboard has the row, the chosen swatch's ring is primary.
+        final swatch = tester.widget<Container>(
+          find
+              .descendant(
+                of: find.byKey(const ValueKey('free-grid-swatch-Magenta')),
+                matching: find.byType(Container),
+              )
+              .first,
+        );
+        final shadows = (swatch.decoration! as BoxDecoration).boxShadow!;
+        expect(
+          shadows.first.color,
+          Theme.of(
+            tester.element(
+              find.byKey(const ValueKey('free-grid-swatch-Magenta')),
+            ),
+          ).colorScheme.primary,
+        );
+      });
+
+      dialogTest(
+        'the chosen swatch: the ring first, the card-colored gap over it',
+        (tester) async {
+          _seed(fake, WarpSlot.pc1, _gridTable());
+          await openDialog(tester, mode: 3);
+          final green = find.byKey(const ValueKey('free-grid-swatch-Green'));
+          final container = tester.widget<Container>(
+            find.descendant(of: green, matching: find.byType(Container)).first,
+          );
+          final shadows = (container.decoration! as BoxDecoration).boxShadow!;
+          final cs = Theme.of(tester.element(green)).colorScheme;
+          expect(shadows, hasLength(2));
+          expect(shadows[0].spreadRadius, 4);
+          expect(
+            shadows[0].color,
+            cs.onSurface,
+            reason: 'the ring is underneath',
+          );
+          expect(shadows[1].spreadRadius, 2);
+          expect(
+            shadows[1].color,
+            DialogSurfaces.of(tester.element(green)).card,
+          );
+        },
+      );
+
+      dialogTest('the controls do not move when the table arrives (offsets)', (
+        tester,
+      ) async {
+        _seed(fake, WarpSlot.pc1, _gridTable());
+        await openDialog(tester, mode: 3);
+        Map<String, Offset> offsets() => {
+          for (final t in [
+            'Memory',
+            'Grid',
+            'Selected points',
+            'On the projector',
+          ])
+            t: tester.getTopLeft(find.text(t)),
+        };
+        final ready = offsets();
+        final divider = tester.getRect(find.byKey(freeGridControlsCardKey));
+
+        fake.holdBinary[_ip] = Completer<void>();
+        await tester.tap(reloadButton);
+        await tester.pump(const Duration(milliseconds: 50));
+        expect(find.byType(Skeleton), findsNWidgets(8));
+        expect(offsets(), ready, reason: 'the skeleton has the same headers');
+        expect(tester.getRect(find.byKey(freeGridControlsCardKey)), divider);
+
+        fake.holdBinary[_ip]!.complete();
+        await settle(tester);
+        expect(offsets(), ready);
+      });
+
+      dialogTest('a read-only memory: no pill, no control grid entry, empty '
+          'Grid fields', (tester) async {
+        _seed(fake, WarpSlot.pc1, identityWarpTable(_caps.geometry, planes: 3));
+        await openDialog(tester, mode: 3);
+        expect(find.text('3 x 3 points'), findsNothing);
+        expect(find.text('Control grid'), findsNothing);
+        expect(find.text('Panel'), findsOneWidget);
+        expect(find.text('Folded cell'), findsOneWidget);
+        final fields = tester.widgetList<TextField>(find.byType(TextField));
+        expect([for (final f in fields) f.controller!.text], everyElement(''));
+      });
+
+      dialogTest('an editable memory shows its size in the Grid fields', (
+        tester,
+      ) async {
+        _seed(fake, WarpSlot.pc1, _gridTable(columns: 5, rows: 4));
+        fake.warpFor(_ip).gridCounts[1] = '5:4';
+        await openDialog(tester, mode: 3);
+        final fields = tester
+            .widgetList<TextField>(find.byType(TextField))
+            .map((f) => f.controller!.text)
+            .toList();
+        expect(fields.take(2), ['5', '4']);
+        expect(find.text('Control grid'), findsOneWidget);
+      });
+    },
+  );
+
+  group('help, focus and icons (UI-R-10, UI-R-15, UI-R-19)', () {
+    dialogTest('every help row is one line and the keys do not wrap', (
+      tester,
+    ) async {
+      _seed(fake, WarpSlot.pc1, _gridTable());
+      await openDialog(tester, mode: 3);
+      await hover(tester, find.byKey(const ValueKey('free-grid-help')));
+      final descriptions = [
+        'Next or previous point, row by row',
+        'Add to the selection',
+        'Select an area',
+        'Zoom at the cursor',
+        'Scroll up and down, sideways',
+        'Pan',
+        'Clear the selection',
+        'Bezier on selection, reset positions',
+        'Mirror horizontally, vertically',
+      ];
+      final heights = {
+        for (final d in descriptions) d: tester.getSize(find.text(d)).height,
+      };
+      expect(heights.values.toSet(), hasLength(1), reason: '$heights');
+      final rich = tester.getSize(
+        find.textContaining('Move the selection 1 px'),
+      );
+      expect(rich.height, heights.values.first);
+      // The key column: 'Middle drag, [Space] drag' is a single line.
+      final keys = tester.getSize(find.text('Middle drag,'));
+      expect(keys.height, heights.values.first);
+      final bubble = tester.getSize(find.byType(TooltipBubble));
+      expect(bubble.width, lessThanOrEqualTo(420));
+    });
+
+    dialogTest('the canvas shows a ring for keyboard focus only', (
+      tester,
+    ) async {
+      _seed(fake, WarpSlot.pc1, _gridTable());
+      await openDialog(tester, mode: 3);
+      bool ringShown() =>
+          (tester
+                      .widget<DecoratedBox>(
+                        find.byKey(const ValueKey('free-grid-focus-ring')),
+                      )
+                      .decoration
+                  as BoxDecoration)
+              .border !=
+          null;
+      expect(ringShown(), isFalse);
+      // A click focuses the canvas, with no ring.
+      FocusManager.instance.highlightStrategy =
+          FocusHighlightStrategy.alwaysTouch;
+      await tester.tapAt(
+        tester.getCenter(find.byKey(const ValueKey('free-grid-paint'))),
+      );
+      await tester.pump();
+      expect(ringShown(), isFalse);
+      // The keyboard has it.
+      FocusManager.instance.highlightStrategy =
+          FocusHighlightStrategy.alwaysTraditional;
+      await tester.pump();
+      expect(ringShown(), isTrue);
+      FocusManager.instance.highlightStrategy =
+          FocusHighlightStrategy.automatic;
+    });
+
+    dialogTest('a round icon button shows a ring when the keyboard is on it', (
+      tester,
+    ) async {
+      _seed(fake, WarpSlot.pc1, _gridTable());
+      await openDialog(tester, mode: 3);
+      Color ring() {
+        final box = tester.widget<DecoratedBox>(
+          find
+              .descendant(of: reloadButton, matching: find.byType(DecoratedBox))
+              .first,
+        );
+        return (box.decoration as BoxDecoration).border!.top.color;
+      }
+
+      expect(ring().a, 0, reason: 'no ring at rest');
+      for (var i = 0; i < 40; i++) {
+        await tab(tester);
+        final context = FocusManager.instance.primaryFocus?.context;
+        if (context != null &&
+            tester.any(
+              find.descendant(
+                of: reloadButton,
+                matching: find.byType(InkResponse),
+              ),
+            ) &&
+            context.findAncestorWidgetOfExactType<InkResponse>() != null &&
+            inside(context, const ValueKey('free-grid-reload'))) {
+          break;
+        }
+      }
+      expect(ring().a, 1, reason: 'a solid ring with the keyboard on it');
+    });
+
+    dialogTest('Fit movable range has its own icon, the tile keeps grid_on', (
+      tester,
+    ) async {
+      _seed(fake, WarpSlot.pc1, _gridTable());
+      await openDialog(tester, mode: 3);
+      final fit = find.byKey(const ValueKey('free-grid-fit'));
+      expect(
+        tester
+            .widget<Icon>(find.descendant(of: fit, matching: find.byType(Icon)))
+            .icon,
+        Icons.open_in_full,
+      );
+      expect(Icons.open_in_full, isNot(Icons.zoom_out_map));
+      expect(
+        tester.widget<ModeTile>(tileOf('Corner Correction')).icon,
+        Icons.zoom_out_map,
+      );
+      expect(tester.widget<ModeTile>(tileOf('Free grid')).icon, Icons.grid_on);
     });
   });
 

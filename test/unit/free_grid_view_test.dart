@@ -136,6 +136,70 @@ void main() {
     });
   });
 
+  group('the first view keeps clear of the zoom cluster', () {
+    // A 1000 x 500 panel on a 360 x 190 canvas, the cluster 130 x 34 in the
+    // bottom right corner.
+    const size = Size(360, 190);
+    const cluster = Rect.fromLTWH(360 - 8 - 130, 190 - 6 - 34, 130, 34);
+    const plain = FreeGridFrame(
+      panelWidth: 1000,
+      panelHeight: 500,
+      rangeX: 200,
+      rangeY: 100,
+      canvas: size,
+    );
+    const guarded = FreeGridFrame(
+      panelWidth: 1000,
+      panelHeight: 500,
+      rangeX: 200,
+      rangeY: 100,
+      canvas: size,
+      avoid: cluster,
+    );
+
+    test('without it the panel reaches the cluster', () {
+      final panel = plain.fitPanel().rectToScreen(plain.panel);
+      expect(panel.overlaps(cluster), isTrue);
+    });
+
+    test('with it the panel is fitted above the cluster', () {
+      final view = guarded.fitPanel();
+      final panel = view.rectToScreen(guarded.panel);
+      expect(panel.overlaps(cluster), isFalse);
+      expect(panel.bottom, lessThan(cluster.top));
+      expect(panel.top, greaterThan(0));
+      expect(view.zoom, lessThan(plain.fitPanel().zoom));
+      // Still centred across the canvas.
+      expect(panel.center.dx, closeTo(size.width / 2, 1e-9));
+    });
+
+    test('a panel that is clear of it keeps the plain fit', () {
+      const roomy = Size(900, 700);
+      const clear = FreeGridFrame(
+        panelWidth: 1000,
+        panelHeight: 500,
+        rangeX: 200,
+        rangeY: 100,
+        canvas: roomy,
+        avoid: Rect.fromLTWH(900 - 10 - 100, 700 - 8 - 34, 100, 34),
+      );
+      const bare = FreeGridFrame(
+        panelWidth: 1000,
+        panelHeight: 500,
+        rangeX: 200,
+        rangeY: 100,
+        canvas: roomy,
+      );
+      expect(clear.fitPanel().sameAs(bare.fitPanel()), isTrue);
+    });
+
+    test('Fit toggles from the guarded view', () {
+      final view = guarded.fitPanel();
+      expect(guarded.nextFit(view), FreeGridFit.movableRange);
+      expect(guarded.nextFit(guarded.fitRange()), FreeGridFit.panel);
+    });
+  });
+
   group('movable range frame', () {
     test('shows while some of its outline is in view', () {
       expect(frame.rangeFrameVisible(frame.fitRange()), isTrue);
@@ -209,6 +273,40 @@ void main() {
   group('note', () {
     final caps = lookupWarpModelCaps('001c_00_26')!;
     final wuxga = lookupWarpModelCaps('0016_00_26')!;
+
+    test('a memory that could not be read is neutral', () {
+      final note = freeGridNote(
+        const WarpSessionState(phase: WarpSessionPhase.failed),
+      );
+      expect(note.kind, FreeGridNoteKind.notRead);
+      expect(note.isWarning, isFalse);
+    });
+
+    test('the warning texts spell color the US way and name the grid', () {
+      final s = WarpSessionState(
+        caps: caps,
+        gridCounts: (columns: 9, rows: 7),
+        readOnlyReason: WarpReadOnlyReason.colourPlanes,
+      );
+      expect(
+        freeGridWarningText(freeGridNote(s), s),
+        'This memory holds one table per color, the editor cannot change it.',
+      );
+      final detail = WarpSessionState(
+        caps: caps,
+        table: identityWarpTable(caps.geometry),
+        gridCounts: (columns: 9, rows: 7),
+        undescribedDetail: true,
+      );
+      expect(
+        freeGridWarningText(freeGridNote(detail), detail),
+        contains('detail a 9 x 7 grid cannot describe'),
+      );
+      expect(
+        freeGridWarningText(const FreeGridNote(FreeGridNoteKind.hint), s),
+        '',
+      );
+    });
 
     WarpSessionState ready({
       WarpModelCaps? useCaps,

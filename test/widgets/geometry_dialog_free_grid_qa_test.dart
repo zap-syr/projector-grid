@@ -22,6 +22,7 @@ import 'package:projector_grid/features/workspace/presentation/providers/warp_ba
 import 'package:projector_grid/features/workspace/presentation/providers/warp_edit_session_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/workspace_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/common/mode_tile.dart';
+import 'package:projector_grid/features/workspace/presentation/widgets/common/segmented_tabs.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/geometry/free_grid/free_grid_painter.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/geometry_correction_dialog.dart';
 
@@ -296,7 +297,15 @@ void main() {
       expect(workspace().claimNodeForExternalPoll(_node.id), isTrue);
       await tester.tap(tileOf('Free grid'));
       await tester.pump(const Duration(milliseconds: 50));
-      // The other tiles are enabled while the session reads.
+      // The other tiles wait while the session reads, so no GMMI0 of the
+      // dialog can race the session's (this probe used to click Keystone
+      // here and expect it to win; now the click is refused, and the
+      // projector and the tiles agree once the session is done).
+      expect(
+        tester.widget<ModeTile>(tileOf('Keystone')).onTap,
+        isNull,
+        reason: 'the tile must be disabled while the session switches',
+      );
       await tester.tap(tileOf('Keystone'));
       await tester.pump(const Duration(milliseconds: 50));
       workspace().releaseNodeFromExternalPoll(_node.id);
@@ -304,13 +313,18 @@ void main() {
         await tester.pump(const Duration(milliseconds: 100));
       }
       await settle(tester);
-
-      expect(selectedTile(tester), 'Keystone');
+      expect(selectedTile(tester), 'Free grid');
       expect(
         fake.warpFor(_ip).mode,
-        1,
-        reason: 'the late VXX:GMMI0=+00003 put the projector in PC-1',
+        3,
+        reason: 'the dialog and the projector agree',
       );
+
+      // Once it is done the mode can be left, and the projector follows.
+      await tester.tap(tileOf('Keystone'));
+      await settle(tester);
+      expect(selectedTile(tester), 'Keystone');
+      expect(fake.warpFor(_ip).mode, 1);
     });
 
     dialogTest('QA-003 PC-2 then Keystone while a poll runs: the projector '
@@ -322,6 +336,11 @@ void main() {
       expect(workspace().claimNodeForExternalPoll(_node.id), isTrue);
       await tester.tap(find.text('PC-2'));
       await tester.pump(const Duration(milliseconds: 50));
+      // As above: the other tiles and the memory segments wait, instead of
+      // Keystone winning the race.
+      expect(tester.widget<ModeTile>(tileOf('Keystone')).onTap, isNull);
+      // The controls are a skeleton while it reads: no segment to click.
+      expect(find.byType(SegmentedTabs<WarpSlot?>), findsNothing);
       await tester.tap(tileOf('Keystone'));
       await tester.pump(const Duration(milliseconds: 50));
       workspace().releaseNodeFromExternalPoll(_node.id);
@@ -329,13 +348,13 @@ void main() {
         await tester.pump(const Duration(milliseconds: 100));
       }
       await settle(tester);
+      expect(selectedTile(tester), 'Free grid');
+      expect(fake.warpFor(_ip).mode, 4);
 
+      await tester.tap(tileOf('Keystone'));
+      await settle(tester);
       expect(selectedTile(tester), 'Keystone');
-      expect(
-        fake.warpFor(_ip).mode,
-        1,
-        reason: 'the late VXX:GMMI0=+00004 put the projector in PC-2',
-      );
+      expect(fake.warpFor(_ip).mode, 1);
     });
   });
 
@@ -557,7 +576,9 @@ void main() {
     expect(session().readOnly, isTrue);
     expect(
       find.text(
-        'This memory holds one table per colour, the editor cannot change it.',
+        // Spelled "color" now (UI-R-13), and shown in the footer's message
+        // slot (UI-R-2): the compact card has no note line.
+        'This memory holds one table per color, the editor cannot change it.',
       ),
       findsOneWidget,
       reason:
