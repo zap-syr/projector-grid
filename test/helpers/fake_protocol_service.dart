@@ -1,6 +1,10 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:projector_grid/core/services/panasonic_protocol_service.dart';
+import 'package:projector_grid/features/workspace/domain/warp_codec.dart';
+
+import 'fake_warp_projector.dart';
 
 /// Scriptable stand-in for [PanasonicProtocolService] — never opens a socket.
 class FakeProtocolService extends PanasonicProtocolService {
@@ -34,6 +38,23 @@ class FakeProtocolService extends PanasonicProtocolService {
   /// `sendQuickQuery` to these IPs doesn't answer until the completer does.
   final Map<String, Completer<void>> holdQueries = {};
 
+  /// The warp tables of each projector that has been asked for with
+  /// [warpFor]. Binary frames are answered from them, and so are the
+  /// `GMMI0`, `GDTS1` and `GGNS1` commands that [rawResponses] does not script
+  /// (an IP without one keeps the plain behaviour).
+  final Map<String, FakeWarpProjector> warpProjectors = {};
+
+  /// The warp tables of [ip], created on first use. Its injection hooks
+  /// script a failed transfer.
+  FakeWarpProjector warpFor(String ip) =>
+      warpProjectors.putIfAbsent(ip, FakeWarpProjector.new);
+
+  /// Every `sendBinaryCommand` call.
+  final List<(String ip, Uint8List frame)> sentBinary = [];
+
+  /// `sendBinaryCommand` to these IPs doesn't answer until the completer does.
+  final Map<String, Completer<void>> holdBinary = {};
+
   final List<(String ip, String cmd)> sentCommands = [];
   final List<(String ip, String cmd)> sentRaw = [];
 
@@ -55,7 +76,32 @@ class FakeProtocolService extends PanasonicProtocolService {
   ) async {
     sentCommands.add((ip, cmd));
     await holdCommands[ip]?.future;
+    final warp = warpProjectors[ip];
+    if (warp != null) {
+      if (warp.dropsAscii(cmd)) return false;
+      warp.handleAscii(cmd);
+    }
     return commandSucceeds[ip] ?? true;
+  }
+
+  @override
+  Future<Uint8List> sendBinaryCommand(
+    String ip,
+    int port,
+    String login,
+    String password,
+    Uint8List frame,
+  ) async {
+    sentBinary.add((ip, frame));
+    await holdBinary[ip]?.future;
+    final line = warpFor(ip).handleBinary(frame);
+    if (line == null) throw const WarpTransportException('connection dropped');
+    // The same parse as the real service.
+    try {
+      return parseWarpBinaryReply(line);
+    } on FormatException {
+      throw WarpProtocolException('unexpected reply: $line');
+    }
   }
 
   @override
@@ -101,6 +147,12 @@ class FakeProtocolService extends PanasonicProtocolService {
     final perIp = rawResponsesByIp[ip];
     if (perIp != null && perIp.containsKey(cmd)) return perIp[cmd];
     if (rawResponses.containsKey(cmd)) return rawResponses[cmd];
+    final warp = warpProjectors[ip];
+    if (warp != null) {
+      if (warp.dropsAscii(cmd)) return null;
+      final reply = warp.handleAscii(cmd);
+      if (reply != null) return reply;
+    }
     // Writes (`VXX:KEY=value`) succeed and echo back unless scripted.
     if (cmd.contains('=')) return cmd.substring(4);
     return null;
