@@ -31,7 +31,7 @@ final class AlertCountsProvider
         argument: null,
         retry: null,
         name: r'alertCountsProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -58,4 +58,4 @@ final class AlertCountsProvider
   }
 }
 
-String _$alertCountsHash() => r'2d276dc06ae49db1cd382703b841d20d11ba349a';
+String _$alertCountsHash() => r'765375d16fb71e27fc6c71f97e53afadb6cb55e2';

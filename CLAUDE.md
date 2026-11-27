@@ -37,6 +37,8 @@ dart run build_runner watch --delete-conflicting-outputs   # auto-regen during a
 
 flutter run -d windows        # or: -d macos
 dart analyze --fatal-infos .  # must be clean before committing; runs riverpod_lint
+# Suppress a riverpod_lint finding with `// ignore: riverpod_lint/<rule>` (the plain rule
+# name does not work), above the doc comment if the member has one.
 # (not `flutter analyze`: on Flutter 3.47 it skips analyzer-plugin diagnostics; and
 # not `dart analyze lib test`: plugins only report for the package root or single files)
 dart format .                 # must be run before committing

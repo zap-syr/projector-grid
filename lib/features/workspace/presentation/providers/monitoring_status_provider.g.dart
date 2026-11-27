@@ -39,7 +39,7 @@ final class MonitoringStatusProvider
         argument: null,
         retry: null,
         name: r'monitoringStatusProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -69,4 +69,4 @@ final class MonitoringStatusProvider
   }
 }
 
-String _$monitoringStatusHash() => r'84ba0ce75a32501e63c16ecb178be1ae5cecd52d';
+String _$monitoringStatusHash() => r'7516686ea4dc13e2cb08d24c0a6e41294fd62348';

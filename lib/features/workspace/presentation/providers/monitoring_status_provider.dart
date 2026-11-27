@@ -13,7 +13,7 @@ part 'monitoring_status_provider.g.dart';
 /// rows `select` their own entry or summary out of it, and the statuses
 /// compare by value, so a poll that changes nothing they show rebuilds
 /// none of them.
-@riverpod
+@Riverpod(keepAlive: true)
 Map<String, MonitoringStatus> monitoringStatus(Ref ref) {
   final nodes = ref.watch(workspaceProvider);
   final alerts = ref.watch(alertsProvider);
