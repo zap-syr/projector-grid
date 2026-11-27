@@ -288,7 +288,7 @@ class AppSettings {
   );
 }
 
-@riverpod
+@Riverpod(keepAlive: true)
 class AppSettingsNotifier extends _$AppSettingsNotifier {
   static String get _filePath => appConfigFilePath('app_settings.json');
 

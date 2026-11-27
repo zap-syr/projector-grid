@@ -8,7 +8,7 @@ part 'selection_provider.g.dart';
 /// that selecting/deselecting nodes doesn't rebuild the node list, doesn't
 /// get captured in undo/redo snapshots, and never touches project-file
 /// serialization.
-@riverpod
+@Riverpod(keepAlive: true)
 class SelectionNotifier extends _$SelectionNotifier {
   @override
   Set<String> build() => {};

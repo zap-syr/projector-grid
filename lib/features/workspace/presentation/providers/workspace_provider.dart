@@ -26,7 +26,7 @@ import 'scheduled_tasks_provider.dart';
 
 part 'workspace_provider.g.dart';
 
-@riverpod
+@Riverpod(keepAlive: true)
 class WorkspaceNotifier extends _$WorkspaceNotifier {
   late PanasonicProtocolService _protocolService;
   final _webStatusService = ProjectorWebStatusService();

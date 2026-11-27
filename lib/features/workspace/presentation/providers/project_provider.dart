@@ -44,7 +44,7 @@ class ProjectState {
   }
 }
 
-@riverpod
+@Riverpod(keepAlive: true)
 class ProjectStateNotifier extends _$ProjectStateNotifier {
   bool _suppressDirty = false;
 

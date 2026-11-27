@@ -38,7 +38,7 @@ final class SelectionNotifierProvider
         argument: null,
         retry: null,
         name: r'selectionProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -59,7 +59,7 @@ final class SelectionNotifierProvider
   }
 }
 
-String _$selectionNotifierHash() => r'12264568227cfb502ad23877344f1567a3311f41';
+String _$selectionNotifierHash() => r'b190080a9215088ac7ad192c32163f5dbbbde33e';
 
 /// Holds the set of currently-selected projector node IDs.
 ///

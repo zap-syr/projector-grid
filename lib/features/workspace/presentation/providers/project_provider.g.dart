@@ -20,7 +20,7 @@ final class ProjectStateNotifierProvider
         argument: null,
         retry: null,
         name: r'projectStateProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -42,7 +42,7 @@ final class ProjectStateNotifierProvider
 }
 
 String _$projectStateNotifierHash() =>
-    r'a4a96b34114eef525667ddc8ca6813fa914e3e1e';
+    r'180b9750c1b9fad028984dbca2b39201e1b44250';
 
 abstract class _$ProjectStateNotifier extends $Notifier<ProjectState> {
   ProjectState build();
