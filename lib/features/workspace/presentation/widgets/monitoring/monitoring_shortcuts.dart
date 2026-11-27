@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../../core/keyboard/primary_shortcut.dart';
 import '../../providers/monitoring_filter_provider.dart';
 import '../../providers/monitoring_panel_provider.dart';
 
@@ -20,9 +21,7 @@ class MonitoringShortcuts extends ConsumerWidget {
         ref.read(monitoringSearchFocusProvider.notifier).request();
     return CallbackShortcuts(
       bindings: {
-        const SingleActivator(LogicalKeyboardKey.keyF, control: true):
-            focusSearch,
-        const SingleActivator(LogicalKeyboardKey.keyF, meta: true): focusSearch,
+        primaryShortcut(LogicalKeyboardKey.keyF): focusSearch,
         const SingleActivator(LogicalKeyboardKey.escape): () =>
             ref.read(monitoringPanelProvider.notifier).close(),
       },

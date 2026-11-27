@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../../../../core/keyboard/primary_shortcut.dart';
 import '../../../../core/services/app_log_file.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../providers/alert_notifications_provider.dart';
@@ -297,48 +298,19 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
     return MacMenuBar(
       child: Shortcuts(
         shortcuts: {
-          const SingleActivator(LogicalKeyboardKey.keyN, control: true):
-              const _NewProjectIntent(),
-          const SingleActivator(LogicalKeyboardKey.keyO, control: true):
-              const _OpenProjectIntent(),
-          const SingleActivator(LogicalKeyboardKey.keyS, control: true):
-              const _SaveProjectIntent(),
-          const SingleActivator(
-            LogicalKeyboardKey.keyS,
-            control: true,
-            shift: true,
-          ): const _SaveAsProjectIntent(),
-          const SingleActivator(LogicalKeyboardKey.keyQ, control: true):
-              const ExitIntent(),
+          primaryShortcut(LogicalKeyboardKey.keyN): const _NewProjectIntent(),
+          primaryShortcut(LogicalKeyboardKey.keyO): const _OpenProjectIntent(),
+          primaryShortcut(LogicalKeyboardKey.keyS): const _SaveProjectIntent(),
+          primaryShortcut(LogicalKeyboardKey.keyS, shift: true):
+              const _SaveAsProjectIntent(),
+          primaryShortcut(LogicalKeyboardKey.keyQ): const ExitIntent(),
           const SingleActivator(LogicalKeyboardKey.f5): const _RefreshIntent(),
-          const SingleActivator(LogicalKeyboardKey.digit1, control: true):
+          primaryShortcut(LogicalKeyboardKey.digit1):
               const _ShowControlsIntent(),
-          const SingleActivator(LogicalKeyboardKey.digit2, control: true):
+          primaryShortcut(LogicalKeyboardKey.digit2):
               const _ShowMonitoringIntent(),
-          const SingleActivator(LogicalKeyboardKey.keyL, control: true):
+          primaryShortcut(LogicalKeyboardKey.keyL):
               const _ToggleAlignmentIntent(),
-          if (defaultTargetPlatform ==
-              TargetPlatform.macOS) ...<ShortcutActivator, Intent>{
-            const SingleActivator(LogicalKeyboardKey.keyN, meta: true):
-                const _NewProjectIntent(),
-            const SingleActivator(LogicalKeyboardKey.keyO, meta: true):
-                const _OpenProjectIntent(),
-            const SingleActivator(LogicalKeyboardKey.keyS, meta: true):
-                const _SaveProjectIntent(),
-            const SingleActivator(
-              LogicalKeyboardKey.keyS,
-              meta: true,
-              shift: true,
-            ): const _SaveAsProjectIntent(),
-            const SingleActivator(LogicalKeyboardKey.keyQ, meta: true):
-                const ExitIntent(),
-            const SingleActivator(LogicalKeyboardKey.digit1, meta: true):
-                const _ShowControlsIntent(),
-            const SingleActivator(LogicalKeyboardKey.digit2, meta: true):
-                const _ShowMonitoringIntent(),
-            const SingleActivator(LogicalKeyboardKey.keyL, meta: true):
-                const _ToggleAlignmentIntent(),
-          },
         },
         child: Actions(
           actions: {

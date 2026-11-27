@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/keyboard/primary_shortcut.dart';
 import '../providers/alignment_provider.dart';
 import '../providers/app_settings_provider.dart';
 import '../providers/canvas_reveal_provider.dart';
@@ -619,52 +620,29 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
                 // The Scrollable Workspace
                 Shortcuts(
                   shortcuts: {
-                    LogicalKeySet(
-                      LogicalKeyboardKey.control,
-                      LogicalKeyboardKey.keyA,
-                    ): const SelectAllIntent(),
-                    LogicalKeySet(
-                      LogicalKeyboardKey.meta,
-                      LogicalKeyboardKey.keyA,
-                    ): const SelectAllIntent(),
-                    LogicalKeySet(
-                      LogicalKeyboardKey.control,
-                      LogicalKeyboardKey.keyD,
-                    ): const DeselectAllIntent(),
-                    LogicalKeySet(
-                      LogicalKeyboardKey.meta,
-                      LogicalKeyboardKey.keyD,
-                    ): const DeselectAllIntent(),
+                    primaryShortcut(LogicalKeyboardKey.keyA):
+                        const SelectAllIntent(),
+                    primaryShortcut(LogicalKeyboardKey.keyD):
+                        const DeselectAllIntent(),
                     // Select in Group — takes the group from the first/only
                     // selected projector (see the action below); a no-op if
                     // nothing is selected or the selection has no group.
-                    LogicalKeySet(
-                      LogicalKeyboardKey.control,
-                      LogicalKeyboardKey.keyG,
-                    ): const SelectGroupIntent(),
-                    LogicalKeySet(
-                      LogicalKeyboardKey.meta,
-                      LogicalKeyboardKey.keyG,
-                    ): const SelectGroupIntent(),
-                    LogicalKeySet(LogicalKeyboardKey.delete):
+                    primaryShortcut(LogicalKeyboardKey.keyG):
+                        const SelectGroupIntent(),
+                    const SingleActivator(LogicalKeyboardKey.delete):
                         const DeleteIntent(),
-                    LogicalKeySet(
-                      LogicalKeyboardKey.control,
-                      LogicalKeyboardKey.keyZ,
-                    ): const UndoIntent(),
-                    LogicalKeySet(
-                      LogicalKeyboardKey.meta,
-                      LogicalKeyboardKey.keyZ,
-                    ): const UndoIntent(),
+                    primaryShortcut(LogicalKeyboardKey.keyZ):
+                        const UndoIntent(),
                     // Redo is Ctrl+Y here (Windows/Linux convention). macOS
                     // uses Cmd+Shift+Z instead, matching platform convention —
                     // bound via the native Edit menu in mac_menu_bar.dart, not
                     // here, so there's exactly one macOS Redo binding rather
                     // than this plus a non-standard Cmd+Y.
-                    LogicalKeySet(
-                      LogicalKeyboardKey.control,
-                      LogicalKeyboardKey.keyY,
-                    ): const RedoIntent(),
+                    if (defaultTargetPlatform != TargetPlatform.macOS)
+                      const SingleActivator(
+                        LogicalKeyboardKey.keyY,
+                        control: true,
+                      ): const RedoIntent(),
 
                     // ── Lens Shift — normal speed (arrow only) ───────────────────
                     const SingleActivator(LogicalKeyboardKey.arrowUp):
@@ -702,59 +680,17 @@ class _ProjectorWorkspaceState extends ConsumerState<ProjectorWorkspace>
                       'VXX:LNSI2=+00200',
                     ),
 
-                    // ── Lens Shift — slow speed (Ctrl + arrow; also Cmd + arrow
-                    // on macOS, matching how every other Ctrl-bound shortcut in
-                    // this map registers a meta variant too, and how the
-                    // Keyboard Shortcuts dialog already labels this row ⌘ on
-                    // macOS) ───────────────────
-                    const SingleActivator(
-                      LogicalKeyboardKey.arrowUp,
-                      control: true,
-                    ): const SendCommandIntent(
-                      'VXX:LNSI3=+00000',
-                    ),
-                    const SingleActivator(
-                      LogicalKeyboardKey.arrowDown,
-                      control: true,
-                    ): const SendCommandIntent(
-                      'VXX:LNSI3=+00001',
-                    ),
-                    const SingleActivator(
-                      LogicalKeyboardKey.arrowLeft,
-                      control: true,
-                    ): const SendCommandIntent(
-                      'VXX:LNSI2=+00001',
-                    ),
-                    const SingleActivator(
-                      LogicalKeyboardKey.arrowRight,
-                      control: true,
-                    ): const SendCommandIntent(
-                      'VXX:LNSI2=+00000',
-                    ),
-                    const SingleActivator(
-                      LogicalKeyboardKey.arrowUp,
-                      meta: true,
-                    ): const SendCommandIntent(
-                      'VXX:LNSI3=+00000',
-                    ),
-                    const SingleActivator(
-                      LogicalKeyboardKey.arrowDown,
-                      meta: true,
-                    ): const SendCommandIntent(
-                      'VXX:LNSI3=+00001',
-                    ),
-                    const SingleActivator(
-                      LogicalKeyboardKey.arrowLeft,
-                      meta: true,
-                    ): const SendCommandIntent(
-                      'VXX:LNSI2=+00001',
-                    ),
-                    const SingleActivator(
-                      LogicalKeyboardKey.arrowRight,
-                      meta: true,
-                    ): const SendCommandIntent(
-                      'VXX:LNSI2=+00000',
-                    ),
+                    // Lens Shift - slow speed (primary modifier + arrow:
+                    // Cmd on macOS, Ctrl elsewhere, as the Keyboard Shortcuts
+                    // dialog labels it)
+                    primaryShortcut(LogicalKeyboardKey.arrowUp):
+                        const SendCommandIntent('VXX:LNSI3=+00000'),
+                    primaryShortcut(LogicalKeyboardKey.arrowDown):
+                        const SendCommandIntent('VXX:LNSI3=+00001'),
+                    primaryShortcut(LogicalKeyboardKey.arrowLeft):
+                        const SendCommandIntent('VXX:LNSI2=+00001'),
+                    primaryShortcut(LogicalKeyboardKey.arrowRight):
+                        const SendCommandIntent('VXX:LNSI2=+00000'),
 
                     // ── Shutter ───────────────────────────────────────────────────
                     const SingleActivator(LogicalKeyboardKey.keyI):
