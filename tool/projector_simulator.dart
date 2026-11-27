@@ -26,6 +26,25 @@
 // projector 2 in Curved Correction (arcs 30 / -20, throw ratio 0.8), the
 // others with correction off.
 //
+// Free grid (the PC-1 / PC-2 / PC-3 warp memories, Geometry dialog): the model
+// id (QVX:MIDS1), the binary table frames (the `01`-prefixed commands) and
+// the QVX:GDTS1 / QVX:GGNS1 stored time and control point counts, all answered
+// by the tests' FakeWarpProjector (test/helpers), one per projector. The mode
+// GMMI0 also takes 3, 4, 5 (PC-1 to PC-3) on these projectors; it stays the
+// one value shared with Keystone / Curved / Corner. Each binary frame prints
+// as one line (type, size, reply).
+//   projector 1  MIDS1=0028:00:26  4K class, 3 bits, as a PT-RQ25K: supported.
+//                PC-1 holds a gentle barrel table (control grid 9 x 7) with a
+//                stored time; PC-2 and PC-3 are empty.
+//   projector 2  MIDS1=0022:00:26  WUXGA class, 4 bits, no inverse, as a
+//                PT-RZ34KE: supported. All three memories are empty.
+//   projector 3  MIDS1=0024:00:30  a row the app does not understand (its
+//                neutral table does not fit its bits): the dialog shows the
+//                unsupported-format notice. All memories are empty.
+//   projector 4+ QVX:MIDS1 answers ER401 and a binary frame ERR1, like a
+//                projector without the feature: no Free grid tile.
+//   warp <n|all>   prints each memory: stored time, control points, table.
+//
 // Self-diagnosis codes (QVX:ERRS2, see the panasonic-ntcontrol skill's
 // Self-diagnosis codes) are set while it runs, by typing into its console:
 //   err 3 F305 U200   projector 3 reports these codes
@@ -69,6 +88,14 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:projector_grid/core/services/warp_transfer.dart';
+import 'package:projector_grid/features/workspace/domain/warp_codec.dart';
+import 'package:projector_grid/features/workspace/domain/warp_control_grid.dart';
+import 'package:projector_grid/features/workspace/domain/warp_model_caps.dart';
+
+import '../test/helpers/fake_warp_projector.dart';
 
 // ── Config ───────────────────────────────────────────────────────────────────
 const int defaultCount = 6;
@@ -86,7 +113,16 @@ const double _cardHeight = 100;
 class SimProjector {
   SimProjector(this.index, this.ip)
     : fadeIn = index == 2 ? '2.0' : '0.0',
-      serial = 'SIM${index.toString().padLeft(5, '0')}';
+      serial = 'SIM${index.toString().padLeft(5, '0')}',
+      mids = _midsById[index],
+      warp = _midsById.containsKey(index) ? FakeWarpProjector() : null;
+
+  /// The `QVX:MIDS1` value by projector number; the others have no Free grid.
+  static const _midsById = {1: '0028:00:26', 2: '0022:00:26', 3: '0024:00:30'};
+
+  /// The Free grid memories, null on a projector without the feature.
+  final FakeWarpProjector? warp;
+  final String? mids;
 
   final int index;
   final String serial;
@@ -140,13 +176,19 @@ class SimProjector {
   }
 
   late final EdgeBlendSim edgeBlend = EdgeBlendSim(demo: index == 1);
-  late final GeometrySim geometry = GeometrySim(index: index);
+  late final GeometrySim geometry = GeometrySim(
+    index: index,
+    warpModes: warp != null,
+  );
 
   String reply(String cmd) {
     final blend = edgeBlend.reply(cmd);
     if (blend != null) return blend;
     final geo = geometry.reply(cmd);
     if (geo != null) return geo;
+    if (cmd == 'QVX:MIDS1' && mids != null) return 'MIDS1=$mids';
+    final warpReply = warp?.handleAscii(cmd);
+    if (warpReply != null) return warpReply;
     if (cmd == 'PON') {
       if (power == 1 || power == 4) _powerTo(2, 3, warmUp);
       return 'PON';
@@ -348,7 +390,7 @@ class EdgeBlendSim {
 /// the register's range is refused with ER402. Like the hardware, Vertical
 /// Keystone reads back up to ±40 even where the projector applies less.
 class GeometrySim {
-  GeometrySim({required int index}) {
+  GeometrySim({required int index, this.warpModes = false}) {
     // Something for the preview to show on opening: projector 1 in Keystone,
     // projector 2 in Curved Correction.
     if (index == 1) {
@@ -367,10 +409,14 @@ class GeometrySim {
     }
   }
 
+  /// True on a projector with the Free grid: the mode also takes 3, 4, 5
+  /// (PC-1 to PC-3).
+  final bool warpModes;
+
   /// Integer registers and their range. Corner limits are the Tier A
   /// inward reach (geometry_values.dart): 960 H, 600 V.
   static final _intRange = <String, (int, int)>{
-    'GMMI0': (0, 10), // 0 off, 1 Keystone, 2 Curved, 10 Corner
+    'GMMI0': (0, 10), // 0 off, 1 Keystone, 2 Curved, 3-5 PC-1/2/3, 10 Corner
     'QPDI1': (0, 1), // Quad Pixel Drive
     'GMKI4': (-60, 60),
     'GMKI7': (-30, 30),
@@ -417,7 +463,16 @@ class GeometrySim {
     if (_intRange[key] case (final lo, final hi)) {
       final n = int.tryParse(value);
       if (n == null || n < lo || n > hi) return 'ER402';
-      if (key == 'GMMI0' && ![0, 1, 2, 10].contains(n)) return 'ER402';
+      if (key == 'GMMI0' &&
+          ![
+            0,
+            1,
+            2,
+            10,
+            if (warpModes) ...[3, 4, 5],
+          ].contains(n)) {
+        return 'ER402';
+      }
       ints[key] = n;
       return cmd;
     }
@@ -477,6 +532,8 @@ Future<void> main(List<String> args) async {
     }
   }
 
+  await _seedWarp(projectors.first);
+
   for (final p in projectors) {
     try {
       await p.goOnline();
@@ -511,12 +568,107 @@ Future<void> main(List<String> args) async {
       .listen((line) => _command(line.trim(), projectors));
 }
 
+/// Puts a gentle barrel into PC-1 of projector 1 the way the app stores one:
+/// the same sequence, so the blocks, the stored time and the 9 x 7 control
+/// point count are what a real store leaves.
+Future<void> _seedWarp(SimProjector p) async {
+  final fake = p.warp;
+  final caps = lookupWarpModelCaps('001c_00_26');
+  if (fake == null || caps == null) return;
+  const columns = 9;
+  const rows = 7;
+  final nominal = WarpControlGrid.identity(
+    columns: columns,
+    rows: rows,
+    panelWidth: caps.panelWidth,
+    panelHeight: caps.panelHeight,
+  );
+  // Points pulled toward the centre by up to 6 % at the corners.
+  final points = Float64List.fromList(nominal.points);
+  final cx = caps.panelWidth / 2;
+  final cy = caps.panelHeight / 2;
+  for (var i = 0; i < columns * rows; i++) {
+    final dx = (points[i * 2] - cx) / cx;
+    final dy = (points[i * 2 + 1] - cy) / cy;
+    final pull = 1 - 0.06 * (dx * dx + dy * dy) / 2;
+    points[i * 2] = cx + (points[i * 2] - cx) * pull;
+    points[i * 2 + 1] = cy + (points[i * 2 + 1] - cy) * pull;
+  }
+  final grid = WarpControlGrid(
+    columns: columns,
+    rows: rows,
+    panelWidth: caps.panelWidth,
+    panelHeight: caps.panelHeight,
+    points: points,
+  );
+  await storeWarpMemory(
+    MemoryWarpLink(fake),
+    slot: WarpSlot.pc1,
+    caps: caps,
+    full: tableFromControlGrid(grid, caps.geometry),
+    gridColumns: columns,
+    gridRows: rows,
+    now: DateTime.now(),
+  );
+  fake.frames.clear();
+  fake.asciiCommands.clear();
+}
+
+/// What `warp <n>` prints: every memory of a Free grid projector.
+void _listWarp(SimProjector p) {
+  final fake = p.warp;
+  if (fake == null) {
+    stdout.writeln('${p.ip}  no Free grid (MIDS1 answers ER401).');
+    return;
+  }
+  stdout.writeln('${p.ip}  MIDS1=${p.mids}  mode ${p.geometry.ints['GMMI0']}');
+  final caps = lookupWarpModelCaps(
+    warpModelIdFromMids('MIDS1=${p.mids}') ?? '',
+  );
+  for (final slot in [WarpSlot.pc1, WarpSlot.pc2, WarpSlot.pc3]) {
+    final n = slot.offset ~/ 2;
+    final block = caps == null
+        ? null
+        : fake.blockOf(warpTypeCode(caps.fullBase, slot));
+    stdout.writeln(
+      '  PC-$n  stored ${fake.storedTimes[n] ?? '-'}  '
+      'grid ${fake.gridCounts[n] ?? '-'}  '
+      'table ${block == null ? 'none' : '${block.length} B'}',
+    );
+  }
+}
+
+/// One short line for a binary frame: what it asks and how the projector
+/// answered.
+String _describeFrame(Uint8List frame, String? answer) {
+  final command = frame.length >= 4 ? (frame[2] << 8) | frame[3] : 0;
+  String hex(int b) => '0x${b.toRadixString(16).padLeft(2, '0')}';
+  final what = switch (command) {
+    0xA9C0 when frame.length > 8 => 'WRITE type ${hex(frame[6])}',
+    0xA8C0 when frame.length > 5 => 'READ type ${hex(frame[4])}',
+    0xAAE0 || 0xAAE1 || 0xAAE2 || 0xAAE3 => 'SAVE ${hex(frame[3])}',
+    _ => 'cmd 0x${command.toRadixString(16)}',
+  };
+  final String reply;
+  if (answer == null) {
+    reply = 'dropped';
+  } else if (answer.startsWith('010200FF') && answer.length >= 12) {
+    reply = 'error 0x${answer.substring(8, 10)}';
+  } else if (answer.startsWith('01')) {
+    reply = 'frame ${(answer.length - 2) ~/ 2} B';
+  } else {
+    reply = answer;
+  }
+  return 'binary $what, ${frame.length} B -> $reply';
+}
+
 const _help = '''
   err <n|all> <codes...>   set self-diagnosis codes, e.g. err 3 F305 U200
   clear <n|all>            remove them
   list                     who reports what
   sig <n|all> off|on|blip  input signal gone, back, or gone for ~3.5 s
-  net <n|all> off|on       network link down (no replies) or back''';
+  net <n|all> off|on       network link down (no replies) or back
+  warp <n|all>             Free grid memories: stored time, grid, table''';
 
 Future<void> _command(String line, List<SimProjector> projectors) async {
   final parts = line.split(RegExp(r'\s+'));
@@ -565,6 +717,9 @@ Future<void> _command(String line, List<SimProjector> projectors) async {
         '${parts[1] == 'all' ? 'All projectors' : targets.single.ip}: '
         'signal $how.',
       );
+    case 'warp':
+      targets.forEach(_listWarp);
+      return;
     case 'net' when parts.length > 2:
       final how = parts[2];
       if (how != 'off' && how != 'on') return stdout.writeln(_help);
@@ -608,6 +763,19 @@ void _serve(Socket socket, SimProjector p) {
     final content = buffer.toString();
     final end = content.indexOf('\r');
     if (end < 0) return;
+    // A binary command: `01` and the frame as hex. A projector without the
+    // Free grid does not know it.
+    final binary = RegExp(r'^01((?:[0-9A-Fa-f]{2})+)$')
+        .firstMatch(content.substring(0, end));
+    if (binary != null) {
+      final frame = warpHexToBytes(binary.group(1)!);
+      final warp = p.warp;
+      final answer = warp == null ? '00ERR1' : warp.handleBinary(frame);
+      stdout.writeln('${p.ip}  ${_describeFrame(frame, answer)}');
+      if (answer != null) socket.add(ascii.encode('$answer\r'));
+      unawaited(socket.flush().then((_) => socket.close()).catchError((_) {}));
+      return;
+    }
     // Unprotected mode: the command arrives with a bare `00` header.
     final cmd = content.substring(0, end).replaceFirst(RegExp('^00'), '');
     final reply = p.reply(cmd);
