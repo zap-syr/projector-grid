@@ -1,9 +1,9 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../../core/services/app_config_dir.dart';
+import '../../../../core/services/atomic_file.dart';
 import '../../domain/monitoring_table_columns.dart';
 import '../../domain/monitoring_view_settings.dart';
 
@@ -16,25 +16,17 @@ class MonitoringViewNotifier extends _$MonitoringViewNotifier {
   static String get _filePath => appConfigFilePath('monitoring_view.json');
 
   @override
-  MonitoringViewSettings build() {
-    try {
-      final file = File(_filePath);
-      if (!file.existsSync()) return const MonitoringViewSettings();
-      return MonitoringViewSettings.fromJson(
-        jsonDecode(file.readAsStringSync()) as Map<String, dynamic>,
-      );
-    } catch (_) {
-      return const MonitoringViewSettings();
-    }
-  }
+  MonitoringViewSettings build() =>
+      readJsonConfigOrQuarantine(
+        _filePath,
+        'Monitoring view',
+        (json) => MonitoringViewSettings.fromJson(json as Map<String, dynamic>),
+      ) ??
+      const MonitoringViewSettings();
 
   void _set(MonitoringViewSettings next) {
     state = next;
-    try {
-      final file = File(_filePath);
-      file.parent.createSync(recursive: true);
-      file.writeAsStringSync(jsonEncode(next.toJson()));
-    } catch (_) {}
+    saveConfigFileSync(_filePath, 'Monitoring view', jsonEncode(next.toJson()));
   }
 
   void setMode(MonitoringViewMode mode) => _set(state.copyWith(mode: mode));

@@ -5,6 +5,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../../core/services/app_config_dir.dart';
 import '../../../../core/services/app_log_file.dart';
+import '../../../../core/services/atomic_file.dart';
 import '../../domain/log_event.dart';
 import '../../domain/projector_group.dart';
 import '../../domain/projector_node.dart';
@@ -345,9 +346,7 @@ if (\$r -eq 'OK') { Write-Output \$dialog.FileName }
         'scheduledTasks': tasks.map(scheduledTaskToJson).toList(),
       });
 
-      final file = File(path);
-      await file.parent.create(recursive: true);
-      await file.writeAsString(json);
+      await writeFileAtomic(path, json);
 
       final renamed = path != state.currentFilePath;
       final updated = _addToRecent(path, state.recentProjects);
@@ -437,24 +436,22 @@ if (\$r -eq 'OK') { Write-Output \$dialog.FileName }
 
   // ── Recent projects ───────────────────────────────────────────────────────
 
-  List<String> _loadRecentProjects() {
-    try {
-      final file = File(_recentProjectsPath);
-      if (!file.existsSync()) return [];
-      final list = jsonDecode(file.readAsStringSync()) as List<dynamic>;
-      return list.cast<String>().where((p) => File(p).existsSync()).toList();
-    } catch (_) {
-      return [];
-    }
-  }
+  List<String> _loadRecentProjects() =>
+      readJsonConfigOrQuarantine(
+        _recentProjectsPath,
+        'Recent projects',
+        (json) => (json as List<dynamic>)
+            .cast<String>()
+            .where((p) => File(p).existsSync())
+            .toList(),
+      ) ??
+      [];
 
-  void _saveRecentProjects(List<String> recent) {
-    try {
-      final file = File(_recentProjectsPath);
-      file.parent.createSync(recursive: true);
-      file.writeAsStringSync(jsonEncode(recent));
-    } catch (_) {}
-  }
+  void _saveRecentProjects(List<String> recent) => saveConfigFileSync(
+    _recentProjectsPath,
+    'Recent projects',
+    jsonEncode(recent),
+  );
 
   List<String> _addToRecent(String path, List<String> current) {
     final updated = [path, ...current.where((p) => p != path)];
