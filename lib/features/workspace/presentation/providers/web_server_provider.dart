@@ -103,6 +103,9 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
   Future<void> start() async {
     final port = ref.read(appSettingsProvider).webPort;
     final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
+    // Disposal stopped the service already; starting it now would leave a
+    // server listening for nobody.
+    if (!ref.mounted) return;
     final assets = manifest
         .listAssets()
         .where((k) => k.startsWith('$webAssetRoot/'))
@@ -114,6 +117,12 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
       handler: (Request r) =>
           r.url.path.startsWith('api/') ? api(r) : static(r),
     );
+    if (!ref.mounted) {
+      // Disposed while binding: onDispose's stop() ran before the server
+      // existed, so this one is still ours to close.
+      await _service.stop();
+      return;
+    }
     state = ok;
     // Persist the outcome, not the request — same reasoning as OSC: a failed
     // bind must not leave the switch on and retry the same port every launch.
@@ -130,6 +139,7 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
     final wasActive = _service.isActive;
     _endAllSessions();
     await _service.stop();
+    if (!ref.mounted) return;
     state = false;
     ref.read(appSettingsProvider.notifier).setWebEnabled(false);
     if (wasActive) _log(LogSeverity.info, 'Web access off');
@@ -138,6 +148,7 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
   Future<void> restart() async {
     _endAllSessions();
     await _service.stop();
+    if (!ref.mounted) return;
     await start();
   }
 
@@ -396,6 +407,7 @@ class WebServerNotifier extends _$WebServerNotifier implements WebApiSource {
       case WebAlignmentStepOrder(:final order):
         notifier.setStepOrder(order);
     }
+    if (!ref.mounted) return null;
     return alignment();
   }
 

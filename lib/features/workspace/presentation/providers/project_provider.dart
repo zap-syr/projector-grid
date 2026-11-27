@@ -44,7 +44,7 @@ class ProjectState {
   }
 }
 
-@riverpod
+@Riverpod(keepAlive: true)
 class ProjectStateNotifier extends _$ProjectStateNotifier {
   bool _suppressDirty = false;
 
@@ -153,7 +153,9 @@ class ProjectStateNotifier extends _$ProjectStateNotifier {
   Future<void> openProject(String path) async {
     try {
       final file = File(path);
-      if (!await file.exists()) {
+      final exists = await file.exists();
+      if (!ref.mounted) return;
+      if (!exists) {
         state = state.copyWith(
           recentProjects: _removeFromRecent(path, state.recentProjects),
         );
@@ -161,8 +163,9 @@ class ProjectStateNotifier extends _$ProjectStateNotifier {
         return;
       }
 
-      final json =
-          jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+      final content = await file.readAsString();
+      if (!ref.mounted) return;
+      final json = jsonDecode(content) as Map<String, dynamic>;
       final nodes = _deserializeNodes(json);
       final groups = _deserializeGroups(json);
 
@@ -187,6 +190,8 @@ class ProjectStateNotifier extends _$ProjectStateNotifier {
       AppLog.note('Project opened: $path');
     } catch (e, stack) {
       AppLog.error('Opening the project $path', e, stack);
+      // A read that failed because the container went away has no log to go to.
+      if (!ref.mounted) return;
       ref
           .read(eventLogProvider.notifier)
           .log(
@@ -204,6 +209,7 @@ class ProjectStateNotifier extends _$ProjectStateNotifier {
     try {
       path = await _showOpenDialog();
     } catch (e) {
+      if (!ref.mounted) return false;
       // The native picker process itself failed to launch (e.g. PowerShell
       // blocked by policy, osascript unavailable) — surface it instead of
       // letting the exception propagate out of a plain onPressed handler.
@@ -218,7 +224,7 @@ class ProjectStateNotifier extends _$ProjectStateNotifier {
           );
       return false;
     }
-    if (path == null) return false;
+    if (path == null || !ref.mounted) return false;
     await openProject(path);
     return true;
   }
@@ -241,6 +247,7 @@ class ProjectStateNotifier extends _$ProjectStateNotifier {
     try {
       path = await _showSaveDialog(defaultName);
     } catch (e) {
+      if (!ref.mounted) return false;
       // Same reasoning as pickAndOpenProject: the native picker process
       // itself failed to launch, not a project-file write failure.
       ref
@@ -254,7 +261,7 @@ class ProjectStateNotifier extends _$ProjectStateNotifier {
           );
       return false;
     }
-    if (path == null) return false;
+    if (path == null || !ref.mounted) return false;
     final filePath = path.endsWith('.pgrid') ? path : '$path.pgrid';
     return _writeToFile(filePath);
   }
@@ -347,6 +354,8 @@ if (\$r -eq 'OK') { Write-Output \$dialog.FileName }
       });
 
       await writeFileAtomic(path, json);
+      // Written, so a save: only the recent list and dirty flag are lost.
+      if (!ref.mounted) return true;
 
       final renamed = path != state.currentFilePath;
       final updated = _addToRecent(path, state.recentProjects);

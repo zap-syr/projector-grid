@@ -29,7 +29,7 @@ final class PollStatusNotifierProvider
         argument: null,
         retry: null,
         name: r'pollStatusProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -51,7 +51,7 @@ final class PollStatusNotifierProvider
 }
 
 String _$pollStatusNotifierHash() =>
-    r'6a5773d1678b465ca1ad42533722822463666011';
+    r'163449d7111c911153596aba9bd466570d1663b9';
 
 /// Tracks poll-cycle timing/progress. Pure UI feedback — deliberately kept
 /// outside [WorkspaceNotifier]'s node-list state so it isn't captured in

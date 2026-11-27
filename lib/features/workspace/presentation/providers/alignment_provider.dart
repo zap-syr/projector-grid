@@ -186,6 +186,7 @@ class AlignmentNotifier extends _$AlignmentNotifier {
 
     state = state.copyWith(busy: true);
     final captured = await _captureAll(reachable);
+    if (!ref.mounted) return;
     if (captured.isEmpty) {
       state = state.copyWith(busy: false);
       _log(LogSeverity.error, 'Alignment mode: no projector answered');
@@ -197,6 +198,7 @@ class AlignmentNotifier extends _$AlignmentNotifier {
       _sessionIps.add(m.ip);
     }
     await Future.wait(captured.where((m) => m.fade != null).map(_zeroFade));
+    if (!ref.mounted) return;
 
     final order = _order();
     final focusedId =
@@ -230,6 +232,7 @@ class AlignmentNotifier extends _$AlignmentNotifier {
     _syncs.clear();
     final managed = _managed.values.toList();
     await Future.wait(managed.map(_restore));
+    if (!ref.mounted) return;
     _managed.clear();
     _applied.clear();
     _sessionIps.clear();
@@ -446,6 +449,9 @@ class AlignmentNotifier extends _$AlignmentNotifier {
       m.password,
       cmd,
     );
+    // Also what keeps the callers' own follow-ups (state reads, log lines)
+    // off a disposed container: they only run on a true result or after this.
+    if (!ref.mounted) return false;
     if (ok) {
       ref.read(workspaceProvider.notifier).noteCommandSent(m.id, cmd);
     } else {

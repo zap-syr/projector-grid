@@ -21,7 +21,7 @@ class PollStatus {
 /// Tracks poll-cycle timing/progress. Pure UI feedback — deliberately kept
 /// outside [WorkspaceNotifier]'s node-list state so it isn't captured in
 /// undo/redo snapshots or project-file serialization.
-@riverpod
+@Riverpod(keepAlive: true)
 class PollStatusNotifier extends _$PollStatusNotifier {
   @override
   PollStatus build() => const PollStatus();

@@ -9,7 +9,7 @@ import '../../domain/custom_command.dart';
 
 part 'custom_commands_provider.g.dart';
 
-@riverpod
+@Riverpod(keepAlive: true)
 class CustomCommandsNotifier extends _$CustomCommandsNotifier {
   static const _maxRawLogChars = 300;
 

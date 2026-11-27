@@ -26,7 +26,7 @@ import 'scheduled_tasks_provider.dart';
 
 part 'workspace_provider.g.dart';
 
-@riverpod
+@Riverpod(keepAlive: true)
 class WorkspaceNotifier extends _$WorkspaceNotifier {
   late PanasonicProtocolService _protocolService;
   final _webStatusService = ProjectorWebStatusService();
@@ -528,6 +528,9 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
           start,
           (start + _networkBatchSize).clamp(0, currentIds.length),
         );
+        // Container disposed while the last batch was out: the loop below
+        // reads state and would poll on for nobody.
+        if (!ref.mounted) return false;
         await Future.wait(
           batchIds.map((id) async {
             // refreshNode() only checks isPolling once, at entry — it can
@@ -570,7 +573,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
         );
       }
     } finally {
-      ref.read(pollStatusProvider.notifier).completed();
+      if (ref.mounted) ref.read(pollStatusProvider.notifier).completed();
     }
     return true;
   }
@@ -627,6 +630,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
       concurrency: telemetryConcurrency,
       withSerial: withSerial,
     );
+    if (!ref.mounted) return;
 
     if (probe == ProbeResult.unauthorized) {
       // It answered, just not to this login.
@@ -717,6 +721,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
           node.login,
           node.password,
         );
+        if (!ref.mounted) return;
       }
 
       _applyPollResult(node.id, (n) {
@@ -879,6 +884,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     bool logCameOnline = true,
   }) async {
     final isOnline = await _protocolService.checkConnection(ip, port);
+    if (!ref.mounted) return;
     if (isOnline) {
       // An open port isn't an answer: the node stays offline until the poll
       // gets one. Flipping it to connected here would clear its Offline alert
@@ -1060,6 +1066,8 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
     }
 
     for (var start = 0; start < targets.length; start += _networkBatchSize) {
+      // Disposed while the last batch was out: no more commands for nobody.
+      if (!ref.mounted) break;
       final batch = targets.sublist(
         start,
         (start + _networkBatchSize).clamp(0, targets.length),
@@ -1079,6 +1087,8 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
           } finally {
             _dispatching.remove(node.id);
           }
+          // The log and the optimistic update below need a live container.
+          if (!ref.mounted) return;
           logLine(node, success ? CommandOutcome.sent : CommandOutcome.failed);
           if (success) {
             _applyOptimisticUpdate(node.id, cmd);
@@ -1100,7 +1110,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
       ],
       skipped: skipped,
     );
-    if (batch != null) {
+    if (batch != null && ref.mounted) {
       _logEvent(
         LogEvent(
           severity: result.allOk ? LogSeverity.info : LogSeverity.warning,
@@ -1147,7 +1157,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
             node.password,
             command,
           );
-    if (response == null) return null;
+    if (response == null || !ref.mounted) return null;
 
     state = state.map((n) {
       if (n.id != node.id) return n;
@@ -1295,6 +1305,8 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
         }
 
         await _pollSpecificTelemetry(node, 'QVX:POWI1');
+        // onDispose cancels the timer, not a callback already past it.
+        if (!ref.mounted) return;
         _notifyStateChanged();
 
         final updated = state.where((n) => n.id == nodeId).firstOrNull;
@@ -1309,6 +1321,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
         _powerTransitionTimers.remove(nodeId);
         if (settled && updated != null) {
           await _pollSpecificTelemetry(updated, 'QSH');
+          if (!ref.mounted) return;
           if (target == PowerStatus.on) {
             await _refreshSignalAfterPowerOn(nodeId);
           } else {
@@ -1317,6 +1330,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
               await _pollSpecificTelemetry(afterShutter, 'QVX:NSGS1');
             }
           }
+          if (!ref.mounted) return;
           _notifyStateChanged();
         }
       });
@@ -1340,6 +1354,7 @@ class WorkspaceNotifier extends _$WorkspaceNotifier {
       if (!isUnusableSignalValue(sig)) return;
       if (DateTime.now().isAfter(deadline)) return;
       await Future.delayed(_powerTransitionPollInterval);
+      if (!ref.mounted) return;
     }
   }
 

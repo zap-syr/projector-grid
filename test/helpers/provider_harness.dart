@@ -1,24 +1,19 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:projector_grid/features/workspace/domain/projector_node.dart';
-import 'package:projector_grid/features/workspace/presentation/providers/poll_status_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/protocol_service_provider.dart';
-import 'package:projector_grid/features/workspace/presentation/providers/selection_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/workspace_provider.dart';
 
 import 'fake_protocol_service.dart';
 
-/// A container wired to [fake]. The auto-dispose providers the workspace
-/// depends on are kept alive for the whole test, as the UI watching them does
-/// in the app — otherwise they'd reset between reads.
+/// A container wired to [fake]. The app-lifetime providers (workspace,
+/// selection, poll status, settings, project) are keepAlive, so nothing needs
+/// to listen to them for their state to survive between reads.
 ProviderContainer makeContainer(FakeProtocolService fake) {
   final container = ProviderContainer(
     overrides: [protocolServiceProvider.overrideWithValue(fake)],
   );
   addTearDown(container.dispose);
-  container.listen(workspaceProvider, (_, _) {});
-  container.listen(selectionProvider, (_, _) {});
-  container.listen(pollStatusProvider, (_, _) {});
   return container;
 }
 

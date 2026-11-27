@@ -48,7 +48,9 @@ class AlertsNotifier extends _$AlertsNotifier {
     );
     // Another provider's state can't change during build, and the event log
     // is one.
-    Future.microtask(() => _reconcile(ref.read(workspaceProvider)));
+    Future.microtask(() {
+      if (ref.mounted) _reconcile(ref.read(workspaceProvider));
+    });
     return const {};
   }
 

@@ -121,15 +121,15 @@ does window setup; `lib/app/app.dart` is just `MaterialApp` + theme.
 
 | Provider | Responsibility |
 |---|---|
-| `workspaceProvider` | projector node list, group assignments, undo/redo stack, polling timers, optimistic-update timers |
-| `projectStateProvider` | current file path, dirty flag, recent-projects list |
+| `workspaceProvider` | projector node list, group assignments, undo/redo stack, polling timers, optimistic-update timers (`keepAlive`) |
+| `projectStateProvider` | current file path, dirty flag, recent-projects list (`keepAlive`) |
 | `protocolServiceProvider` | the shared `PanasonicProtocolService` (`keepAlive`); a provider so tests can override it with a fake |
-| `appSettingsProvider` | theme mode, polling interval, OSC port/enabled, which view is active, log panel visibility |
+| `appSettingsProvider` | theme mode, polling interval, OSC port/enabled, which view is active, log panel visibility (`keepAlive`) |
 | `oscProvider` | OSC UDP server/client lifecycle (`keepAlive`) |
-| `customCommandsProvider` | user-defined commands + auto-generated OSC slugs |
+| `customCommandsProvider` | user-defined commands + auto-generated OSC slugs (`keepAlive`) |
 | `eventLogProvider` | rolling event log, capped at 5000 *rows* (`keepAlive`): a batch command or a run of folded repeats is one row however many events it holds (`capLogRows` in `domain/event_log_rows.dart`) |
 | `scheduledTasksProvider` | timed/recurring task list + its scheduler `Timer` (`keepAlive`) |
-| `selectionProvider` / `pollStatusProvider` | current card selection; per-projector poll-in-flight state |
+| `selectionProvider` / `pollStatusProvider` | current card selection; per-projector poll-in-flight state (`keepAlive`) |
 | `editHistoryStatusProvider` / `statusSummaryProvider` | small derived/selector providers (undo-redo availability for the Edit menu; online/offline/warning counts for the status bar) that dedupe by structural equality so they don't rebuild on every telemetry tick |
 | `alertsProvider` | active alerts (`keepAlive`), reconciled from workspace state and the signal watch by pure functions in `domain/alerts.dart` |
 | `signalWatchProvider` | Signal lost detection (`keepAlive`): `QVX:NSGS1` every 2 s on powered-on projectors while the rule is on, staggered, at most 16 in flight, skipping nodes `WorkspaceNotifier.isNodeBusy`; logic in `domain/signal_watch.dart` |

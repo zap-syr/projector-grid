@@ -20,7 +20,7 @@ final class AppSettingsNotifierProvider
         argument: null,
         retry: null,
         name: r'appSettingsProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -42,7 +42,7 @@ final class AppSettingsNotifierProvider
 }
 
 String _$appSettingsNotifierHash() =>
-    r'67c5d7d7d339efc3becf0fbd363c9281e497a82a';
+    r'8847fb8bdab20ec1403d1780d07ae8ea61f5fba6';
 
 abstract class _$AppSettingsNotifier extends $Notifier<AppSettings> {
   AppSettings build();
