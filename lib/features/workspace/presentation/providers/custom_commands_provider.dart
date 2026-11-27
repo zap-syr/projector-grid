@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../../core/services/app_config_dir.dart';
+import '../../../../core/services/app_log_file.dart';
 import '../../../../core/services/atomic_file.dart';
 import '../../domain/custom_command.dart';
 
@@ -10,6 +11,8 @@ part 'custom_commands_provider.g.dart';
 
 @riverpod
 class CustomCommandsNotifier extends _$CustomCommandsNotifier {
+  static const _maxRawLogChars = 300;
+
   static String get _filePath => appConfigFilePath('custom_commands.json');
 
   @override
@@ -20,12 +23,28 @@ class CustomCommandsNotifier extends _$CustomCommandsNotifier {
         // Parse each entry independently so one malformed command (e.g. from
         // a partial write during a crash) doesn't discard every other
         // previously-saved command, only that one entry is dropped.
+        final entries = json as List<dynamic>;
         final commands = <CustomCommand>[];
-        for (final e in json as List<dynamic>) {
+        for (var i = 0; i < entries.length; i++) {
+          final e = entries[i];
           try {
             commands.add(CustomCommand.fromJson(e as Map<String, dynamic>));
-          } catch (_) {
-            // Skip just this entry; the rest of the file may still be valid.
+          } catch (cause) {
+            // The entry vanishes from the file on the next save, so the log
+            // keeps what the owner needs to restore it. The position is in
+            // the first line because the log collapses repeats by that line,
+            // and two entries can fail with the same text. No stack: the
+            // message says everything.
+            var raw = jsonEncode(e);
+            if (raw.length > _maxRawLogChars) {
+              raw = '${raw.substring(0, _maxRawLogChars)}...';
+            }
+            AppLog.error(
+              'Custom commands load',
+              'entry ${i + 1} of ${entries.length} in $_filePath dropped '
+                  '($cause), raw JSON: $raw',
+              null,
+            );
           }
         }
         return commands;
