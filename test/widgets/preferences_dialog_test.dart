@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:projector_grid/core/theme/app_theme.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/protocol_service_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/widgets/preferences_dialog.dart';
 
@@ -12,7 +13,7 @@ void main() {
   useTempConfigDir();
 
   // The app's minimum window size — the dialog must fit it without overflow.
-  Future<void> pumpDialog(WidgetTester tester) async {
+  Future<void> pumpDialog(WidgetTester tester, {ThemeData? theme}) async {
     tester.view.physicalSize = const Size(800, 600);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -21,7 +22,10 @@ void main() {
         overrides: [
           protocolServiceProvider.overrideWithValue(FakeProtocolService()),
         ],
-        child: const MaterialApp(home: Scaffold(body: PreferencesDialog())),
+        child: MaterialApp(
+          theme: theme ?? AppTheme.lightTheme,
+          home: const Scaffold(body: PreferencesDialog()),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -94,6 +98,47 @@ void main() {
       find.text('Intake temperature: Warning must be below critical'),
       findsOneWidget,
     );
+  });
+
+  group('plain HTTP note', () {
+    for (final (name, theme, status) in [
+      ('light', AppTheme.lightTheme, AppStatusColors.light),
+      ('dark', AppTheme.darkTheme, AppStatusColors.dark),
+    ]) {
+      testWidgets('takes its colours from AppStatusColors ($name)', (
+        tester,
+      ) async {
+        await pumpDialog(tester, theme: theme);
+        await openSection(tester, 'Web Access');
+
+        final text = find.textContaining('Plain HTTP');
+        final box = tester.widget<Container>(
+          find.ancestor(of: text, matching: find.byType(Container)).first,
+        );
+        expect(
+          (box.decoration as BoxDecoration).color,
+          status.warningContainer,
+        );
+        expect(tester.widget<Text>(text).style?.color, status.warning);
+        final icon = find.descendant(
+          of: find.ancestor(of: text, matching: find.byType(Row)).first,
+          matching: find.byIcon(Icons.warning_amber_rounded),
+        );
+        expect(tester.widget<Icon>(icon).color, status.warning);
+      });
+    }
+
+    testWidgets('the alert warning icon is the status warning colour', (
+      tester,
+    ) async {
+      await pumpDialog(tester, theme: AppTheme.lightTheme);
+      await openSection(tester, 'Alerts');
+      final icons = tester.widgetList<Icon>(find.byIcon(Icons.warning));
+      expect(icons, isNotEmpty);
+      for (final icon in icons) {
+        expect(icon.color, AppStatusColors.light.warning);
+      }
+    });
   });
 
   group('value field', () {

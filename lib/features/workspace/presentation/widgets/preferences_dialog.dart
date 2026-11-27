@@ -939,7 +939,11 @@ class _SeverityIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) => severity == AlertSeverity.critical
       ? Icon(Icons.error, size: size, color: Colors.red)
-      : Icon(Icons.warning, size: size, color: Colors.orange);
+      : Icon(
+          Icons.warning,
+          size: size,
+          color: AppStatusColors.of(context).warning,
+        );
 }
 
 /// Green while the client has a page open, a ring while only its session
@@ -1148,17 +1152,12 @@ class _PlainHttpNote extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isLight = Theme.of(context).brightness == Brightness.light;
-    final background = isLight
-        ? const Color(0xFFFFF4E0)
-        : const Color(0xFF3A2C12);
-    final foreground = isLight
-        ? const Color(0xFF7A4B00)
-        : const Color(0xFFFFD08A);
+    final status = AppStatusColors.of(context);
+    final foreground = status.warning;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: background,
+        color: status.warningContainer,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
