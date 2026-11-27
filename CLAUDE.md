@@ -185,6 +185,9 @@ undoing a layout change never rolls back power/temperature readings.
 Project files and app settings are JSON in the platform config dir (`app_config_dir.dart`):
 `%APPDATA%\ProjectorGrid\` (Windows), `~/Library/Application Support/ProjectorGrid/` (macOS).
 Window geometry is persisted separately (`window_prefs_service.dart`), debounced during drag and saved once on close.
+`--config-dir=<path>` (`launch_args.dart`) moves all of these, and the logs, to another folder; live
+checks of a release build use it so they never touch the real profile, and the app log names the
+active folder in a `Config dir:` line at startup.
 
 ### Window close / quit flow (subtle)
 

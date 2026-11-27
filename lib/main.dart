@@ -10,6 +10,7 @@ import 'package:window_manager/window_manager.dart';
 
 import 'app/app.dart';
 import 'core/services/app_log_file.dart';
+import 'core/services/launch_args.dart';
 import 'core/services/window_prefs_service.dart';
 
 import 'dart:io' show Platform;
@@ -71,8 +72,11 @@ void _logInternalErrors() {
   };
 }
 
-void main() async {
+void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Before the log starts and before any per-user file is read.
+  final configDir = applyLaunchArgs(args);
 
   final package = await PackageInfo.fromPlatform();
   AppLog.start(
@@ -80,6 +84,12 @@ void main() async {
         '${package.version}+${package.buildNumber}'
         '${kReleaseMode ? '' : (kProfileMode ? ', profile' : ', debug')}',
     os: '${Platform.operatingSystem} ${Platform.operatingSystemVersion}',
+  );
+  // App log only (info): an agent checking a live run reads it there, and
+  // the Event Log has no use for it.
+  AppLog.info(
+    'Config dir: ${configDir.path} '
+    '(${configDir.fromArg ? 'from --config-dir' : 'default'})',
   );
   _logInternalErrors();
 
