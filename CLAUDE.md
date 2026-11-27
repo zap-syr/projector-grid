@@ -81,6 +81,8 @@ re-run `build_runner` first.
   `flutter analyze lib test` and `flutter test` on Windows and macOS, and a `web` job that
   checks `types.gen.ts` matches `openapi.yaml`, then `check`, `lint`, `test` and `build`
   in `web_ui/`. The release workflow builds `web_ui/` before the Flutter build.
+- CI and release pin Flutter 3.47.9 (`flutter-version` in both workflows); lift the pin when
+  upgrading to 3.50 (`projector-grid-notes/plans/CODE_AUDIT_PLAN.md` D3).
 
 ### Standalone protocol scripts (`tool/`)
 
