@@ -72,7 +72,7 @@ abstract class _$AlertsNotifier extends $Notifier<Map<AlertKey, ActiveAlert>> {
   Map<AlertKey, ActiveAlert> build();
   @$mustCallSuper
   @override
-  void runBuild() {
+  WhenComplete runBuild() {
     final ref =
         this.ref
             as $Ref<Map<AlertKey, ActiveAlert>, Map<AlertKey, ActiveAlert>>;
@@ -87,6 +87,6 @@ abstract class _$AlertsNotifier extends $Notifier<Map<AlertKey, ActiveAlert>> {
               Object?,
               Object?
             >;
-    element.handleCreate(ref, build);
+    return element.handleCreate(ref, build);
   }
 }

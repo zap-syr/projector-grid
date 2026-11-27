@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // coverage:ignore-file
-// ignore_for_file: type=lint
+// ignore_for_file: type=lint, type=warning, deprecated_member_use, deprecated_member_use_from_same_package
 // ignore_for_file: unused_element, deprecated_member_use, deprecated_member_use_from_same_package, use_function_type_syntax_for_parameters, unnecessary_const, avoid_init_to_null, invalid_override_different_default_values_named, prefer_expression_function_bodies, annotate_overrides, invalid_annotation_target, unnecessary_question_mark
 
 part of 'scheduled_task.dart';
@@ -9,6 +9,7 @@ part of 'scheduled_task.dart';
 // FreezedGenerator
 // **************************************************************************
 
+// GENERATED CODE - DO NOT MODIFY BY HAND
 // dart format off
 T _$identity<T>(T value) => value;
 /// @nodoc
@@ -25,16 +26,21 @@ $ScheduledTaskCopyWith<ScheduledTask> get copyWith => _$ScheduledTaskCopyWithImp
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is ScheduledTask&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.command, command) || other.command == command)&&(identical(other.commandLabel, commandLabel) || other.commandLabel == commandLabel)&&(identical(other.target, target) || other.target == target)&&const DeepCollectionEquality().equals(other.targetGroupIds, targetGroupIds)&&(identical(other.scheduleType, scheduleType) || other.scheduleType == scheduleType)&&(identical(other.oneTimeAt, oneTimeAt) || other.oneTimeAt == oneTimeAt)&&(identical(other.timeOfDay, timeOfDay) || other.timeOfDay == timeOfDay)&&const DeepCollectionEquality().equals(other.weekdays, weekdays)&&(identical(other.enabled, enabled) || other.enabled == enabled)&&(identical(other.lastRunAt, lastRunAt) || other.lastRunAt == lastRunAt));
+  final _this = this as ScheduledTask;
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ScheduledTask&&(identical(other.id, _this.id) || other.id == _this.id)&&(identical(other.name, _this.name) || other.name == _this.name)&&(identical(other.command, _this.command) || other.command == _this.command)&&(identical(other.commandLabel, _this.commandLabel) || other.commandLabel == _this.commandLabel)&&(identical(other.target, _this.target) || other.target == _this.target)&&const DeepCollectionEquality().equals(other.targetGroupIds, _this.targetGroupIds)&&(identical(other.scheduleType, _this.scheduleType) || other.scheduleType == _this.scheduleType)&&(identical(other.oneTimeAt, _this.oneTimeAt) || other.oneTimeAt == _this.oneTimeAt)&&(identical(other.timeOfDay, _this.timeOfDay) || other.timeOfDay == _this.timeOfDay)&&const DeepCollectionEquality().equals(other.weekdays, _this.weekdays)&&(identical(other.enabled, _this.enabled) || other.enabled == _this.enabled)&&(identical(other.lastRunAt, _this.lastRunAt) || other.lastRunAt == _this.lastRunAt));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,name,command,commandLabel,target,const DeepCollectionEquality().hash(targetGroupIds),scheduleType,oneTimeAt,timeOfDay,const DeepCollectionEquality().hash(weekdays),enabled,lastRunAt);
+int get hashCode {
+  final _this = this as ScheduledTask;
+  return Object.hash(runtimeType,_this.id,_this.name,_this.command,_this.commandLabel,_this.target,const DeepCollectionEquality().hash(_this.targetGroupIds),_this.scheduleType,_this.oneTimeAt,_this.timeOfDay,const DeepCollectionEquality().hash(_this.weekdays),_this.enabled,_this.lastRunAt);
+}
 
 @override
 String toString() {
-  return 'ScheduledTask(id: $id, name: $name, command: $command, commandLabel: $commandLabel, target: $target, targetGroupIds: $targetGroupIds, scheduleType: $scheduleType, oneTimeAt: $oneTimeAt, timeOfDay: $timeOfDay, weekdays: $weekdays, enabled: $enabled, lastRunAt: $lastRunAt)';
+  final _this = this as ScheduledTask;
+  return 'ScheduledTask(id: ${_this.id}, name: ${_this.name}, command: ${_this.command}, commandLabel: ${_this.commandLabel}, target: ${_this.target}, targetGroupIds: ${_this.targetGroupIds}, scheduleType: ${_this.scheduleType}, oneTimeAt: ${_this.oneTimeAt}, timeOfDay: ${_this.timeOfDay}, weekdays: ${_this.weekdays}, enabled: ${_this.enabled}, lastRunAt: ${_this.lastRunAt})';
 }
 
 
@@ -63,7 +69,7 @@ class _$ScheduledTaskCopyWithImpl<$Res>
 /// Create a copy of ScheduledTask
 /// with the given fields replaced by the non-null parameter values.
 @pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? command = null,Object? commandLabel = null,Object? target = null,Object? targetGroupIds = null,Object? scheduleType = null,Object? oneTimeAt = freezed,Object? timeOfDay = freezed,Object? weekdays = freezed,Object? enabled = null,Object? lastRunAt = freezed,}) {
-  return _then(_self.copyWith(
+  return _then(ScheduledTask(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,command: null == command ? _self.command : command // ignore: cast_nullable_to_non_nullable
@@ -243,16 +249,18 @@ _$ScheduledTaskCopyWith<_ScheduledTask> get copyWith => __$ScheduledTaskCopyWith
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ScheduledTask&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.command, command) || other.command == command)&&(identical(other.commandLabel, commandLabel) || other.commandLabel == commandLabel)&&(identical(other.target, target) || other.target == target)&&const DeepCollectionEquality().equals(other.targetGroupIds, targetGroupIds)&&(identical(other.scheduleType, scheduleType) || other.scheduleType == scheduleType)&&(identical(other.oneTimeAt, oneTimeAt) || other.oneTimeAt == oneTimeAt)&&(identical(other.timeOfDay, timeOfDay) || other.timeOfDay == timeOfDay)&&const DeepCollectionEquality().equals(other.weekdays, weekdays)&&(identical(other.enabled, enabled) || other.enabled == enabled)&&(identical(other.lastRunAt, lastRunAt) || other.lastRunAt == lastRunAt));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _ScheduledTask&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.command, command) || other.command == command)&&(identical(other.commandLabel, commandLabel) || other.commandLabel == commandLabel)&&(identical(other.target, target) || other.target == target)&&const DeepCollectionEquality().equals(other.targetGroupIds, targetGroupIds)&&(identical(other.scheduleType, scheduleType) || other.scheduleType == scheduleType)&&(identical(other.oneTimeAt, oneTimeAt) || other.oneTimeAt == oneTimeAt)&&(identical(other.timeOfDay, timeOfDay) || other.timeOfDay == timeOfDay)&&const DeepCollectionEquality().equals(other.weekdays, weekdays)&&(identical(other.enabled, enabled) || other.enabled == enabled)&&(identical(other.lastRunAt, lastRunAt) || other.lastRunAt == lastRunAt));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,name,command,commandLabel,target,const DeepCollectionEquality().hash(targetGroupIds),scheduleType,oneTimeAt,timeOfDay,const DeepCollectionEquality().hash(weekdays),enabled,lastRunAt);
+int get hashCode {
+    return Object.hash(runtimeType,id,name,command,commandLabel,target,const DeepCollectionEquality().hash(targetGroupIds),scheduleType,oneTimeAt,timeOfDay,const DeepCollectionEquality().hash(weekdays),enabled,lastRunAt);
+}
 
 @override
 String toString() {
-  return 'ScheduledTask(id: $id, name: $name, command: $command, commandLabel: $commandLabel, target: $target, targetGroupIds: $targetGroupIds, scheduleType: $scheduleType, oneTimeAt: $oneTimeAt, timeOfDay: $timeOfDay, weekdays: $weekdays, enabled: $enabled, lastRunAt: $lastRunAt)';
+    return 'ScheduledTask(id: $id, name: $name, command: $command, commandLabel: $commandLabel, target: $target, targetGroupIds: $targetGroupIds, scheduleType: $scheduleType, oneTimeAt: $oneTimeAt, timeOfDay: $timeOfDay, weekdays: $weekdays, enabled: $enabled, lastRunAt: $lastRunAt)';
 }
 
 

@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // coverage:ignore-file
-// ignore_for_file: type=lint
+// ignore_for_file: type=lint, type=warning, deprecated_member_use, deprecated_member_use_from_same_package
 // ignore_for_file: unused_element, deprecated_member_use, deprecated_member_use_from_same_package, use_function_type_syntax_for_parameters, unnecessary_const, avoid_init_to_null, invalid_override_different_default_values_named, prefer_expression_function_bodies, annotate_overrides, invalid_annotation_target, unnecessary_question_mark
 
 part of 'projector_group.dart';
@@ -9,6 +9,7 @@ part of 'projector_group.dart';
 // FreezedGenerator
 // **************************************************************************
 
+// GENERATED CODE - DO NOT MODIFY BY HAND
 // dart format off
 T _$identity<T>(T value) => value;
 /// @nodoc
@@ -25,16 +26,21 @@ $ProjectorGroupCopyWith<ProjectorGroup> get copyWith => _$ProjectorGroupCopyWith
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is ProjectorGroup&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.color, color) || other.color == color)&&(identical(other.oscAddress, oscAddress) || other.oscAddress == oscAddress));
+  final _this = this as ProjectorGroup;
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ProjectorGroup&&(identical(other.id, _this.id) || other.id == _this.id)&&(identical(other.name, _this.name) || other.name == _this.name)&&(identical(other.color, _this.color) || other.color == _this.color)&&(identical(other.oscAddress, _this.oscAddress) || other.oscAddress == _this.oscAddress));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,name,color,oscAddress);
+int get hashCode {
+  final _this = this as ProjectorGroup;
+  return Object.hash(runtimeType,_this.id,_this.name,_this.color,_this.oscAddress);
+}
 
 @override
 String toString() {
-  return 'ProjectorGroup(id: $id, name: $name, color: $color, oscAddress: $oscAddress)';
+  final _this = this as ProjectorGroup;
+  return 'ProjectorGroup(id: ${_this.id}, name: ${_this.name}, color: ${_this.color}, oscAddress: ${_this.oscAddress})';
 }
 
 
@@ -63,7 +69,7 @@ class _$ProjectorGroupCopyWithImpl<$Res>
 /// Create a copy of ProjectorGroup
 /// with the given fields replaced by the non-null parameter values.
 @pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? color = null,Object? oscAddress = null,}) {
-  return _then(_self.copyWith(
+  return _then(ProjectorGroup(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,color: null == color ? _self.color : color // ignore: cast_nullable_to_non_nullable
@@ -227,16 +233,18 @@ _$ProjectorGroupCopyWith<_ProjectorGroup> get copyWith => __$ProjectorGroupCopyW
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ProjectorGroup&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.color, color) || other.color == color)&&(identical(other.oscAddress, oscAddress) || other.oscAddress == oscAddress));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _ProjectorGroup&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.color, color) || other.color == color)&&(identical(other.oscAddress, oscAddress) || other.oscAddress == oscAddress));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,name,color,oscAddress);
+int get hashCode {
+    return Object.hash(runtimeType,id,name,color,oscAddress);
+}
 
 @override
 String toString() {
-  return 'ProjectorGroup(id: $id, name: $name, color: $color, oscAddress: $oscAddress)';
+    return 'ProjectorGroup(id: $id, name: $name, color: $color, oscAddress: $oscAddress)';
 }
 
 

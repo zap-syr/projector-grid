@@ -48,7 +48,7 @@ abstract class _$CustomCommandsNotifier extends $Notifier<List<CustomCommand>> {
   List<CustomCommand> build();
   @$mustCallSuper
   @override
-  void runBuild() {
+  WhenComplete runBuild() {
     final ref = this.ref as $Ref<List<CustomCommand>, List<CustomCommand>>;
     final element =
         ref.element
@@ -58,6 +58,6 @@ abstract class _$CustomCommandsNotifier extends $Notifier<List<CustomCommand>> {
               Object?,
               Object?
             >;
-    element.handleCreate(ref, build);
+    return element.handleCreate(ref, build);
   }
 }

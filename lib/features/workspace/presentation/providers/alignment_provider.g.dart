@@ -64,7 +64,7 @@ abstract class _$AlignmentNotifier extends $Notifier<AlignmentState> {
   AlignmentState build();
   @$mustCallSuper
   @override
-  void runBuild() {
+  WhenComplete runBuild() {
     final ref = this.ref as $Ref<AlignmentState, AlignmentState>;
     final element =
         ref.element
@@ -74,6 +74,6 @@ abstract class _$AlignmentNotifier extends $Notifier<AlignmentState> {
               Object?,
               Object?
             >;
-    element.handleCreate(ref, build);
+    return element.handleCreate(ref, build);
   }
 }

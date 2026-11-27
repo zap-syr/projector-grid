@@ -48,7 +48,7 @@ abstract class _$EventLogRequestNotifier extends $Notifier<EventLogRequest?> {
   EventLogRequest? build();
   @$mustCallSuper
   @override
-  void runBuild() {
+  WhenComplete runBuild() {
     final ref = this.ref as $Ref<EventLogRequest?, EventLogRequest?>;
     final element =
         ref.element
@@ -58,6 +58,6 @@ abstract class _$EventLogRequestNotifier extends $Notifier<EventLogRequest?> {
               Object?,
               Object?
             >;
-    element.handleCreate(ref, build);
+    return element.handleCreate(ref, build);
   }
 }

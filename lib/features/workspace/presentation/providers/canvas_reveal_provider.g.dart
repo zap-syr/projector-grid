@@ -63,7 +63,7 @@ abstract class _$CanvasRevealNotifier
   ({String nodeId, int seq})? build();
   @$mustCallSuper
   @override
-  void runBuild() {
+  WhenComplete runBuild() {
     final ref =
         this.ref
             as $Ref<({String nodeId, int seq})?, ({String nodeId, int seq})?>;
@@ -78,6 +78,6 @@ abstract class _$CanvasRevealNotifier
               Object?,
               Object?
             >;
-    element.handleCreate(ref, build);
+    return element.handleCreate(ref, build);
   }
 }

@@ -47,7 +47,7 @@ abstract class _$OscNotifier extends $Notifier<OscStatus> {
   OscStatus build();
   @$mustCallSuper
   @override
-  void runBuild() {
+  WhenComplete runBuild() {
     final ref = this.ref as $Ref<OscStatus, OscStatus>;
     final element =
         ref.element
@@ -57,6 +57,6 @@ abstract class _$OscNotifier extends $Notifier<OscStatus> {
               Object?,
               Object?
             >;
-    element.handleCreate(ref, build);
+    return element.handleCreate(ref, build);
   }
 }

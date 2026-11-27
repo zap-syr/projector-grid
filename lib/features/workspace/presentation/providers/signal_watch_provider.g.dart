@@ -102,7 +102,7 @@ abstract class _$SignalWatchNotifier
   Map<String, SignalLoss> build();
   @$mustCallSuper
   @override
-  void runBuild() {
+  WhenComplete runBuild() {
     final ref =
         this.ref as $Ref<Map<String, SignalLoss>, Map<String, SignalLoss>>;
     final element =
@@ -113,6 +113,6 @@ abstract class _$SignalWatchNotifier
               Object?,
               Object?
             >;
-    element.handleCreate(ref, build);
+    return element.handleCreate(ref, build);
   }
 }
