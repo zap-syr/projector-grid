@@ -84,6 +84,28 @@ bool _isSave(Uint8List f) => f.length >= 4 && f[2] == 0xAA;
 bool _isRead(Uint8List f) => f.length >= 4 && f[2] == 0xA8;
 
 /// A backup store that cannot save.
+/// A fake whose next binary call fails the way the protocol worker does when
+/// it dies: with a [StateError], not a warp exception.
+class _Fake extends FakeProtocolService {
+  int workerFailsBinaryCalls = 0;
+
+  @override
+  Future<Uint8List> sendBinaryCommand(
+    String ip,
+    int port,
+    String login,
+    String password,
+    Uint8List frame,
+  ) async {
+    if (workerFailsBinaryCalls > 0) {
+      workerFailsBinaryCalls--;
+      sentBinary.add((ip, frame));
+      throw StateError('Protocol worker exited');
+    }
+    return super.sendBinaryCommand(ip, port, login, password, frame);
+  }
+}
+
 class _FailingBackups extends WarpBackupStore {
   _FailingBackups(super.root);
 
@@ -96,13 +118,15 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final configDir = useTempConfigDir();
 
-  late FakeProtocolService fake;
+  late _Fake fake;
   late WarpBackupStore backups;
   late List<ProviderContainer> containers;
 
   setUp(() {
-    fake = FakeProtocolService()..rawResponses['QVX:MIDS1'] = _mids;
-    fake.warpFor(_ip);
+    fake = _Fake()..rawResponses['QVX:MIDS1'] = _mids;
+    // In PC-1, as a projector is when its memory is edited: a Reload checks
+    // that the projector is in the memory it shows.
+    fake.warpFor(_ip).mode = 3;
     backups = WarpBackupStore(
       Directory('${configDir().path}${Platform.pathSeparator}warp_backups'),
     );
@@ -153,6 +177,10 @@ void main() {
   }
 
   List<Uint8List> frames() => [for (final (_, f) in fake.sentBinary) f];
+  List<String> gmmiWritesOfTest() => [
+    for (final (_, cmd) in [...fake.sentCommands, ...fake.sentRaw])
+      if (cmd.startsWith('VXX:GMMI0')) cmd,
+  ];
   List<Uint8List> writeFrames() => frames().where(_isWrite).toList();
   bool isBusy(ProviderContainer c) =>
       c.read(workspaceProvider.notifier).isNodeBusy(_id);
@@ -235,7 +263,9 @@ void main() {
       projector().failFrame(0, 0x8C);
       await session(c).open();
       expect(stateOf(c).phase, WarpSessionPhase.failed);
-      expect(stateOf(c).failureMessage, contains('PC-1'));
+      // Words for the operator; the reason and the memory in the detail.
+      expect(stateOf(c).failureMessage, contains('Try again'));
+      expect(stateOf(c).failureDetail, contains('PC-1'));
       expect(stateOf(c).table, isNull);
       expect(isBusy(c), isFalse);
 
@@ -408,7 +438,9 @@ void main() {
       expect(gmmiWrites(), isEmpty);
     });
 
-    test('a refused switch fails without reading', () async {
+    test('a refused switch shows nothing of what was read', () async {
+      // The memory is read first (decision 14.3), then the switch is
+      // refused: the read is thrown away, nothing is written.
       fake.commandSucceeds[_ip] = false;
       final c = newContainer();
       keep(c);
@@ -416,8 +448,58 @@ void main() {
       expect(stateOf(c).phase, WarpSessionPhase.failed);
       expect(stateOf(c).failureMessage, contains('PC-3'));
       expect(stateOf(c).table, isNull);
-      expect(frames(), isEmpty);
+      expect(writeFrames(), isEmpty);
       expect(isBusy(c), isFalse);
+    });
+
+    test(
+      'a model without memories is read first and never written to',
+      () async {
+        // MIDS1 0010: a model with the inverse table; its PC-1 answers FF 8B.
+        fake.rawResponses['QVX:MIDS1'] = _midsWithInverse;
+        projector().mode = 0;
+        final c = newContainer();
+        keep(c);
+        var beforeSwitchCalled = false;
+        await session(c).open(
+          switchTo: WarpSlot.pc1,
+          beforeSwitch: () async => beforeSwitchCalled = true,
+        );
+        expect(stateOf(c).phase, WarpSessionPhase.unsupported);
+        expect(
+          stateOf(c).unsupportedReason,
+          WarpUnsupportedReason.notAvailable,
+        );
+        expect(gmmiWrites(), isEmpty);
+        expect(projector().mode, 0);
+        expect(beforeSwitchCalled, isFalse, reason: 'nothing is written first');
+        expect(writeFrames(), isEmpty);
+      },
+    );
+
+    test('the memory read before the switch is the one shown', () async {
+      projector().mode = 0;
+      seed(WarpSlot.pc2, _gridTable(_caps, dx: 33), _caps);
+      final c = newContainer();
+      keep(c);
+      final order = <String>[];
+      await session(c).open(
+        switchTo: WarpSlot.pc2,
+        beforeSwitch: () async => order.add('before'),
+      );
+      expect(order, ['before']);
+      expect(stateOf(c).phase, WarpSessionPhase.ready);
+      expect(stateOf(c).rawBlock, _blockOf(_gridTable(_caps, dx: 33), _caps));
+      // One read of the memory only: no second one after the switch.
+      expect(frames().where(_isRead).map((f) => f[4]).toSet(), {0x74});
+      expect(
+        [
+          for (final (_, cmd) in fake.sentRaw)
+            if (cmd == 'QVX:GMMI0') cmd,
+        ],
+        hasLength(1),
+        reason: 'a single pass over the memory (each one asks the mode)',
+      );
     });
 
     test('opening again forgets the memory it held', () async {
@@ -650,8 +732,9 @@ void main() {
       await session(c)
           .store(_gridTable(_caps, dx: -60), gridColumns: 4, gridRows: 3);
       expect(stateOf(c).phase, WarpSessionPhase.failed);
-      expect(stateOf(c).failureMessage, contains('backup'));
-      expect(stateOf(c).failureMessage, contains('Nothing was sent'));
+      expect(stateOf(c).failureMessage, contains('nothing was sent'));
+      expect(stateOf(c).failureMessage, endsWith('Try again.'));
+      expect(stateOf(c).failureDetail, contains('backup'));
       expect(writeFrames(), isEmpty);
       expect(frames().where(_isSave), isEmpty);
       expect(isBusy(c), isFalse);
@@ -673,9 +756,9 @@ void main() {
         expect(stateOf(c).phase, WarpSessionPhase.failed);
         expect(
           stateOf(c).failureMessage,
-          'Storing PC-1 failed: Projector '
-          'busy, try again. Nothing was sent.',
+          'Storing PC-1 failed, nothing was sent. Try again.',
         );
+        expect(stateOf(c).failureDetail, 'Projector busy, try again');
       });
       expect(writeFrames(), isEmpty);
       expect(await storedBackup(WarpSlot.pc1), isNull);
@@ -691,7 +774,10 @@ void main() {
       final s = stateOf(c);
       expect(s.phase, WarpSessionPhase.failed);
       expect(s.failureMessage, contains('step 3 of'));
-      expect(s.failureMessage, contains('Reload'));
+      // One line that ends with what to do, no hex code in it.
+      expect(s.failureMessage, endsWith('Reload to check.'));
+      expect(s.failureMessage, isNot(contains('0x')));
+      expect(s.failureDetail, isNotNull);
       expect(frames().where(_isSave), isEmpty);
       expect(projector().saves, isEmpty);
       expect(projector().gridCounts[1], '5:5');
@@ -731,8 +817,8 @@ void main() {
       await session(c).store(bad, gridColumns: 3, gridRows: 3);
 
       expect(stateOf(c).phase, WarpSessionPhase.failed);
-      expect(stateOf(c).failureMessage, contains('out of range'));
-      expect(stateOf(c).failureMessage, contains('Nothing was sent'));
+      expect(stateOf(c).failureDetail, contains('out of range'));
+      expect(stateOf(c).failureMessage, contains('nothing was sent'));
       expect(writeFrames(), isEmpty);
       expect(await storedBackup(WarpSlot.pc1), isNull);
       expect(isBusy(c), isFalse);
@@ -1123,6 +1209,334 @@ void main() {
       expect(stateOf(c).phase, WarpSessionPhase.ready);
       await session(c).markPoints(List.filled(9, 1));
       expect(stateOf(c).previewError, isNull);
+    });
+
+    test(
+      'a command that dies in the worker does not stop the next one',
+      () async {
+        final c = await opened();
+        fake.workerFailsBinaryCalls = 1;
+        await session(c).showGridOverlay(on: true, columns: 3, rows: 3, rgb: 7);
+        expect(stateOf(c).previewError, contains('worker'));
+        final mark = fake.sentBinary.length;
+        await session(c).showGridOverlay(on: true, columns: 3, rows: 3, rgb: 8);
+        expect(fake.sentBinary.length - mark, 1);
+        expect(stateOf(c).previewError, isNull);
+        expect(isBusy(c), isFalse);
+      },
+    );
+  });
+
+  group('Reload checks that the projector is in the memory (QA-004)', () {
+    setUp(() {
+      seed(WarpSlot.pc1, _gridTable(_caps, dx: 40), _caps);
+      seed(WarpSlot.pc2, _gridTable(_caps, dx: 20), _caps);
+    });
+
+    test('after a switch the projector refused, nothing is shown', () async {
+      projector().mode = 0;
+      projector().droppedAscii.add('VXX:GMMI0');
+      final c = newContainer();
+      keep(c);
+      await session(c).open(switchTo: WarpSlot.pc1);
+      expect(stateOf(c).phase, WarpSessionPhase.failed);
+      final attempts = gmmiWritesOfTest().length;
+      expect(attempts, 1, reason: 'the one refused switch');
+
+      projector().droppedAscii.clear();
+      await session(c).reload();
+      expect(stateOf(c).phase, WarpSessionPhase.failed);
+      expect(
+        stateOf(c).failureMessage,
+        'The projector is not in PC-1. Select PC-1 to switch it.',
+      );
+      expect(stateOf(c).table, isNull);
+      expect(stateOf(c).controlGrid, isNull);
+      expect(
+        gmmiWritesOfTest(),
+        hasLength(attempts),
+        reason: 'Reload never switches',
+      );
+      expect(projector().mode, 0);
+      // Writes stay refused until a memory the projector is in is loaded.
+      await expectLater(
+        session(c).store(_gridTable(_caps), gridColumns: 3, gridRows: 3),
+        throwsStateError,
+      );
+      await expectLater(
+        session(c).resetToNeutral(gridColumns: 3, gridRows: 3),
+        throwsStateError,
+      );
+      expect(writeFrames(), isEmpty);
+
+      // Selecting the memory switches the projector and loads it.
+      await session(c).selectMemory(WarpSlot.pc1);
+      expect(stateOf(c).phase, WarpSessionPhase.ready);
+      expect(projector().mode, 3);
+    });
+
+    test('a projector in another memory: Reload is refused too', () async {
+      final c = await opened();
+      expect(stateOf(c).phase, WarpSessionPhase.ready);
+      projector().mode = 4;
+      await session(c).reload();
+      expect(stateOf(c).phase, WarpSessionPhase.failed);
+      expect(stateOf(c).failureMessage, contains('not in PC-1'));
+      expect(stateOf(c).table, isNull);
+    });
+
+    test('a projector in the memory reloads as before', () async {
+      final c = await opened();
+      await session(c).reload();
+      expect(stateOf(c).phase, WarpSessionPhase.ready);
+      expect(stateOf(c).table, isNotNull);
+    });
+  });
+
+  group('a read that goes wrong in any way ends in failed', () {
+    setUp(() => seed(WarpSlot.pc1, _gridTable(_caps), _caps));
+
+    test('a worker that died (QA-006)', () async {
+      final c = await opened();
+      fake.workerFailsBinaryCalls = 1;
+      await session(c).reload();
+      expect(stateOf(c).phase, WarpSessionPhase.failed);
+      expect(stateOf(c).failureMessage, contains('Try again'));
+      expect(stateOf(c).failureDetail, contains('Protocol worker exited'));
+      expect(isBusy(c), isFalse);
+      // The session still reads.
+      await session(c).reload();
+      expect(stateOf(c).phase, WarpSessionPhase.ready);
+    });
+
+    test('a worker that died while the session opens', () async {
+      final c = newContainer();
+      keep(c);
+      fake.workerFailsBinaryCalls = 1;
+      await session(c).open();
+      expect(stateOf(c).phase, WarpSessionPhase.failed);
+      expect(isBusy(c), isFalse);
+    });
+
+    test('an error that is not a protocol error, in a switch', () async {
+      final c = await opened();
+      fake.workerFailsBinaryCalls = 1;
+      await session(c).selectMemory(WarpSlot.pc2);
+      expect(stateOf(c).phase, WarpSessionPhase.failed);
+      expect(isBusy(c), isFalse);
+    });
+
+    test('the failure goes to the event log with its reason', () async {
+      final c = await opened();
+      fake.workerFailsBinaryCalls = 1;
+      await session(c).reload();
+      final rows = logRows(c).where((r) => r.message.contains('read failed'));
+      expect(rows, hasLength(1));
+      expect(rows.single.severity, LogSeverity.error);
+      expect(rows.single.message, contains('Protocol worker exited'));
+    });
+
+    test('no GMMI0 reply: words, no "null" (QA-007)', () async {
+      final c = await opened();
+      for (final reply in ['ER401', null]) {
+        fake.rawResponsesByIp[_ip] = {'QVX:GMMI0': reply};
+        await session(c).reload();
+        expect(stateOf(c).phase, WarpSessionPhase.failed);
+        expect(
+          stateOf(c).failureMessage,
+          'The projector did not report its geometry mode.',
+        );
+        expect(stateOf(c).failureMessage, isNot(contains('null')));
+        expect(stateOf(c).failureDetail, startsWith('Could not read PC-1'));
+      }
+    });
+  });
+
+  group('switchOffOverlay (QA-001, QA-002)', () {
+    setUp(() => seed(WarpSlot.pc1, _gridTable(_caps), _caps));
+
+    List<Uint8List> overlayFrames() => [
+      for (final f in frames())
+        if (f.length > 4 && f[2] == 0xAB && f[3] == 0x07) f,
+    ];
+
+    Future<bool> off(ProviderContainer c) => session(c).switchOffOverlay(
+      overlay: true,
+      cursor: false,
+      columns: 3,
+      rows: 3,
+      rgb: 0xFF00,
+    );
+
+    test('goes out when no memory is loaded', () async {
+      final c = await opened();
+      projector().corruptReadChecksum = true;
+      await session(c).reload();
+      expect(stateOf(c).table, isNull);
+      // The normal command is dropped without a table...
+      await session(c).showGridOverlay(on: false, columns: 3, rows: 3, rgb: 1);
+      expect(overlayFrames(), isEmpty);
+      // ...the off command is not.
+      expect(await off(c), isTrue);
+      expect(overlayFrames(), hasLength(1));
+      expect(overlayFrames().single[4], 0);
+    });
+
+    test('goes out when the cursor was on too, cursor first', () async {
+      final c = await opened();
+      final ok = await session(c).switchOffOverlay(
+        overlay: true,
+        cursor: true,
+        columns: 3,
+        rows: 3,
+        rgb: 1,
+      );
+      expect(ok, isTrue);
+      final tail = frames().reversed.take(2).toList().reversed.toList();
+      expect(tail.first[2], 0xAC, reason: 'the cursor frame');
+      expect(tail.first[4], 0);
+      expect(tail.last[2], 0xAB);
+      expect(tail.last[4], 0);
+    });
+
+    test('nothing asked, nothing sent', () async {
+      final c = await opened();
+      final mark = fake.sentBinary.length;
+      expect(
+        await session(c).switchOffOverlay(
+          overlay: false,
+          cursor: false,
+          columns: 3,
+          rows: 3,
+          rgb: 1,
+        ),
+        isTrue,
+      );
+      expect(fake.sentBinary.length, mark);
+    });
+
+    test(
+      'waits for a poll that holds the projector for over a second',
+      () async {
+        // Real time: the overlay queue's first future belongs to the real
+        // zone, so a fake clock would not move it.
+        final c = await opened();
+        final workspace = c.read(workspaceProvider.notifier);
+        expect(workspace.claimNodeForExternalPoll(_id), isTrue);
+        bool? result;
+        final done = off(c).then((v) => result = v);
+        await Future<void>.delayed(const Duration(milliseconds: 1500));
+        expect(
+          result,
+          isNull,
+          reason:
+              'still waiting after the 1 s of a '
+              'normal overlay command',
+        );
+        expect(overlayFrames(), isEmpty);
+        workspace.releaseNodeFromExternalPoll(_id);
+        await done;
+        expect(result, isTrue);
+        expect(overlayFrames(), hasLength(1));
+        expect(isBusy(c), isFalse);
+      },
+    );
+
+    test('gives up after 5 s with one event log row', () async {
+      final c = await opened();
+      final workspace = c.read(workspaceProvider.notifier);
+      expect(workspace.claimNodeForExternalPoll(_id), isTrue);
+      final stopwatch = Stopwatch()..start();
+      final result = await off(c);
+      expect(result, isFalse);
+      expect(
+        stopwatch.elapsed,
+        greaterThanOrEqualTo(const Duration(seconds: 5)),
+      );
+      expect(overlayFrames(), isEmpty);
+      final rows = logRows(c)
+          .where((r) => r.message.startsWith('Grid overlay may still be on'));
+      expect(rows, hasLength(1));
+      expect(rows.single.severity, LogSeverity.error);
+      expect(rows.single.projectorIp, _ip);
+      workspace.releaseNodeFromExternalPoll(_id);
+    });
+
+    test(
+      'a worker that died: a row, and the next command still goes',
+      () async {
+        final c = await opened();
+        fake.workerFailsBinaryCalls = 1;
+        expect(await off(c), isFalse);
+        expect(
+          logRows(c).where((r) => r.message.contains('may still be on')),
+          hasLength(1),
+        );
+        expect(await off(c), isTrue);
+      },
+    );
+
+    test('is sent after a read that is running', () async {
+      final c = await opened();
+      final held = Completer<void>();
+      fake.holdBinary[_ip] = held;
+      final reading = session(c).reload();
+      await until(() => stateOf(c).phase == WarpSessionPhase.loading);
+      final done = off(c);
+      held.complete();
+      await reading;
+      expect(await done, isTrue);
+      expect(overlayFrames().last[4], 0);
+    });
+  });
+
+  group('the backup of a memory that was never stored (QA-010)', () {
+    test('is marked, after the first write and after a reload', () async {
+      // An empty memory: no stored time.
+      final c = await opened();
+      expect(stateOf(c).storedAt, isNull);
+      expect(stateOf(c).backupOfUnstored, isFalse, reason: 'no backup yet');
+      await session(c).resetToNeutral(gridColumns: 3, gridRows: 3);
+      expect(stateOf(c).backupTakenAt, isNotNull);
+      expect(stateOf(c).backupOfUnstored, isTrue);
+      await session(c).reload();
+      expect(
+        stateOf(c).backupOfUnstored,
+        isTrue,
+        reason: 'from the stored one',
+      );
+    });
+
+    test('a stored memory leaves it off', () async {
+      seed(WarpSlot.pc1, _gridTable(_caps), _caps);
+      projector().storedTimes[1] = '20260101120000';
+      final c = await opened();
+      await session(c).resetToNeutral(gridColumns: 3, gridRows: 3);
+      expect(stateOf(c).backupTakenAt, isNotNull);
+      expect(stateOf(c).backupOfUnstored, isFalse);
+      await session(c).reload();
+      expect(stateOf(c).backupOfUnstored, isFalse);
+    });
+  });
+
+  group('lastStoreIncomplete', () {
+    test('stays until the next read or write', () async {
+      projector().droppedAscii.add('VXX:GDTS1');
+      final c = await opened();
+      await session(c)
+          .store(_gridTable(_caps, dx: 10), gridColumns: 3, gridRows: 3);
+      expect(stateOf(c).lastStoreIncomplete, isTrue);
+      projector().droppedAscii.clear();
+      await session(c).reload();
+      expect(stateOf(c).lastStoreIncomplete, isFalse);
+      projector().droppedAscii.add('VXX:GDTS1');
+      await session(c)
+          .store(_gridTable(_caps, dx: 20), gridColumns: 3, gridRows: 3);
+      expect(stateOf(c).lastStoreIncomplete, isTrue);
+      projector().droppedAscii.clear();
+      await session(c)
+          .store(_gridTable(_caps, dx: 30), gridColumns: 3, gridRows: 3);
+      expect(stateOf(c).lastStoreIncomplete, isFalse);
     });
   });
 }
