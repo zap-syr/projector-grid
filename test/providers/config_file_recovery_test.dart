@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:projector_grid/core/services/app_log_file.dart';
+import 'package:projector_grid/core/services/log_files.dart';
 import 'package:projector_grid/features/workspace/domain/monitoring_view_settings.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/app_settings_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/custom_commands_provider.dart';
@@ -134,6 +135,62 @@ void main() {
       final c = container();
       expect(c.read(customCommandsProvider).map((e) => e.name), ['Dyn']);
       expect(badCopies('custom_commands.json'), isEmpty);
+      expect(logged, hasLength(1));
+    });
+
+    test('each dropped entry is logged with path, position and raw JSON', () {
+      const good = {'id': '2', 'name': 'Dyn', 'command': 'OAD:1'};
+      const bad1 = {'id': '1', 'name': 'No command'};
+      file('custom_commands.json')
+          .writeAsStringSync(jsonEncode([bad1, good, 'not a command']));
+      final c = container();
+
+      expect(c.read(customCommandsProvider).map((e) => e.name), ['Dyn']);
+      expect(badCopies('custom_commands.json'), isEmpty);
+      expect(logged, hasLength(2));
+      expect(stacks, everyElement(isNull));
+      final path = file('custom_commands.json').path;
+      expect(logged[0], startsWith('Custom commands load: '));
+      expect(logged[0], contains(path));
+      expect(logged[0], contains('entry 1 of 3'));
+      expect(logged[0], contains(jsonEncode(bad1)));
+      expect(logged[1], startsWith('Custom commands load: '));
+      expect(logged[1], contains(path));
+      expect(logged[1], contains('entry 3 of 3'));
+      expect(logged[1], contains('"not a command"'));
+    });
+
+    test('a long raw entry is cut to 300 characters plus dots', () {
+      final long = {'id': '1', 'name': 'x' * 500};
+      file('custom_commands.json').writeAsStringSync(jsonEncode([long]));
+      container().read(customCommandsProvider);
+
+      final raw = jsonEncode(long);
+      expect(logged, hasLength(1));
+      expect(logged.single, endsWith('${raw.substring(0, 300)}...'));
+      expect(logged.single, isNot(contains(raw.substring(0, 301))));
+    });
+
+    test('the repeat gate keeps both entries that fail the same way', () {
+      final keys = <String>[];
+      AppLog.debugOnError = (source, error, stack) =>
+          keys.add(errorRepeatKey(error, stack));
+      file('custom_commands.json').writeAsStringSync(jsonEncode(['a', 'a']));
+      container().read(customCommandsProvider);
+
+      expect(keys, hasLength(2));
+      final gate = ErrorRepeatGate();
+      final now = DateTime(2026, 11, 27);
+      expect(keys.map((k) => gate.admit(k, now)), everyElement(isNotNull));
+    });
+
+    test('a fully valid file logs nothing', () {
+      file('custom_commands.json').writeAsStringSync(
+        jsonEncode([
+          {'id': '1', 'name': 'Dyn', 'command': 'OAD:1'},
+        ]),
+      );
+      expect(container().read(customCommandsProvider), hasLength(1));
       expect(logged, isEmpty);
     });
   });
