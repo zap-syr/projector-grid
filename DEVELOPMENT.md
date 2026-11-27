@@ -122,6 +122,8 @@ Project files, app settings and window geometry are JSON in the platform config 
 - Windows: `%APPDATA%\ProjectorGrid\`
 - macOS: `~/Library/Application Support/ProjectorGrid/`
 
+To run with an isolated profile (settings, window geometry, recent projects, logs), start the app with `--config-dir=<path>`, for example `projector_grid.exe "--config-dir=D:\temp profile"`. The folder is created if missing, a relative path is resolved against the current directory, and the app does not start if the folder cannot be created. Other arguments are ignored. The app log (`logs/app-*.log`) names the active folder in a `Config dir:` line at startup. Notification and audio plugins may still write outside this folder.
+
 ## Development Workflow
 
 ### Code Generation
