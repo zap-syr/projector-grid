@@ -245,6 +245,8 @@ These are intentional choices, not gaps to "fix":
 - One responsibility per provider/widget file. Never mutate state in place — Freezed `copyWith` or a new
   plain-Dart instance.
 - Do **not** add fallback handling or validation for cases that cannot occur at runtime.
+- Import Material widgets from `package:material_ui/material_ui.dart`, not `package:flutter/material.dart`
+  (deprecated since Flutter 3.50). SDK `foundation.dart`, `services.dart` and `widgets.dart` imports stay.
 - Comments explain *why*, not *what*.
 - Commit subjects are imperative with a prefix: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`.
 - The analyzer excludes all platform folders (`windows/`, `macos/`, `build/`, …); only `lib/` and `test/` are linted.
