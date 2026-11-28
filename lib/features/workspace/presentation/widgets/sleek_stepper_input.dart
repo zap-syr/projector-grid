@@ -18,6 +18,13 @@ class SleekStepperInput extends StatefulWidget {
   final void Function(String) onValueChanged;
   final bool autofocus;
 
+  /// The field's width; the Free grid's H and V fields are 60.
+  final double width;
+
+  /// False builds the field disabled: Tab skips it, it takes no caret and
+  /// no typing, and its arrows do nothing.
+  final bool enabled;
+
   const SleekStepperInput({
     super.key,
     required this.initialValue,
@@ -26,6 +33,8 @@ class SleekStepperInput extends StatefulWidget {
     required this.onValueChanged,
     this.step = 1.0,
     this.autofocus = false,
+    this.width = 72,
+    this.enabled = true,
   });
 
   @override
@@ -123,6 +132,7 @@ class _SleekStepperInputState extends State<SleekStepperInput> {
   }
 
   void _startStepping(int delta) {
+    if (!widget.enabled) return;
     _step(delta);
     _stepDelayTimer = Timer(const Duration(milliseconds: 400), () {
       _stepRepeatTimer = Timer.periodic(const Duration(milliseconds: 80), (_) {
@@ -153,7 +163,7 @@ class _SleekStepperInputState extends State<SleekStepperInput> {
     final arrowColor = t.secondary;
 
     return Container(
-      width: 72,
+      width: widget.width,
       height: 32,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
@@ -167,6 +177,7 @@ class _SleekStepperInputState extends State<SleekStepperInput> {
             child: TextField(
               controller: _controller,
               focusNode: _focusNode,
+              enabled: widget.enabled,
               textAlign: TextAlign.center,
               style: t.mono,
               keyboardType: const TextInputType.numberWithOptions(

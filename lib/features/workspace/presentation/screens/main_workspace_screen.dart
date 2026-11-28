@@ -14,6 +14,7 @@ import '../providers/alerts_provider.dart';
 import '../providers/alignment_provider.dart';
 import '../providers/app_settings_provider.dart';
 import '../providers/osc_provider.dart';
+import '../providers/warp_window_close_guard_provider.dart';
 import '../providers/web_server_provider.dart';
 import '../providers/project_provider.dart';
 import '../providers/workspace_provider.dart';
@@ -214,7 +215,7 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
     if (!mounted) return true;
     final canQuit = await TopMenuBar.confirmUnsavedChanges(context, ref);
     if (canQuit) {
-      await _leaveAlignmentMode();
+      await _releaseProjectors();
       AppLog.stop();
     }
     return canQuit;
@@ -227,6 +228,16 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
       .read(alignmentProvider.notifier)
       .exit()
       .timeout(const Duration(seconds: 5), onTimeout: () {});
+
+  /// Everything that has to be put right on the projectors before the app
+  /// goes: Alignment mode, and the Free grid sessions (a write that runs is
+  /// waited for, the grid overlay and the cursor are taken off). The Free grid
+  /// part returns at once when no session has anything to settle, and is
+  /// bounded at about 10 s.
+  Future<void> _releaseProjectors() async {
+    await _leaveAlignmentMode();
+    await ref.read(warpWindowCloseGuardProvider).settle();
+  }
 
   /// `windowManager.destroy()` always calls `NSApp.terminate(nil)` under the
   /// hood, which re-enters AppDelegate's `applicationShouldTerminate` on
@@ -267,7 +278,7 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
     }
     final canProceed = await TopMenuBar.confirmUnsavedChanges(context, ref);
     if (canProceed) {
-      await _leaveAlignmentMode();
+      await _releaseProjectors();
       await _markTerminationApproved();
       AppLog.stop();
       await windowManager.destroy();
@@ -349,7 +360,7 @@ class _MainWorkspaceScreenState extends ConsumerState<MainWorkspaceScreen>
                 if (!await TopMenuBar.confirmUnsavedChanges(context, ref)) {
                   return null;
                 }
-                await _leaveAlignmentMode();
+                await _releaseProjectors();
                 await _markTerminationApproved();
                 AppLog.stop();
                 await windowManager.destroy();

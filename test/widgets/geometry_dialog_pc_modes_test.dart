@@ -10,9 +10,10 @@ import 'package:projector_grid/features/workspace/presentation/widgets/geometry_
 import '../helpers/fake_protocol_service.dart';
 import '../helpers/test_config_dir.dart';
 
-/// A projector in one of the free-form memories PC-1 to PC-3 opens the dialog
-/// exactly like a projector with the correction off, until the Free grid tile
-/// exists.
+/// A projector in one of the free-form memories PC-1 to PC-3 whose model has
+/// no Free grid (no MIDS1 reply here) opens the dialog exactly like a
+/// projector with the correction off: there is no tile to select. The Free
+/// grid itself is in `geometry_dialog_free_grid_test.dart`.
 void main() {
   useTempConfigDir();
 

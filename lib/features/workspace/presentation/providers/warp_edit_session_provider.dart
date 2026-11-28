@@ -17,6 +17,7 @@ import '../../domain/warp_table.dart';
 import 'event_log_provider.dart';
 import 'protocol_service_provider.dart';
 import 'warp_backup_store_provider.dart';
+import 'warp_window_close_guard_provider.dart';
 import 'workspace_provider.dart';
 
 part 'warp_edit_session_provider.g.dart';
@@ -26,6 +27,10 @@ const Duration _claimTimeout = Duration(seconds: 3);
 
 /// Overlays are cosmetic: they give up sooner.
 const Duration _overlayClaimTimeout = Duration(seconds: 1);
+
+/// Taking the overlay off waits longer than anything cosmetic: leaving it on
+/// the projector is the one thing worse than a slow close.
+const Duration _switchOffClaimTimeout = Duration(seconds: 5);
 
 const Duration _claimStep = Duration(milliseconds: 100);
 
@@ -60,7 +65,8 @@ enum _WriteKind {
 /// watch first (`claimNodeForExternalPoll`), so one projector never sees
 /// more than one of the app's transfers at a time.
 @riverpod
-class WarpEditSession extends _$WarpEditSession {
+class WarpEditSession extends _$WarpEditSession
+    implements WarpCloseParticipant {
   late PanasonicProtocolService _service;
   late WorkspaceNotifier _workspace;
   late WarpBackupStore _backups;
@@ -86,14 +92,47 @@ class WarpEditSession extends _$WarpEditSession {
   Timer? _previewTimer;
   Future<void> _overlayTail = Future<void>.value();
 
+  // The switch the editor asked for with [open]: a retry before the model is
+  // known repeats it, so a memory is only shown once the projector is in it.
+  WarpSlot? _requestedSwitch;
+  Future<void> Function()? _requestedBeforeSwitch;
+
+  // The write that runs now, for the window close to wait for.
+  Future<void>? _activeWrite;
+
+  // What this session left on the projector. It stays set until an off was
+  // sent, so a failed off is tried again when the mode or the window goes.
+  bool _overlayOn = false;
+  bool _cursorOn = false;
+  ({int columns, int rows, int rgb}) _overlayArgs = (
+    columns: 3,
+    rows: 3,
+    rgb: 0x00FF00,
+  );
+
   @override
   WarpSessionState build(String nodeId) {
     _service = ref.read(protocolServiceProvider);
     _workspace = ref.read(workspaceProvider.notifier);
     _backups = ref.read(warpBackupStoreProvider);
     _eventLog = ref.read(eventLogProvider.notifier);
-    ref.onDispose(() => _previewTimer?.cancel());
+    final guard = ref.read(warpWindowCloseGuardProvider);
+    guard.register(this);
+    ref.onDispose(() {
+      _previewTimer?.cancel();
+      guard.unregister(this);
+    });
     return const WarpSessionState();
+  }
+
+  @override
+  bool needsCloseSettle() => _activeWrite != null || _overlayOn || _cursorOn;
+
+  @override
+  Future<void> settleForClose() async {
+    final write = _activeWrite;
+    if (write != null) await write;
+    await switchOffTracked();
   }
 
   ProjectorNode get _node =>
@@ -134,16 +173,40 @@ class WarpEditSession extends _$WarpEditSession {
 
   // ----------------------------------------------------------------- open
 
+  /// Whether the next write to the current memory first saves a backup of
+  /// it: true until this session has written to that memory once.
+  bool takesBackupOnNextWrite() => !_backedUp.contains(state.slot);
+
   /// Finds out the model and loads a memory: the one the projector is in when
   /// that is PC-1 to PC-3, else PC-1. Reading does not change the mode.
-  Future<void> open() async {
+  ///
+  /// With [switchTo] the memory is read first, and only when it is there the
+  /// projector is put in it with one `GMMI0` write (the data read is kept,
+  /// there is no second read): the editor opens it from another geometry
+  /// mode. A model the session cannot use is never written to, and neither
+  /// is one whose first read says it has no memories.
+  ///
+  /// [beforeSwitch] runs after the memory was found and before the `GMMI0`
+  /// write (the dialog's Quad Pixel Drive step).
+  Future<void> open({
+    WarpSlot? switchTo,
+    Future<void> Function()? beforeSwitch,
+  }) async {
     if (_working) return;
     _working = true;
+    if (switchTo != null) {
+      _requestedSwitch = switchTo;
+      _requestedBeforeSwitch = beforeSwitch;
+    }
     try {
+      // A session opened again (the tile clicked after leaving the mode)
+      // must not show the memory it held before.
+      _beginLoad(state.slot);
       state = state.copyWith(
         phase: WarpSessionPhase.detecting,
         unsupportedReason: null,
         failureMessage: null,
+        failureDetail: null,
       );
       final node = _node;
       if (!await _claim(_claimTimeout)) {
@@ -152,6 +215,7 @@ class WarpEditSession extends _$WarpEditSession {
       }
       WarpModelCaps? caps;
       String? modeReply;
+      Object? error;
       try {
         final mids = await _service.sendRawCommand(
           node.ipAddress,
@@ -161,7 +225,7 @@ class WarpEditSession extends _$WarpEditSession {
           'QVX:MIDS1',
         );
         caps = mids == null ? null : warpModelCapsFromMids(mids);
-        if (caps != null && warpModelSupported(caps)) {
+        if (caps != null && warpModelSupported(caps) && switchTo == null) {
           modeReply = await _service.sendRawCommand(
             node.ipAddress,
             node.port,
@@ -170,10 +234,19 @@ class WarpEditSession extends _$WarpEditSession {
             'QVX:GMMI0',
           );
         }
+      } catch (e) {
+        error = e;
       } finally {
         _release();
       }
       if (!ref.mounted) return;
+      if (error != null) {
+        _failRead(
+          GeometryMode.forWarpSlot(switchTo ?? state.slot).label,
+          error,
+        );
+        return;
+      }
       if (caps == null) {
         state = state.copyWith(
           phase: WarpSessionPhase.unsupported,
@@ -189,16 +262,75 @@ class WarpEditSession extends _$WarpEditSession {
         );
         return;
       }
+      state = state.copyWith(caps: caps);
+      if (switchTo != null) {
+        await _openInto(switchTo, beforeSwitch);
+        return;
+      }
       // A failed mode read is not handled here: the load reads it again and
       // reports the failure.
       final mode = modeReply == null
           ? null
           : GeometryMode.fromProtocol(modeReply.split('=').last);
-      state = state.copyWith(caps: caps);
+      // Whichever memory it opens on, the projector must be in it: a
+      // projector in Off or another mode ends in `failed`, not in a memory
+      // shown while the projector is somewhere else.
       await _load(mode?.warpSlot ?? WarpSlot.pc1);
     } finally {
       _working = false;
     }
+  }
+
+  /// The [open] of a memory the projector is not in yet: read it, check that
+  /// the model has it, then switch the projector and show what was read.
+  Future<void> _openInto(
+    WarpSlot slot,
+    Future<void> Function()? beforeSwitch,
+  ) async {
+    _beginLoad(slot);
+    final result = await _fetch(slot);
+    if (result == null || !ref.mounted) return;
+    if (_hasNoMemories(result)) {
+      _markNotAvailable();
+      return;
+    }
+    try {
+      await beforeSwitch?.call();
+    } catch (_) {
+      // The step is the caller's to report (it did, to its own client): the
+      // switch is still tried.
+    }
+    if (!ref.mounted) return;
+    final node = _node;
+    final mode = GeometryMode.forWarpSlot(slot);
+    if (!await _claim(_claimTimeout)) {
+      if (ref.mounted) _fail(_busyMessage);
+      return;
+    }
+    var switched = false;
+    Object? error;
+    try {
+      switched = await _service.sendCommand(
+        node.ipAddress,
+        node.port,
+        node.login,
+        node.password,
+        'VXX:GMMI0=${mode.protocolValue}',
+      );
+    } catch (e) {
+      error = e;
+    } finally {
+      _release();
+    }
+    if (!ref.mounted) return;
+    if (!switched) {
+      _fail(
+        'Could not switch the projector to ${mode.label}. Try again.',
+        detail: error?.toString(),
+      );
+      return;
+    }
+    await _present(slot, result);
   }
 
   // ----------------------------------------------------------------- read
@@ -217,7 +349,8 @@ class WarpEditSession extends _$WarpEditSession {
         if (ref.mounted) _fail(_busyMessage);
         return;
       }
-      final bool switched;
+      var switched = false;
+      Object? error;
       try {
         switched = await _service.sendCommand(
           node.ipAddress,
@@ -226,12 +359,17 @@ class WarpEditSession extends _$WarpEditSession {
           node.password,
           'VXX:GMMI0=${mode.protocolValue}',
         );
+      } catch (e) {
+        error = e;
       } finally {
         _release();
       }
       if (!ref.mounted) return;
       if (!switched) {
-        _fail('Could not switch the projector to ${mode.label}.');
+        _fail(
+          'Could not switch the projector to ${mode.label}. Try again.',
+          detail: error?.toString(),
+        );
         return;
       }
       await _load(slot);
@@ -241,9 +379,18 @@ class WarpEditSession extends _$WarpEditSession {
   }
 
   /// Reads the current memory again. Opens the session instead while the
-  /// model is not known yet.
+  /// model is not known yet. When the projector turns out not to be in the
+  /// memory, nothing is shown and nothing is written: the operator selects
+  /// the memory to switch it.
   Future<void> reload() async {
-    if (state.caps == null) return open();
+    // The model is not known yet (the first call was busy, or the worker
+    // died): repeat what was asked, the switch included.
+    if (state.caps == null) {
+      return open(
+        switchTo: _requestedSwitch,
+        beforeSwitch: _requestedBeforeSwitch,
+      );
+    }
     if (!_canStartRead) return;
     _working = true;
     try {
@@ -258,14 +405,51 @@ class WarpEditSession extends _$WarpEditSession {
       state.caps != null &&
       state.phase != WarpSessionPhase.unsupported;
 
-  void _fail(String message) {
+  void _fail(String message, {String? detail}) {
     state = state.copyWith(
       phase: WarpSessionPhase.failed,
       failureMessage: message,
+      failureDetail: detail,
       progressDone: 0,
       progressTotal: 0,
     );
   }
+
+  /// A read that went wrong: the operator gets words and what to do; the
+  /// reason goes to the event log and a tooltip.
+  void _failRead(String label, Object error) {
+    final reason = switch (error) {
+      WarpProtocolException(:final message) => message,
+      WarpTransportException(:final message) => message,
+      _ => '$error',
+    };
+    // The mode is the read's first question: ER401 (not ready) and no reply
+    // both say the projector gave none.
+    final message = reason.contains('GMMI0')
+        ? 'The projector did not report its geometry mode.'
+        : 'The projector did not answer the read. Try again, or check that '
+              'it is not busy.';
+    final detail = 'Could not read $label: $reason';
+    _fail(message, detail: detail);
+    _logProblem('Free grid $label read failed: $reason');
+  }
+
+  void _logProblem(String message, {LogSeverity severity = LogSeverity.error}) {
+    final n = _nodeOrNull;
+    _eventLog.log(
+      LogEvent(
+        severity: severity,
+        type: LogEventType.command,
+        message: message,
+        projectorIp: n?.ipAddress,
+        projectorName: n?.name,
+        nodeId: nodeId,
+      ),
+    );
+  }
+
+  ProjectorNode? get _nodeOrNull =>
+      ref.read(workspaceProvider).where((n) => n.id == nodeId).firstOrNull;
 
   /// Forgets the data of the memory shown so far: nothing of it may be
   /// written into [slot] if the read fails.
@@ -274,6 +458,7 @@ class WarpEditSession extends _$WarpEditSession {
       phase: WarpSessionPhase.loading,
       slot: slot,
       failureMessage: null,
+      failureDetail: null,
       lastStoreIncomplete: false,
       storedAt: null,
       table: null,
@@ -284,44 +469,91 @@ class WarpEditSession extends _$WarpEditSession {
       readOnlyReason: null,
       undescribedDetail: false,
       backupTakenAt: null,
+      backupOfUnstored: false,
     );
   }
 
-  Future<void> _load(WarpSlot slot) async {
+  /// Reads memory [slot] under the claim. Null when it could not be read:
+  /// the session is `failed` then, with the reason.
+  Future<WarpReloadResult?> _fetch(WarpSlot slot) async {
     final caps = state.caps!;
     final node = _node;
     final label = GeometryMode.forWarpSlot(slot).label;
-    _beginLoad(slot);
-
     if (!await _claim(_claimTimeout)) {
       if (ref.mounted) _fail(_busyMessage);
-      return;
+      return null;
     }
     WarpReloadResult? result;
-    String? error;
+    Object? error;
     try {
       result = await reloadWarpMemory(_linkFor(node), slot, caps);
-    } on WarpProtocolException catch (e) {
-      error = e.message;
-    } on WarpTransportException catch (e) {
-      error = e.message;
+    } catch (e) {
+      // Whatever it was (a worker that died included), the session must not
+      // stay in `loading`.
+      error = e;
     } finally {
       _release();
     }
-    if (!ref.mounted) return;
+    if (!ref.mounted) return null;
     if (result == null) {
-      _fail('Could not read $label: $error');
+      _failRead(label, error ?? 'no answer');
+      return null;
+    }
+    return result;
+  }
+
+  /// A first read that says the model has no memories at all.
+  bool _hasNoMemories(WarpReloadResult result) =>
+      result.read is WarpBlockNotAvailable &&
+      !state.caps!.isNoInverse &&
+      !_firstReadDone;
+
+  void _markNotAvailable() {
+    state = state.copyWith(
+      phase: WarpSessionPhase.unsupported,
+      unsupportedReason: WarpUnsupportedReason.notAvailable,
+    );
+  }
+
+  /// Reads [slot] and shows it. With [checkMode] a projector that is not in
+  /// the memory ends the read in `failed` (nothing is shown, so nothing can
+  /// be written to a memory the projector is not showing).
+  Future<void> _load(WarpSlot slot, {bool checkMode = true}) async {
+    _beginLoad(slot);
+    final result = await _fetch(slot);
+    if (result == null || !ref.mounted) return;
+    if (_hasNoMemories(result)) {
+      _markNotAvailable();
       return;
     }
-
-    final read = result.read;
-    if (read is WarpBlockNotAvailable && !caps.isNoInverse && !_firstReadDone) {
-      state = state.copyWith(
-        phase: WarpSessionPhase.unsupported,
-        unsupportedReason: WarpUnsupportedReason.notAvailable,
+    final mode = GeometryMode.forWarpSlot(slot);
+    if (checkMode &&
+        '+${result.mode.toString().padLeft(5, '0')}' != mode.protocolValue) {
+      _fail(
+        'The projector is not in ${mode.label}. Select ${mode.label} to '
+        'switch it.',
+        detail: 'GMMI0 is ${result.mode}, not ${mode.protocolValue}',
       );
       return;
     }
+    await _present(slot, result);
+  }
+
+  /// Shows what was read from [slot]. Whatever goes wrong while the table is
+  /// turned into a grid ends in `failed`, never in a stuck `loading`.
+  Future<void> _present(WarpSlot slot, WarpReloadResult result) async {
+    try {
+      await _presentUnguarded(slot, result);
+    } catch (e) {
+      if (ref.mounted) _failRead(GeometryMode.forWarpSlot(slot).label, e);
+    }
+  }
+
+  Future<void> _presentUnguarded(WarpSlot slot, WarpReloadResult result) async {
+    final caps = state.caps!;
+    final node = _node;
+    final label = GeometryMode.forWarpSlot(slot).label;
+    final read = result.read;
 
     final WarpTable table;
     Uint8List? rawBlock;
@@ -331,7 +563,11 @@ class WarpEditSession extends _$WarpEditSession {
         try {
           table = decodeTable(read.block, WarpEncoding.triple, caps.bits);
         } on FormatException catch (e) {
-          _fail('$label holds a table this app cannot read: ${e.message}');
+          _fail(
+            '$label holds a table this app cannot read. Try another memory.',
+            detail: 'Could not read $label: ${e.message}',
+          );
+          _logProblem('Free grid $label read failed: ${e.message}');
           return;
         }
         rawBlock = read.block;
@@ -370,9 +606,15 @@ class WarpEditSession extends _$WarpEditSession {
       }
     }
 
-    final backup = await _backups.load(_backupKey(node, caps), slot);
+    WarpBackup? backup;
+    try {
+      backup = await _backups.load(_backupKey(node, caps), slot);
+    } catch (_) {
+      // A backup that cannot be read is no backup: the memory still shows.
+    }
     if (!ref.mounted) return;
     state = state.copyWith(
+      backupOfUnstored: backup != null && backup.storedAt == null,
       phase: WarpSessionPhase.ready,
       storedAt: result.storedAt,
       gridCounts: counts,
@@ -492,7 +734,9 @@ class WarpEditSession extends _$WarpEditSession {
         takeBackup: false,
       );
       if (!outcome.ok || !ref.mounted) return;
-      await _load(slot);
+      // Read back what was written: the projector was in the memory for the
+      // write, so the mode is not asked again.
+      await _load(slot, checkMode: false);
       if (ref.mounted && outcome.incomplete) {
         state = state.copyWith(lastStoreIncomplete: true);
       }
@@ -501,9 +745,37 @@ class WarpEditSession extends _$WarpEditSession {
     }
   }
 
-  /// Everything a Store, Restore and Reset share. Failures end in the
-  /// `failed` phase and an event log row; the session stays usable.
+  /// Everything a Store, Restore and Reset share, known to the window close
+  /// while it runs.
   Future<({bool ok, bool incomplete})> _write(
+    _WriteKind kind,
+    WarpTable table, {
+    required int gridColumns,
+    required int gridRows,
+    required Uint8List? header,
+    required DateTime now,
+    required bool takeBackup,
+  }) async {
+    final run = _writeInner(
+      kind,
+      table,
+      gridColumns: gridColumns,
+      gridRows: gridRows,
+      header: header,
+      now: now,
+      takeBackup: takeBackup,
+    );
+    _activeWrite = run.then<void>((_) {}, onError: (Object _) {});
+    try {
+      return await run;
+    } finally {
+      _activeWrite = null;
+    }
+  }
+
+  /// Failures end in the `failed` phase and an event log row; the session
+  /// stays usable.
+  Future<({bool ok, bool incomplete})> _writeInner(
     _WriteKind kind,
     WarpTable table, {
     required int gridColumns,
@@ -533,6 +805,9 @@ class WarpEditSession extends _$WarpEditSession {
 
     WarpStoreResult? result;
     DateTime? backupTakenAt;
+    // Set when this write takes the backup: whether the memory had ever been
+    // stored then.
+    bool? backupOfUnstored;
     // Why it failed, for the log; and for the editor, which also says what
     // state the projector may be in.
     String? reason;
@@ -547,7 +822,9 @@ class WarpEditSession extends _$WarpEditSession {
         // the backup of an earlier session.
         _checkEncodable(table, caps);
         if (takeBackup && !_backedUp.contains(slot)) {
+          final neverStored = state.storedAt == null;
           backupTakenAt = await _saveBackup(node, caps, slot);
+          backupOfUnstored = neverStored;
           _backedUp.add(slot);
         }
         nothingSent = false;
@@ -593,15 +870,17 @@ class WarpEditSession extends _$WarpEditSession {
 
     final warpResult = result;
     final String? failure;
+    String? failureDetail;
     final String logMessage;
     var severity = LogSeverity.success;
     if (warpResult == null) {
       final step = 'step ${done + 1}${total > 0 ? ' of $total' : ''}';
+      // One line that ends with what to do; the reason is the tooltip's.
       failure = nothingSent
-          ? '${kind.progressive} $label failed: $reason. Nothing was sent.'
-          : '${kind.progressive} $label failed at $step: $reason. The memory '
-                'may be partly written: press Reload to see what the '
-                'projector holds.';
+          ? '${kind.progressive} $label failed, nothing was sent. Try again.'
+          : '${kind.progressive} $label failed at $step, it may be partly '
+                'written. Reload to check.';
+      failureDetail = reason;
       logMessage = nothingSent
           ? 'Free grid $label ${kind.noun} failed, nothing was sent: $reason'
           : 'Free grid $label ${kind.noun} failed at $step: $reason';
@@ -638,9 +917,11 @@ class WarpEditSession extends _$WarpEditSession {
       state = state.copyWith(
         phase: WarpSessionPhase.failed,
         failureMessage: failure,
+        failureDetail: failureDetail,
         progressDone: 0,
         progressTotal: 0,
         backupTakenAt: takenAt,
+        backupOfUnstored: backupOfUnstored ?? state.backupOfUnstored,
       );
       return (ok: false, incomplete: false);
     }
@@ -658,6 +939,7 @@ class WarpEditSession extends _$WarpEditSession {
       progressDone: 0,
       progressTotal: 0,
       backupTakenAt: takenAt,
+      backupOfUnstored: backupOfUnstored ?? state.backupOfUnstored,
     );
     return (ok: true, incomplete: !warpResult.complete);
   }
@@ -809,8 +1091,13 @@ class WarpEditSession extends _$WarpEditSession {
     required int x,
     required int y,
     int kind = 0,
-  }) =>
-      _overlay((link) => sendWarpCursor(link, on: on, x: x, y: y, kind: kind));
+  }) => _overlay((link) async {
+    // Marked before the send: a command that failed half way may have shown
+    // it. It is cleared when an off went out.
+    if (on) _cursorOn = true;
+    await sendWarpCursor(link, on: on, x: x, y: y, kind: kind);
+    if (!on) _cursorOn = false;
+  });
 
   /// Shows or hides the grid through the control points.
   Future<void> showGridOverlay({
@@ -818,15 +1105,20 @@ class WarpEditSession extends _$WarpEditSession {
     required int columns,
     required int rows,
     required int rgb,
-  }) => _overlay(
-    (link) => sendWarpGridOverlay(
+  }) => _overlay((link) async {
+    if (on) {
+      _overlayOn = true;
+      _overlayArgs = (columns: columns, rows: rows, rgb: rgb);
+    }
+    await sendWarpGridOverlay(
       link,
       on: on,
       columns: columns,
       rows: rows,
       rgb: rgb,
-    ),
-  );
+    );
+    if (!on) _overlayOn = false;
+  });
 
   /// Highlights the control points whose mark is 1.
   Future<void> markPoints(List<int> marks) =>
@@ -837,14 +1129,24 @@ class WarpEditSession extends _$WarpEditSession {
     required int x,
     required int y,
     required List<int> marks,
-  }) => _overlay((link) => sendWarpSelection(link, x: x, y: y, marks: marks));
+  }) => _overlay((link) async {
+    _cursorOn = true;
+    await sendWarpSelection(link, x: x, y: y, marks: marks);
+  });
 
   /// One overlay command at a time and in call order, each under the claim.
   /// Dropped while a read or a write runs. A projector that stays busy for a
   /// second is an error, as for the preview.
   Future<void> _overlay(Future<void> Function(WarpLink link) send) {
     if (!_liveAllowed) return Future<void>.value();
-    final run = _overlayTail.then((_) => _overlayOnce(send));
+    return _enqueueOverlay(() => _overlayOnce(send));
+  }
+
+  /// Puts [job] after the overlay commands before it. A job never throws
+  /// (they all catch), and the tail survives one that did anyway: a failed
+  /// command must not stop every later one.
+  Future<void> _enqueueOverlay(Future<void> Function() job) {
+    final run = _overlayTail.then((_) => job()).catchError((Object _) {});
     _overlayTail = run;
     return run;
   }
@@ -863,11 +1165,99 @@ class WarpEditSession extends _$WarpEditSession {
       error = e.message;
     } on WarpTransportException catch (e) {
       error = e.message;
+    } catch (e) {
+      // A worker that died, anything else: the command failed, the queue
+      // goes on.
+      error = '$e';
     } finally {
       _release();
     }
     _setPreviewError(error);
   }
+
+  /// Takes the grid overlay and the cursor off the projector, whatever the
+  /// session is doing: a projector left showing them over another correction
+  /// is worse than a command that waits. Unlike the other overlay commands
+  /// this is sent while a read or a write runs (after it), while no memory is
+  /// loaded (a read that failed), and it waits up to 5 s for the projector
+  /// instead of 1 s. When it still cannot be sent an event log row says the
+  /// overlay may still be on. True when everything asked for went out.
+  Future<bool> switchOffOverlay({
+    required bool overlay,
+    required bool cursor,
+    required int columns,
+    required int rows,
+    required int rgb,
+  }) async {
+    if (!overlay && !cursor) return true;
+    var ok = false;
+    await _enqueueOverlay(() async {
+      if (!ref.mounted) return;
+      final link = _linkFor(_node);
+      String? reason;
+      if (!await _claim(_switchOffClaimTimeout)) {
+        reason = _busyMessage;
+      } else {
+        try {
+          if (cursor) {
+            await sendWarpCursor(link, on: false, x: 0, y: 0);
+            _cursorOn = false;
+          }
+          if (overlay) {
+            await sendWarpGridOverlay(
+              link,
+              on: false,
+              columns: columns,
+              rows: rows,
+              rgb: rgb,
+            );
+            _overlayOn = false;
+          }
+          ok = true;
+        } on WarpProtocolException catch (e) {
+          reason = e.message;
+        } on WarpTransportException catch (e) {
+          reason = e.message;
+        } catch (e) {
+          reason = '$e';
+        } finally {
+          _release();
+        }
+      }
+      if (ok) {
+        _setPreviewError(null);
+        return;
+      }
+      if (!ref.mounted) return;
+      // Still marked as shown (see [_overlayOn]): the editor puts its switch
+      // back on and the footer says so, and the next off is tried when the
+      // mode or the window goes.
+      _setPreviewError(
+        overlay
+            ? 'The grid overlay could not be turned off. Try again.'
+            : 'The cursor could not be turned off. Try again.',
+      );
+      _logProblem(
+        '${overlay ? 'Grid overlay' : 'Cursor'} may still be on: $reason',
+      );
+    });
+    return ok;
+  }
+
+  /// Whether this session left the grid overlay or the cursor on the
+  /// projector, as far as it knows.
+  bool overlayMayBeOn() => _overlayOn || _cursorOn;
+
+  /// Takes off what this session put on the projector and could not take off
+  /// yet: the editor leaving the mode or the dialog, and the window close.
+  /// True when nothing is left.
+  Future<bool> switchOffTracked() => switchOffOverlay(
+    overlay: _overlayOn,
+    cursor: _cursorOn,
+    columns: _overlayArgs.columns,
+    rows: _overlayArgs.rows,
+    rgb: _overlayArgs.rgb,
+  );
 }
 
 /// The backup of a memory could not be saved, so nothing was sent.

@@ -44,11 +44,15 @@ class ConfirmDialog<T> extends StatelessWidget {
     this.subtitle,
     this.changes = const [],
     this.destructive = false,
+    this.monoSubtitle = false,
   });
 
   final IconData icon;
   final String title;
   final String? subtitle;
+
+  /// The subtitle in Plex Mono: it names a projector by model and address.
+  final bool monoSubtitle;
   final List<ConfirmChange> changes;
   final List<ConfirmAction<T>> actions;
 
@@ -95,7 +99,10 @@ class ConfirmDialog<T> extends StatelessWidget {
                         Text(title, style: t.dialogTitle),
                         if (subtitle != null) ...[
                           const SizedBox(height: 4),
-                          Text(subtitle!, style: t.description),
+                          Text(
+                            subtitle!,
+                            style: monoSubtitle ? t.monoSmall : t.description,
+                          ),
                         ],
                       ],
                     ),
@@ -190,7 +197,14 @@ class _ChangesBox extends StatelessWidget {
                               ? t.mono
                               : const TextStyle(fontWeight: FontWeight.w600),
                         ),
-                        if (c.rest.isNotEmpty) TextSpan(text: ' ${c.rest}'),
+                        // A rest that starts with a comma follows the lead
+                        // directly.
+                        if (c.rest.isNotEmpty)
+                          TextSpan(
+                            text: c.rest.startsWith(',')
+                                ? c.rest
+                                : ' ${c.rest}',
+                          ),
                       ],
                     ),
                   ),

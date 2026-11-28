@@ -82,9 +82,11 @@ class WarpSessionState {
     this.readOnlyReason,
     this.undescribedDetail = false,
     this.backupTakenAt,
+    this.backupOfUnstored = false,
     this.lastStoreIncomplete = false,
     this.previewError,
     this.failureMessage,
+    this.failureDetail,
     this.progressDone = 0,
     this.progressTotal = 0,
   });
@@ -143,6 +145,10 @@ class WarpSessionState {
   /// "Backup of ..."; null when there is none.
   final DateTime? backupTakenAt;
 
+  /// True when the backup was taken from a memory that had never been
+  /// stored: restoring it puts the memory back to no correction.
+  final bool backupOfUnstored;
+
   /// True when the last write put the table in the projector but not the
   /// stored time or the numbers of control points.
   final bool lastStoreIncomplete;
@@ -151,8 +157,13 @@ class WarpSessionState {
   /// that works. It never changes [phase].
   final String? previewError;
 
-  /// What went wrong, while [phase] is [WarpSessionPhase.failed].
+  /// What went wrong, in words for the operator, while [phase] is
+  /// [WarpSessionPhase.failed]. It ends with what to do.
   final String? failureMessage;
+
+  /// The reason behind [failureMessage], as the projector or the protocol
+  /// gave it: for a tooltip and the event log, never the line itself.
+  final String? failureDetail;
 
   /// Steps of the running write that are done, and in all, for "step n of
   /// m". The total is 0 until the first step is done.
@@ -184,9 +195,11 @@ class WarpSessionState {
     Object? readOnlyReason = _keep,
     bool? undescribedDetail,
     Object? backupTakenAt = _keep,
+    bool? backupOfUnstored,
     bool? lastStoreIncomplete,
     Object? previewError = _keep,
     Object? failureMessage = _keep,
+    Object? failureDetail = _keep,
     int? progressDone,
     int? progressTotal,
   }) => WarpSessionState(
@@ -220,6 +233,7 @@ class WarpSessionState {
     backupTakenAt: identical(backupTakenAt, _keep)
         ? this.backupTakenAt
         : backupTakenAt as DateTime?,
+    backupOfUnstored: backupOfUnstored ?? this.backupOfUnstored,
     lastStoreIncomplete: lastStoreIncomplete ?? this.lastStoreIncomplete,
     previewError: identical(previewError, _keep)
         ? this.previewError
@@ -227,6 +241,9 @@ class WarpSessionState {
     failureMessage: identical(failureMessage, _keep)
         ? this.failureMessage
         : failureMessage as String?,
+    failureDetail: identical(failureDetail, _keep)
+        ? this.failureDetail
+        : failureDetail as String?,
     progressDone: progressDone ?? this.progressDone,
     progressTotal: progressTotal ?? this.progressTotal,
   );

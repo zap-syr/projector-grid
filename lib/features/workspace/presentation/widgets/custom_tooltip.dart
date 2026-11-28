@@ -27,6 +27,18 @@ class CustomTooltip extends StatefulWidget {
   /// only then.
   final WidgetBuilder? body;
 
+  /// The widest the bubble gets; a table of keys needs more than the
+  /// default.
+  final double maxWidth;
+
+  /// False hides the tooltip and keeps it from showing (a button whose menu
+  /// is open: the tooltip would cover the menu).
+  final bool enabled;
+
+  /// True keeps the tooltip shown with no pointer over it: the button has
+  /// keyboard focus and a keyboard has no hover.
+  final bool pinned;
+
   const CustomTooltip({
     super.key,
     required this.message,
@@ -36,6 +48,9 @@ class CustomTooltip extends StatefulWidget {
     this.warning = false,
     this.placement = TooltipPlacement.top,
     this.body,
+    this.maxWidth = _maxBubbleWidth,
+    this.enabled = true,
+    this.pinned = false,
   });
 
   @override
@@ -46,8 +61,11 @@ class _CustomTooltipState extends State<CustomTooltip> {
   final _key = GlobalKey();
   OverlayEntry? _entry;
 
+  /// Whether the pointer is over the child.
+  bool _hovering = false;
+
   void _show() {
-    if (_entry != null || !mounted) return;
+    if (_entry != null || !mounted || !widget.enabled) return;
     final box = _key.currentContext?.findRenderObject() as RenderBox?;
     if (box == null || !box.hasSize) return;
     final position = box.localToGlobal(Offset.zero);
@@ -70,6 +88,7 @@ class _CustomTooltipState extends State<CustomTooltip> {
                 shortcut: widget.shortcut,
                 warning: widget.warning,
                 body: widget.body,
+                maxWidth: widget.maxWidth,
               ),
             ),
           ),
@@ -96,6 +115,22 @@ class _CustomTooltipState extends State<CustomTooltip> {
   @override
   void didUpdateWidget(CustomTooltip oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.pinned != oldWidget.pinned) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (widget.pinned) {
+          _show();
+        } else if (!_hovering) {
+          _hide();
+        }
+      });
+    }
+    if (!widget.enabled && _entry != null) {
+      // Not while building: the overlay is rebuilt by the removal.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !widget.enabled) _hide();
+      });
+    }
     // A tooltip that changes while shown (Copy's "Copied 42 events") is
     // redrawn with the new text instead of keeping the old one.
     if (_entry != null &&
@@ -118,8 +153,14 @@ class _CustomTooltipState extends State<CustomTooltip> {
   Widget build(BuildContext context) {
     return MouseRegion(
       key: _key,
-      onEnter: (_) => _show(),
-      onExit: (_) => _hide(),
+      onEnter: (_) {
+        _hovering = true;
+        _show();
+      },
+      onExit: (_) {
+        _hovering = false;
+        if (!widget.pinned) _hide();
+      },
       child: widget.child,
     );
   }
@@ -139,6 +180,7 @@ class TooltipBubble extends StatelessWidget {
     this.shortcut,
     this.warning = false,
     this.body,
+    this.maxWidth = _maxBubbleWidth,
   });
 
   final String message;
@@ -146,6 +188,7 @@ class TooltipBubble extends StatelessWidget {
   final List<String>? shortcut;
   final bool warning;
   final WidgetBuilder? body;
+  final double maxWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -161,7 +204,7 @@ class TooltipBubble extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: Container(
-        constraints: const BoxConstraints(maxWidth: _maxBubbleWidth),
+        constraints: BoxConstraints(maxWidth: maxWidth),
         padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
         decoration: BoxDecoration(
           color: sc.tooltipBackground,

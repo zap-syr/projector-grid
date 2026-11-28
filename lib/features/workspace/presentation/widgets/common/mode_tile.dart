@@ -12,9 +12,13 @@ class ModeTileData<T> {
     this.shortLabel,
     this.detail,
     this.gapBefore = false,
+    this.enabled = true,
   });
 
   final T value;
+
+  /// False dims this tile alone (the other modes while a write runs).
+  final bool enabled;
   final IconData icon;
   final String label;
 
@@ -43,7 +47,12 @@ class ModeTileRow<T> extends StatelessWidget {
     required this.height,
     this.iconAbove = true,
     this.shortLabelsBelow = 0,
+    this.horizontalPadding = 10,
   });
+
+  /// Space between a tile's edge and its content; Geometry's five tiles take
+  /// less, so `Corner Correction` fits a fifth of the row.
+  final double horizontalPadding;
 
   final List<ModeTileData<T>> tiles;
 
@@ -86,8 +95,9 @@ class ModeTileRow<T> extends StatelessWidget {
                     tooltip: short && t.shortLabel != null ? t.label : null,
                     detail: t.detail,
                     iconAbove: iconAbove,
+                    horizontalPadding: horizontalPadding,
                     selected: t.value == selected,
-                    onTap: onSelected == null
+                    onTap: onSelected == null || !t.enabled
                         ? null
                         : () => onSelected!(t.value),
                   ),
@@ -111,6 +121,7 @@ class ModeTile extends StatelessWidget {
     this.detail,
     this.tooltip,
     this.iconAbove = true,
+    this.horizontalPadding = 10,
   });
 
   final IconData icon;
@@ -119,6 +130,7 @@ class ModeTile extends StatelessWidget {
   final String? tooltip;
   final bool selected;
   final bool iconAbove;
+  final double horizontalPadding;
 
   /// Null disables the tile (dimmed).
   final VoidCallback? onTap;
@@ -198,7 +210,7 @@ class ModeTile extends StatelessWidget {
           child: InkWell(
             onTap: onTap,
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
+              padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
               child: content,
             ),
           ),

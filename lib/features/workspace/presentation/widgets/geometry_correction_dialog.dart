@@ -6,7 +6,10 @@ import '../../domain/geometry_modes.dart';
 import '../../domain/geometry_preview.dart';
 import '../../domain/geometry_values.dart';
 import '../../domain/projector_node.dart';
+import '../../domain/warp_model_caps.dart';
+import '../../domain/warp_session_state.dart';
 import '../providers/protocol_service_provider.dart';
+import '../providers/warp_edit_session_provider.dart';
 import 'command_failure_notice.dart';
 import 'common/dialog_parts.dart';
 import 'common/projector_settings_client.dart';
@@ -14,6 +17,9 @@ import 'dialog_title_bar.dart';
 import 'geometry/corner_canvas_card.dart';
 import 'geometry/corner_controls.dart';
 import 'geometry/curved_controls.dart';
+import 'geometry/free_grid/free_grid_editor.dart';
+import 'geometry/free_grid/free_grid_footer.dart';
+import 'geometry/free_grid/free_grid_parts.dart';
 import 'geometry/geometry_loading.dart';
 import 'geometry/geometry_mode_tiles.dart';
 import 'geometry/geometry_off_state.dart';
@@ -69,14 +75,56 @@ class _GeometryCorrectionDialogState
   final _corners = CornerModel();
   final _canvasFocus = FocusNode();
 
+  /// Whether the model has the Free grid (memories PC-1 to PC-3 that this
+  /// app can read and write): it gets a tile.
+  bool _freeGridAvailable = false;
+
+  // The Free grid's session outlives the editor widget, so leaving the mode
+  // and coming back keeps the memory it was on. Held from the first need
+  // until the dialog closes.
+  final _editorKey = GlobalKey<FreeGridEditorState>();
+  ProviderSubscription<WarpSessionState>? _sessionSubscription;
+  late final ProviderContainer _container = ProviderScope.containerOf(
+    context,
+    listen: false,
+  );
+  bool _leavingFreeGrid = false;
+
   @override
   void initState() {
     super.initState();
+    FocusManager.instance.addListener(_keepFocus);
     _loadInitial();
+  }
+
+  /// The dialog's own focus scope: it takes focus when the dialog opens, so
+  /// Tab and Esc work at once.
+  final _scope = FocusScopeNode(debugLabel: 'geometry correction dialog');
+  bool _reclaiming = false;
+
+  /// A dialog is modal, but what opened it can give the focus back to itself
+  /// after the dialog took it (a context menu closing): Tab and Esc then go
+  /// to the page below. While this dialog is the top route and the focus is
+  /// outside it, the focus comes back. Another route on top (a confirm) or a
+  /// menu inside the dialog is left alone.
+  void _keepFocus() {
+    if (!mounted || _reclaiming || _scope.hasFocus) return;
+    final route = ModalRoute.of(context);
+    if (route == null || !route.isCurrent) return;
+    _reclaiming = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _reclaiming = false;
+      if (mounted && route.isCurrent && !_scope.hasFocus) {
+        _scope.requestFocus();
+      }
+    });
   }
 
   @override
   void dispose() {
+    FocusManager.instance.removeListener(_keepFocus);
+    _scope.dispose();
+    _sessionSubscription?.close();
     _corners.dispose();
     _canvasFocus.dispose();
     super.dispose();
@@ -86,25 +134,42 @@ class _GeometryCorrectionDialogState
   /// already left doesn't end the loading state of the current one.
   bool get _modeLoading => !_loadedModes.contains(_mode);
 
+  WarpEditSession _ensureSession() {
+    final provider = warpEditSessionProvider(widget.node.id);
+    _sessionSubscription ??= _container.listen(provider, (_, _) {});
+    return _container.read(provider.notifier);
+  }
+
   // ─── Loading ─────────────────────────────────────────────────────────────
   Future<void> _loadInitial() async {
-    final (modeRaw, model) = await (
+    final (modeRaw, model, mids) = await (
       _client.readValue('GMMI0'),
       _client.query('QID'),
+      _client.query('QVX:MIDS1'),
     ).wait;
     if (!mounted) return;
 
     _tier = quadPixelTierFor(model ?? '');
     _corners.extended = _tier == QuadPixelTier.a;
+    final caps = mids == null ? null : warpModelCapsFromMids(mids);
+    _freeGridAvailable = caps != null && warpModelSupported(caps);
     setState(() {
       if (modeRaw != null) {
         final read = GeometryMode.fromProtocol(modeRaw);
-        // The Free grid has no tile or controls here yet: a projector in
-        // PC-1 to PC-3 shows like Off, as it always did.
-        _mode = read.isFreeGrid ? GeometryMode.off : read;
+        // A model without the Free grid shows a projector in PC-1 to PC-3
+        // like Off: there is nothing else to show.
+        _mode = read.isFreeGrid && !_freeGridAvailable
+            ? GeometryMode.off
+            : read;
       }
       _loading = false;
     });
+    // The projector is in a memory already: read it, change nothing.
+    if (_mode.isFreeGrid) {
+      await _ensureSession().open();
+      _leaveIfNoMemories(GeometryMode.off);
+    }
+    if (!mounted) return;
     await _ensureModeLoaded(_mode);
   }
 
@@ -188,7 +253,26 @@ class _GeometryCorrectionDialogState
 
   // ─── Actions ─────────────────────────────────────────────────────────────
   Future<void> _selectMode(GeometryMode m) async {
-    if (m == _mode) return;
+    if (m.isFreeGrid) return _selectFreeGrid();
+    if (m == _mode || _leavingFreeGrid) return;
+    if (_mode.isFreeGrid) {
+      // Not while the session reads or writes: its own GMMI0 could land
+      // after this one and leave the projector in a memory.
+      if (_container.read(warpEditSessionProvider(widget.node.id)).busy) {
+        return;
+      }
+      // The grid overlay and the cursor go off before the mode changes, so
+      // the projector is not left showing them over another correction.
+      // The editor is locked meanwhile: nothing in it may start a read or a
+      // write whose GMMI0 could land after the mode change.
+      setState(() => _leavingFreeGrid = true);
+      try {
+        await _editorKey.currentState?.turnOffProjectorOverlays();
+      } finally {
+        if (mounted) setState(() => _leavingFreeGrid = false);
+      }
+      if (!mounted) return;
+    }
     final wasOff = _mode == GeometryMode.off;
     // The selection and the layout switch at once; the round trips below
     // (each its own TCP connection) run under the loading layout instead
@@ -201,6 +285,43 @@ class _GeometryCorrectionDialogState
     await _client.writeRaw('VXX:GMMI0=${m.protocolValue}');
     if (!mounted) return;
     await _ensureModeLoaded(m);
+  }
+
+  /// The Free grid tile: the same Quad Pixel Drive step as the other modes,
+  /// then the session puts the projector in a memory (the one it showed
+  /// before in this dialog, else PC-1) and reads it, with the one `GMMI0`
+  /// write that is.
+  Future<void> _selectFreeGrid() async {
+    if (_mode.isFreeGrid) return;
+    final previous = _mode;
+    final wasOff = previous == GeometryMode.off;
+    final session = _ensureSession();
+    final slot = _container.read(warpEditSessionProvider(widget.node.id)).slot;
+    setState(() => _mode = GeometryModeTiles.freeGridTile);
+    await session.open(
+      switchTo: slot,
+      // After the session has found the memory there, and before it switches
+      // the projector: a model without memories is never written to.
+      beforeSwitch: () async {
+        if (_tier != QuadPixelTier.none && wasOff) {
+          await _client.writeBool('QPDI1', true);
+        }
+      },
+    );
+    _leaveIfNoMemories(previous);
+  }
+
+  /// A model whose first read says it has no memories: the projector was not
+  /// switched, so the dialog goes back to the mode it was in and the tile is
+  /// gone for the rest of the dialog.
+  void _leaveIfNoMemories(GeometryMode previous) {
+    if (!mounted) return;
+    final s = _container.read(warpEditSessionProvider(widget.node.id));
+    if (s.phase != WarpSessionPhase.unsupported) return;
+    setState(() {
+      _mode = previous;
+      _freeGridAvailable = false;
+    });
   }
 
   Future<void> _writeResets(List<(String, bool)> registers) async {
@@ -242,44 +363,80 @@ class _GeometryCorrectionDialogState
   // ─── Build ───────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      clipBehavior: Clip.antiAlias,
-      // A cap the dialog fills: one size in every mode and while loading;
-      // the smallest window (800×600) leaves about 720×550 inside the insets.
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(
-          maxWidth: GeometryCorrectionDialog.maxWidth,
-          maxHeight: GeometryCorrectionDialog.maxHeight,
-        ),
-        child: SizedBox.expand(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              DialogTitleBar(
-                icon: Icons.crop_free,
-                title: 'Geometry Correction',
-                projectorId: widget.node.id,
-              ),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      GeometryModeTiles(
-                        mode: _loading ? null : _mode,
-                        onSelected: _selectMode,
+    final freeGrid = !_loading && _mode.isFreeGrid;
+    // Only while the Free grid shows: the dialog needs the session's state
+    // for the footer and to dim the other tiles while a write runs.
+    final session = freeGrid
+        ? ref.watch(warpEditSessionProvider(widget.node.id))
+        : null;
+    // A Store, Restore or Reset that is running is not left unseen: the
+    // dialog stays (Esc, a click outside and the close button all ask the
+    // route to pop, which is refused) until the write has ended.
+    final writing = session?.phase == WarpSessionPhase.storing;
+    return PopScope(
+      canPop: !writing,
+      child: Dialog(
+        clipBehavior: Clip.antiAlias,
+        // A cap the dialog fills: one size in every mode and while loading;
+        // the smallest window (800x600) leaves about 720x550 inside the
+        // insets.
+        child: FocusScope(
+          node: _scope,
+          autofocus: true,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth: GeometryCorrectionDialog.maxWidth,
+              maxHeight: GeometryCorrectionDialog.maxHeight,
+            ),
+            child: LayoutBuilder(
+              builder: (context, constraints) => SizedBox.expand(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    DialogTitleBar(
+                      icon: Icons.crop_free,
+                      title: 'Geometry Correction',
+                      projectorId: widget.node.id,
+                      onClose: () => Navigator.of(context).maybePop(),
+                    ),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            GeometryModeTiles(
+                              mode: _loading ? null : _mode,
+                              onSelected: _selectMode,
+                              showFreeGrid: _freeGridAvailable,
+                              // While the session reads or writes, the other
+                              // modes wait: a GMMI0 of this dialog must not
+                              // race the session's.
+                              othersEnabled:
+                                  !((session?.busy ?? false) ||
+                                      _leavingFreeGrid),
+                            ),
+                            const SizedBox(height: 16),
+                            Expanded(child: _buildBody()),
+                          ],
+                        ),
                       ),
-                      const SizedBox(height: 16),
-                      Expanded(child: _buildBody()),
-                    ],
-                  ),
+                    ),
+                    if (session != null)
+                      FreeGridFooter(
+                        session: session,
+                        compact: FreeGridSplit.isCompact(constraints.maxWidth),
+                      )
+                    else
+                      DialogFooter(
+                        message: SentRightAwayNote(
+                          loading: _loading || _modeLoading,
+                        ),
+                      ),
+                  ],
                 ),
               ),
-              DialogFooter(
-                message: SentRightAwayNote(loading: _loading || _modeLoading),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -287,6 +444,13 @@ class _GeometryCorrectionDialogState
   }
 
   Widget _buildBody() {
+    if (!_loading && _mode.isFreeGrid) {
+      return FreeGridEditor(
+        key: _editorKey,
+        node: widget.node,
+        locked: _leavingFreeGrid,
+      );
+    }
     if (!_loading && _mode == GeometryMode.off) {
       return LayoutBuilder(
         builder: (context, constraints) => GeometryOffState(
