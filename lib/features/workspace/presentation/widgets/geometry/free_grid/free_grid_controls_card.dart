@@ -53,8 +53,13 @@ class FreeGridProjectorSettings {
 /// and On the projector. Groups that cannot act yet are present and
 /// disabled, so the layout is final.
 class FreeGridControlsCard extends StatelessWidget {
+  /// The dialog is leaving the mode: the controls look as they are and do
+  /// nothing, like while the session reads or writes.
+  final bool locked;
+
   const FreeGridControlsCard({
     super.key,
+    this.locked = false,
     required this.session,
     required this.settings,
     required this.onSelectMemory,
@@ -101,6 +106,7 @@ class FreeGridControlsCard extends StatelessWidget {
           ]
         : [
             _MemoryGroup(
+              locked: locked,
               session: session,
               onSelectMemory: onSelectMemory,
               onReload: onReload,
@@ -111,6 +117,7 @@ class FreeGridControlsCard extends StatelessWidget {
             _GridGroup(session: session),
             _SelectedGroup(session: session),
             _ProjectorGroup(
+              locked: locked,
               session: session,
               settings: settings,
               onCursor: onCursor,
@@ -274,6 +281,7 @@ class _SkeletonGroup extends StatelessWidget {
 
 class _MemoryGroup extends StatelessWidget {
   const _MemoryGroup({
+    required this.locked,
     required this.session,
     required this.onSelectMemory,
     required this.onReload,
@@ -282,6 +290,7 @@ class _MemoryGroup extends StatelessWidget {
     required this.onReset,
   });
 
+  final bool locked;
   final WarpSessionState session;
   final ValueChanged<WarpSlot> onSelectMemory;
   final VoidCallback onReload;
@@ -292,7 +301,7 @@ class _MemoryGroup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final label = freeGridSlotLabel(session.slot);
-    final usable = !session.busy;
+    final usable = !session.busy && !locked;
     final stored = session.storedAt;
     final String? caption = session.table == null
         ? null
@@ -499,6 +508,7 @@ class _PositionRow extends StatelessWidget {
 
 class _ProjectorGroup extends StatelessWidget {
   const _ProjectorGroup({
+    required this.locked,
     required this.session,
     required this.settings,
     required this.onCursor,
@@ -507,6 +517,7 @@ class _ProjectorGroup extends StatelessWidget {
     required this.onLivePreview,
   });
 
+  final bool locked;
   final WarpSessionState session;
   final FreeGridProjectorSettings settings;
   final ValueChanged<bool> onCursor;
@@ -518,7 +529,7 @@ class _ProjectorGroup extends StatelessWidget {
   Widget build(BuildContext context) {
     // The projector can only be told something while a memory is loaded and
     // no transfer runs.
-    final usable = session.table != null && !session.busy;
+    final usable = session.table != null && !session.busy && !locked;
     return _Group(
       header: const _GroupHeader(title: 'On the projector'),
       rows: [

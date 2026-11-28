@@ -35,6 +35,10 @@ class CustomTooltip extends StatefulWidget {
   /// is open: the tooltip would cover the menu).
   final bool enabled;
 
+  /// True keeps the tooltip shown with no pointer over it: the button has
+  /// keyboard focus and a keyboard has no hover.
+  final bool pinned;
+
   const CustomTooltip({
     super.key,
     required this.message,
@@ -46,6 +50,7 @@ class CustomTooltip extends StatefulWidget {
     this.body,
     this.maxWidth = _maxBubbleWidth,
     this.enabled = true,
+    this.pinned = false,
   });
 
   @override
@@ -55,6 +60,9 @@ class CustomTooltip extends StatefulWidget {
 class _CustomTooltipState extends State<CustomTooltip> {
   final _key = GlobalKey();
   OverlayEntry? _entry;
+
+  /// Whether the pointer is over the child.
+  bool _hovering = false;
 
   void _show() {
     if (_entry != null || !mounted || !widget.enabled) return;
@@ -107,6 +115,16 @@ class _CustomTooltipState extends State<CustomTooltip> {
   @override
   void didUpdateWidget(CustomTooltip oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.pinned != oldWidget.pinned) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (widget.pinned) {
+          _show();
+        } else if (!_hovering) {
+          _hide();
+        }
+      });
+    }
     if (!widget.enabled && _entry != null) {
       // Not while building: the overlay is rebuilt by the removal.
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -135,8 +153,14 @@ class _CustomTooltipState extends State<CustomTooltip> {
   Widget build(BuildContext context) {
     return MouseRegion(
       key: _key,
-      onEnter: (_) => _show(),
-      onExit: (_) => _hide(),
+      onEnter: (_) {
+        _hovering = true;
+        _show();
+      },
+      onExit: (_) {
+        _hovering = false;
+        if (!widget.pinned) _hide();
+      },
       child: widget.child,
     );
   }

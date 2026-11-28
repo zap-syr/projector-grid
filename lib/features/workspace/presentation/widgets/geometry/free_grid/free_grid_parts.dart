@@ -121,6 +121,9 @@ class _FreeGridIconButtonState extends State<FreeGridIconButton>
       body: w.tooltipBody,
       maxWidth: w.tooltipMaxWidth,
       enabled: w.showTooltip,
+      // A button whose tooltip is its content (the keyboard help) shows it
+      // for keyboard focus too.
+      pinned: ring && w.tooltipBody != null,
       child: Semantics(
         button: true,
         enabled: enabled,

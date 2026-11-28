@@ -35,7 +35,12 @@ class FreeGridCanvasCard extends StatefulWidget {
     required this.session,
     required this.compact,
     required this.onRetry,
+    this.locked = false,
   });
+
+  /// The dialog is leaving the mode: the card looks as it is and does
+  /// nothing.
+  final bool locked;
 
   final WarpSessionState session;
 
@@ -87,7 +92,11 @@ class _FreeGridCanvasCardState extends State<FreeGridCanvasCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _Header(session: _s, compact: widget.compact, active: _showsDrawing),
+          _Header(
+            session: _s,
+            compact: widget.compact,
+            active: _showsDrawing && !widget.locked,
+          ),
           divider,
           Expanded(child: _body(context)),
           divider,
@@ -121,7 +130,7 @@ class _FreeGridCanvasCardState extends State<FreeGridCanvasCard> {
             'The projector did not answer the read. Try again, or check '
                 'that it is not busy.',
         reason: _s.failureDetail,
-        onRetry: widget.onRetry,
+        onRetry: widget.locked ? null : widget.onRetry,
       );
     }
     final storing = _s.phase == WarpSessionPhase.storing;
@@ -131,11 +140,15 @@ class _FreeGridCanvasCardState extends State<FreeGridCanvasCard> {
           child: FreeGridCanvas(
             session: _s,
             compact: widget.compact,
-            enabled: !storing,
+            enabled: !storing && !widget.locked,
             focusNode: _focus,
             onRangeFrameVisible: (visible) => _rangeVisible.value = visible,
             clusterTrailing: widget.compact
-                ? FreeGridHelpButton(enabled: !storing, size: 26, iconSize: 16)
+                ? FreeGridHelpButton(
+                    enabled: !storing && !widget.locked,
+                    size: 26,
+                    iconSize: 16,
+                  )
                 : null,
           ),
         ),
@@ -269,7 +282,7 @@ class _ReadFailed extends StatelessWidget {
 
   /// The reason as the projector gave it: a tooltip on the detail.
   final String? reason;
-  final VoidCallback onRetry;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {

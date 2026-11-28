@@ -93,11 +93,37 @@ class _GeometryCorrectionDialogState
   @override
   void initState() {
     super.initState();
+    FocusManager.instance.addListener(_keepFocus);
     _loadInitial();
+  }
+
+  /// The dialog's own focus scope: it takes focus when the dialog opens, so
+  /// Tab and Esc work at once.
+  final _scope = FocusScopeNode(debugLabel: 'geometry correction dialog');
+  bool _reclaiming = false;
+
+  /// A dialog is modal, but what opened it can give the focus back to itself
+  /// after the dialog took it (a context menu closing): Tab and Esc then go
+  /// to the page below. While this dialog is the top route and the focus is
+  /// outside it, the focus comes back. Another route on top (a confirm) or a
+  /// menu inside the dialog is left alone.
+  void _keepFocus() {
+    if (!mounted || _reclaiming || _scope.hasFocus) return;
+    final route = ModalRoute.of(context);
+    if (route == null || !route.isCurrent) return;
+    _reclaiming = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _reclaiming = false;
+      if (mounted && route.isCurrent && !_scope.hasFocus) {
+        _scope.requestFocus();
+      }
+    });
   }
 
   @override
   void dispose() {
+    FocusManager.instance.removeListener(_keepFocus);
+    _scope.dispose();
     _sessionSubscription?.close();
     _corners.dispose();
     _canvasFocus.dispose();
@@ -237,11 +263,13 @@ class _GeometryCorrectionDialogState
       }
       // The grid overlay and the cursor go off before the mode changes, so
       // the projector is not left showing them over another correction.
-      _leavingFreeGrid = true;
+      // The editor is locked meanwhile: nothing in it may start a read or a
+      // write whose GMMI0 could land after the mode change.
+      setState(() => _leavingFreeGrid = true);
       try {
         await _editorKey.currentState?.turnOffProjectorOverlays();
       } finally {
-        _leavingFreeGrid = false;
+        if (mounted) setState(() => _leavingFreeGrid = false);
       }
       if (!mounted) return;
     }
@@ -352,55 +380,61 @@ class _GeometryCorrectionDialogState
         // A cap the dialog fills: one size in every mode and while loading;
         // the smallest window (800x600) leaves about 720x550 inside the
         // insets.
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            maxWidth: GeometryCorrectionDialog.maxWidth,
-            maxHeight: GeometryCorrectionDialog.maxHeight,
-          ),
-          child: LayoutBuilder(
-            builder: (context, constraints) => SizedBox.expand(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  DialogTitleBar(
-                    icon: Icons.crop_free,
-                    title: 'Geometry Correction',
-                    projectorId: widget.node.id,
-                    onClose: () => Navigator.of(context).maybePop(),
-                  ),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          GeometryModeTiles(
-                            mode: _loading ? null : _mode,
-                            onSelected: _selectMode,
-                            showFreeGrid: _freeGridAvailable,
-                            // While the session reads or writes, the other
-                            // modes wait: a GMMI0 of this dialog must not
-                            // race the session's.
-                            othersEnabled: !(session?.busy ?? false),
-                          ),
-                          const SizedBox(height: 16),
-                          Expanded(child: _buildBody()),
-                        ],
+        child: FocusScope(
+          node: _scope,
+          autofocus: true,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth: GeometryCorrectionDialog.maxWidth,
+              maxHeight: GeometryCorrectionDialog.maxHeight,
+            ),
+            child: LayoutBuilder(
+              builder: (context, constraints) => SizedBox.expand(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    DialogTitleBar(
+                      icon: Icons.crop_free,
+                      title: 'Geometry Correction',
+                      projectorId: widget.node.id,
+                      onClose: () => Navigator.of(context).maybePop(),
+                    ),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            GeometryModeTiles(
+                              mode: _loading ? null : _mode,
+                              onSelected: _selectMode,
+                              showFreeGrid: _freeGridAvailable,
+                              // While the session reads or writes, the other
+                              // modes wait: a GMMI0 of this dialog must not
+                              // race the session's.
+                              othersEnabled:
+                                  !((session?.busy ?? false) ||
+                                      _leavingFreeGrid),
+                            ),
+                            const SizedBox(height: 16),
+                            Expanded(child: _buildBody()),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                  if (session != null)
-                    FreeGridFooter(
-                      session: session,
-                      compact: FreeGridSplit.isCompact(constraints.maxWidth),
-                    )
-                  else
-                    DialogFooter(
-                      message: SentRightAwayNote(
-                        loading: _loading || _modeLoading,
+                    if (session != null)
+                      FreeGridFooter(
+                        session: session,
+                        compact: FreeGridSplit.isCompact(constraints.maxWidth),
+                      )
+                    else
+                      DialogFooter(
+                        message: SentRightAwayNote(
+                          loading: _loading || _modeLoading,
+                        ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -411,7 +445,11 @@ class _GeometryCorrectionDialogState
 
   Widget _buildBody() {
     if (!_loading && _mode.isFreeGrid) {
-      return FreeGridEditor(key: _editorKey, node: widget.node);
+      return FreeGridEditor(
+        key: _editorKey,
+        node: widget.node,
+        locked: _leavingFreeGrid,
+      );
     }
     if (!_loading && _mode == GeometryMode.off) {
       return LayoutBuilder(

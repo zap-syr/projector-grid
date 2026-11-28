@@ -22,9 +22,14 @@ import 'free_grid_parts.dart';
 /// [turnOffProjectorOverlays] and, as a last resort, when it is disposed
 /// with the dialog.
 class FreeGridEditor extends ConsumerStatefulWidget {
-  const FreeGridEditor({super.key, required this.node});
+  const FreeGridEditor({super.key, required this.node, this.locked = false});
 
   final ProjectorNode node;
+
+  /// The dialog is leaving the Free grid and waits for the projector to
+  /// take the overlay off: nothing here may start a read or a write until
+  /// the mode change is done. The layout does not change.
+  final bool locked;
 
   @override
   ConsumerState<FreeGridEditor> createState() => FreeGridEditorState();
@@ -39,10 +44,6 @@ class FreeGridEditorState extends ConsumerState<FreeGridEditor> {
   late final WarpEditSession _session;
 
   FreeGridProjectorSettings _settings = const FreeGridProjectorSettings();
-
-  /// What the projector is showing because of this editor.
-  bool _overlayShown = false;
-  bool _cursorShown = false;
 
   String get _id => widget.node.id;
 
@@ -65,23 +66,15 @@ class FreeGridEditorState extends ConsumerState<FreeGridEditor> {
 
   // ----------------------------------------------------------- projector
 
-  /// Sends the grid overlay and the cursor off, when this editor turned them
-  /// on, whatever the session is doing: after a read that failed, behind a
-  /// poll that holds the projector (it waits for up to 5 s), behind a
-  /// transfer. The session logs it when the overlay may still be on.
+  /// Sends the grid overlay and the cursor off, when the session put them on
+  /// and has not taken them off yet, whatever it is doing: after a read that
+  /// failed, behind a poll that holds the projector (it waits for up to 5
+  /// s), behind a transfer. The session keeps them marked as on while an off
+  /// could not be sent, so the next leave or close tries again, and logs it
+  /// when the overlay may still be on.
   Future<void> turnOffProjectorOverlays() async {
-    if (!_overlayShown && !_cursorShown) return;
-    final overlay = _overlayShown;
-    final cursor = _cursorShown;
-    _overlayShown = false;
-    _cursorShown = false;
-    await _session.switchOffOverlay(
-      overlay: overlay,
-      cursor: cursor,
-      columns: _overlayColumns,
-      rows: _overlayRows,
-      rgb: _settings.overlayRgb,
-    );
+    if (!_session.overlayMayBeOn()) return;
+    await _session.switchOffTracked();
   }
 
   /// The grid size the overlay was last sent with.
@@ -101,12 +94,29 @@ class FreeGridEditorState extends ConsumerState<FreeGridEditor> {
   }
 
   Future<void> _setOverlay(bool on) async {
+    if (widget.locked) return;
     setState(() => _settings = _settings.copyWith(gridOverlayOn: on));
-    _overlayShown = on;
-    await _sendOverlay(on: on, rgb: _settings.overlayRgb);
+    if (on) {
+      await _sendOverlay(on: true, rgb: _settings.overlayRgb);
+      return;
+    }
+    // The off waits for the projector as long as a close would (5 s). When it
+    // cannot be sent the overlay is still on the projector: the switch goes
+    // back on, the footer says so, and leaving the mode tries again.
+    final ok = await _session.switchOffOverlay(
+      overlay: true,
+      cursor: false,
+      columns: _overlayColumns,
+      rows: _overlayRows,
+      rgb: _settings.overlayRgb,
+    );
+    if (!ok && mounted) {
+      setState(() => _settings = _settings.copyWith(gridOverlayOn: true));
+    }
   }
 
   Future<void> _setOverlayColor(int rgb) async {
+    if (widget.locked) return;
     setState(() => _settings = _settings.copyWith(overlayRgb: rgb));
     if (_settings.gridOverlayOn) await _sendOverlay(on: true, rgb: rgb);
   }
@@ -122,11 +132,13 @@ class FreeGridEditorState extends ConsumerState<FreeGridEditor> {
   }
 
   Future<void> _selectMemory(WarpSlot slot) async {
+    if (widget.locked) return;
     await _session.selectMemory(slot);
     await _resendOverlay();
   }
 
   Future<void> _reload() async {
+    if (widget.locked) return;
     await _session.reload();
     await _resendOverlay();
   }
@@ -135,6 +147,7 @@ class FreeGridEditorState extends ConsumerState<FreeGridEditor> {
       projectorLabel(widget.node.name, widget.node.ipAddress);
 
   Future<void> _restoreBackup() async {
+    if (widget.locked) return;
     final s = _state;
     final taken = s.backupTakenAt;
     if (taken == null) return;
@@ -154,6 +167,7 @@ class FreeGridEditorState extends ConsumerState<FreeGridEditor> {
   }
 
   Future<void> _reset() async {
+    if (widget.locked) return;
     final s = _state;
     final confirmed = await confirmFreeGridReset(
       context,
@@ -187,11 +201,13 @@ class FreeGridEditorState extends ConsumerState<FreeGridEditor> {
             session: session,
             compact: compact,
             onRetry: _reload,
+            locked: widget.locked,
           ),
         ),
         FocusTraversalGroup(
           child: FreeGridControlsCard(
             session: session,
+            locked: widget.locked,
             settings: _settings,
             onSelectMemory: _selectMemory,
             onReload: _reload,
