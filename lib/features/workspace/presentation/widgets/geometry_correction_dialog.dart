@@ -350,7 +350,7 @@ class _GeometryCorrectionDialogState
       child: Dialog(
         clipBehavior: Clip.antiAlias,
         // A cap the dialog fills: one size in every mode and while loading;
-        // the smallest window (800×600) leaves about 720×550 inside the
+        // the smallest window (800x600) leaves about 720x550 inside the
         // insets.
         child: ConstrainedBox(
           constraints: const BoxConstraints(
