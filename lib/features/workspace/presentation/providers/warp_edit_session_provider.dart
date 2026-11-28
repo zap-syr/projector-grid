@@ -17,6 +17,7 @@ import '../../domain/warp_table.dart';
 import 'event_log_provider.dart';
 import 'protocol_service_provider.dart';
 import 'warp_backup_store_provider.dart';
+import 'warp_window_close_guard_provider.dart';
 import 'workspace_provider.dart';
 
 part 'warp_edit_session_provider.g.dart';
@@ -64,7 +65,8 @@ enum _WriteKind {
 /// watch first (`claimNodeForExternalPoll`), so one projector never sees
 /// more than one of the app's transfers at a time.
 @riverpod
-class WarpEditSession extends _$WarpEditSession {
+class WarpEditSession extends _$WarpEditSession
+    implements WarpCloseParticipant {
   late PanasonicProtocolService _service;
   late WorkspaceNotifier _workspace;
   late WarpBackupStore _backups;
@@ -90,14 +92,47 @@ class WarpEditSession extends _$WarpEditSession {
   Timer? _previewTimer;
   Future<void> _overlayTail = Future<void>.value();
 
+  // The switch the editor asked for with [open]: a retry before the model is
+  // known repeats it, so a memory is only shown once the projector is in it.
+  WarpSlot? _requestedSwitch;
+  Future<void> Function()? _requestedBeforeSwitch;
+
+  // The write that runs now, for the window close to wait for.
+  Future<void>? _activeWrite;
+
+  // What this session left on the projector. It stays set until an off was
+  // sent, so a failed off is tried again when the mode or the window goes.
+  bool _overlayOn = false;
+  bool _cursorOn = false;
+  ({int columns, int rows, int rgb}) _overlayArgs = (
+    columns: 3,
+    rows: 3,
+    rgb: 0x00FF00,
+  );
+
   @override
   WarpSessionState build(String nodeId) {
     _service = ref.read(protocolServiceProvider);
     _workspace = ref.read(workspaceProvider.notifier);
     _backups = ref.read(warpBackupStoreProvider);
     _eventLog = ref.read(eventLogProvider.notifier);
-    ref.onDispose(() => _previewTimer?.cancel());
+    final guard = ref.read(warpWindowCloseGuardProvider);
+    guard.register(this);
+    ref.onDispose(() {
+      _previewTimer?.cancel();
+      guard.unregister(this);
+    });
     return const WarpSessionState();
+  }
+
+  @override
+  bool needsCloseSettle() => _activeWrite != null || _overlayOn || _cursorOn;
+
+  @override
+  Future<void> settleForClose() async {
+    final write = _activeWrite;
+    if (write != null) await write;
+    await switchOffTracked();
   }
 
   ProjectorNode get _node =>
@@ -159,6 +194,10 @@ class WarpEditSession extends _$WarpEditSession {
   }) async {
     if (_working) return;
     _working = true;
+    if (switchTo != null) {
+      _requestedSwitch = switchTo;
+      _requestedBeforeSwitch = beforeSwitch;
+    }
     try {
       // A session opened again (the tile clicked after leaving the mode)
       // must not show the memory it held before.
@@ -233,7 +272,10 @@ class WarpEditSession extends _$WarpEditSession {
       final mode = modeReply == null
           ? null
           : GeometryMode.fromProtocol(modeReply.split('=').last);
-      await _load(mode?.warpSlot ?? WarpSlot.pc1, checkMode: false);
+      // Whichever memory it opens on, the projector must be in it: a
+      // projector in Off or another mode ends in `failed`, not in a memory
+      // shown while the projector is somewhere else.
+      await _load(mode?.warpSlot ?? WarpSlot.pc1);
     } finally {
       _working = false;
     }
@@ -341,7 +383,14 @@ class WarpEditSession extends _$WarpEditSession {
   /// memory, nothing is shown and nothing is written: the operator selects
   /// the memory to switch it.
   Future<void> reload() async {
-    if (state.caps == null) return open();
+    // The model is not known yet (the first call was busy, or the worker
+    // died): repeat what was asked, the switch included.
+    if (state.caps == null) {
+      return open(
+        switchTo: _requestedSwitch,
+        beforeSwitch: _requestedBeforeSwitch,
+      );
+    }
     if (!_canStartRead) return;
     _working = true;
     try {
@@ -696,9 +745,37 @@ class WarpEditSession extends _$WarpEditSession {
     }
   }
 
-  /// Everything a Store, Restore and Reset share. Failures end in the
-  /// `failed` phase and an event log row; the session stays usable.
+  /// Everything a Store, Restore and Reset share, known to the window close
+  /// while it runs.
   Future<({bool ok, bool incomplete})> _write(
+    _WriteKind kind,
+    WarpTable table, {
+    required int gridColumns,
+    required int gridRows,
+    required Uint8List? header,
+    required DateTime now,
+    required bool takeBackup,
+  }) async {
+    final run = _writeInner(
+      kind,
+      table,
+      gridColumns: gridColumns,
+      gridRows: gridRows,
+      header: header,
+      now: now,
+      takeBackup: takeBackup,
+    );
+    _activeWrite = run.then<void>((_) {}, onError: (Object _) {});
+    try {
+      return await run;
+    } finally {
+      _activeWrite = null;
+    }
+  }
+
+  /// Failures end in the `failed` phase and an event log row; the session
+  /// stays usable.
+  Future<({bool ok, bool incomplete})> _writeInner(
     _WriteKind kind,
     WarpTable table, {
     required int gridColumns,
@@ -1014,8 +1091,13 @@ class WarpEditSession extends _$WarpEditSession {
     required int x,
     required int y,
     int kind = 0,
-  }) =>
-      _overlay((link) => sendWarpCursor(link, on: on, x: x, y: y, kind: kind));
+  }) => _overlay((link) async {
+    // Marked before the send: a command that failed half way may have shown
+    // it. It is cleared when an off went out.
+    if (on) _cursorOn = true;
+    await sendWarpCursor(link, on: on, x: x, y: y, kind: kind);
+    if (!on) _cursorOn = false;
+  });
 
   /// Shows or hides the grid through the control points.
   Future<void> showGridOverlay({
@@ -1023,15 +1105,20 @@ class WarpEditSession extends _$WarpEditSession {
     required int columns,
     required int rows,
     required int rgb,
-  }) => _overlay(
-    (link) => sendWarpGridOverlay(
+  }) => _overlay((link) async {
+    if (on) {
+      _overlayOn = true;
+      _overlayArgs = (columns: columns, rows: rows, rgb: rgb);
+    }
+    await sendWarpGridOverlay(
       link,
       on: on,
       columns: columns,
       rows: rows,
       rgb: rgb,
-    ),
-  );
+    );
+    if (!on) _overlayOn = false;
+  });
 
   /// Highlights the control points whose mark is 1.
   Future<void> markPoints(List<int> marks) =>
@@ -1042,7 +1129,10 @@ class WarpEditSession extends _$WarpEditSession {
     required int x,
     required int y,
     required List<int> marks,
-  }) => _overlay((link) => sendWarpSelection(link, x: x, y: y, marks: marks));
+  }) => _overlay((link) async {
+    _cursorOn = true;
+    await sendWarpSelection(link, x: x, y: y, marks: marks);
+  });
 
   /// One overlay command at a time and in call order, each under the claim.
   /// Dropped while a read or a write runs. A projector that stays busy for a
@@ -1109,7 +1199,10 @@ class WarpEditSession extends _$WarpEditSession {
         reason = _busyMessage;
       } else {
         try {
-          if (cursor) await sendWarpCursor(link, on: false, x: 0, y: 0);
+          if (cursor) {
+            await sendWarpCursor(link, on: false, x: 0, y: 0);
+            _cursorOn = false;
+          }
           if (overlay) {
             await sendWarpGridOverlay(
               link,
@@ -1118,6 +1211,7 @@ class WarpEditSession extends _$WarpEditSession {
               rows: rows,
               rgb: rgb,
             );
+            _overlayOn = false;
           }
           ok = true;
         } on WarpProtocolException catch (e) {
@@ -1130,13 +1224,40 @@ class WarpEditSession extends _$WarpEditSession {
           _release();
         }
       }
-      if (ok || !ref.mounted) return;
+      if (ok) {
+        _setPreviewError(null);
+        return;
+      }
+      if (!ref.mounted) return;
+      // Still marked as shown (see [_overlayOn]): the editor puts its switch
+      // back on and the footer says so, and the next off is tried when the
+      // mode or the window goes.
+      _setPreviewError(
+        overlay
+            ? 'The grid overlay could not be turned off. Try again.'
+            : 'The cursor could not be turned off. Try again.',
+      );
       _logProblem(
         '${overlay ? 'Grid overlay' : 'Cursor'} may still be on: $reason',
       );
     });
     return ok;
   }
+
+  /// Whether this session left the grid overlay or the cursor on the
+  /// projector, as far as it knows.
+  bool overlayMayBeOn() => _overlayOn || _cursorOn;
+
+  /// Takes off what this session put on the projector and could not take off
+  /// yet: the editor leaving the mode or the dialog, and the window close.
+  /// True when nothing is left.
+  Future<bool> switchOffTracked() => switchOffOverlay(
+    overlay: _overlayOn,
+    cursor: _cursorOn,
+    columns: _overlayArgs.columns,
+    rows: _overlayArgs.rows,
+    rgb: _overlayArgs.rgb,
+  );
 }
 
 /// The backup of a memory could not be saved, so nothing was sent.

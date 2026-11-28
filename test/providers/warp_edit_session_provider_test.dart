@@ -17,6 +17,7 @@ import 'package:projector_grid/features/workspace/presentation/providers/event_l
 import 'package:projector_grid/features/workspace/presentation/providers/protocol_service_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/warp_backup_store_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/warp_edit_session_provider.dart';
+import 'package:projector_grid/features/workspace/presentation/providers/warp_window_close_guard_provider.dart';
 import 'package:projector_grid/features/workspace/presentation/providers/workspace_provider.dart';
 
 import '../helpers/fake_protocol_service.dart';
@@ -88,6 +89,25 @@ bool _isRead(Uint8List f) => f.length >= 4 && f[2] == 0xA8;
 /// it dies: with a [StateError], not a warp exception.
 class _Fake extends FakeProtocolService {
   int workerFailsBinaryCalls = 0;
+
+  /// How many model queries die in the worker.
+  int workerFailsRawCommands = 0;
+
+  @override
+  Future<String?> sendRawCommand(
+    String ip,
+    int port,
+    String login,
+    String password,
+    String cmd,
+  ) {
+    if (cmd == 'QVX:MIDS1' && workerFailsRawCommands > 0) {
+      workerFailsRawCommands--;
+      sentRaw.add((ip, cmd));
+      throw StateError('Protocol worker exited');
+    }
+    return super.sendRawCommand(ip, port, login, password, cmd);
+  }
 
   @override
   Future<Uint8List> sendBinaryCommand(
@@ -240,12 +260,20 @@ void main() {
       expect(fake.sentCommands, isEmpty);
     });
 
-    test('GMMI0 +00000 loads PC-1 and changes nothing', () async {
+    test('GMMI0 +00000 shows nothing and changes nothing (QA-012)', () async {
+      // The projector is not in a memory: nothing is shown as ready (the
+      // memory is read, but the projector shows something else), and nothing
+      // is written.
       projector().mode = 0;
       seed(WarpSlot.pc1, _gridTable(_caps), _caps);
       final c = await opened();
       expect(stateOf(c).slot, WarpSlot.pc1);
-      expect(stateOf(c).phase, WarpSessionPhase.ready);
+      expect(stateOf(c).phase, WarpSessionPhase.failed);
+      expect(
+        stateOf(c).failureMessage,
+        'The projector is not in PC-1. Select PC-1 to switch it.',
+      );
+      expect(stateOf(c).table, isNull);
       expect(projector().mode, 0);
       expect([
         for (final (_, cmd) in fake.sentRaw)
@@ -1227,6 +1255,65 @@ void main() {
     );
   });
 
+  group('Reload before the model is known (QA-012)', () {
+    setUp(() {
+      seed(WarpSlot.pc1, _gridTable(_caps, dx: 40), _caps);
+      seed(WarpSlot.pc2, _gridTable(_caps, dx: 20), _caps);
+    });
+
+    test('a worker that dies on the model query: Reload switches', () async {
+      projector().mode = 0;
+      final c = newContainer();
+      keep(c);
+      fake.workerFailsRawCommands = 1;
+      var steps = 0;
+      await session(c)
+          .open(switchTo: WarpSlot.pc2, beforeSwitch: () async => steps++);
+      expect(stateOf(c).phase, WarpSessionPhase.failed);
+      expect(stateOf(c).caps, isNull);
+      expect(projector().mode, 0);
+      expect(steps, 0);
+
+      await session(c).reload();
+      expect(stateOf(c).phase, WarpSessionPhase.ready);
+      expect(stateOf(c).slot, WarpSlot.pc2);
+      expect(projector().mode, 4);
+      expect(steps, 1, reason: 'the dialog step runs on the retry too');
+      expect(isBusy(c), isFalse);
+    });
+
+    test('without a remembered switch a projector outside the memories '
+        'fails', () async {
+      projector().mode = 0;
+      fake.workerFailsRawCommands = 1;
+      final c = newContainer();
+      keep(c);
+      await session(c).open();
+      expect(stateOf(c).caps, isNull);
+      await session(c).reload();
+      expect(stateOf(c).phase, WarpSessionPhase.failed);
+      expect(
+        stateOf(c).failureMessage,
+        'The projector is not in PC-1. Select PC-1 to switch it.',
+      );
+      expect(projector().mode, 0, reason: 'nothing was written');
+    });
+
+    test(
+      'without a remembered switch a projector in PC-2 opens PC-2',
+      () async {
+        projector().mode = 4;
+        fake.workerFailsRawCommands = 1;
+        final c = newContainer();
+        keep(c);
+        await session(c).open();
+        await session(c).reload();
+        expect(stateOf(c).phase, WarpSessionPhase.ready);
+        expect(stateOf(c).slot, WarpSlot.pc2);
+      },
+    );
+  });
+
   group('Reload checks that the projector is in the memory (QA-004)', () {
     setUp(() {
       seed(WarpSlot.pc1, _gridTable(_caps, dx: 40), _caps);
@@ -1487,6 +1574,147 @@ void main() {
       await reading;
       expect(await done, isTrue);
       expect(overlayFrames().last[4], 0);
+    });
+  });
+
+  group('what the session left on the projector (QA-014)', () {
+    setUp(() => seed(WarpSlot.pc1, _gridTable(_caps), _caps));
+
+    test('is marked when shown and cleared when an off went out', () async {
+      final c = await opened();
+      expect(session(c).overlayMayBeOn(), isFalse);
+      await session(c).showGridOverlay(on: true, columns: 3, rows: 3, rgb: 7);
+      expect(session(c).overlayMayBeOn(), isTrue);
+      await session(c).showGridOverlay(on: false, columns: 3, rows: 3, rgb: 7);
+      expect(session(c).overlayMayBeOn(), isFalse);
+      await session(c).showCursor(on: true, x: 1, y: 2);
+      expect(session(c).overlayMayBeOn(), isTrue);
+      await session(c).showCursor(on: false, x: 1, y: 2);
+      expect(session(c).overlayMayBeOn(), isFalse);
+      await session(c).sendSelection(x: 1, y: 2, marks: List.filled(9, 0));
+      expect(session(c).overlayMayBeOn(), isTrue);
+    });
+
+    test('an off that failed keeps it marked; the next one sends it', () async {
+      final c = await opened();
+      await session(c).showGridOverlay(on: true, columns: 5, rows: 4, rgb: 9);
+      fake.workerFailsBinaryCalls = 1;
+      expect(await session(c).switchOffTracked(), isFalse);
+      expect(session(c).overlayMayBeOn(), isTrue);
+      expect(
+        stateOf(c).previewError,
+        'The grid overlay could not be turned off. Try again.',
+      );
+      final mark = fake.sentBinary.length;
+      expect(await session(c).switchOffTracked(), isTrue);
+      expect(session(c).overlayMayBeOn(), isFalse);
+      expect(stateOf(c).previewError, isNull);
+      final off = fake.sentBinary.skip(mark).map((e) => e.$2).single;
+      // The grid size and the color it was shown with.
+      expect(off, [0x02, 0x00, 0xAB, 0x07, 0, 5, 4, 0, 0, 9, 0x03]);
+    });
+
+    test('a failed cursor off says so', () async {
+      final c = await opened();
+      await session(c).showCursor(on: true, x: 1, y: 1);
+      fake.workerFailsBinaryCalls = 1;
+      expect(await session(c).switchOffTracked(), isFalse);
+      expect(
+        stateOf(c).previewError,
+        'The cursor could not be turned off. Try again.',
+      );
+      expect(session(c).overlayMayBeOn(), isTrue);
+    });
+
+    test('nothing marked: nothing sent', () async {
+      final c = await opened();
+      final mark = fake.sentBinary.length;
+      expect(await session(c).switchOffTracked(), isTrue);
+      expect(fake.sentBinary.length, mark);
+    });
+  });
+
+  group('the window close guard (QA-016)', () {
+    setUp(() => seed(WarpSlot.pc1, _gridTable(_caps), _caps));
+
+    WarpWindowCloseGuard guardOf(ProviderContainer c) =>
+        c.read(warpWindowCloseGuardProvider);
+
+    test('with no session it returns at once', () async {
+      final c = newContainer();
+      final stopwatch = Stopwatch()..start();
+      await guardOf(c).settle();
+      expect(stopwatch.elapsed, lessThan(const Duration(milliseconds: 100)));
+      expect(fake.sentBinary, isEmpty);
+    });
+
+    test('a session with nothing to settle returns at once', () async {
+      final c = await opened();
+      final mark = fake.sentBinary.length;
+      await guardOf(c).settle();
+      expect(fake.sentBinary.length, mark);
+      expect(session(c).needsCloseSettle(), isFalse);
+    });
+
+    test('takes the overlay and the cursor off', () async {
+      final c = await opened();
+      await session(c).showGridOverlay(on: true, columns: 3, rows: 3, rgb: 7);
+      await session(c).showCursor(on: true, x: 1, y: 1);
+      expect(session(c).needsCloseSettle(), isTrue);
+      final mark = fake.sentBinary.length;
+      await guardOf(c).settle();
+      final frames = fake.sentBinary.skip(mark).map((e) => e.$2).toList();
+      expect(frames.map((f) => f[2]), [0xAC, 0xAB]);
+      expect(frames.every((f) => f[4] == 0), isTrue);
+      expect(session(c).needsCloseSettle(), isFalse);
+    });
+
+    test('waits for a write that runs, then settles', () async {
+      final c = await opened();
+      await session(c).showGridOverlay(on: true, columns: 3, rows: 3, rgb: 7);
+      final held = Completer<void>();
+      fake.holdBinary[_ip] = held;
+      final writing = session(c).resetToNeutral(gridColumns: 3, gridRows: 3);
+      await until(() => stateOf(c).phase == WarpSessionPhase.storing);
+      var settled = false;
+      final settling = guardOf(c).settle().then((_) => settled = true);
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      expect(settled, isFalse, reason: 'the write is still running');
+      held.complete();
+      await writing;
+      await settling;
+      expect(settled, isTrue);
+      expect(projector().saves, isNotEmpty, reason: 'the write was finished');
+      final overlay = frames().where((f) => f[2] == 0xAB).last;
+      expect(overlay[4], 0, reason: 'the overlay went off after the write');
+    });
+
+    test(
+      'is bounded: a write that never ends does not hold the window',
+      () async {
+        final c = await opened();
+        final held = Completer<void>();
+        fake.holdBinary[_ip] = held;
+        final writing = session(c).resetToNeutral(gridColumns: 3, gridRows: 3);
+        await until(() => stateOf(c).phase == WarpSessionPhase.storing);
+        final stopwatch = Stopwatch()..start();
+        await guardOf(c).settle(timeout: const Duration(milliseconds: 400));
+        expect(stopwatch.elapsed, lessThan(const Duration(seconds: 2)));
+        held.complete();
+        await writing;
+      },
+    );
+
+    test('a disposed session is no longer asked', () async {
+      final c = newContainer();
+      final sub = keep(c);
+      await session(c).open();
+      await session(c).showGridOverlay(on: true, columns: 3, rows: 3, rgb: 7);
+      sub.close();
+      await Future<void>.delayed(Duration.zero);
+      final mark = fake.sentBinary.length;
+      await guardOf(c).settle();
+      expect(fake.sentBinary.length, mark);
     });
   });
 
